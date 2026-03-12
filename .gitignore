@@ -1,6 +1,8 @@
 .worktrees/
+.references/
 .assets
 .env
+node_modules/
 *.pyc
 dist/
 build/
@@ -21,4 +23,3 @@ poetry.lock
 .pytest_cache/
 botpy.log
 nano.*.save
-

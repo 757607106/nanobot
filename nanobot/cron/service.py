@@ -94,6 +94,7 @@ class CronService:
                         id=j["id"],
                         name=j["name"],
                         enabled=j.get("enabled", True),
+                        source=j.get("source", ""),
                         schedule=CronSchedule(
                             kind=j["schedule"]["kind"],
                             at_ms=j["schedule"].get("atMs"),
@@ -141,6 +142,7 @@ class CronService:
                     "id": j.id,
                     "name": j.name,
                     "enabled": j.enabled,
+                    "source": j.source,
                     "schedule": {
                         "kind": j.schedule.kind,
                         "atMs": j.schedule.at_ms,
@@ -277,6 +279,14 @@ class CronService:
 
     # ========== Public API ==========
 
+    def get_job(self, job_id: str) -> CronJob | None:
+        """Return a job by ID."""
+        store = self._load_store()
+        for job in store.jobs:
+            if job.id == job_id:
+                return job
+        return None
+
     def list_jobs(self, include_disabled: bool = False) -> list[CronJob]:
         """List all jobs."""
         store = self._load_store()
@@ -288,23 +298,31 @@ class CronService:
         name: str,
         schedule: CronSchedule,
         message: str,
+        payload_kind: str = "agent_turn",
         deliver: bool = False,
         channel: str | None = None,
         to: str | None = None,
         delete_after_run: bool = False,
+        source: str = "",
+        job_id: str | None = None,
     ) -> CronJob:
         """Add a new job."""
         store = self._load_store()
         _validate_schedule_for_add(schedule)
         now = _now_ms()
+        identifier = job_id or str(uuid.uuid4())[:8]
+
+        if any(existing.id == identifier for existing in store.jobs):
+            raise ValueError(f"job id '{identifier}' already exists")
 
         job = CronJob(
-            id=str(uuid.uuid4())[:8],
+            id=identifier,
             name=name,
             enabled=True,
+            source=source,
             schedule=schedule,
             payload=CronPayload(
-                kind="agent_turn",
+                kind=payload_kind,
                 message=message,
                 deliver=deliver,
                 channel=channel,
@@ -351,6 +369,59 @@ class CronService:
                 self._save_store()
                 self._arm_timer()
                 return job
+        return None
+
+    def update_job(
+        self,
+        job_id: str,
+        *,
+        name: str | None = None,
+        enabled: bool | None = None,
+        source: str | None = None,
+        schedule: CronSchedule | None = None,
+        payload: CronPayload | None = None,
+        delete_after_run: bool | None = None,
+    ) -> CronJob | None:
+        """Update a job in place."""
+        store = self._load_store()
+        for job in store.jobs:
+            if job.id != job_id:
+                continue
+
+            if name is not None:
+                cleaned = name.strip()
+                if not cleaned:
+                    raise ValueError("name cannot be empty")
+                job.name = cleaned
+
+            if source is not None:
+                job.source = source
+
+            if schedule is not None:
+                _validate_schedule_for_add(schedule)
+                job.schedule = schedule
+
+            if payload is not None:
+                job.payload = payload
+
+            if delete_after_run is not None:
+                job.delete_after_run = delete_after_run
+
+            if enabled is not None:
+                job.enabled = enabled
+
+            now = _now_ms()
+            job.updated_at_ms = now
+            if job.enabled:
+                job.state.next_run_at_ms = _compute_next_run(job.schedule, now)
+            else:
+                job.state.next_run_at_ms = None
+
+            self._save_store()
+            self._arm_timer()
+            logger.info("Cron: updated job {}", job_id)
+            return job
+
         return None
 
     async def run_job(self, job_id: str, force: bool = False) -> bool:

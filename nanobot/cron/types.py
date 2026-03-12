@@ -21,7 +21,7 @@ class CronSchedule:
 @dataclass
 class CronPayload:
     """What to do when the job runs."""
-    kind: Literal["system_event", "agent_turn"] = "agent_turn"
+    kind: Literal["system_event", "agent_turn", "calendar_reminder"] = "agent_turn"
     message: str = ""
     # Deliver response to channel
     deliver: bool = False
@@ -44,6 +44,7 @@ class CronJob:
     id: str
     name: str
     enabled: bool = True
+    source: str = ""
     schedule: CronSchedule = field(default_factory=lambda: CronSchedule(kind="every"))
     payload: CronPayload = field(default_factory=CronPayload)
     state: CronJobState = field(default_factory=CronJobState)

@@ -484,6 +484,20 @@ def gateway(
     asyncio.run(run())
 
 
+@app.command("web-ui")
+def web_ui(
+    host: str = typer.Option("127.0.0.1", "--host", help="Web UI host"),
+    port: int = typer.Option(6788, "--port", "-p", help="Web UI port"),
+    workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+):
+    """Start the nanobot Web UI."""
+    from nanobot.web.api import run_server
+
+    loaded = _load_runtime_config(config, workspace)
+    _print_deprecated_memory_window_notice(loaded)
+    console.print(f"{__logo__} Starting nanobot Web UI on http://{host}:{port}...")
+    run_server(config=loaded, host=host, port=port)
 
 
 # ============================================================================

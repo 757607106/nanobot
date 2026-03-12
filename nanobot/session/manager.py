@@ -113,6 +113,15 @@ class SessionManager:
         self._cache[key] = session
         return session
 
+    def get(self, key: str) -> Session | None:
+        """Return an existing session without creating a new one."""
+        if key in self._cache:
+            return self._cache[key]
+        session = self._load(key)
+        if session is not None:
+            self._cache[key] = session
+        return session
+
     def _load(self, key: str) -> Session | None:
         """Load a session from disk."""
         path = self._get_session_path(key)
@@ -179,6 +188,24 @@ class SessionManager:
 
         self._cache[session.key] = session
 
+    def delete(self, key: str) -> bool:
+        """Delete a session from disk and cache."""
+        removed = False
+        for path in (self._get_session_path(key), self._get_legacy_session_path(key)):
+            if path.exists():
+                path.unlink()
+                removed = True
+        self._cache.pop(key, None)
+        return removed
+
+    def update_metadata(self, key: str, **metadata: Any) -> Session:
+        """Merge metadata into a session and persist it."""
+        session = self.get_or_create(key)
+        session.metadata.update(metadata)
+        session.updated_at = datetime.now()
+        self.save(session)
+        return session
+
     def invalidate(self, key: str) -> None:
         """Remove a session from the in-memory cache."""
         self._cache.pop(key, None)
@@ -194,19 +221,30 @@ class SessionManager:
 
         for path in self.sessions_dir.glob("*.jsonl"):
             try:
-                # Read just the metadata line
+                message_count = 0
                 with open(path, encoding="utf-8") as f:
                     first_line = f.readline().strip()
-                    if first_line:
-                        data = json.loads(first_line)
-                        if data.get("_type") == "metadata":
-                            key = data.get("key") or path.stem.replace("_", ":", 1)
-                            sessions.append({
-                                "key": key,
-                                "created_at": data.get("created_at"),
-                                "updated_at": data.get("updated_at"),
-                                "path": str(path)
-                            })
+                    if not first_line:
+                        continue
+                    data = json.loads(first_line)
+                    if data.get("_type") != "metadata":
+                        continue
+
+                    for line in f:
+                        if line.strip():
+                            message_count += 1
+
+                    key = data.get("key") or path.stem.replace("_", ":", 1)
+                    metadata = data.get("metadata", {}) or {}
+                    sessions.append({
+                        "key": key,
+                        "created_at": data.get("created_at"),
+                        "updated_at": data.get("updated_at"),
+                        "path": str(path),
+                        "metadata": metadata,
+                        "title": metadata.get("title"),
+                        "message_count": message_count,
+                    })
             except Exception:
                 continue
 
