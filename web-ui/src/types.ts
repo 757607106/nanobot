@@ -43,6 +43,24 @@ export interface ProviderConfig {
   extraHeaders?: Record<string, string> | null
 }
 
+export interface ProviderMeta {
+  name: string
+  label: string
+  category: 'direct' | 'gateway' | 'local' | 'oauth' | 'standard'
+  keywords: string[]
+  defaultApiBase?: string | null
+  supportsPromptCaching: boolean
+  isGateway: boolean
+  isLocal: boolean
+  isOauth: boolean
+  isDirect: boolean
+}
+
+export interface ConfigMeta {
+  providers: ProviderMeta[]
+  resolvedProvider: string
+}
+
 export interface ConfigData {
   agents: {
     defaults: {
@@ -57,8 +75,20 @@ export interface ConfigData {
     }
   }
   providers: Record<string, ProviderConfig>
-  channels: Record<string, unknown>
-  gateway: Record<string, unknown>
+  channels: {
+    sendProgress: boolean
+    sendToolHints: boolean
+    [key: string]: unknown
+  }
+  gateway: {
+    host: string
+    port: number
+    heartbeat?: {
+      enabled: boolean
+      intervalS: number
+    }
+    [key: string]: unknown
+  }
   tools: {
     restrictToWorkspace: boolean
     web?: {

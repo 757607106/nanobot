@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   ChatResponse,
+  ConfigMeta,
   ConfigData,
   CronJob,
   CronJobInput,
@@ -45,7 +46,7 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
 
   const payload = (await response.json()) as ApiEnvelope<T>
   if (!response.ok || !payload.success) {
-    throw new Error(payload.error?.message || 'Request failed')
+    throw new Error(payload.error?.message || '请求失败')
   }
   return payload.data
 }
@@ -84,7 +85,7 @@ export const api = {
     })
 
     if (!response.ok || !response.body) {
-      throw new Error('Stream request failed')
+      throw new Error('流式请求失败')
     }
 
     const reader = response.body.getReader()
@@ -126,9 +127,10 @@ export const api = {
       reader.releaseLock()
     }
 
-    throw new Error('Stream ended unexpectedly')
+    throw new Error('流式响应意外中断')
   },
   getConfig: () => request<ConfigData>('/config'),
+  getConfigMeta: () => request<ConfigMeta>('/config/meta'),
   updateConfig: (config: ConfigData) =>
     request<ConfigData>('/config', {
       method: 'PUT',

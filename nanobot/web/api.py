@@ -37,8 +37,9 @@ from nanobot.cron.types import CronJob, CronPayload, CronSchedule
 from nanobot.providers.base import GenerationSettings
 from nanobot.providers.custom_provider import CustomProvider
 from nanobot.providers.litellm_provider import LiteLLMProvider
-from nanobot.services.agent_templates import AgentTemplateManager
 from nanobot.providers.openai_codex_provider import OpenAICodexProvider
+from nanobot.providers.registry import PROVIDERS
+from nanobot.services.agent_templates import AgentTemplateManager
 from nanobot.services.calendar_reminder import CalendarReminderService
 from nanobot.session.manager import Session, SessionManager
 from nanobot.storage.calendar_repository import get_calendar_repository
@@ -832,6 +833,40 @@ class WebAppState:
     def get_config(self) -> dict[str, Any]:
         return self.config.model_dump(mode="json", by_alias=True)
 
+    def get_config_meta(self) -> dict[str, Any]:
+        providers: list[dict[str, Any]] = []
+        for spec in PROVIDERS:
+            if spec.is_oauth:
+                category = "oauth"
+            elif spec.is_gateway:
+                category = "gateway"
+            elif spec.is_local:
+                category = "local"
+            elif spec.is_direct:
+                category = "direct"
+            else:
+                category = "standard"
+
+            providers.append(
+                {
+                    "name": spec.name,
+                    "label": spec.label,
+                    "category": category,
+                    "keywords": list(spec.keywords),
+                    "defaultApiBase": spec.default_api_base or None,
+                    "supportsPromptCaching": spec.supports_prompt_caching,
+                    "isGateway": spec.is_gateway,
+                    "isLocal": spec.is_local,
+                    "isOauth": spec.is_oauth,
+                    "isDirect": spec.is_direct,
+                }
+            )
+
+        return {
+            "providers": providers,
+            "resolvedProvider": self.config.get_provider_name(self.config.agents.defaults.model) or "auto",
+        }
+
     def update_config(self, payload: dict[str, Any]) -> dict[str, Any]:
         config = Config.model_validate(payload)
         save_config(config)
@@ -1183,6 +1218,10 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     @app.get("/api/v1/config")
     def get_config(request: Request) -> JSONResponse:
         return _json_response(200, _ok(request.app.state.web.get_config()))
+
+    @app.get("/api/v1/config/meta")
+    def get_config_meta(request: Request) -> JSONResponse:
+        return _json_response(200, _ok(request.app.state.web.get_config_meta()))
 
     @app.put("/api/v1/config")
     def update_config(

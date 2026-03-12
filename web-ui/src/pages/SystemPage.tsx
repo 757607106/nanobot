@@ -1,26 +1,19 @@
-import { useEffect, useState } from 'react'
-import { App, Button, Card, Col, Row, Space, Spin, Statistic, Tag, Typography } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { App, Button, Card, Empty, Spin, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { api } from '../api'
+import PageHero from '../components/PageHero'
+import { formatDateTimeZh, formatUptimeZh } from '../locale'
 import type { SystemStatus } from '../types'
 
-const { Title, Text } = Typography
-
-function formatUptime(seconds: number) {
-  if (!Number.isFinite(seconds)) {
-    return '--'
-  }
-  const total = Math.max(0, Math.floor(seconds))
-  const hours = Math.floor(total / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-  const remain = total % 60
-  return `${hours}h ${minutes}m ${remain}s`
-}
+const { Text } = Typography
 
 export default function SystemPage() {
   const { message } = App.useApp()
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const enabledChannels = useMemo(() => status?.stats.enabledChannels ?? [], [status])
 
   useEffect(() => {
     void loadStatus()
@@ -33,7 +26,7 @@ export default function SystemPage() {
       const next = await api.getSystemStatus()
       setStatus(next)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Failed to load system status')
+      message.error(error instanceof Error ? error.message : '加载系统状态失败')
     } finally {
       setLoading(false)
     }
@@ -48,111 +41,158 @@ export default function SystemPage() {
   }
 
   return (
-    <div className="page-card">
-      <div className="page-header-block">
-        <div>
-          <Title level={2}>System</Title>
-          <Text type="secondary">
-            Runtime status for the current nanobot backend and workspace.
-          </Text>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void loadStatus()} loading={loading}>
-          Refresh
-        </Button>
-      </div>
+    <div className="page-stack">
+      <PageHero
+        className="page-hero-compact"
+        eyebrow="后端健康度"
+        title="查看运行时、会话与投递状态"
+        description="快速掌握当前 nanobot 后端、工作区运行时和调度服务的整体状态。"
+        actions={(
+          <Button icon={<ReloadOutlined />} onClick={() => void loadStatus()} loading={loading}>
+            刷新
+          </Button>
+        )}
+        stats={[
+          { label: '运行时长', value: status ? formatUptimeZh(status.web.uptime) : '--' },
+          { label: '网页会话', value: status?.stats.webSessions ?? 0 },
+          { label: '消息数', value: status?.stats.messages ?? 0 },
+          { label: '定时任务', value: status?.stats.scheduledJobs ?? 0 },
+        ]}
+      />
 
-      {status && (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={6}>
-              <Card>
-                <Statistic title="Uptime" value={formatUptime(status.web.uptime)} />
-              </Card>
-            </Col>
-            <Col xs={24} md={6}>
-              <Card>
-                <Statistic title="Web Sessions" value={status.stats.webSessions} />
-              </Card>
-            </Col>
-            <Col xs={24} md={6}>
-              <Card>
-                <Statistic title="Messages" value={status.stats.messages} />
-              </Card>
-            </Col>
-            <Col xs={24} md={6}>
-              <Card>
-                <Statistic title="Scheduled Jobs" value={status.stats.scheduledJobs} />
-              </Card>
-            </Col>
-          </Row>
+      {status ? (
+        <div className="page-grid system-dashboard-grid">
+          <Card className="config-panel-card system-runtime-card">
+            <div className="config-card-header">
+              <div className="page-section-title">
+                <Typography.Title level={4}>运行概览</Typography.Title>
+                <Text type="secondary">把后端当前是否健康、正在用什么运行，以及关键路径在哪里，集中放在同一块面板里。</Text>
+              </div>
+              <Tag>{status.web.version}</Tag>
+            </div>
 
-          <Card title="Runtime">
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={12}>
-                <Text type="secondary">Version</Text>
-                <div className="mono-block">{status.web.version}</div>
-              </Col>
-              <Col xs={24} md={12}>
-                <Text type="secondary">Provider</Text>
-                <div className="mono-block">{status.web.provider}</div>
-              </Col>
-              <Col xs={24} md={12}>
-                <Text type="secondary">Model</Text>
-                <div className="mono-block">{status.web.model}</div>
-              </Col>
-              <Col xs={24} md={12}>
-                <Text type="secondary">Python</Text>
-                <div className="mono-block">{status.environment.python}</div>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary">Workspace</Text>
-                <div className="mono-block">{status.web.workspace}</div>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary">Config Path</Text>
-                <div className="mono-block">{status.web.configPath}</div>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary">Platform</Text>
-                <div className="mono-block">{status.environment.platform}</div>
-              </Col>
-            </Row>
-          </Card>
+            <div className="page-meta-grid system-health-grid">
+              <div className="page-meta-card">
+                <span>总会话数</span>
+                <strong>{status.stats.totalSessions}</strong>
+              </div>
+              <div className="page-meta-card">
+                <span>已启用频道</span>
+                <strong>{status.stats.enabledChannelCount}</strong>
+              </div>
+              <div className="page-meta-card">
+                <span>当前供应商</span>
+                <strong>{status.web.provider}</strong>
+              </div>
+              <div className="page-meta-card">
+                <span>Cron 任务数</span>
+                <strong>{status.cron.jobs}</strong>
+              </div>
+            </div>
 
-          <Card title="Enabled Channels">
-            <Space wrap>
-              {status.stats.enabledChannels.length > 0 ? (
-                status.stats.enabledChannels.map((channel) => (
-                  <Tag key={channel} color="green">
-                    {channel}
-                  </Tag>
-                ))
-              ) : (
-                <Text type="secondary">No channels enabled in the current config.</Text>
-              )}
-            </Space>
-          </Card>
-
-          <Card title="Cron Runtime">
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={8}>
-                <Text type="secondary">Service</Text>
-                <div className="mono-block">{status.cron.enabled ? 'running' : 'stopped'}</div>
-              </Col>
-              <Col xs={24} md={8}>
-                <Text type="secondary">Delivery Mode</Text>
-                <div className="mono-block">{status.cron.deliveryMode}</div>
-              </Col>
-              <Col xs={24} md={8}>
-                <Text type="secondary">Next Wake</Text>
-                <div className="mono-block">
-                  {status.cron.nextWakeAtMs ? new Date(status.cron.nextWakeAtMs).toLocaleString() : '--'}
+            <div className="page-scroll-shell system-detail-shell">
+              <div className="detail-grid">
+                <div className="detail-block">
+                  <Text type="secondary">工作区</Text>
+                  <div className="mono-block mono-block-large">{status.web.workspace}</div>
                 </div>
-              </Col>
-            </Row>
+                <div className="detail-block">
+                  <Text type="secondary">配置文件路径</Text>
+                  <div className="mono-block mono-block-large">{status.web.configPath}</div>
+                </div>
+                <div className="detail-block">
+                  <Text type="secondary">模型</Text>
+                  <div className="mono-block">{status.web.model}</div>
+                </div>
+                <div className="detail-block">
+                  <Text type="secondary">Python</Text>
+                  <div className="mono-block">{status.environment.python}</div>
+                </div>
+                <div className="detail-block">
+                  <Text type="secondary">平台</Text>
+                  <div className="mono-block">{status.environment.platform}</div>
+                </div>
+              </div>
+            </div>
           </Card>
-        </Space>
-      )}
+
+          <div className="page-stack system-side-stack">
+            <Card className="config-panel-card">
+              <div className="config-card-header">
+                <div className="page-section-title">
+                  <Typography.Title level={4}>频道状态</Typography.Title>
+                  <Text type="secondary">当前保存配置中真正启用的频道。</Text>
+                </div>
+              </div>
+              <div className="page-scroll-shell system-tag-shell">
+                {enabledChannels.length > 0 ? (
+                  <div className="tag-cloud">
+                    {enabledChannels.map((channel) => (
+                      <Tag key={channel}>{channel}</Tag>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty description="当前没有启用任何频道" className="empty-block" />
+                )}
+              </div>
+            </Card>
+
+            <Card className="config-panel-card">
+              <div className="config-card-header">
+                <div className="page-section-title">
+                  <Typography.Title level={4}>Cron 运行状态</Typography.Title>
+                  <Text type="secondary">后台调度任务的服务心跳、投递策略和下一次唤醒时间。</Text>
+                </div>
+              </div>
+              <div className="page-meta-grid system-side-grid">
+                <div className="page-meta-card">
+                  <span>服务状态</span>
+                  <strong>{status.cron.enabled ? '运行中' : '已停止'}</strong>
+                </div>
+                <div className="page-meta-card">
+                  <span>投递模式</span>
+                  <strong>{status.cron.deliveryMode === 'agent_only' ? '仅 Agent' : status.cron.deliveryMode}</strong>
+                </div>
+                <div className="page-meta-card">
+                  <span>下一次唤醒</span>
+                  <strong>{status.cron.nextWakeAtMs ? formatDateTimeZh(status.cron.nextWakeAtMs) : '--'}</strong>
+                </div>
+                <div className="page-meta-card">
+                  <span>已调度任务</span>
+                  <strong>{status.cron.jobs}</strong>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="config-panel-card">
+              <div className="config-card-header">
+                <div className="page-section-title">
+                  <Typography.Title level={4}>环境信息</Typography.Title>
+                  <Text type="secondary">方便确认当前实例版本与运行平台。</Text>
+                </div>
+              </div>
+              <div className="page-meta-grid system-side-grid">
+                <div className="page-meta-card">
+                  <span>版本</span>
+                  <strong>{status.web.version}</strong>
+                </div>
+                <div className="page-meta-card">
+                  <span>Python</span>
+                  <strong>{status.environment.python}</strong>
+                </div>
+                <div className="page-meta-card">
+                  <span>平台</span>
+                  <strong>{status.environment.platform}</strong>
+                </div>
+                <div className="page-meta-card">
+                  <span>运行时长</span>
+                  <strong>{formatUptimeZh(status.web.uptime)}</strong>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

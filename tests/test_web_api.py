@@ -99,6 +99,18 @@ def test_web_api_cron_crud_and_run(web_client: TestClient) -> None:
     assert deleted.json()["data"] == {"deleted": True}
 
 
+def test_web_api_config_meta_uses_provider_registry(web_client: TestClient) -> None:
+    config_meta = web_client.get("/api/v1/config/meta")
+    assert config_meta.status_code == 200
+    payload = config_meta.json()["data"]
+
+    providers = payload["providers"]
+    assert any(item["name"] == "openrouter" and item["category"] == "gateway" for item in providers)
+    assert any(item["name"] == "ollama" and item["category"] == "local" for item in providers)
+    assert any(item["name"] == "openai_codex" and item["category"] == "oauth" for item in providers)
+    assert payload["resolvedProvider"] == "auto"
+
+
 def test_web_api_unknown_route_uses_envelope(web_client: TestClient) -> None:
     response = web_client.post("/api/v1/does-not-exist")
     assert response.status_code == 404
