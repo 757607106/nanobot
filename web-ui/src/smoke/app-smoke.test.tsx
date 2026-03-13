@@ -1743,7 +1743,7 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('验证')).toBeInTheDocument()
     expect(screen.getByText('自动化')).toBeInTheDocument()
     expect(screen.getByText('日志与运维动作')).toBeInTheDocument()
-    expect(screen.getByText('把配置问题变成可执行修复项')).toBeInTheDocument()
+    expect(screen.getByText('配置修复中心')).toBeInTheDocument()
   })
 
   it('redirects unauthenticated users to the login page', async () => {
@@ -1846,13 +1846,13 @@ describe('web app smoke pages', () => {
 
   it('renders the calendar page', async () => {
     renderPage(<CalendarPage />)
-    expect(await screen.findByText('把事件、提醒和派生任务留在同一个工作区')).toBeInTheDocument()
+    expect(await screen.findByText('日程与提醒')).toBeInTheDocument()
     expect(screen.getByText('派生提醒任务')).toBeInTheDocument()
   })
 
   it('renders the cron page', async () => {
     renderPage(<CronPage />)
-    expect(await screen.findByText('安排自动化执行，而不是靠记忆推进')).toBeInTheDocument()
+    expect(await screen.findByText('自动化任务')).toBeInTheDocument()
   })
 
   it('renders the skills page', async () => {
@@ -1864,20 +1864,20 @@ describe('web app smoke pages', () => {
 
   it('renders the main prompt page', async () => {
     renderPage(<MainPromptPage />)
-    expect(await screen.findByText('维护工作区引导与长期记忆')).toBeInTheDocument()
+    expect(await screen.findByText('工作区引导与记忆')).toBeInTheDocument()
     expect(screen.getByText('工作区文件选择')).toBeInTheDocument()
     expect(screen.getByText('长期记忆')).toBeInTheDocument()
   })
 
   it('renders the templates page', async () => {
     renderPage(<TemplatesPage />)
-    expect(await screen.findByText('把 Agent 模板当成一等资产来管理')).toBeInTheDocument()
+    expect(await screen.findByText('Agent 模板中心')).toBeInTheDocument()
     expect(screen.getByText('导入 / 导出 / 冲突策略')).toBeInTheDocument()
   })
 
   it('renders the mcp page', async () => {
     renderPage(<McpPage />)
-    expect(await screen.findByText('把 MCP 变成可安装、可验证的扩展目录')).toBeInTheDocument()
+    expect(await screen.findByText('MCP 扩展目录')).toBeInTheDocument()
     expect(screen.getByText('从仓库安装')).toBeInTheDocument()
     expect(screen.getByText('MCP 目录')).toBeInTheDocument()
     expect(screen.getByText('Workspace Files')).toBeInTheDocument()
@@ -1933,7 +1933,7 @@ describe('web app smoke pages', () => {
     )
     expect(await screen.findByText('配置 Telegram')).toBeInTheDocument()
     expect(screen.getByText('启用状态')).toBeInTheDocument()
-    expect(screen.getByText('测试当前配置')).toBeInTheDocument()
+    expect(screen.getByText('测试')).toBeInTheDocument()
     expect(screen.getByText('接入字段')).toBeInTheDocument()
   })
 
@@ -1963,7 +1963,7 @@ describe('web app smoke pages', () => {
 
   it('renders the profile page', async () => {
     renderPage(<ProfilePage />)
-    expect(await screen.findByText('维护管理员资料、头像与密码轮换')).toBeInTheDocument()
+    expect(await screen.findByText('管理员资料与安全')).toBeInTheDocument()
     expect(screen.getByText('密码轮换')).toBeInTheDocument()
   })
 
@@ -1975,12 +1975,12 @@ describe('web app smoke pages', () => {
 
   it('renders the validation page', async () => {
     renderPage(<ValidationPage />)
-    expect(await screen.findByText('把配置问题变成可执行修复项')).toBeInTheDocument()
+    expect(await screen.findByText('配置修复中心')).toBeInTheDocument()
     expect(screen.getByText('危险配置隔离区')).toBeInTheDocument()
   })
 
   it('renders the system page', async () => {
     renderPage(<SystemPage />)
-    expect(await screen.findByText('聚焦实例健康、绑定关系与环境信息')).toBeInTheDocument()
+    expect(await screen.findByText('实例健康与环境')).toBeInTheDocument()
   })
 })

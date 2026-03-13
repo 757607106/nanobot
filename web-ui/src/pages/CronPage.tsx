@@ -273,8 +273,8 @@ export default function CronPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="定时任务"
-        title="安排自动化执行，而不是靠记忆推进"
-        description="当前页面直接连接项目里的 cron 服务，适合创建固定节奏的总结、检查、同步和提醒任务。"
+        title="自动化任务"
+        description="直接连接项目 cron 服务，用来安排固定节奏的总结、检查、同步和提醒。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>
@@ -298,7 +298,7 @@ export default function CronPage() {
           <div className="section-heading-row">
             <div className="page-section-title">
               <Title level={4}>任务工作区</Title>
-              <Text type="secondary">筛选、查看和管理当前 Web 后端可执行的定时任务。列表内容较长时会在当前区域内滚动。</Text>
+              <Text type="secondary">筛选、查看和管理当前 Web 后端可执行的定时任务。</Text>
             </div>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
               新建任务
@@ -306,12 +306,12 @@ export default function CronPage() {
           </div>
 
           {status?.deliveryMode === 'agent_only' && (
-            <Alert
-              showIcon
-              type="info"
-              message="当前 Web UI 仅通过 Agent 执行定时任务。"
-              description="投递目标字段会保留用于兼容，但这个页面不会顺带启动 gateway 频道。"
-            />
+          <Alert
+            showIcon
+            type="info"
+            message="当前 Web UI 仅通过 Agent 执行定时任务。"
+            description="投递目标字段仅保留兼容，不会顺带启动 gateway 频道。"
+          />
           )}
 
           <div className="page-meta-grid">
@@ -359,7 +359,7 @@ export default function CronPage() {
               </div>
             ) : filteredJobs.length === 0 ? (
               <Empty
-                description="还没有定时任务。创建一个任务来安排未来的 Agent 执行。"
+                description="暂无定时任务"
                 className="empty-block cron-empty-state"
               />
             ) : (

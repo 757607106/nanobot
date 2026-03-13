@@ -155,12 +155,12 @@ export default function ValidationPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="Validation Center"
-        title="把配置问题变成可执行修复项"
-        description="统一跑 provider、runtime、gateway、路径与 MCP readiness 检查，并且给出可以直接跳转的修复入口。"
+        title="配置修复中心"
+        description="统一检查 provider、runtime、gateway、路径与 MCP readiness，并提供可直接跳转的修复入口。"
         badges={[<Tag key="summary">{summary.label}</Tag>]}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadValidation()} loading={loading}>
-            重新运行验证
+            重新检查
           </Button>
         )}
         stats={[

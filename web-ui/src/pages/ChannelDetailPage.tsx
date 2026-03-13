@@ -325,7 +325,7 @@ export default function ChannelDetailPage() {
         className="page-hero-compact"
         eyebrow="渠道详情"
         title={`配置 ${meta.label}`}
-        description="这个页面只处理单个渠道的接入字段、启用状态和缺失项，不混入其他平台设置。"
+        description="这里只处理当前渠道的接入字段、启用状态和缺失项。"
         badges={[
           <Tag color={statusColorMap[detail.channel.status]} key="status">{detail.channel.statusLabel}</Tag>,
           <Tag key="category">{channelCategoryLabels[meta.category]}</Tag>,
@@ -333,14 +333,7 @@ export default function ChannelDetailPage() {
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadChannel()}>
-              重新加载
-            </Button>
-            <Button
-              icon={<SearchOutlined />}
-              loading={testing}
-              onClick={() => void testChannel()}
-            >
-              测试连接
+              刷新
             </Button>
             <Button
               type="primary"
@@ -349,7 +342,7 @@ export default function ChannelDetailPage() {
               onClick={() => void saveChannel()}
               data-testid={testIds.channels.detailSave}
             >
-              保存渠道配置
+              保存
             </Button>
           </Space>
         )}
@@ -375,7 +368,7 @@ export default function ChannelDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>启用状态</Typography.Title>
-                <Text type="secondary">只有启用后的渠道才会被当前实例加载。</Text>
+                <Text type="secondary">启用后才会被当前实例加载。</Text>
               </div>
               <Switch
                 checked={Boolean(draftConfig.enabled)}
@@ -389,7 +382,7 @@ export default function ChannelDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>测试连接</Typography.Title>
-                <Text type="secondary">使用当前页面草稿配置直接测试，不必先保存。</Text>
+                <Text type="secondary">直接用当前草稿测试，不必先保存。</Text>
               </div>
               <Button
                 icon={<SearchOutlined />}
@@ -397,7 +390,7 @@ export default function ChannelDetailPage() {
                 onClick={() => void testChannel()}
                 data-testid={testIds.channels.detailTest}
               >
-                测试当前配置
+                测试
               </Button>
             </div>
 
@@ -421,7 +414,7 @@ export default function ChannelDetailPage() {
                 </div>
               </Space>
             ) : (
-              <Text type="secondary">点击测试后，会按当前页面草稿配置做最小探测，不会直接启动长期连接。</Text>
+              <Text type="secondary">点击后会做最小探测，不会直接启动长期连接。</Text>
             )}
           </Card>
 
@@ -430,7 +423,7 @@ export default function ChannelDetailPage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>绑定流程</Typography.Title>
-                  <Text type="secondary">这里负责启动本地 bridge、获取二维码、查看绑定状态和停止流程。</Text>
+                  <Text type="secondary">这里负责启动 bridge、获取二维码和查看绑定状态。</Text>
                 </div>
                 <Space wrap>
                   <Button
@@ -439,7 +432,7 @@ export default function ChannelDetailPage() {
                     onClick={() => void loadWhatsAppBindingStatus()}
                     data-testid={testIds.channels.whatsappBindRefresh}
                   >
-                    刷新绑定状态
+                    刷新状态
                   </Button>
                   <Button
                     type="primary"
@@ -497,13 +490,13 @@ export default function ChannelDetailPage() {
                     <Space direction="vertical" size={8}>
                       <Text strong>扫描二维码完成设备绑定</Text>
                       <QRCode value={whatsappBinding.qrCode} size={192} />
-                      <Text type="secondary">二维码刷新后请重新扫码；扫码完成后点击“刷新绑定状态”确认连接。</Text>
+                      <Text type="secondary">二维码刷新后请重新扫码，完成后再刷新状态。</Text>
                     </Space>
                   ) : (
                     <Text type="secondary">
                       {whatsappBinding.bindingRequired
-                        ? '启动绑定后，如果 bridge 已返回二维码，会在这里直接展示。'
-                        : '当前实例已存在认证数据，如需重新绑定可以先停止流程再重启。'}
+                        ? '启动绑定后，如果 bridge 返回二维码，会在这里展示。'
+                        : '当前已有认证数据，如需重绑可先停止再重启。'}
                     </Text>
                   )}
 
@@ -519,7 +512,7 @@ export default function ChannelDetailPage() {
                   ) : null}
                 </Space>
               ) : (
-                <Text type="secondary">这个区域用于管理 WhatsApp bridge 绑定流程，当前还没有读取到状态。</Text>
+                <Text type="secondary">这里用于管理 WhatsApp 绑定流程，当前还没有读取到状态。</Text>
               )}
             </Card>
           ) : null}
@@ -529,7 +522,7 @@ export default function ChannelDetailPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>接入字段</Typography.Title>
-              <Text type="secondary">先完成高频接入字段，再在左侧测试区确认连通性。</Text>
+              <Text type="secondary">先完成高频字段，再到左侧测试连通性。</Text>
             </div>
           </div>
 

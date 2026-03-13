@@ -43,8 +43,8 @@ export default function SystemPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="后端健康度"
-        title="聚焦实例健康、绑定关系与环境信息"
-        description="系统页只保留实例健康、当前绑定的工作区与模型，以及运行环境信息；验证、自动化和运维细节都放到系统域其他标签。"
+        title="实例健康与环境"
+        description="查看健康状态、工作区绑定与运行环境。验证、自动化和运维细节放到系统域其他标签。"
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadStatus()} loading={loading}>
             刷新
@@ -64,7 +64,7 @@ export default function SystemPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>实例绑定</Typography.Title>
-                <Text type="secondary">这里只确认当前控制台绑定到了哪个工作区、模型和配置文件，不再夹带运维摘要。</Text>
+                <Text type="secondary">确认当前绑定的工作区、模型和配置文件。</Text>
               </div>
               <Tag>{status.web.version}</Tag>
             </div>
@@ -107,7 +107,7 @@ export default function SystemPage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>环境信息</Typography.Title>
-                  <Text type="secondary">方便确认当前实例版本、运行平台与语言环境。</Text>
+                  <Text type="secondary">查看当前实例版本、平台与语言环境。</Text>
                 </div>
               </div>
               <div className="page-meta-grid system-side-grid">

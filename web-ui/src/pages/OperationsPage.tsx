@@ -74,10 +74,10 @@ export default function OperationsPage() {
         className="page-hero-compact"
         eyebrow="Operations Center"
         title="只保留日志与运维动作"
-        description="运维页不再重复展示会话、消息和实例用量，只保留实例级日志尾部和部署方声明的运维动作。"
+        description="查看日志尾部和可用运维动作。"
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadOps()} loading={loading}>
-            刷新运维中心
+            刷新
           </Button>
         )}
         stats={[
@@ -92,7 +92,7 @@ export default function OperationsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>日志尾部</Typography.Title>
-              <Text type="secondary">默认读取日志目录中的最新文件尾部，帮助快速定位实例级错误，不需要再切回终端。</Text>
+              <Text type="secondary">读取最新日志尾部，快速定位实例级错误。</Text>
             </div>
           </div>
 
@@ -116,7 +116,7 @@ export default function OperationsPage() {
                 )}
               />
             ) : (
-              <Empty description="当前日志目录中没有可读文件" className="empty-block" />
+              <Empty description="暂无可读日志" className="empty-block" />
             )}
           </div>
         </Card>
@@ -125,7 +125,7 @@ export default function OperationsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>运维动作</Typography.Title>
-              <Text type="secondary">重启和更新动作只会在部署方显式声明 hook 命令后开放，默认保持不可执行。</Text>
+              <Text type="secondary">只有显式声明的 hook 动作才会开放执行。</Text>
             </div>
           </div>
 
@@ -163,7 +163,7 @@ export default function OperationsPage() {
                 )}
               />
             ) : (
-              <Empty description="当前没有可用运维动作" className="empty-block" />
+              <Empty description="暂无可用运维动作" className="empty-block" />
             )}
           </div>
         </Card>

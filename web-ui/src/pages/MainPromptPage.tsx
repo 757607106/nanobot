@@ -27,48 +27,48 @@ const documentMeta: Record<string, { group: DocumentGroupKey; title: string; sum
   'AGENTS.md': {
     group: 'guidance',
     title: '主引导',
-    summary: '定义 nanobot 在当前工作区中的核心行为、约束和协作方式。',
+    summary: '定义当前工作区里的核心行为、约束和协作方式。',
   },
   'SOUL.md': {
     group: 'guidance',
     title: '风格与价值观',
-    summary: '补充角色气质、表达风格和长期协作倾向。',
+    summary: '补充角色气质、表达风格和协作倾向。',
   },
   'USER.md': {
     group: 'guidance',
     title: '用户偏好',
-    summary: '记录这个工作区里使用者的背景、习惯和交付偏好。',
+    summary: '记录使用者背景、习惯和交付偏好。',
   },
   'TOOLS.md': {
     group: 'guidance',
     title: '工具约束',
-    summary: '约束工具使用边界、默认流程和高频操作规则。',
+    summary: '约束工具边界、默认流程和高频规则。',
   },
   'HEARTBEAT.md': {
     group: 'guidance',
     title: '节奏与巡检',
-    summary: '沉淀工作节奏、例行检查项和推进策略。',
+    summary: '沉淀工作节奏、检查项和推进策略。',
   },
   'memory/MEMORY.md': {
     group: 'memory',
     title: '长期记忆',
-    summary: '沉淀需要跨会话延续的重要事实、决策和上下文。',
+    summary: '沉淀跨会话延续的重要事实、决策和上下文。',
   },
   'memory/HISTORY.md': {
     group: 'memory',
     title: '历史记录',
-    summary: '记录阶段性变更、里程碑和可追溯的历史背景。',
+    summary: '记录阶段变更、里程碑和历史背景。',
   },
 }
 
 const groupMeta: Record<DocumentGroupKey, { label: string; summary: string }> = {
   guidance: {
     label: '工作区引导',
-    summary: '这组文件决定当前实例在这个工作区里如何行动、如何表达以及如何使用工具。',
+    summary: '这组文件决定当前工作区里的行为、表达和工具使用方式。',
   },
   memory: {
     label: '长期记忆',
-    summary: '这组文件用于沉淀跨会话延续的信息，而不是描述一次性的任务输入。',
+    summary: '这组文件沉淀跨会话信息，不记录一次性任务输入。',
   },
 }
 
@@ -185,8 +185,8 @@ export default function MainPromptPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="提示词与记忆"
-        title="维护工作区引导与长期记忆"
-        description="这里只管理 `AGENTS.md`、`SOUL.md`、`USER.md`、`TOOLS.md`、`HEARTBEAT.md`、`memory/MEMORY.md` 和 `memory/HISTORY.md`。"
+        title="工作区引导与记忆"
+        description="集中维护引导文件与长期记忆，不把模型、渠道和模板配置混进来。"
         actions={(
           <Space wrap>
             <Button
@@ -197,7 +197,7 @@ export default function MainPromptPage() {
               }}
               loading={loadingList || loadingDocument}
             >
-              刷新页面
+              刷新
             </Button>
             <Popconfirm
               title="确定恢复默认内容吗？"
@@ -228,14 +228,14 @@ export default function MainPromptPage() {
             showIcon
             type="info"
             message="这不是通用文档中心。"
-            description="这个页面只负责工作区引导和长期记忆；单次任务说明、模型配置、渠道接入和模板管理都不应该塞到这里。"
+            description="这里只管工作区引导和长期记忆。"
           />
 
           <Card className="config-panel-card prompt-nav-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>工作区文件选择</Typography.Title>
-                <Text type="secondary">先选对文件，再编辑内容。引导文件和长期记忆文件分开管理。</Text>
+                <Text type="secondary">先选文件，再编辑内容。</Text>
               </div>
               <Tag>{previewMode === 'edit' ? '编辑模式' : '预览模式'}</Tag>
             </div>
@@ -309,7 +309,7 @@ export default function MainPromptPage() {
             <div className="page-section-title">
               <Typography.Title level={4}>{document?.label || activeSummary?.label || '文档内容'}</Typography.Title>
               <Text type="secondary">
-                {activeMeta?.summary || '支持直接编辑或切到预览模式查看 Markdown 渲染效果。'}
+                {activeMeta?.summary || '支持直接编辑，也可以切到预览模式。'}
               </Text>
             </div>
             <Segmented

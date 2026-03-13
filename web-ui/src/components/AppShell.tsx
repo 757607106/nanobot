@@ -156,7 +156,6 @@ export default function AppShell() {
           <div className="brand-mark">N</div>
           <div className="brand-copy">
             <Typography.Title level={2}>nanobot</Typography.Title>
-            <Typography.Text>围绕当前实例的核心工作流构建的中文控制台。</Typography.Text>
           </div>
         </div>
       </div>
@@ -219,9 +218,6 @@ export default function AppShell() {
               ) : null}
               <div className="header-title-block">
                 <Typography.Title level={5}>{activeRoute.label}</Typography.Title>
-                {!isChatRoute ? (
-                  <Typography.Text className="header-summary">{activeRoute.summary}</Typography.Text>
-                ) : null}
               </div>
               <span className="header-live-pill is-online">{isChatRoute ? '实例' : '当前实例'}</span>
             </div>

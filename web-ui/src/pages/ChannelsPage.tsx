@@ -100,11 +100,11 @@ export default function ChannelsPage() {
         className="page-hero-compact"
         eyebrow="渠道接入"
         title="把聊天渠道接进实例"
-        description="这个页面只处理渠道列表、启用状态和配置入口，不再把渠道配置埋在通用配置页里。"
+        description="查看渠道列表、启用状态和配置入口。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadChannels()}>
-              刷新列表
+              刷新
             </Button>
           </Space>
         )}
@@ -120,7 +120,7 @@ export default function ChannelsPage() {
         <div className="config-card-header">
           <div className="page-section-title">
             <Typography.Title level={4}>统一投递行为</Typography.Title>
-            <Text type="secondary">先定义所有已启用渠道是否展示实时进度和工具提示。</Text>
+            <Text type="secondary">统一控制进度和工具提示是否出现在渠道里。</Text>
           </div>
           <Button
             type="primary"
@@ -138,7 +138,7 @@ export default function ChannelsPage() {
             <div className="channel-flag-card">
               <div>
                 <Text strong>发送进度</Text>
-                <Text type="secondary">把 agent 的中间进度流式发送到聊天渠道。</Text>
+                <Text type="secondary">把执行进度同步到聊天渠道。</Text>
               </div>
               <Switch
                 checked={deliveryDraft.sendProgress}
@@ -150,7 +150,7 @@ export default function ChannelsPage() {
             <div className="channel-flag-card">
               <div>
                 <Text strong>发送工具提示</Text>
-                <Text type="secondary">在渠道内展示工具调用提示，例如读取文件或搜索网页。</Text>
+                <Text type="secondary">在渠道里显示工具调用提示。</Text>
               </div>
               <Switch
                 checked={deliveryDraft.sendToolHints}
@@ -178,7 +178,7 @@ export default function ChannelsPage() {
             <div className="section-heading-row">
                 <div className="page-section-title">
                   <Typography.Title level={4}>{channelCategoryLabels[category]}</Typography.Title>
-                  <Text type="secondary">这里聚焦接入状态与配置入口，单渠道详情页已支持直接发起测试。</Text>
+                  <Text type="secondary">这里看接入状态，测试放到详情页。</Text>
                 </div>
               <Tag>{items.length} 个渠道</Tag>
             </div>
@@ -201,7 +201,7 @@ export default function ChannelsPage() {
                         </div>
                       </div>
 
-                      <Text type="secondary">{state?.statusDetail ?? '尚未读取到当前状态。'}</Text>
+                      <Text type="secondary">{state?.statusDetail ?? '暂未读取状态。'}</Text>
 
                       {missingLabels.length > 0 ? (
                         <div className="config-meta-row">
@@ -214,7 +214,7 @@ export default function ChannelsPage() {
 
                       <div className="config-card-footer">
                         <Text type="secondary">
-                          {state?.enabled ? '当前实例会在运行时加载这个渠道。' : '先完成配置，再决定是否启用。'}
+                          {state?.enabled ? '运行时会加载这个渠道。' : '先补齐配置，再决定是否启用。'}
                         </Text>
                         <Button
                           type="primary"

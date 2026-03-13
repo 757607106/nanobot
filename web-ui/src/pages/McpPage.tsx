@@ -139,12 +139,12 @@ export default function McpPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="MCP Registry"
-        title="把 MCP 变成可安装、可验证的扩展目录"
-        description="这个页面只保留四件事：看目录、从仓库安装、执行探测、进入单个 MCP 做隔离测试。"
+        title="MCP 扩展目录"
+        description="在这里查看目录、从仓库安装、执行探测，并进入单个 MCP 做隔离测试。"
         actions={(
           <div className="mcp-hero-actions">
             <Button icon={<ReloadOutlined />} onClick={() => void loadServers()} loading={loading}>
-              刷新索引
+              刷新
             </Button>
           </div>
         )}
@@ -161,7 +161,7 @@ export default function McpPage() {
           className="mcp-inline-alert"
           type="info"
           message="先补齐配置，再执行探测"
-          description={`当前还有 ${summary.incomplete} 个 MCP 缺少关键配置，建议先完成安装或补字段，再进入探测和隔离测试。`}
+          description={`还有 ${summary.incomplete} 个 MCP 缺少关键配置，补齐后再探测。`}
         />
       ) : null}
 
@@ -169,7 +169,7 @@ export default function McpPage() {
         <div className="config-card-header">
           <div className="page-section-title">
             <Typography.Title level={4}>从仓库安装</Typography.Title>
-            <Text type="secondary">输入仓库地址，先预检安装条件，再把 MCP 登记到当前实例。</Text>
+            <Text type="secondary">输入仓库地址，预检后安装并登记。</Text>
           </div>
         </div>
 
@@ -275,8 +275,8 @@ export default function McpPage() {
             message={`MCP ${lastInstall.serverName} 已安装并登记`}
             description={
               lastInstall.installDir
-                ? `安装目录：${lastInstall.installDir}。当前默认保持禁用，等后续测试通过后再启用。`
-                : '当前默认保持禁用，等后续测试通过后再启用。'
+                ? `安装目录：${lastInstall.installDir}。默认保持禁用，测试通过后再启用。`
+                : '默认保持禁用，测试通过后再启用。'
             }
           />
         ) : null}
@@ -286,7 +286,7 @@ export default function McpPage() {
         <div className="config-card-header">
           <div className="page-section-title">
             <Typography.Title level={4}>MCP 目录</Typography.Title>
-            <Text type="secondary">这里聚焦目录、探测和进入测试；详细配置、启停和修复保留到单个 MCP 详情页。</Text>
+            <Text type="secondary">这里聚焦目录、探测和进入测试。</Text>
           </div>
           <div className="tag-cloud">
             <Tag>登记 {summary.total}</Tag>
@@ -351,7 +351,7 @@ export default function McpPage() {
                     onClick={() => navigate(`/mcp/${encodeURIComponent(entry.name)}`)}
                     data-testid={`${testIds.mcp.detailLinkPrefix}${entry.name}`}
                   >
-                    进入测试
+                    进入详情
                   </Button>
                 </div>
               </article>
@@ -360,7 +360,7 @@ export default function McpPage() {
         ) : (
           <Empty
             className="empty-block"
-            description="当前还没有登记任何 MCP 服务，先从上面的仓库入口安装一个 MCP。"
+            description="还没有登记 MCP，先从上面的仓库入口安装一个。"
           />
         )}
       </Card>

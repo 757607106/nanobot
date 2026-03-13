@@ -263,9 +263,9 @@ export default function TemplatesPage() {
       setReloading(true)
       await api.reloadAgentTemplates()
       await loadTemplateWorkspace()
-      message.success('模板索引已重新加载')
+      message.success('模板索引已同步')
     } catch (error) {
-      setTemplateError(getErrorMessage(error, '重载模板失败'))
+      setTemplateError(getErrorMessage(error, '同步模板索引失败'))
     } finally {
       setReloading(false)
     }
@@ -323,18 +323,18 @@ export default function TemplatesPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="Templates"
-        title="把 Agent 模板当成一等资产来管理"
-        description="这页集中处理内置模板、工作区模板、导入导出和冲突策略，不需要再通过原始 API 手工维护。"
+        title="Agent 模板中心"
+        description="集中管理内置模板、工作区模板，以及导入导出和冲突策略。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadTemplateWorkspace()} loading={loading}>
-              刷新模板
+              刷新
             </Button>
             <Button icon={<PlusOutlined />} onClick={() => startCreateTemplate(false)}>
               新建模板
             </Button>
             <Button icon={<AppstoreOutlined />} onClick={() => void handleReloadTemplates()} loading={reloading}>
-              重载模板索引
+              同步索引
             </Button>
           </Space>
         )}
@@ -351,7 +351,7 @@ export default function TemplatesPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>模板索引</Typography.Title>
-              <Text type="secondary">先区分内置模板和工作区模板，再决定是直接编辑、复制还是导出。</Text>
+              <Text type="secondary">先区分内置模板和工作区模板，再决定后续操作。</Text>
             </div>
             <Tag>{templates.length} 项</Tag>
           </div>
@@ -385,7 +385,7 @@ export default function TemplatesPage() {
                 )}
               />
             ) : (
-              <Empty description="当前还没有模板" className="empty-block" />
+              <Empty description="暂无模板" className="empty-block" />
             )}
           </div>
         </Card>
@@ -395,7 +395,7 @@ export default function TemplatesPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>{template ? `维护 ${template.name}` : '创建工作区模板'}</Typography.Title>
-                <Text type="secondary">模板级启用态、工具清单、规则与系统提示词都在这里维护。</Text>
+                <Text type="secondary">这里维护启用态、工具、规则和系统提示词。</Text>
               </div>
               <Space wrap>
                 {template ? <Tag>{template.is_builtin ? '内置只读' : '工作区模板'}</Tag> : <Tag>新建中</Tag>}
@@ -409,7 +409,7 @@ export default function TemplatesPage() {
                   type="info"
                   showIcon
                   message="当前模板来自内置模板库，只读。"
-                  description="如果你想基于它继续改造，建议使用“另存为副本”，把内置模板转成工作区模板后再编辑。"
+                  description="如需继续改造，建议先另存为副本。"
                 />
               ) : null}
 
@@ -519,7 +519,7 @@ export default function TemplatesPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>导入 / 导出 / 冲突策略</Typography.Title>
-                <Text type="secondary">直接把导出的 YAML 留在这里做 round trip，冲突行为在导入前就明确声明。</Text>
+                <Text type="secondary">在这里处理导入、导出和冲突策略。</Text>
               </div>
             </div>
 
@@ -569,7 +569,7 @@ export default function TemplatesPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>可用工具与技能</Typography.Title>
-                <Text type="secondary">先看合法工具，再决定模板里的工具和技能组合，避免保存时再撞上校验错误。</Text>
+                <Text type="secondary">先确认可用工具，再决定模板里的组合。</Text>
               </div>
             </div>
 

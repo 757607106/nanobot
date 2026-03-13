@@ -858,7 +858,7 @@ export default function ChatPage() {
             <div>
               <span className="section-kicker">会话中心</span>
               <Typography.Title level={4}>工作区会话</Typography.Title>
-              <Text type="secondary">只保留最近会话和当前对话主线，减少无关信息干扰。</Text>
+              <Text type="secondary">只保留最近会话和当前对话主线。</Text>
             </div>
             <Button
               type="primary"
@@ -935,7 +935,7 @@ export default function ChatPage() {
                 <Text type="secondary">
                   {selectedSession
                     ? `最后更新于 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}，继续追问或补充附件即可。`
-                    : '直接开始输入，系统会自动为当前问题创建新的会话。'}
+                    : '直接开始输入，系统会自动创建新会话。'}
                 </Text>
               </div>
               <div className="chat-stage-actions">
@@ -960,11 +960,11 @@ export default function ChatPage() {
                 </div>
               ) : messageInfos.length === 0 ? (
                 <div className="chat-empty-state chat-empty-state-compact">
-                  <Welcome
-                    variant="borderless"
-                    icon={<RobotOutlined />}
-                    title={selectedSession ? '继续这个对话' : '开始一个更干净的工作区对话'}
-                    description="把问题、文件和必要上下文放进同一个输入区，其余信息尽量留在消息流内部解决。"
+                    <Welcome
+                      variant="borderless"
+                      icon={<RobotOutlined />}
+                      title={selectedSession ? '继续这个对话' : '开始一个更干净的工作区对话'}
+                      description="把问题、文件和必要上下文放进同一个输入区。"
                     extra={
                       <div className="chat-empty-extra">
                         {quickPromptItems.length > 0 ? (
@@ -999,7 +999,7 @@ export default function ChatPage() {
                 <div className="composer-pending-attachments">
                   <div className="chat-inline-section-head">
                     <span>待发送附件</span>
-                    <Text type="secondary">发送时会自动上传到当前工作区，并作为本轮上下文。</Text>
+                    <Text type="secondary">发送时会自动上传到当前工作区。</Text>
                   </div>
                   <div>
                     <Attachments

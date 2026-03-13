@@ -145,14 +145,14 @@ export default function SkillsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>推荐路径：技能市场</Typography.Title>
-                <Text type="secondary">优先去市场浏览和下载技能，当前实例内置了 ClawHub 兼容技能生态。</Text>
+                <Text type="secondary">优先去市场浏览和下载技能。</Text>
               </div>
               <Tag color="processing">推荐</Tag>
             </div>
 
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
               <Text type="secondary">
-                先在市场里找到合适的技能，再把下载好的技能目录带回当前实例；如果市场里没有，也可以走下方手动上传兜底。
+                先在市场里找到合适的技能，再把目录带回当前实例；没有的话再手动上传。
               </Text>
               <Space wrap>
                 <Button type="primary" href="https://clawhub.ai" target="_blank" rel="noreferrer">
@@ -172,7 +172,7 @@ export default function SkillsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>兜底路径：手动上传</Typography.Title>
-                <Text type="secondary">市场外的技能目录仍可直接上传到当前工作区，不影响原版 nanobot 主链。</Text>
+                <Text type="secondary">市场外的技能目录也可以直接上传到当前工作区。</Text>
               </div>
               <Button
                 type="primary"
@@ -188,7 +188,7 @@ export default function SkillsPage() {
               showIcon
               type="info"
               message="上传前请确认目录里包含 SKILL.md。"
-              description="上传后的目录会写入当前工作区的 `skills/` 下，运行时会自动继续沿用原版技能发现机制。"
+              description="上传后会写入当前工作区的 `skills/` 目录。"
             />
           </Card>
         </div>
@@ -197,7 +197,7 @@ export default function SkillsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>已安装技能</Typography.Title>
-              <Text type="secondary">这里只展示当前实例已经可用的技能，并保留删除工作区技能的能力。</Text>
+              <Text type="secondary">这里展示当前实例可用的技能。</Text>
             </div>
             <Tag>{filteredSkills.length} 项技能</Tag>
           </div>
@@ -219,7 +219,7 @@ export default function SkillsPage() {
               </div>
             ) : filteredSkills.length === 0 ? (
               <Empty
-                description={skills.length === 0 ? '当前还没有安装任何技能' : '没有匹配当前搜索条件的技能'}
+                description={skills.length === 0 ? '还没有安装技能' : '没有匹配结果'}
                 className="empty-block"
               />
             ) : (

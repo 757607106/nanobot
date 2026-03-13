@@ -192,12 +192,12 @@ export default function ProfilePage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="Admin Profile"
-        title="维护管理员资料、头像与密码轮换"
-        description="这部分独立于普通配置页，专门处理管理员身份本身，避免把账号信息和运行时配置混在一起。"
+        title="管理员资料与安全"
+        description="集中维护管理员资料、头像和密码，不把账号信息混进运行时配置。"
         badges={[<Tag key="username">@{profile.username}</Tag>]}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} loading={loading}>
-            刷新资料
+            刷新
           </Button>
         )}
         stats={[
@@ -213,7 +213,7 @@ export default function ProfilePage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>管理员资料</Typography.Title>
-              <Text type="secondary">用户名用于登录，展示名称和邮箱用于后续运维与通知信息呈现。</Text>
+              <Text type="secondary">用户名用于登录，展示名称和邮箱用于展示与通知。</Text>
             </div>
           </div>
 
@@ -256,7 +256,7 @@ export default function ProfilePage() {
                 onClick={() => void handleSaveProfile()}
                 data-testid={testIds.profile.saveProfile}
               >
-                保存资料
+                保存
               </Button>
               <Text type="secondary">创建时间：{formatDateTimeZh(profile.createdAt)}</Text>
             </Space>
@@ -267,7 +267,7 @@ export default function ProfilePage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>头像</Typography.Title>
-              <Text type="secondary">头像独立存储为受限图片文件，不直接写进会话状态，避免认证信息膨胀。</Text>
+              <Text type="secondary">头像单独存储，不直接写进会话状态。</Text>
             </div>
           </div>
 
@@ -306,7 +306,7 @@ export default function ProfilePage() {
 
             <Space wrap>
               <Button type="primary" icon={<SaveOutlined />} loading={uploadingAvatar} onClick={() => void handleUploadAvatar()}>
-                上传头像
+                上传
               </Button>
               <Button danger icon={<DeleteOutlined />} loading={uploadingAvatar} disabled={!profile.hasAvatar} onClick={() => void handleDeleteAvatar()}>
                 移除头像
@@ -319,7 +319,7 @@ export default function ProfilePage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>密码轮换</Typography.Title>
-              <Text type="secondary">更新密码后会重新签发当前会话，旧密码和旧会话都会失效。</Text>
+              <Text type="secondary">更新后，旧密码和旧会话都会失效。</Text>
             </div>
           </div>
 

@@ -283,13 +283,13 @@ export default function McpServerDetailPage() {
         actions={(
           <div className="mcp-hero-actions">
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mcp')}>
-              返回 MCP 索引
+              返回列表
             </Button>
             <Button icon={<ReloadOutlined />} onClick={() => void loadServer(serverName)}>
-              重新加载
+              刷新
             </Button>
             <Button onClick={() => void handleProbe()} loading={probing} data-testid={testIds.mcp.detailProbe}>
-              立即探测
+              探测
             </Button>
             <Button onClick={() => void handleToggle(!entry.enabled)} loading={toggling} data-testid={testIds.mcp.detailToggle}>
               {entry.enabled ? '停用 MCP' : '启用 MCP'}
@@ -301,7 +301,7 @@ export default function McpServerDetailPage() {
               loading={saving}
               data-testid={testIds.mcp.detailSave}
             >
-              保存详情
+              保存
             </Button>
           </div>
         )}

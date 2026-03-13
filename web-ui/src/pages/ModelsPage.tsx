@@ -130,14 +130,14 @@ export default function ModelsPage() {
         className="page-hero-compact"
         eyebrow="模型配置"
         title="先把默认模型接通"
-        description="围绕供应商、Base URL、API Key 和模型来配置当前实例，避免在一页里混入渠道、MCP 或系统设置。"
+        description="围绕供应商、Base URL、API Key 和模型完成默认配置。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadModels()}>
-              重新加载
+              刷新
             </Button>
             <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void saveCurrentConfig()}>
-              保存模型配置
+              保存
             </Button>
           </Space>
         )}
@@ -158,7 +158,7 @@ export default function ModelsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>1. 选择供应商</Typography.Title>
-                <Text type="secondary">先确定默认供应商，再补齐连接信息与模型。</Text>
+                <Text type="secondary">先选供应商，再补连接信息。</Text>
               </div>
               <Space wrap>
                 <Tag>{providerCategoryLabels[selectedProviderMeta.category]}</Tag>
@@ -182,7 +182,7 @@ export default function ModelsPage() {
               showIcon
               type={selectedProviderMeta.isLocal ? 'success' : 'info'}
               message={selectedProviderMeta.label}
-              description={providerDescriptions[selectedProviderMeta.name] || '当前供应商会直接映射到后端运行时。'}
+              description={providerDescriptions[selectedProviderMeta.name] || '会直接映射到后端运行时。'}
             />
 
             <div className="config-meta-row">
@@ -201,7 +201,7 @@ export default function ModelsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>2. 模型</Typography.Title>
-                <Text type="secondary">先选常用模型，不在列表里的模型也可以直接输入。</Text>
+                <Text type="secondary">先选常用模型，也支持直接输入。</Text>
               </div>
               <Tag>{suggestedModels.length} 个建议</Tag>
             </div>
@@ -226,7 +226,7 @@ export default function ModelsPage() {
             </div>
 
             <Paragraph className="models-helper-copy">
-              这些建议来自当前项目内的供应商注册信息和 README 示例，用于帮助非技术用户更快开始；如果你已经有自定义模型名，直接输入即可。
+              这些建议来自供应商注册信息和 README 示例；如果你有自定义模型名，直接输入即可。
             </Paragraph>
           </Card>
         </div>
@@ -236,7 +236,7 @@ export default function ModelsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>3. 连接信息</Typography.Title>
-                <Text type="secondary">优先只填写高频字段；更低频的兼容字段继续沿用后端配置结构，当前不在页面直接暴露。</Text>
+                <Text type="secondary">这里只保留常用连接字段。</Text>
               </div>
             </div>
 
@@ -245,7 +245,7 @@ export default function ModelsPage() {
                 showIcon
                 type="info"
                 message="该供应商使用 OAuth"
-                description="当前项目仍沿用原版登录流程，不在这个页面直接录入 API Key。"
+                description="该供应商沿用 OAuth 登录流程，这里不直接录入 API Key。"
               />
             ) : (
               <>
@@ -287,7 +287,7 @@ export default function ModelsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>4. 推理参数</Typography.Title>
-                <Text type="secondary">只保留常用参数，避免在这里混入工作区、渠道和工具设置。</Text>
+                <Text type="secondary">这里只保留常用推理参数。</Text>
               </div>
             </div>
 

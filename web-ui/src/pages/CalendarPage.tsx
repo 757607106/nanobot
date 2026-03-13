@@ -286,12 +286,12 @@ export default function CalendarPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="Calendar"
-        title="把事件、提醒和派生任务留在同一个工作区"
-        description="日程页直接建立在现有 Calendar API 之上，把事件管理、提醒默认值和派生出来的 Cron 提醒任务放进一个操作面板。"
+        title="日程与提醒"
+        description="统一管理事件、提醒默认值和派生的 Cron 任务。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadCalendar()} loading={loading}>
-              刷新日程
+              刷新
             </Button>
             <Button icon={<PlusOutlined />} onClick={handleNewEvent}>
               新建事件
@@ -311,7 +311,7 @@ export default function CalendarPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>事件列表</Typography.Title>
-              <Text type="secondary">先选一个已有事件继续编辑，也可以直接新建。</Text>
+              <Text type="secondary">先选已有事件继续编辑，也可以直接新建。</Text>
             </div>
             <Tag>{events.length} 项</Tag>
           </div>
@@ -347,7 +347,7 @@ export default function CalendarPage() {
                 )}
               />
             ) : (
-              <Empty description="当前还没有日程事件" className="empty-block" />
+              <Empty description="暂无日程事件" className="empty-block" />
             )}
           </div>
         </Card>
@@ -357,7 +357,7 @@ export default function CalendarPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>{selectedEvent ? `编辑 ${selectedEvent.title}` : '创建新事件'}</Typography.Title>
-                <Text type="secondary">保持表单简单，优先覆盖标题、时间、优先级和提醒这几个高频字段。</Text>
+                <Text type="secondary">优先填写标题、时间、优先级和提醒。</Text>
               </div>
               {selectedEvent ? <Tag>{formatDateTimeZh(selectedEvent.updatedAt)}</Tag> : <Tag>未保存</Tag>}
             </div>
@@ -435,7 +435,7 @@ export default function CalendarPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>提醒默认设置</Typography.Title>
-                <Text type="secondary">这是全局默认值，影响后续新建事件时的初始体验，而不是覆盖已有事件。</Text>
+                <Text type="secondary">影响新建事件的默认值，不覆盖已有事件。</Text>
               </div>
             </div>
 
@@ -478,7 +478,7 @@ export default function CalendarPage() {
                 </Button>
               </div>
             ) : (
-              <Empty description="当前无法读取日程设置" className="empty-block" />
+              <Empty description="暂无日程设置" className="empty-block" />
             )}
           </Card>
 
@@ -486,7 +486,7 @@ export default function CalendarPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>派生提醒任务</Typography.Title>
-                <Text type="secondary">这些任务来自 Calendar Reminder Service，用来保证事件提醒最终能进入会话或频道。</Text>
+                <Text type="secondary">这些任务负责把事件提醒投递到会话或频道。</Text>
               </div>
               <Tag>{derivedJobCount} 项</Tag>
             </div>
@@ -515,7 +515,7 @@ export default function CalendarPage() {
                   )}
                 />
               ) : (
-                <Empty description="当前没有由日程派生出的提醒任务" className="empty-block" />
+                <Empty description="暂无派生提醒任务" className="empty-block" />
               )}
             </div>
           </Card>
