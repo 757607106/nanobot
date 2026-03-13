@@ -82,6 +82,10 @@ async def connect_mcp_servers(
 
     for name, cfg in mcp_servers.items():
         try:
+            if not getattr(cfg, "enabled", True):
+                logger.info("MCP server '{}': disabled in config, skipping", name)
+                continue
+
             transport_type = cfg.type
             if not transport_type:
                 if cfg.command:

@@ -87,10 +87,34 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    ssr: {
+      noExternal: [
+        'antd',
+        '@ant-design/icons',
+        '@ant-design/x',
+        '@ant-design/x-sdk',
+      ],
+    },
     build: {
       rollupOptions: {
         output: {
           manualChunks,
+        },
+      },
+    },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: './src/test/setup.ts',
+      css: true,
+      server: {
+        deps: {
+          inline: [
+            'antd',
+            /^@ant-design\//,
+            /^@rc-component\//,
+            /^rc-/,
+          ],
         },
       },
     },

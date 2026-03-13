@@ -10,7 +10,6 @@ import {
   Input,
   Popconfirm,
   Row,
-  Segmented,
   Space,
   Spin,
   Tag,
@@ -27,8 +26,6 @@ import PageHero from '../components/PageHero'
 import type { InstalledSkill } from '../types'
 const { Text } = Typography
 
-type SkillFilter = 'all' | 'workspace' | 'builtin'
-
 export default function SkillsPage() {
   const { message } = App.useApp()
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -37,7 +34,6 @@ export default function SkillsPage() {
   const [uploading, setUploading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<SkillFilter>('all')
 
   useEffect(() => {
     void loadSkills()
@@ -45,19 +41,13 @@ export default function SkillsPage() {
 
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
-      if (filter === 'workspace' && skill.source !== 'workspace') {
-        return false
-      }
-      if (filter === 'builtin' && skill.source === 'workspace') {
-        return false
-      }
       if (!query.trim()) {
         return true
       }
       const haystack = `${skill.name} ${skill.description} ${skill.author ?? ''} ${(skill.tags ?? []).join(' ')}`.toLowerCase()
       return haystack.includes(query.trim().toLowerCase())
     })
-  }, [filter, query, skills])
+  }, [query, skills])
 
   async function loadSkills() {
     try {
@@ -116,8 +106,8 @@ export default function SkillsPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="技能管理"
-        title="管理当前工作区可发现的技能"
-        description="上传、查看和清理技能目录，让当前后端运行时能够直接发现并加载这些能力。"
+        title="先从技能市场拿能力"
+        description="这个页面只保留三件事：打开技能市场、手动上传兜底、查看当前实例已经安装了哪些技能。"
         actions={(
           <Space wrap>
             <Button
@@ -140,21 +130,74 @@ export default function SkillsPage() {
         ]}
       />
 
-      <div className="page-card">
-        <input
-          type="file"
-          ref={folderInputRef}
-          {...({ webkitdirectory: '', directory: '' } as InputHTMLAttributes<HTMLInputElement>)}
-          multiple
-          style={{ display: 'none' }}
-          onChange={(event) => void handleFolderSelect(event)}
-        />
+      <input
+        type="file"
+        ref={folderInputRef}
+        {...({ webkitdirectory: '', directory: '' } as InputHTMLAttributes<HTMLInputElement>)}
+        multiple
+        style={{ display: 'none' }}
+        onChange={(event) => void handleFolderSelect(event)}
+      />
 
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div className="section-heading-row">
+      <div className="page-grid skills-page-grid">
+        <div className="page-stack skills-market-stack">
+          <Card className="config-panel-card">
+            <div className="config-card-header">
+              <div className="page-section-title">
+                <Typography.Title level={4}>推荐路径：技能市场</Typography.Title>
+                <Text type="secondary">优先去市场浏览和下载技能，当前实例内置了 ClawHub 兼容技能生态。</Text>
+              </div>
+              <Tag color="processing">推荐</Tag>
+            </div>
+
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <Text type="secondary">
+                先在市场里找到合适的技能，再把下载好的技能目录带回当前实例；如果市场里没有，也可以走下方手动上传兜底。
+              </Text>
+              <Space wrap>
+                <Button type="primary" href="https://clawhub.ai" target="_blank" rel="noreferrer">
+                  打开 ClawHub 市场
+                </Button>
+                <Button href="https://openclawdoc.com/docs/skills/clawhub/" target="_blank" rel="noreferrer">
+                  查看市场说明
+                </Button>
+                <Button href="https://openclawdoc.com/docs/skills/overview/" target="_blank" rel="noreferrer">
+                  查看 Skills 说明
+                </Button>
+              </Space>
+            </Space>
+          </Card>
+
+          <Card className="config-panel-card">
+            <div className="config-card-header">
+              <div className="page-section-title">
+                <Typography.Title level={4}>兜底路径：手动上传</Typography.Title>
+                <Text type="secondary">市场外的技能目录仍可直接上传到当前工作区，不影响原版 nanobot 主链。</Text>
+              </div>
+              <Button
+                type="primary"
+                icon={<FolderOpenOutlined />}
+                loading={uploading}
+                onClick={() => folderInputRef.current?.click()}
+              >
+                上传技能目录
+              </Button>
+            </div>
+
+            <Alert
+              showIcon
+              type="info"
+              message="上传前请确认目录里包含 SKILL.md。"
+              description="上传后的目录会写入当前工作区的 `skills/` 下，运行时会自动继续沿用原版技能发现机制。"
+            />
+          </Card>
+        </div>
+
+        <Card className="config-panel-card skills-library-card">
+          <div className="config-card-header">
             <div className="page-section-title">
-              <Typography.Title level={4}>技能资产库</Typography.Title>
-              <Text type="secondary">统一搜索、筛选、上传和清理当前工作区技能资产。</Text>
+              <Typography.Title level={4}>已安装技能</Typography.Title>
+              <Text type="secondary">这里只展示当前实例已经可用的技能，并保留删除工作区技能的能力。</Text>
             </div>
             <Tag>{filteredSkills.length} 项技能</Tag>
           </div>
@@ -167,48 +210,6 @@ export default function SkillsPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <Segmented
-              value={filter}
-              options={[
-                { label: '全部', value: 'all' },
-                { label: '工作区', value: 'workspace' },
-                { label: '内置', value: 'builtin' },
-              ]}
-              onChange={(value) => setFilter(value as SkillFilter)}
-            />
-          </div>
-
-          <div className="page-meta-grid">
-            <div className="page-meta-card">
-              <span>当前筛选</span>
-              <strong>{filteredSkills.length} 个技能</strong>
-            </div>
-            <div className="page-meta-card">
-              <span>工作区来源</span>
-              <strong>{skills.filter((item) => item.source === 'workspace').length}</strong>
-            </div>
-            <div className="page-meta-card">
-              <span>内置来源</span>
-              <strong>{skills.filter((item) => item.source !== 'workspace').length}</strong>
-            </div>
-            <div className="page-meta-card">
-              <span>当前操作</span>
-              <strong>{uploading ? '正在上传技能目录' : '可上传或清理技能'}</strong>
-            </div>
-          </div>
-
-          <Alert
-            showIcon
-            type="info"
-            message="请上传包含 SKILL.md 的完整技能目录。"
-            description="上传后的目录会写入当前工作区的 `skills/` 下，因此无需改动 agent 核心流程就能被运行时发现。"
-          />
-
-          <div className="skills-dropzone-hint">
-            <Text>
-              目录结构建议为 `my-skill/SKILL.md`，并可在同级包含 `scripts/`、`references/`
-              或 `assets/` 等辅助文件。
-            </Text>
           </div>
 
           <div className="page-scroll-shell skills-scroll-shell">
@@ -218,7 +219,7 @@ export default function SkillsPage() {
               </div>
             ) : filteredSkills.length === 0 ? (
               <Empty
-                description={skills.length === 0 ? '当前没有可用技能' : '没有匹配当前筛选条件的技能'}
+                description={skills.length === 0 ? '当前还没有安装任何技能' : '没有匹配当前搜索条件的技能'}
                 className="empty-block"
               />
             ) : (
@@ -285,7 +286,7 @@ export default function SkillsPage() {
               </Row>
             )}
           </div>
-        </Space>
+        </Card>
       </div>
     </div>
   )

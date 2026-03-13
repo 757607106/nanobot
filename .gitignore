@@ -23,3 +23,6 @@ poetry.lock
 .pytest_cache/
 botpy.log
 nano.*.save
+web-ui/test-results/
+web-ui/playwright-report/
+tmp/web-e2e-runtime/

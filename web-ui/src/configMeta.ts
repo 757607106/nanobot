@@ -62,6 +62,8 @@ export const channelCategoryLabels: Record<ChannelMeta['category'], string> = {
   Inbox: '邮箱收件',
 }
 
+const allowFromPlaceholder = '每行一个值；填 * 允许所有人'
+
 export const channelMetas: ChannelMeta[] = [
   {
     name: 'telegram',
@@ -70,7 +72,7 @@ export const channelMetas: ChannelMeta[] = [
     description: 'Telegram 机器人接入，支持白名单、代理和群聊回复策略。',
     primaryFields: [
       { path: ['token'], label: '机器人 Token', kind: 'password' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: '每行一个用户 ID 或用户名' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
       { path: ['proxy'], label: '代理地址', kind: 'text', placeholder: 'http://127.0.0.1:7890' },
       {
         path: ['groupPolicy'],
@@ -92,7 +94,7 @@ export const channelMetas: ChannelMeta[] = [
     primaryFields: [
       { path: ['bridgeUrl'], label: '桥接地址', kind: 'text' },
       { path: ['bridgeToken'], label: '桥接令牌', kind: 'password' },
-      { path: ['allowFrom'], label: '允许号码', kind: 'list' },
+      { path: ['allowFrom'], label: '允许号码', kind: 'list', placeholder: allowFromPlaceholder },
     ],
   },
   {
@@ -102,7 +104,7 @@ export const channelMetas: ChannelMeta[] = [
     description: 'Discord 机器人接入，包含网关参数与群组策略控制。',
     primaryFields: [
       { path: ['token'], label: '机器人 Token', kind: 'password' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
       { path: ['gatewayUrl'], label: '网关地址', kind: 'text' },
       { path: ['intents'], label: 'Intents', kind: 'number', min: 0 },
       {
@@ -124,7 +126,7 @@ export const channelMetas: ChannelMeta[] = [
     primaryFields: [
       { path: ['appId'], label: 'App ID', kind: 'text' },
       { path: ['secret'], label: '密钥', kind: 'password' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
     ],
   },
   {
@@ -135,7 +137,7 @@ export const channelMetas: ChannelMeta[] = [
     primaryFields: [
       { path: ['botToken'], label: 'Bot Token', kind: 'password' },
       { path: ['appToken'], label: 'App Token', kind: 'password' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
       { path: ['groupAllowFrom'], label: '允许频道', kind: 'list' },
       { path: ['replyInThread'], label: '在线程中回复', kind: 'switch' },
       {
@@ -160,7 +162,7 @@ export const channelMetas: ChannelMeta[] = [
       { path: ['accessToken'], label: '访问令牌', kind: 'password' },
       { path: ['userId'], label: '用户 ID', kind: 'text' },
       { path: ['deviceId'], label: '设备 ID', kind: 'text' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
       { path: ['groupAllowFrom'], label: '允许房间', kind: 'list' },
       { path: ['e2eeEnabled'], label: '启用 E2EE', kind: 'switch' },
       {
@@ -183,7 +185,7 @@ export const channelMetas: ChannelMeta[] = [
     primaryFields: [
       { path: ['appId'], label: 'App ID', kind: 'text' },
       { path: ['appSecret'], label: 'App Secret', kind: 'password' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
       { path: ['reactEmoji'], label: '反馈表情', kind: 'text' },
       { path: ['verificationToken'], label: '校验 Token', kind: 'password' },
       { path: ['encryptKey'], label: '加密 Key', kind: 'password' },
@@ -197,7 +199,7 @@ export const channelMetas: ChannelMeta[] = [
     primaryFields: [
       { path: ['clientId'], label: 'Client ID', kind: 'text' },
       { path: ['clientSecret'], label: 'Client Secret', kind: 'password' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
     ],
   },
   {
@@ -208,7 +210,7 @@ export const channelMetas: ChannelMeta[] = [
     primaryFields: [
       { path: ['botId'], label: 'Bot ID', kind: 'text' },
       { path: ['secret'], label: '密钥', kind: 'password' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
       { path: ['welcomeMessage'], label: '欢迎语', kind: 'textarea' },
     ],
   },
@@ -223,7 +225,7 @@ export const channelMetas: ChannelMeta[] = [
       { path: ['agentUserId'], label: 'Agent 用户 ID', kind: 'text' },
       { path: ['sessions'], label: 'Sessions', kind: 'list' },
       { path: ['panels'], label: 'Panels', kind: 'list' },
-      { path: ['allowFrom'], label: '允许用户', kind: 'list' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
       {
         path: ['replyDelayMode'],
         label: '延迟回复模式',
@@ -252,7 +254,7 @@ export const channelMetas: ChannelMeta[] = [
       { path: ['smtpUsername'], label: 'SMTP 用户名', kind: 'text' },
       { path: ['smtpPassword'], label: 'SMTP 密码', kind: 'password' },
       { path: ['fromAddress'], label: '发件地址', kind: 'text' },
-      { path: ['allowFrom'], label: '允许发件人', kind: 'list' },
+      { path: ['allowFrom'], label: '允许发件人', kind: 'list', placeholder: allowFromPlaceholder },
       { path: ['autoReplyEnabled'], label: '启用自动回复', kind: 'switch' },
     ],
   },

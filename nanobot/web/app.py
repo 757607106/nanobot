@@ -1,0 +1,209 @@
+"""FastAPI app factory and frontend serving for the nanobot Web UI."""
+
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any, Literal
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from loguru import logger
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from nanobot import __version__
+from nanobot.config.loader import get_config_path
+from nanobot.config.schema import Config
+from nanobot.platform.instances import PlatformInstanceService
+from nanobot.web.auth import SESSION_COOKIE_NAME, WebAuthManager
+from nanobot.web.channels import WebChannelService
+from nanobot.web.channel_testing import WebChannelTestService
+from nanobot.web.frontend import (
+    _frontend_dev_is_ready,
+    _resolve_frontend_source_dir,
+    _resolve_npm_command,
+    _resolve_static_dir,
+    _run_frontend_dev_server as _frontend_run_frontend_dev_server,
+    _run_static_server as _frontend_run_static_server,
+    _static_response,
+)
+from nanobot.web.http import APIError, _err, _json_response
+from nanobot.web.mcp_registry import WebMCPRegistryManager
+from nanobot.web.mcp_repository import MCPRepositoryService
+from nanobot.web.mcp_servers import MCPServerService
+from nanobot.web.operations import WebOperationsService
+from nanobot.web.routers import (
+    auth_router,
+    chat_router,
+    channels_router,
+    mcp_router,
+    operations_router,
+    schedule_router,
+    setup_router,
+    workspace_router,
+)
+from nanobot.web.runtime import WebAppState
+from nanobot.web.setup import WebSetupManager
+from nanobot.web.whatsapp_binding import WebWhatsAppBindingService
+
+
+def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
+    """Create the FastAPI app for the Web UI."""
+    resolved_static_dir = static_dir or _resolve_static_dir()
+    instance = PlatformInstanceService().get_default_instance(get_config_path())
+    auth = WebAuthManager(instance)
+    mcp_registry = WebMCPRegistryManager(instance)
+    mcp_repository = MCPRepositoryService(instance, mcp_registry)
+    mcp_servers = MCPServerService(instance, mcp_registry)
+    channels = WebChannelService()
+    channel_tests = WebChannelTestService(instance)
+    whatsapp_binding = WebWhatsAppBindingService(instance)
+    setup = WebSetupManager(instance)
+    operations = WebOperationsService(setup, mcp_registry, instance)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.instance = instance
+        app.state.web = WebAppState(config, instance=instance)
+        app.state.static_dir = resolved_static_dir
+        app.state.auth = auth
+        app.state.mcp_registry = mcp_registry
+        app.state.mcp_repository = mcp_repository
+        app.state.mcp_servers = mcp_servers
+        app.state.channels = channels
+        app.state.channel_tests = channel_tests
+        app.state.whatsapp_binding = whatsapp_binding
+        app.state.operations = operations
+        app.state.setup = setup
+        try:
+            yield
+        finally:
+            app.state.whatsapp_binding.shutdown()
+            await app.state.web.shutdown_async()
+
+    app = FastAPI(title="nanobot Web UI", version=__version__, lifespan=lifespan)
+    app.state.instance = instance
+    app.state.auth = auth
+    app.state.mcp_registry = mcp_registry
+    app.state.mcp_repository = mcp_repository
+    app.state.mcp_servers = mcp_servers
+    app.state.channels = channels
+    app.state.channel_tests = channel_tests
+    app.state.whatsapp_binding = whatsapp_binding
+    app.state.operations = operations
+    app.state.setup = setup
+
+    @app.exception_handler(APIError)
+    async def handle_api_error(_request: Request, exc: APIError) -> JSONResponse:
+        return _json_response(exc.status_code, _err(exc.code, exc.message, exc.details))
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        return _json_response(
+            422,
+            _err("VALIDATION_ERROR", "Request validation failed.", exc.errors()),
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def handle_http_exception(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if exc.status_code == 404:
+            return _json_response(404, _err("NOT_FOUND", "Endpoint not found."))
+        return _json_response(
+            exc.status_code,
+            _err("HTTP_ERROR", str(exc.detail or "Request failed."), exc.detail),
+        )
+
+    @app.middleware("http")
+    async def enforce_web_auth(request: Request, call_next):
+        path = request.url.path
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        if not path.startswith("/api/v1/"):
+            return await call_next(request)
+        if path == "/api/v1/health" or path.startswith("/api/v1/auth/"):
+            response = await call_next(request)
+            if path.startswith("/api/v1/auth/"):
+                response.headers["Cache-Control"] = "no-store"
+            return response
+        if not request.app.state.auth.get_authenticated_user(request.cookies.get(SESSION_COOKIE_NAME)):
+            return _json_response(401, _err("AUTH_REQUIRED", "Authentication required."))
+        return await call_next(request)
+
+    app.include_router(auth_router)
+    app.include_router(setup_router)
+    app.include_router(mcp_router)
+    app.include_router(channels_router)
+    app.include_router(operations_router)
+    app.include_router(schedule_router)
+    app.include_router(workspace_router)
+    app.include_router(chat_router)
+
+    @app.api_route(
+        "/api/{path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+        include_in_schema=False,
+    )
+    def unknown_api_route(path: str):
+        _ = path
+        raise APIError(404, "NOT_FOUND", "Endpoint not found.")
+
+    @app.get("/", include_in_schema=False)
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_frontend(request: Request, full_path: str = ""):
+        if full_path.startswith("api/"):
+            raise APIError(404, "NOT_FOUND", "Endpoint not found.")
+        return _static_response(request.app.state.static_dir, full_path)
+
+    return app
+
+
+def run_server(
+    config: Config,
+    host: str = "127.0.0.1",
+    port: int = 6788,
+    frontend_mode: Literal["auto", "static", "dev"] = "auto",
+) -> None:
+    """Run the Web UI server in static or hot-reload dev mode."""
+    frontend_dir = _resolve_frontend_source_dir()
+    npm_command = _resolve_npm_command()
+    dev_ready, dev_reason = _frontend_dev_is_ready(frontend_dir, npm_command)
+
+    if frontend_mode == "dev":
+        if not dev_ready:
+            raise RuntimeError(
+                "Frontend dev mode requires the web-ui source checkout, npm, and installed "
+                "dependencies. Run `cd web-ui && npm install` first."
+            )
+        _run_frontend_dev_server(config, host, port, frontend_dir, npm_command)
+        return
+
+    if frontend_mode == "auto" and dev_ready:
+        _run_frontend_dev_server(config, host, port, frontend_dir, npm_command)
+        return
+
+    if frontend_mode == "auto" and dev_reason:
+        logger.info("Frontend dev mode unavailable ({}); falling back to static bundle.", dev_reason)
+
+    _run_static_server(config, host, port)
+
+
+def _run_static_server(config: Config, host: str, port: int) -> None:
+    _frontend_run_static_server(create_app, config, host, port)
+
+
+def _run_frontend_dev_server(
+    config: Config,
+    host: str,
+    port: int,
+    frontend_dir: Path,
+    npm_command: str,
+) -> None:
+    _frontend_run_frontend_dev_server(create_app, config, host, port, frontend_dir, npm_command)
+
+
+__all__ = [
+    "WebAppState",
+    "create_app",
+    "run_server",
+]

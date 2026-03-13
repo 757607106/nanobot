@@ -72,4 +72,10 @@ def _migrate_config(data: dict) -> dict:
     exec_cfg = tools.get("exec", {})
     if "restrictToWorkspace" in exec_cfg and "restrictToWorkspace" not in tools:
         tools["restrictToWorkspace"] = exec_cfg.pop("restrictToWorkspace")
+
+    mcp_servers = tools.get("mcpServers") or tools.get("mcp_servers")
+    if isinstance(mcp_servers, dict):
+        for item in mcp_servers.values():
+            if isinstance(item, dict) and "enabled" not in item:
+                item["enabled"] = True
     return data
