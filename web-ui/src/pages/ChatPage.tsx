@@ -23,17 +23,10 @@ import {
 } from '@ant-design/icons'
 import { RobotOutlined } from '@ant-design/icons'
 import { api } from '../api'
-import PageHero from '../components/PageHero'
 import { formatDateTimeZh, formatRelativeTimeZh } from '../locale'
 import type { ChatMessage, SessionSummary, StreamEvent } from '../types'
 
 const { Text } = Typography
-
-const starterPrompts = [
-  '总结当前工作区状态，并给出最值得优先处理的下一步任务。',
-  '检查当前配置，指出最重要的风险或缺失项。',
-  '在不改动 agent 核心流程的前提下，规划一个清晰的重构方案。',
-]
 
 function getDisplaySessionTitle(title?: string) {
   if (!title || title === 'New Chat') {
@@ -322,27 +315,14 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="page-stack">
-      <PageHero
-        className="page-hero-compact"
-        eyebrow="工作区对话"
-        title="围绕工作区持续协作，而不是临时聊天"
-        description="当前页面专门面向真实任务推进。会话会保存在工作区内，方便继续追问、迭代方案和承接上下文。"
-        stats={[
-          { label: '会话总数', value: sessions.length },
-          { label: '当前会话', value: selectedSession ? selectedSession.id.slice(0, 8) : '待创建' },
-          { label: '消息数', value: messages.length },
-          { label: '状态', value: sending ? '生成中' : selectedSession ? '就绪' : '待开始' },
-        ]}
-      />
-
+    <div className="page-stack chat-page-shell">
       <div className="page-grid chat-grid chat-grid-enhanced">
         <Card className="sidebar-card sidebar-surface chat-rail-card" styles={{ body: { padding: 0 } }}>
           <div className="chat-rail-head">
             <div>
-              <span className="section-kicker">工作区会话</span>
-              <Typography.Title level={4}>对话列表</Typography.Title>
-              <Text type="secondary">所有网页会话都会保存在当前工作区，可持续追踪与继续处理。</Text>
+              <span className="section-kicker">会话中心</span>
+              <Typography.Title level={4}>工作区会话</Typography.Title>
+              <Text type="secondary">左侧统一管理新建、切换、重命名和删除，右侧只保留真实协作内容。</Text>
             </div>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateSession}>
               新建
@@ -371,7 +351,7 @@ export default function ChatPage() {
           </div>
 
           <div className="chat-rail-note">
-            会话支持重命名、删除和持续追踪，适合把同一项任务拆成多个稳定工作线程。
+            把不同任务拆成独立会话，便于稳定追踪，不再在右侧重复放置同样的管理操作。
           </div>
 
           {loadingSessions ? (
@@ -417,40 +397,30 @@ export default function ChatPage() {
 
         <Card className="chat-card workbench-card chat-workbench-card" styles={{ body: { padding: 0, height: '100%' } }}>
           <div className="chat-panel">
-            <div className="chat-workbench-head">
-              <div className="chat-heading">
+            <div className="chat-session-focus">
+              <div className="chat-focus-copy">
                 <div>
-                  <span className="section-kicker">实时协作</span>
+                  <span className="section-kicker">核心协作区</span>
                   <Typography.Title level={3}>{selectedSessionTitle}</Typography.Title>
                   <Text type="secondary">
                     {selectedSession
                       ? `最后更新于 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}，你可以继续追问、收敛方案或推进下一步执行。`
-                      : '这里会自动带入当前后端、工作区引导文件、记忆与技能上下文。'}
+                      : '从左侧新建会话后，这里会自动带入当前工作区、主提示词、记忆与技能上下文。'}
                   </Text>
-                  <div className="chat-inline-meta">
-                    <span className="chat-inline-pill">
-                      会话 ID · {selectedSession ? selectedSession.id.slice(0, 8) : '待创建'}
-                    </span>
-                    <span className="chat-inline-pill">消息数 · {messages.length}</span>
-                    <span className="chat-inline-pill">状态 · {sending ? '生成中' : '就绪'}</span>
-                  </div>
                 </div>
               </div>
-              <div className="chat-workbench-controls">
-                <div className="chat-workbench-actions">
-                  {selectedSession ? (
-                    <>
-                      <Button icon={<EditOutlined />} onClick={() => openRenameModal(selectedSession)}>
-                        重命名
-                      </Button>
-                      <Button danger icon={<DeleteOutlined />} onClick={() => confirmDeleteSession(selectedSession)}>
-                        删除
-                      </Button>
-                    </>
-                  ) : null}
-                  <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateSession}>
-                    新建会话
-                  </Button>
+              <div className="chat-focus-stats">
+                <div className="chat-focus-stat">
+                  <span>会话 ID</span>
+                  <strong>{selectedSession ? selectedSession.id.slice(0, 8) : '待创建'}</strong>
+                </div>
+                <div className="chat-focus-stat">
+                  <span>消息数</span>
+                  <strong>{messages.length}</strong>
+                </div>
+                <div className="chat-focus-stat">
+                  <span>状态</span>
+                  <strong>{sending ? '生成中' : selectedSession ? '就绪' : '待开始'}</strong>
                 </div>
               </div>
             </div>
@@ -475,33 +445,14 @@ export default function ChatPage() {
                   <Spin />
                 </div>
               ) : messages.length === 0 ? (
-                <div className="chat-empty-state">
-                  <div className="chat-empty-chip">工作区上下文已就绪</div>
-                  <Typography.Title level={3}>从一个明确任务开始，让它持续陪你推进</Typography.Title>
+                <div className="chat-empty-state chat-empty-state-compact">
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={selectedSession ? '在下方输入内容，继续当前会话。' : '在下方输入内容，开始新的工作区会话。'}
+                  />
                   <Text type="secondary">
-                    适合直接做需求拆解、重构方案、代码评审、配置排查、系统诊断和工作区总结。
+                    当前会自动带入工作区、主提示词、记忆与技能上下文。
                   </Text>
-                  <div className="starter-prompt-grid">
-                    {starterPrompts.map((prompt) => (
-                      <Button key={prompt} className="starter-prompt-card" onClick={() => void handleSubmit(prompt)}>
-                        {prompt}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="chat-empty-feature-grid">
-                    <div className="empty-feature-card">
-                      <strong>自动带入工作区</strong>
-                      <span>读取当前工作区、主提示词与技能上下文。</span>
-                    </div>
-                    <div className="empty-feature-card">
-                      <strong>保留会话历史</strong>
-                      <span>每个网页会话都可独立重命名、继续和追踪。</span>
-                    </div>
-                    <div className="empty-feature-card">
-                      <strong>实时流式反馈</strong>
-                      <span>执行中可看到进度，避免黑盒等待。</span>
-                    </div>
-                  </div>
                 </div>
               ) : (
                 <Bubble.List items={bubbleItems} className="bubble-list" autoScroll />
@@ -509,14 +460,6 @@ export default function ChatPage() {
             </div>
 
             <div className="chat-composer-panel">
-              <div className="quick-prompt-row">
-                {starterPrompts.map((prompt) => (
-                  <button key={prompt} type="button" className="quick-prompt-chip" onClick={() => void handleSubmit(prompt)}>
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-
               <div className="sender-shell">
                 <Sender
                   loading={sending}

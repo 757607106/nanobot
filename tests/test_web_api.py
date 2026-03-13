@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
 from nanobot.config.schema import Config
-from nanobot.web.api import create_app
+from nanobot.web.api import create_app, run_server
 
 
 @pytest.fixture
@@ -118,13 +121,18 @@ def test_web_api_unknown_route_uses_envelope(web_client: TestClient) -> None:
 
 
 def test_web_api_calendar_crud_and_settings(web_client: TestClient) -> None:
+    start_time = datetime.now().replace(second=0, microsecond=0) + timedelta(days=2, hours=1)
+    end_time = start_time + timedelta(hours=1)
+    updated_start_time = start_time + timedelta(hours=1)
+    updated_end_time = updated_start_time + timedelta(hours=1)
+
     created = web_client.post(
         "/api/v1/calendar/events",
         json={
             "title": "Design review",
             "description": "Walk through the web migration",
-            "start": "2026-03-13T09:00:00",
-            "end": "2026-03-13T10:00:00",
+            "start": start_time.isoformat(),
+            "end": end_time.isoformat(),
             "isAllDay": False,
             "priority": "high",
             "reminders": [{"time": 15, "channel": "web", "target": "calendar-reminders"}],
@@ -138,7 +146,10 @@ def test_web_api_calendar_crud_and_settings(web_client: TestClient) -> None:
 
     listed = web_client.get(
         "/api/v1/calendar/events",
-        params={"start": "2026-03-01T00:00:00", "end": "2026-03-31T23:59:59"},
+        params={
+            "start": (start_time - timedelta(days=1)).isoformat(),
+            "end": (updated_end_time + timedelta(days=1)).isoformat(),
+        },
     )
     assert listed.status_code == 200
     assert listed.json()["data"][0]["id"] == event["id"]
@@ -147,8 +158,8 @@ def test_web_api_calendar_crud_and_settings(web_client: TestClient) -> None:
         f"/api/v1/calendar/events/{event['id']}",
         json={
             "title": "Updated review",
-            "start": "2026-03-13T10:00:00",
-            "end": "2026-03-13T11:00:00",
+            "start": updated_start_time.isoformat(),
+            "end": updated_end_time.isoformat(),
             "reminders": [{"time": 30, "channel": "web", "target": "calendar-reminders"}],
         },
     )
@@ -367,3 +378,45 @@ def test_web_api_main_agent_prompt_management(web_client: TestClient) -> None:
     after_reset = web_client.get("/api/v1/main-agent-prompt")
     assert after_reset.status_code == 200
     assert "Agent Instructions" in after_reset.json()["data"]["identity_content"]
+
+
+def test_run_server_prefers_frontend_dev_mode_when_ready(tmp_path) -> None:
+    config = Config()
+    frontend_dir = tmp_path / "web-ui"
+    frontend_dir.mkdir()
+    (frontend_dir / "node_modules").mkdir()
+
+    with patch("nanobot.web.api._resolve_frontend_source_dir", return_value=frontend_dir), \
+         patch("nanobot.web.api._resolve_npm_command", return_value="npm"), \
+         patch("nanobot.web.api._run_frontend_dev_server") as mock_dev, \
+         patch("nanobot.web.api._run_static_server") as mock_static:
+        run_server(config, frontend_mode="auto")
+
+    mock_dev.assert_called_once_with(config, "127.0.0.1", 6788, frontend_dir, "npm")
+    mock_static.assert_not_called()
+
+
+def test_run_server_falls_back_to_static_when_frontend_dev_is_unavailable(tmp_path) -> None:
+    config = Config()
+    frontend_dir = tmp_path / "web-ui"
+    frontend_dir.mkdir()
+
+    with patch("nanobot.web.api._resolve_frontend_source_dir", return_value=frontend_dir), \
+         patch("nanobot.web.api._resolve_npm_command", return_value="npm"), \
+         patch("nanobot.web.api._run_frontend_dev_server") as mock_dev, \
+         patch("nanobot.web.api._run_static_server") as mock_static:
+        run_server(config, frontend_mode="auto")
+
+    mock_dev.assert_not_called()
+    mock_static.assert_called_once_with(config, "127.0.0.1", 6788)
+
+
+def test_run_server_dev_mode_requires_frontend_dependencies(tmp_path) -> None:
+    config = Config()
+    frontend_dir = tmp_path / "web-ui"
+    frontend_dir.mkdir()
+
+    with patch("nanobot.web.api._resolve_frontend_source_dir", return_value=frontend_dir), \
+         patch("nanobot.web.api._resolve_npm_command", return_value="npm"):
+        with pytest.raises(RuntimeError, match="npm install"):
+            run_server(config, frontend_mode="dev")

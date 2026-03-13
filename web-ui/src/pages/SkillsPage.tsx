@@ -151,6 +151,14 @@ export default function SkillsPage() {
         />
 
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <div className="section-heading-row">
+            <div className="page-section-title">
+              <Typography.Title level={4}>技能资产库</Typography.Title>
+              <Text type="secondary">统一搜索、筛选、上传和清理当前工作区技能资产。</Text>
+            </div>
+            <Tag>{filteredSkills.length} 项技能</Tag>
+          </div>
+
           <div className="toolbar-row">
             <Input
               allowClear

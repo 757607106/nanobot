@@ -205,6 +205,35 @@ def test_agent_help_shows_workspace_and_config_options():
     assert "-c" in result.stdout
 
 
+def test_web_ui_forwards_frontend_mode() -> None:
+    config = Config()
+
+    with patch("nanobot.cli.commands._load_runtime_config", return_value=config), \
+         patch("nanobot.cli.commands._print_deprecated_memory_window_notice"), \
+         patch("nanobot.web.api.run_server") as mock_run_server:
+        result = runner.invoke(app, ["web-ui", "--frontend", "static"])
+
+    assert result.exit_code == 0
+    mock_run_server.assert_called_once_with(
+        config=config,
+        host="127.0.0.1",
+        port=6788,
+        frontend_mode="static",
+    )
+
+
+def test_web_ui_handles_runtime_errors() -> None:
+    config = Config()
+
+    with patch("nanobot.cli.commands._load_runtime_config", return_value=config), \
+         patch("nanobot.cli.commands._print_deprecated_memory_window_notice"), \
+         patch("nanobot.web.api.run_server", side_effect=RuntimeError("vite failed")):
+        result = runner.invoke(app, ["web-ui"])
+
+    assert result.exit_code == 1
+    assert "vite failed" in result.stdout
+
+
 def test_agent_uses_default_config_when_no_workspace_or_config_flags(mock_agent_runtime):
     result = runner.invoke(app, ["agent", "-m", "hello"])
 

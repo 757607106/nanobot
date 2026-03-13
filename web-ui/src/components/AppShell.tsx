@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Badge, Button, Drawer, Grid, Layout, Menu, Segmented, Typography } from 'antd'
+import { Button, Drawer, Grid, Layout, Menu, Segmented, Typography } from 'antd'
 import {
   BookOutlined,
   ClockCircleOutlined,
@@ -76,6 +76,7 @@ export default function AppShell() {
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const { preference, resolvedTheme, setPreference } = useThemeMode()
+  const menuTheme = resolvedTheme === 'dark' ? 'dark' : 'light'
 
   useEffect(() => {
     let active = true
@@ -101,6 +102,13 @@ export default function AppShell() {
   )
 
   const online = Boolean(status)
+  const runtimeSummary = status
+    ? [
+        `工作区 ${compactPath(status.web.workspace)}`,
+        `供应商 ${status.web.provider}`,
+        `模型 ${compactPath(status.web.model)}`,
+      ]
+    : ['等待后端状态同步']
 
   const menuItems = useMemo(
     () =>
@@ -163,34 +171,18 @@ export default function AppShell() {
         </div>
       </div>
 
-      <div className="sidebar-runtime-card">
-        <div className="runtime-card-head">
-          <Typography.Text strong>运行概览</Typography.Text>
-          <Badge status={online ? 'processing' : 'default'} text={online ? '在线' : '未连接'} />
-        </div>
-        <div className="runtime-pill-grid">
-          <div className="runtime-pill">
-            <span className="runtime-pill-label">供应商</span>
-            <span className="runtime-pill-value">{status?.web.provider ?? '--'}</span>
-          </div>
-          <div className="runtime-pill">
-            <span className="runtime-pill-label">模型</span>
-            <span className="runtime-pill-value">{status ? compactPath(status.web.model) : '--'}</span>
-          </div>
-          <div className="runtime-pill">
-            <span className="runtime-pill-label">频道</span>
-            <span className="runtime-pill-value">{status?.stats.enabledChannelCount ?? 0}</span>
-          </div>
-          <div className="runtime-pill">
-            <span className="runtime-pill-label">任务</span>
-            <span className="runtime-pill-value">{status?.stats.scheduledJobs ?? 0}</span>
-          </div>
-        </div>
+      <div className="sidebar-status-row">
+        <span className={`sidebar-status-chip${online ? ' is-online' : ''}`}>
+          {online ? '在线' : '未连接'}
+        </span>
+        <span className="sidebar-status-text">
+          {status ? `${status.stats.enabledChannelCount} 个频道 · ${status.stats.scheduledJobs} 个任务` : '等待系统状态'}
+        </span>
       </div>
 
       <Menu
         mode="inline"
-        theme="dark"
+        theme={menuTheme}
         selectedKeys={[activeRoute.key]}
         items={menuItems}
         onClick={({ key }) => navigate(key)}
@@ -209,7 +201,7 @@ export default function AppShell() {
   return (
     <Layout className={`app-shell theme-${resolvedTheme}`}>
       {isDesktop ? (
-        <Sider width={312} theme="dark" className="app-sider">
+        <Sider width={312} theme={menuTheme} className="app-sider">
           {navigationContent}
         </Sider>
       ) : null}
@@ -239,10 +231,18 @@ export default function AppShell() {
                   onClick={() => setMobileNavOpen(true)}
                 />
               ) : null}
-              <Typography.Title level={4}>{activeRoute.label}</Typography.Title>
+              <div className="header-title-block">
+                <Typography.Title level={4}>{activeRoute.label}</Typography.Title>
+                <Typography.Text className="header-summary">{activeRoute.summary}</Typography.Text>
+              </div>
               <span className={`header-live-pill${online ? ' is-online' : ''}`}>
                 {online ? '后端已连接' : '等待连接'}
               </span>
+            </div>
+            <div className="header-runtime-inline">
+              {runtimeSummary.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
             </div>
           </div>
 

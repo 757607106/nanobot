@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Popconfirm, Segmented, Space, Typography } from 'antd'
+import { Alert, App, Button, Card, Popconfirm, Segmented, Space, Tag, Typography } from 'antd'
 import { EditOutlined, EyeOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import TextArea from 'antd/es/input/TextArea'
 import ReactMarkdown from 'react-markdown'
@@ -111,6 +111,14 @@ export default function MainPromptPage() {
 
       <div className="page-card prompt-page-card">
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <div className="section-heading-row">
+            <div className="page-section-title">
+              <Typography.Title level={4}>提示词工作区</Typography.Title>
+              <Text type="secondary">统一查看来源、状态和正文内容，减少编辑区的视觉噪音。</Text>
+            </div>
+            <Tag>{previewMode === 'edit' ? '编辑模式' : '预览模式'}</Tag>
+          </div>
+
           <Alert
             showIcon
             type="info"

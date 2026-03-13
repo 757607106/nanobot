@@ -1,11 +1,26 @@
+import { Suspense, lazy } from 'react'
+import { Spin } from 'antd'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './components/AppShell'
-import ChatPage from './pages/ChatPage'
-import ConfigPage from './pages/ConfigPage'
-import CronPage from './pages/CronPage'
-import MainPromptPage from './pages/MainPromptPage'
-import SkillsPage from './pages/SkillsPage'
-import SystemPage from './pages/SystemPage'
+
+const ChatPage = lazy(() => import('./pages/ChatPage'))
+const ConfigPage = lazy(() => import('./pages/ConfigPage'))
+const CronPage = lazy(() => import('./pages/CronPage'))
+const MainPromptPage = lazy(() => import('./pages/MainPromptPage'))
+const SkillsPage = lazy(() => import('./pages/SkillsPage'))
+const SystemPage = lazy(() => import('./pages/SystemPage'))
+
+function RouteFallback() {
+  return (
+    <div className="page-card center-box">
+      <Spin size="large" />
+    </div>
+  )
+}
+
+function withRouteSuspense(element: JSX.Element) {
+  return <Suspense fallback={<RouteFallback />}>{element}</Suspense>
+}
 
 export default function App() {
   return (
@@ -13,12 +28,12 @@ export default function App() {
       <Routes>
         <Route path="/" element={<AppShell />}>
           <Route index element={<Navigate to="/chat" replace />} />
-          <Route path="chat" element={<ChatPage />} />
-          <Route path="cron" element={<CronPage />} />
-          <Route path="prompt" element={<MainPromptPage />} />
-          <Route path="skills" element={<SkillsPage />} />
-          <Route path="config" element={<ConfigPage />} />
-          <Route path="system" element={<SystemPage />} />
+          <Route path="chat" element={withRouteSuspense(<ChatPage />)} />
+          <Route path="cron" element={withRouteSuspense(<CronPage />)} />
+          <Route path="prompt" element={withRouteSuspense(<MainPromptPage />)} />
+          <Route path="skills" element={withRouteSuspense(<SkillsPage />)} />
+          <Route path="config" element={withRouteSuspense(<ConfigPage />)} />
+          <Route path="system" element={withRouteSuspense(<SystemPage />)} />
         </Route>
       </Routes>
     </BrowserRouter>

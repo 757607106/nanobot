@@ -45,8 +45,8 @@ export default function SystemPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="后端健康度"
-        title="查看运行时、会话与投递状态"
-        description="快速掌握当前 nanobot 后端、工作区运行时和调度服务的整体状态。"
+        title="聚焦实例健康、环境与调度状态"
+        description="把当前 Web 控制台绑定的实例、环境与调度服务拆开呈现，避免信息堆在一块面板里。"
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadStatus()} loading={loading}>
             刷新
@@ -55,8 +55,8 @@ export default function SystemPage() {
         stats={[
           { label: '运行时长', value: status ? formatUptimeZh(status.web.uptime) : '--' },
           { label: '网页会话', value: status?.stats.webSessions ?? 0 },
-          { label: '消息数', value: status?.stats.messages ?? 0 },
-          { label: '定时任务', value: status?.stats.scheduledJobs ?? 0 },
+          { label: '启用频道', value: status?.stats.enabledChannelCount ?? 0 },
+          { label: '定时任务', value: status?.cron.jobs ?? 0 },
         ]}
       />
 
@@ -65,8 +65,8 @@ export default function SystemPage() {
           <Card className="config-panel-card system-runtime-card">
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>运行概览</Typography.Title>
-                <Text type="secondary">把后端当前是否健康、正在用什么运行，以及关键路径在哪里，集中放在同一块面板里。</Text>
+                <Typography.Title level={4}>实例详情</Typography.Title>
+                <Text type="secondary">核心绑定信息集中在这里，方便确认当前控制台正在驱动哪个工作区与模型。</Text>
               </div>
               <Tag>{status.web.version}</Tag>
             </div>
@@ -77,16 +77,16 @@ export default function SystemPage() {
                 <strong>{status.stats.totalSessions}</strong>
               </div>
               <div className="page-meta-card">
-                <span>已启用频道</span>
-                <strong>{status.stats.enabledChannelCount}</strong>
+                <span>网页会话</span>
+                <strong>{status.stats.webSessions}</strong>
               </div>
               <div className="page-meta-card">
                 <span>当前供应商</span>
                 <strong>{status.web.provider}</strong>
               </div>
               <div className="page-meta-card">
-                <span>Cron 任务数</span>
-                <strong>{status.cron.jobs}</strong>
+                <span>消息总数</span>
+                <strong>{status.stats.messages}</strong>
               </div>
             </div>
 
@@ -105,12 +105,12 @@ export default function SystemPage() {
                   <div className="mono-block">{status.web.model}</div>
                 </div>
                 <div className="detail-block">
-                  <Text type="secondary">Python</Text>
-                  <div className="mono-block">{status.environment.python}</div>
+                  <Text type="secondary">已启用频道</Text>
+                  <div className="mono-block">{status.stats.enabledChannelCount}</div>
                 </div>
                 <div className="detail-block">
-                  <Text type="secondary">平台</Text>
-                  <div className="mono-block">{status.environment.platform}</div>
+                  <Text type="secondary">定时任务</Text>
+                  <div className="mono-block">{status.cron.jobs}</div>
                 </div>
               </div>
             </div>

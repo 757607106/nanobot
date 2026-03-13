@@ -72,6 +72,25 @@ function providerCategoryOrder(meta: ProviderMeta) {
   return order.indexOf(meta.category)
 }
 
+const configTabMeta = {
+  runtime: {
+    label: '运行时',
+    description: '配置当前工作区、默认模型和核心推理参数。',
+  },
+  providers: {
+    label: '供应商',
+    description: '按供应商类别统一管理认证、Base 地址与请求头。',
+  },
+  channels: {
+    label: '频道',
+    description: '集中维护投递行为和外部消息通道接入。',
+  },
+  tools: {
+    label: '工具与网关',
+    description: '收敛工具安全、联网能力和网关运行参数。',
+  },
+} as const
+
 export default function ConfigPage() {
   const { message } = App.useApp()
   const [config, setConfig] = useState<ConfigData | null>(null)
@@ -139,6 +158,28 @@ export default function ConfigPage() {
       return true
     })
   }, [channelFilter, config])
+
+  const activeTabMeta = configTabMeta[activeTab as keyof typeof configTabMeta] ?? configTabMeta.runtime
+
+  const activeTabStatus = useMemo(() => {
+    if (!config) {
+      return '--'
+    }
+
+    if (activeTab === 'providers') {
+      return `${configuredProviderCount} 个已配置`
+    }
+
+    if (activeTab === 'channels') {
+      return `${enabledChannelCount} 个已启用`
+    }
+
+    if (activeTab === 'tools') {
+      return config.tools.restrictToWorkspace ? '已限制工作区' : '允许跨目录'
+    }
+
+    return config.agents.defaults.provider || 'auto'
+  }, [activeTab, config, configuredProviderCount, enabledChannelCount])
 
   async function loadConfig() {
     try {
@@ -501,6 +542,14 @@ export default function ConfigPage() {
       />
 
       <div className="page-card tabs-shell">
+        <div className="section-heading-row">
+          <div className="page-section-title">
+            <Typography.Title level={4}>{activeTabMeta.label}</Typography.Title>
+            <Text type="secondary">{activeTabMeta.description}</Text>
+          </div>
+          <Tag>{activeTabStatus}</Tag>
+        </div>
+
         <Tabs
           className="console-tabs"
           activeKey={activeTab}
