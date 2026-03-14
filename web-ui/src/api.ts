@@ -23,6 +23,7 @@ import type {
   CronJobListResponse,
   CronStatus,
   InstalledSkill,
+  MarketplaceSkill,
   McpRepositoryAnalysis,
   McpRepositoryInstallResult,
   McpProbeResult,
@@ -491,6 +492,26 @@ export const api = {
       method: 'POST',
     }),
   getInstalledSkills: () => request<InstalledSkill[]>('/skills/installed'),
+  searchMarketplaceSkills: (query = '', limit = 24) => {
+    const params = new URLSearchParams()
+    if (query.trim()) {
+      params.set('q', query.trim())
+    }
+    params.set('limit', String(limit))
+    const search = params.toString()
+    return request<MarketplaceSkill[]>(`/skills/marketplace${search ? `?${search}` : ''}`)
+  },
+  installMarketplaceSkill: (slug: string, force = false) =>
+    request<InstalledSkill>('/skills/install', {
+      method: 'POST',
+      body: JSON.stringify({ slug, force }),
+    }),
+  uploadSkillZip: (formData: FormData) =>
+    request<InstalledSkill>('/skills/upload-zip', {
+      method: 'POST',
+      body: formData,
+      skipJsonContentType: true,
+    }),
   uploadSkill: (formData: FormData) =>
     request<InstalledSkill>('/skills/upload', {
       method: 'POST',

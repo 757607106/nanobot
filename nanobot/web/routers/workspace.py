@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from nanobot.services.skillhub_marketplace import SkillHubMarketplaceError
 from nanobot.web.http import APIError, _json_response, _ok
 
 router = APIRouter()
@@ -36,6 +37,11 @@ class AgentTemplateExportRequest(BaseModel):
 
 class DocumentUpdateRequest(BaseModel):
     content: str
+
+
+class SkillInstallRequest(BaseModel):
+    slug: str
+    force: bool = False
 
 
 @router.get("/api/v1/agent-templates")
@@ -135,6 +141,26 @@ def get_installed_skills(request: Request) -> JSONResponse:
     return _json_response(200, _ok(request.app.state.web.get_installed_skills()))
 
 
+@router.get("/api/v1/skills/marketplace")
+def get_marketplace_skills(request: Request, q: str = "", limit: int = 24) -> JSONResponse:
+    try:
+        data = request.app.state.web.list_marketplace_skills(q, limit)
+    except SkillHubMarketplaceError as exc:
+        raise APIError(400, "SKILL_MARKETPLACE_FETCH_FAILED", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/skills/install")
+def install_marketplace_skill(request: Request, payload: SkillInstallRequest) -> JSONResponse:
+    try:
+        data = request.app.state.web.install_marketplace_skill(payload.slug, payload.force)
+    except SkillHubMarketplaceError as exc:
+        raise APIError(400, "SKILL_INSTALL_FAILED", str(exc)) from exc
+    except ValueError as exc:
+        raise APIError(400, "SKILL_INSTALL_FAILED", str(exc)) from exc
+    return _json_response(201, _ok(data))
+
+
 @router.post("/api/v1/skills/upload")
 async def upload_skill(request: Request) -> JSONResponse:
     form = await request.form()
@@ -153,6 +179,23 @@ async def upload_skill(request: Request) -> JSONResponse:
 
     try:
         data = request.app.state.web.upload_skill(files)
+    except ValueError as exc:
+        raise APIError(400, "SKILL_UPLOAD_INVALID", str(exc)) from exc
+    return _json_response(201, _ok(data))
+
+
+@router.post("/api/v1/skills/upload-zip")
+async def upload_skill_zip(request: Request) -> JSONResponse:
+    form = await request.form()
+    file_value = form.get("file")
+    if file_value is None:
+        raise APIError(400, "SKILL_UPLOAD_INVALID", "Upload requires a ZIP file.")
+
+    file_bytes = await file_value.read()
+    filename = str(getattr(file_value, "filename", "") or "")
+
+    try:
+        data = request.app.state.web.upload_skill_zip(filename, file_bytes)
     except ValueError as exc:
         raise APIError(400, "SKILL_UPLOAD_INVALID", str(exc)) from exc
     return _json_response(201, _ok(data))

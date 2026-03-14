@@ -20,6 +20,7 @@
 
 ## 📢 News
 
+- **2026-03-14** 🧩 Web UI skills now support SkillHub remote install, single-skill ZIP fallback, and compatibility hints so “installed” is no longer confused with “fully adapted”. See [docs/skills-marketplace.md](./docs/skills-marketplace.md).
 - **2026-03-08** 🚀 Released **v0.1.4.post4** — a reliability-packed release with safer defaults, better multi-instance support, sturdier MCP, and major channel and provider improvements. Please see [release notes](https://github.com/HKUDS/nanobot/releases/tag/v0.1.4.post4) for details.
 - **2026-03-07** 🚀 Azure OpenAI provider, WhatsApp media, QQ group chats, and more Telegram/Feishu polish.
 - **2026-03-06** 🪄 Lighter providers, smarter media handling, and sturdier memory and CLI compatibility.
@@ -211,6 +212,18 @@ nanobot agent
 ```
 
 That's it! You have a working AI assistant in 2 minutes.
+
+## 🧩 Skills Marketplace
+
+The current Web UI supports:
+
+- SkillHub remote marketplace install
+- Manual folder upload as fallback
+- Manual single-skill ZIP upload as fallback
+
+Important: `installed` means a skill was imported into the current workspace and can be discovered by the loader. It does **not** automatically mean the skill is fully adapted to nanobot's runtime model.
+
+See [docs/skills-marketplace.md](./docs/skills-marketplace.md) for the current source of truth, including compatibility levels and the signals used to classify SkillHub skills.
 
 ## 💬 Chat Apps
 

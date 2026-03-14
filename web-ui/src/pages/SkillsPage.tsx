@@ -17,27 +17,45 @@ import {
 } from 'antd'
 import {
   DeleteOutlined,
+  DownloadOutlined,
   FolderOpenOutlined,
   ReloadOutlined,
   SearchOutlined,
+  UploadOutlined,
 } from '@ant-design/icons'
 import { api } from '../api'
 import PageHero from '../components/PageHero'
-import type { InstalledSkill } from '../types'
+import { formatDateTimeZh } from '../locale'
+import type { InstalledSkill, MarketplaceSkill } from '../types'
 const { Text } = Typography
+
+const MARKET_COMPATIBILITY_META: Record<MarketplaceSkill['compatibility'], { color: string }> = {
+  native: { color: 'success' },
+  partial: { color: 'warning' },
+  unsupported: { color: 'error' },
+  unknown: { color: 'default' },
+}
 
 export default function SkillsPage() {
   const { message } = App.useApp()
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const zipInputRef = useRef<HTMLInputElement>(null)
   const [skills, setSkills] = useState<InstalledSkill[]>([])
+  const [marketplaceSkills, setMarketplaceSkills] = useState<MarketplaceSkill[]>([])
   const [loading, setLoading] = useState(true)
+  const [marketLoading, setMarketLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [installingId, setInstallingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [marketQuery, setMarketQuery] = useState('')
 
   useEffect(() => {
     void loadSkills()
+    void loadMarketplaceSkills('')
   }, [])
+
+  const installedSkillIds = useMemo(() => new Set(skills.map((skill) => skill.id)), [skills])
 
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
@@ -59,6 +77,24 @@ export default function SkillsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadMarketplaceSkills(nextQuery: string) {
+    try {
+      setMarketLoading(true)
+      const data = await api.searchMarketplaceSkills(nextQuery, 18)
+      setMarketplaceSkills(data)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载 SkillHub 市场失败')
+    } finally {
+      setMarketLoading(false)
+    }
+  }
+
+  async function handleMarketplaceSearch(value?: string) {
+    const nextQuery = (value ?? marketQuery).trim()
+    setMarketQuery(nextQuery)
+    await loadMarketplaceSkills(nextQuery)
   }
 
   async function handleFolderSelect(event: ChangeEvent<HTMLInputElement>) {
@@ -88,6 +124,28 @@ export default function SkillsPage() {
     }
   }
 
+  async function handleZipSelect(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      setUploading(true)
+      const uploaded = await api.uploadSkillZip(formData)
+      message.success(`技能“${uploaded.name}”上传成功`)
+      await loadSkills()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '上传 ZIP 技能失败')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   async function handleDelete(skillId: string) {
     try {
       setDeletingId(skillId)
@@ -101,13 +159,26 @@ export default function SkillsPage() {
     }
   }
 
+  async function handleInstallMarketplaceSkill(skill: MarketplaceSkill, force = false) {
+    try {
+      setInstallingId(skill.slug)
+      const installed = await api.installMarketplaceSkill(skill.slug, force)
+      message.success(force ? `技能“${installed.name}”已覆盖安装` : `技能“${installed.name}”安装成功`)
+      await Promise.all([loadSkills(), loadMarketplaceSkills(marketQuery)])
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : (force ? '覆盖安装技能失败' : '从 SkillHub 安装技能失败'))
+    } finally {
+      setInstallingId(null)
+    }
+  }
+
   return (
     <div className="page-stack">
       <PageHero
         className="page-hero-compact"
         eyebrow="技能管理"
         title="先从技能市场拿能力"
-        description="这个页面只保留三件事：打开技能市场、手动上传兜底、查看当前实例已经安装了哪些技能。"
+        description="优先从 SkillHub 远端市场直接安装技能，手动上传只作为兜底；右侧始终展示当前实例已经装好的能力。"
         actions={(
           <Space wrap>
             <Button
@@ -117,6 +188,9 @@ export default function SkillsPage() {
               onClick={() => folderInputRef.current?.click()}
             >
               上传文件夹
+            </Button>
+            <Button icon={<UploadOutlined />} loading={uploading} onClick={() => zipInputRef.current?.click()}>
+              上传 ZIP
             </Button>
             <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadSkills()}>
               刷新
@@ -138,33 +212,137 @@ export default function SkillsPage() {
         style={{ display: 'none' }}
         onChange={(event) => void handleFolderSelect(event)}
       />
+      <input
+        type="file"
+        ref={zipInputRef}
+        accept=".zip,application/zip"
+        style={{ display: 'none' }}
+        onChange={(event) => void handleZipSelect(event)}
+      />
 
       <div className="page-grid skills-page-grid">
         <div className="page-stack skills-market-stack">
           <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>推荐路径：技能市场</Typography.Title>
-                <Text type="secondary">优先去市场浏览和下载技能。</Text>
+                <Typography.Title level={4}>推荐路径：SkillHub 远端市场</Typography.Title>
+                <Text type="secondary">直接搜索官方市场并安装到当前工作区。</Text>
               </div>
-              <Tag color="processing">推荐</Tag>
+              <Space wrap size={8}>
+                <Tag color="processing">推荐</Tag>
+                <Tag>{marketplaceSkills.length} 个结果</Tag>
+              </Space>
             </div>
 
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Text type="secondary">
-                先在市场里找到合适的技能，再把目录带回当前实例；没有的话再手动上传。
-              </Text>
+              <Input.Search
+                allowClear
+                enterButton="搜索 SkillHub"
+                prefix={<SearchOutlined />}
+                placeholder="输入技能名称、描述或关键词"
+                value={marketQuery}
+                onChange={(event) => setMarketQuery(event.target.value)}
+                onSearch={(value) => void handleMarketplaceSearch(value)}
+              />
               <Space wrap>
-                <Button type="primary" href="https://clawhub.ai" target="_blank" rel="noreferrer">
-                  打开 ClawHub 市场
+                <Button icon={<ReloadOutlined />} loading={marketLoading} onClick={() => void handleMarketplaceSearch(marketQuery)}>
+                  刷新结果
                 </Button>
-                <Button href="https://openclawdoc.com/docs/skills/clawhub/" target="_blank" rel="noreferrer">
-                  查看市场说明
-                </Button>
-                <Button href="https://openclawdoc.com/docs/skills/overview/" target="_blank" rel="noreferrer">
-                  查看 Skills 说明
+                <Button href="https://skillhub.tencent.com/" target="_blank" rel="noreferrer">
+                  打开 SkillHub 官网
                 </Button>
               </Space>
+
+              <div className="page-scroll-shell skills-scroll-shell">
+                {marketLoading ? (
+                  <div className="center-box">
+                    <Spin />
+                  </div>
+                ) : marketplaceSkills.length === 0 ? (
+                  <Empty description="SkillHub 暂时没有匹配技能" className="empty-block" />
+                ) : (
+                  <Row gutter={[16, 16]} className="skills-grid">
+                    {marketplaceSkills.map((skill) => {
+                      const alreadyInstalled = installedSkillIds.has(skill.slug)
+                      return (
+                        <Col xs={24} md={12} key={skill.slug}>
+                          <Card
+                            title={
+                              <Space wrap>
+                                <span>{skill.name}</span>
+                                {skill.version ? <Tag>{skill.version}</Tag> : null}
+                              </Space>
+                            }
+                            extra={
+                              <Space>
+                                <Tag color="blue">{skill.source}</Tag>
+                                {alreadyInstalled ? <Tag color="success">已安装</Tag> : null}
+                              </Space>
+                            }
+                            actions={
+                              alreadyInstalled
+                                ? [
+                                    <Button
+                                      key="reinstall"
+                                      type="text"
+                                      icon={<ReloadOutlined />}
+                                      loading={installingId === skill.slug}
+                                      onClick={() => void handleInstallMarketplaceSkill(skill, true)}
+                                    >
+                                      覆盖安装
+                                    </Button>,
+                                  ]
+                                : [
+                                    <Button
+                                      key="install"
+                                      type="text"
+                                      icon={<DownloadOutlined />}
+                                      loading={installingId === skill.slug}
+                                      onClick={() => void handleInstallMarketplaceSkill(skill)}
+                                    >
+                                      安装到工作区
+                                    </Button>,
+                                  ]
+                            }
+                          >
+                            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                              <Text type="secondary">{skill.description || '暂无描述。'}</Text>
+                              <Space wrap size={8}>
+                                <Tag color={MARKET_COMPATIBILITY_META[skill.compatibility]?.color || 'default'}>
+                                  {skill.compatibilityLabel}
+                                </Tag>
+                                {typeof skill.downloads === 'number' ? <Tag>下载 {skill.downloads}</Tag> : null}
+                                {skill.updatedAt ? <Tag>更新于 {formatDateTimeZh(skill.updatedAt)}</Tag> : null}
+                              </Space>
+                              {skill.compatibilityReasons && skill.compatibilityReasons.length > 0 ? (
+                                <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                                  {skill.compatibilityReasons.map((reason) => (
+                                    <Text key={reason} type={skill.compatibility === 'unsupported' ? undefined : 'secondary'}>
+                                      {reason}
+                                    </Text>
+                                  ))}
+                                </Space>
+                              ) : null}
+                              {skill.tags && skill.tags.length > 0 ? (
+                                <Space wrap size={4}>
+                                  {skill.tags.map((tag) => (
+                                    <Tag key={tag}>{tag}</Tag>
+                                  ))}
+                                </Space>
+                              ) : null}
+                              {skill.homepage ? (
+                                <Button type="link" href={skill.homepage} target="_blank" rel="noreferrer" style={{ paddingInline: 0 }}>
+                                  查看市场详情
+                                </Button>
+                              ) : null}
+                            </Space>
+                          </Card>
+                        </Col>
+                      )
+                    })}
+                  </Row>
+                )}
+              </div>
             </Space>
           </Card>
 
@@ -172,23 +350,28 @@ export default function SkillsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>兜底路径：手动上传</Typography.Title>
-                <Text type="secondary">市场外的技能目录也可以直接上传到当前工作区。</Text>
+                <Text type="secondary">市场外的技能目录或 ZIP 包都可以直接上传到当前工作区。</Text>
               </div>
-              <Button
-                type="primary"
-                icon={<FolderOpenOutlined />}
-                loading={uploading}
-                onClick={() => folderInputRef.current?.click()}
-              >
-                上传技能目录
-              </Button>
+              <Space wrap>
+                <Button
+                  type="primary"
+                  icon={<FolderOpenOutlined />}
+                  loading={uploading}
+                  onClick={() => folderInputRef.current?.click()}
+                >
+                  上传技能目录
+                </Button>
+                <Button icon={<UploadOutlined />} loading={uploading} onClick={() => zipInputRef.current?.click()}>
+                  上传技能 ZIP
+                </Button>
+              </Space>
             </div>
 
             <Alert
               showIcon
               type="info"
-              message="上传前请确认目录里包含 SKILL.md。"
-              description="上传后会写入当前工作区的 `skills/` 目录。"
+              message="上传前请确认目录或 ZIP 里包含 SKILL.md。"
+              description="上传后会写入当前工作区的 `skills/` 目录；ZIP 仅支持单个技能包。"
             />
           </Card>
         </div>

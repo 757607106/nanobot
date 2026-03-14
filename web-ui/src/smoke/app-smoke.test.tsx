@@ -29,6 +29,7 @@ const mockApi = vi.hoisted(() => ({
   getOpsActions: vi.fn(),
   getOpsLogs: vi.fn(),
   getProfile: vi.fn(),
+  searchMarketplaceSkills: vi.fn(),
   getSetupStatus: vi.fn(),
   probeMcpServer: vi.fn(),
   runMcpRepair: vi.fn(),
@@ -62,6 +63,8 @@ const mockApi = vi.hoisted(() => ({
   reloadAgentTemplates: vi.fn(),
   resetDocument: vi.fn(),
   renameSession: vi.fn(),
+  installMarketplaceSkill: vi.fn(),
+  uploadSkillZip: vi.fn(),
   updateDocument: vi.fn(),
   updateAgentTemplate: vi.fn(),
   updateCalendarEvent: vi.fn(),
@@ -469,9 +472,37 @@ vi.mock('antd', async () => {
     )
   })
   TextAreaInput.displayName = 'MockInputTextArea'
+  const SearchInput = React.forwardRef<HTMLInputElement, Props>((props, ref) => {
+    const { className, disabled, onChange, onSearch, placeholder, value } = props as {
+      className?: string
+      disabled?: boolean
+      onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void
+      onSearch?: (value: string) => void
+      placeholder?: string
+      value?: string | number
+    }
+
+    return (
+      <input
+        ref={ref}
+        className={className}
+        disabled={Boolean(disabled)}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange?.(event)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            onSearch?.(String(value ?? ''))
+          }
+        }}
+      />
+    )
+  })
+  SearchInput.displayName = 'MockInputSearch'
 
   const Input = Object.assign(InputBase, {
     Password: PasswordInput,
+    Search: SearchInput,
     TextArea: TextAreaInput,
   })
 
@@ -1699,6 +1730,49 @@ describe('web app smoke pages', () => {
         isDeletable: false,
       },
     ])
+    mockApi.searchMarketplaceSkills.mockResolvedValue([
+      {
+        id: 'frontend-design',
+        slug: 'frontend-design',
+        name: 'frontend-design',
+        description: 'Create distinctive production-grade frontend interfaces.',
+        source: 'skillhub',
+        version: '1.0.0',
+        tags: ['design'],
+        homepage: 'https://skillhub.tencent.com/',
+        compatibility: 'native',
+        compatibilityLabel: '原生可用',
+        compatibilitySummary: '包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。',
+        compatibilityReasons: [
+          '包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。',
+          '未发现 OpenClaw、Claude 或 Codex 专属 hooks、目录约定或 `sessions_*` 依赖。',
+        ],
+      },
+    ])
+    mockApi.installMarketplaceSkill.mockResolvedValue({
+      id: 'frontend-design',
+      name: 'frontend-design',
+      description: 'Create distinctive production-grade frontend interfaces.',
+      source: 'workspace',
+      path: '/tmp/workspace/skills/frontend-design',
+      version: '1.0.0',
+      author: 'SkillHub',
+      tags: ['design'],
+      enabled: true,
+      isDeletable: true,
+    })
+    mockApi.uploadSkillZip.mockResolvedValue({
+      id: 'zip-skill',
+      name: 'zip-skill',
+      description: 'ZIP uploaded skill.',
+      source: 'workspace',
+      path: '/tmp/workspace/skills/zip-skill',
+      version: '1.0.0',
+      author: 'SkillHub',
+      tags: ['zip'],
+      enabled: true,
+      isDeletable: true,
+    })
   })
 
   it('renders the desktop app shell navigation', async () => {
@@ -1858,8 +1932,10 @@ describe('web app smoke pages', () => {
   it('renders the skills page', async () => {
     renderPage(<SkillsPage />)
     expect(await screen.findByText('先从技能市场拿能力')).toBeInTheDocument()
-    expect(screen.getByText('推荐路径：技能市场')).toBeInTheDocument()
+    expect(screen.getByText('推荐路径：SkillHub 远端市场')).toBeInTheDocument()
     expect(screen.getByText('兜底路径：手动上传')).toBeInTheDocument()
+    expect(screen.getByText('原生可用')).toBeInTheDocument()
+    expect(screen.getByText('包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。')).toBeInTheDocument()
   })
 
   it('renders the main prompt page', async () => {

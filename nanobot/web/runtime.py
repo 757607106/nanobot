@@ -235,8 +235,17 @@ class WebAppState:
     def get_installed_skills(self) -> list[dict[str, Any]]:
         return self.workspace_runtime.get_installed_skills()
 
+    def list_marketplace_skills(self, query: str = "", limit: int = 24) -> list[dict[str, Any]]:
+        return self.workspace_runtime.list_marketplace_skills(query, limit)
+
+    def install_marketplace_skill(self, slug: str, force: bool = False) -> dict[str, Any]:
+        return self.workspace_runtime.install_marketplace_skill(slug, force)
+
     def upload_skill(self, files: list[tuple[str, bytes]]) -> dict[str, Any]:
         return self.workspace_runtime.upload_skill(files)
+
+    def upload_skill_zip(self, filename: str, content: bytes) -> dict[str, Any]:
+        return self.workspace_runtime.upload_skill_zip(filename, content)
 
     def delete_skill(self, skill_id: str) -> bool:
         return self.workspace_runtime.delete_skill(skill_id)

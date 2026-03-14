@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import io
 import re
 import shutil
+import tempfile
+import zipfile
 from datetime import datetime
 from importlib.resources import files as pkg_files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from nanobot.services.skillhub_marketplace import SkillHubMarketplaceClient, SkillHubMarketplaceError
 
 if TYPE_CHECKING:
     from nanobot.web.runtime import WebAppState
@@ -19,6 +24,7 @@ class WebWorkspaceRuntimeService:
     def __init__(self, state: WebAppState, document_definitions: dict[str, dict[str, Any]]):
         self.state = state
         self.document_definitions = document_definitions
+        self.skillhub = SkillHubMarketplaceClient()
 
     def get_template_tool_catalog(self) -> list[dict[str, str]]:
         if self.state.agent is None:
@@ -114,6 +120,70 @@ class WebWorkspaceRuntimeService:
             return []
         return self.state.agent_templates.list_installed_skills()
 
+    def list_marketplace_skills(self, query: str = "", limit: int = 24) -> list[dict[str, Any]]:
+        return self.skillhub.list_skills(query=query, limit=limit)
+
+    def install_marketplace_skill(self, slug: str, force: bool = False) -> dict[str, Any]:
+        safe_slug = self.skillhub.normalize_skill_id(slug)
+        builtin_skill = Path(__file__).resolve().parents[2] / "skills" / safe_slug
+        if builtin_skill.is_dir():
+            raise SkillHubMarketplaceError(
+                f"Skill '{safe_slug}' already exists as a built-in skill. Choose a different skill."
+            )
+
+        self.skillhub.install_skill(self.state.config.workspace_path, safe_slug, force=force)
+        installed = self.get_installed_skills()
+        matched = next((item for item in installed if item["id"] == safe_slug), None)
+        if matched is None:
+            raise RuntimeError(f"Installed skill '{safe_slug}' could not be loaded.")
+        return matched
+
+    @staticmethod
+    def _safe_skill_name(name: str) -> bool:
+        return bool(re.fullmatch(r"[A-Za-z0-9._-]+", name))
+
+    @staticmethod
+    def _safe_rel_path(rel_path: str) -> bool:
+        normalized = rel_path.replace("\\", "/").strip()
+        return bool(normalized) and ".." not in normalized and not Path(normalized).is_absolute()
+
+    @staticmethod
+    def _read_skill_name_from_markdown(skill_file: Path) -> str | None:
+        try:
+            content = skill_file.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        match = re.search(r"^name:\s*['\"]?([^'\"]+)['\"]?\s*$", content, re.MULTILINE)
+        if not match:
+            return None
+        candidate = match.group(1).strip()
+        return candidate or None
+
+    def _resolve_uploaded_skill_root(self, extracted_root: Path, archive_name: str) -> tuple[str, Path]:
+        skill_files = list(extracted_root.rglob("SKILL.md"))
+        if len(skill_files) != 1:
+            raise ValueError("ZIP 文件必须只包含一个技能目录。")
+
+        skill_file = skill_files[0]
+        skill_dir = skill_file.parent
+        if skill_dir == extracted_root:
+            fallback_name = Path(archive_name or "").stem
+            skill_name = self._read_skill_name_from_markdown(skill_file) or fallback_name
+        else:
+            skill_name = skill_dir.name
+
+        skill_name = str(skill_name or "").strip()
+        if not self._safe_skill_name(skill_name):
+            raise ValueError(f"Invalid skill name: {skill_name or '<empty>'}")
+        return skill_name, skill_dir
+
+    def _finalize_uploaded_skill(self, skill_name: str) -> dict[str, Any]:
+        installed = self.get_installed_skills()
+        matched = next((item for item in installed if item["id"] == skill_name), None)
+        if matched is None:
+            raise RuntimeError(f"Uploaded skill '{skill_name}' could not be loaded.")
+        return matched
+
     def upload_skill(self, files: list[tuple[str, bytes]]) -> dict[str, Any]:
         workspace_skills = self.state.config.workspace_path / "skills"
         workspace_skills.mkdir(parents=True, exist_ok=True)
@@ -121,19 +191,12 @@ class WebWorkspaceRuntimeService:
         if not files:
             raise ValueError("No skill files were uploaded.")
 
-        def safe_skill_name(name: str) -> bool:
-            return bool(re.fullmatch(r"[A-Za-z0-9_-]+", name))
-
-        def safe_rel_path(rel_path: str) -> bool:
-            normalized = rel_path.replace("\\", "/").strip()
-            return bool(normalized) and ".." not in normalized and not Path(normalized).is_absolute()
-
         skill_name: str | None = None
         has_skill_md = False
 
         for rel_path, content in files:
             normalized = rel_path.replace("\\", "/").strip()
-            if not safe_rel_path(normalized):
+            if not self._safe_rel_path(normalized):
                 continue
 
             parts = [part for part in normalized.split("/") if part]
@@ -141,7 +204,7 @@ class WebWorkspaceRuntimeService:
                 continue
 
             current_skill_name = parts[0]
-            if not safe_skill_name(current_skill_name):
+            if not self._safe_skill_name(current_skill_name):
                 raise ValueError(f"Invalid skill name: {current_skill_name}")
 
             if skill_name is None:
@@ -165,15 +228,41 @@ class WebWorkspaceRuntimeService:
             shutil.rmtree(skill_root, ignore_errors=True)
             raise ValueError("A skill folder must include SKILL.md.")
 
-        installed = self.get_installed_skills()
-        matched = next((item for item in installed if item["id"] == skill_name), None)
-        if matched is None:
-            raise RuntimeError(f"Uploaded skill '{skill_name}' could not be loaded.")
-        return matched
+        return self._finalize_uploaded_skill(skill_name)
+
+    def upload_skill_zip(self, filename: str, content: bytes) -> dict[str, Any]:
+        if not content:
+            raise ValueError("ZIP 文件不能为空。")
+        if filename and not filename.lower().endswith(".zip"):
+            raise ValueError("Only .zip skill archives are supported.")
+
+        try:
+            archive = zipfile.ZipFile(io.BytesIO(content))
+        except zipfile.BadZipFile as exc:
+            raise ValueError("Uploaded file is not a valid ZIP archive.") from exc
+
+        with tempfile.TemporaryDirectory(prefix="nanobot-skill-upload-") as tmp_dir:
+            extracted_root = Path(tmp_dir)
+            with archive:
+                for info in archive.infolist():
+                    member = Path(info.filename)
+                    if member.is_absolute() or ".." in member.parts:
+                        raise ValueError(f"Unsafe ZIP path entry detected: {info.filename}")
+                archive.extractall(extracted_root)
+
+            skill_name, source_dir = self._resolve_uploaded_skill_root(extracted_root, filename)
+            workspace_skills = self.state.config.workspace_path / "skills"
+            workspace_skills.mkdir(parents=True, exist_ok=True)
+            destination = workspace_skills / skill_name
+            if destination.exists():
+                shutil.rmtree(destination)
+            shutil.copytree(source_dir, destination)
+
+        return self._finalize_uploaded_skill(skill_name)
 
     def delete_skill(self, skill_id: str) -> bool:
         safe_id = str(skill_id or "").strip()
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", safe_id):
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", safe_id):
             raise ValueError("Invalid skill id.")
 
         workspace_skill = self.state.config.workspace_path / "skills" / safe_id

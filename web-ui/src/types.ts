@@ -375,6 +375,23 @@ export interface InstalledSkill {
   isDeletable?: boolean
 }
 
+export interface MarketplaceSkill {
+  id: string
+  slug: string
+  name: string
+  description: string
+  version?: string | null
+  tags?: string[]
+  source: string
+  homepage?: string | null
+  updatedAt?: number | null
+  downloads?: number | null
+  compatibility: 'native' | 'partial' | 'unsupported' | 'unknown'
+  compatibilityLabel: string
+  compatibilitySummary?: string | null
+  compatibilityReasons: string[]
+}
+
 export interface AgentTemplateTool {
   name: string
   description: string
