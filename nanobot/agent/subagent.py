@@ -1,10 +1,12 @@
 """Subagent manager for background task execution."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -15,8 +17,12 @@ from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import ExecToolConfig
+from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
 from nanobot.providers.base import LLMProvider
 from nanobot.utils.helpers import build_assistant_message
+
+if TYPE_CHECKING:
+    from nanobot.platform.runs import RunService
 
 
 class SubagentManager:
@@ -30,10 +36,10 @@ class SubagentManager:
         model: str | None = None,
         brave_api_key: str | None = None,
         web_proxy: str | None = None,
-        exec_config: "ExecToolConfig | None" = None,
+        exec_config: ExecToolConfig | None = None,
         restrict_to_workspace: bool = False,
+        run_registry: RunService | None = None,
     ):
-        from nanobot.config.schema import ExecToolConfig
         self.provider = provider
         self.workspace = workspace
         self.bus = bus
@@ -42,6 +48,7 @@ class SubagentManager:
         self.web_proxy = web_proxy
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
+        self.run_registry = run_registry
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._session_tasks: dict[str, set[str]] = {}  # session_key -> {task_id, ...}
 
@@ -52,11 +59,44 @@ class SubagentManager:
         origin_channel: str = "cli",
         origin_chat_id: str = "direct",
         session_key: str | None = None,
+        parent_run_id: str | None = None,
+        root_run_id: str | None = None,
+        thread_id: str | None = None,
+        agent_id: str | None = None,
+        team_id: str | None = None,
+        spawn_depth: int = 0,
     ) -> str:
         """Spawn a subagent to execute a task in the background."""
-        task_id = str(uuid.uuid4())[:8]
         display_label = label or task[:30] + ("..." if len(task) > 30 else "")
         origin = {"channel": origin_channel, "chat_id": origin_chat_id}
+        task_preview = " ".join(task.split())[:280]
+        task_id = str(uuid.uuid4())[:8]
+
+        if self.run_registry:
+            self.run_registry.check_limits(
+                session_key=session_key,
+                parent_run_id=parent_run_id,
+                spawn_depth=spawn_depth,
+            )
+            record = self.run_registry.create_run(
+                kind=RunKind.SUBAGENT,
+                label=display_label,
+                task_preview=task_preview,
+                agent_id=agent_id,
+                team_id=team_id,
+                thread_id=thread_id,
+                parent_run_id=parent_run_id,
+                root_run_id=root_run_id,
+                session_key=session_key,
+                origin_channel=origin_channel,
+                origin_chat_id=origin_chat_id,
+                spawn_depth=spawn_depth,
+                workspace_path=str(self.workspace),
+                memory_scope="agent_session",
+                knowledge_scope="workspace",
+                control_scope=RunControlScope.CHILD if parent_run_id else RunControlScope.TOP_LEVEL,
+            )
+            task_id = record.run_id
 
         bg_task = asyncio.create_task(
             self._run_subagent(task_id, task, display_label, origin)
@@ -88,6 +128,9 @@ class SubagentManager:
         logger.info("Subagent [{}] starting task: {}", task_id, label)
 
         try:
+            if self.run_registry:
+                self.run_registry.start_run(task_id)
+
             # Build subagent tools (no message tool, no spawn tool)
             tools = ToolRegistry()
             allowed_dir = self.workspace if self.restrict_to_workspace else None
@@ -114,6 +157,7 @@ class SubagentManager:
             max_iterations = 15
             iteration = 0
             final_result: str | None = None
+            tools_used: list[str] = []
 
             while iteration < max_iterations:
                 iteration += 1
@@ -138,9 +182,29 @@ class SubagentManager:
 
                     # Execute tools
                     for tool_call in response.tool_calls:
+                        tools_used.append(tool_call.name)
                         args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                         logger.debug("Subagent [{}] executing: {} with arguments: {}", task_id, tool_call.name, args_str)
+                        if self.run_registry:
+                            self.run_registry.append_event(
+                                task_id,
+                                "tool_called",
+                                {
+                                    "toolName": tool_call.name,
+                                    "arguments": tool_call.arguments,
+                                },
+                            )
                         result = await tools.execute(tool_call.name, tool_call.arguments)
+                        if self.run_registry:
+                            self.run_registry.append_event(
+                                task_id,
+                                "tool_result",
+                                {
+                                    "toolName": tool_call.name,
+                                    "contentPreview": result[:500],
+                                    "isError": result.startswith("Error"),
+                                },
+                            )
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tool_call.id,
@@ -155,11 +219,48 @@ class SubagentManager:
                 final_result = "Task completed but no final response was generated."
 
             logger.info("Subagent [{}] completed successfully", task_id)
+            if self.run_registry:
+                artifact_path = self.run_registry.write_markdown_artifact(
+                    task_id,
+                    title=f"Subagent Artifact · {label}",
+                    metadata={
+                        "run_id": task_id,
+                        "kind": "subagent",
+                        "iterations": iteration,
+                        "tools_used": list(dict.fromkeys(tools_used)),
+                    },
+                    sections=[
+                        ("Task", task),
+                        ("Result", final_result),
+                    ],
+                )
+                self.run_registry.complete_run(
+                    task_id,
+                    RunResultSummary(
+                        content=final_result,
+                        tools_used=list(dict.fromkeys(tools_used)),
+                        metadata={"iterations": iteration},
+                    ),
+                    artifact_path=artifact_path,
+                )
             await self._announce_result(task_id, label, task, final_result, origin, "ok")
 
+        except asyncio.CancelledError:
+            logger.info("Subagent [{}] cancelled", task_id)
+            if self.run_registry:
+                try:
+                    self.run_registry.cancel_run(task_id)
+                except Exception:
+                    logger.debug("Subagent [{}] cancel state update skipped", task_id)
+            raise
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             logger.error("Subagent [{}] failed: {}", task_id, e)
+            if self.run_registry:
+                try:
+                    self.run_registry.fail_run(task_id, "SUBAGENT_ERROR", str(e))
+                except Exception:
+                    logger.debug("Subagent [{}] failure state update skipped", task_id)
             await self._announce_result(task_id, label, task, error_msg, origin, "error")
 
     async def _announce_result(
@@ -192,6 +293,16 @@ Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not men
         )
 
         await self.bus.publish_inbound(msg)
+        if self.run_registry:
+            self.run_registry.append_event(
+                task_id,
+                "announced",
+                {
+                    "status": status,
+                    "channel": origin["channel"],
+                    "chatId": origin["chat_id"],
+                },
+            )
         logger.debug("Subagent [{}] announced result to {}:{}", task_id, origin['channel'], origin['chat_id'])
     
     def _build_subagent_prompt(self) -> str:
@@ -220,11 +331,26 @@ Stay focused on the assigned task. Your final response will be reported back to 
         """Cancel all subagents for the given session. Returns count cancelled."""
         tasks = [self._running_tasks[tid] for tid in self._session_tasks.get(session_key, [])
                  if tid in self._running_tasks and not self._running_tasks[tid].done()]
+        if self.run_registry:
+            for task_id in self._session_tasks.get(session_key, set()):
+                try:
+                    self.run_registry.request_cancel(task_id)
+                except Exception:
+                    continue
         for t in tasks:
             t.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         return len(tasks)
+
+    async def cancel_run(self, run_id: str) -> bool:
+        """Cancel one running subagent task by run id."""
+        task = self._running_tasks.get(run_id)
+        if task is None or task.done():
+            return False
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        return True
 
     def get_running_count(self) -> int:
         """Return the number of currently running subagents."""

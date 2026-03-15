@@ -15,14 +15,17 @@ from nanobot.config.loader import get_config_path
 from nanobot.config.schema import Config
 from nanobot.cron.service import CronService
 from nanobot.platform.instances import PlatformInstance, PlatformInstanceService
+from nanobot.platform.runs import RunService
 from nanobot.services.agent_templates import AgentTemplateManager
 from nanobot.services.calendar_reminder import CalendarReminderService
 from nanobot.session.manager import SessionManager
 from nanobot.storage.calendar_repository import get_calendar_repository
 from nanobot.web.runtime_services import (
+    WebAgentRuntimeService,
     WebChatRuntimeService,
     WebConfigRuntimeService,
     WebScheduleRuntimeService,
+    WebTeamRuntimeService,
     WebWorkspaceRuntimeService,
 )
 
@@ -68,19 +71,31 @@ DOCUMENT_DEFINITIONS: dict[str, dict[str, Any]] = {
 class WebAppState:
     """State holder for the Web UI server."""
 
-    def __init__(self, config: Config, instance: PlatformInstance | None = None):
+    def __init__(
+        self,
+        config: Config,
+        instance: PlatformInstance | None = None,
+        runs: RunService | None = None,
+    ):
         self._lock = threading.RLock()
         self.version = __version__
         self.start_time = time.time()
         self.instance = instance or PlatformInstanceService().get_default_instance(get_config_path())
         self.instance.bind()
         self.config = config
+        self.runs = runs
         self.bus: MessageBus | None = None
         self.agent: AgentLoop | None = None
         self.sessions: SessionManager | None = None
         self.agent_templates: AgentTemplateManager | None = None
+        self.app_agents = None
+        self.app_teams = None
+        self.app_knowledge = None
+        self.app_memory = None
         self.calendar_repo = get_calendar_repository(config.workspace_path)
 
+        self.agent_runtime = WebAgentRuntimeService(self)
+        self.team_runtime = WebTeamRuntimeService(self)
         self.chat_runtime = WebChatRuntimeService(self)
         self.schedule_runtime = WebScheduleRuntimeService(self)
         self.workspace_runtime = WebWorkspaceRuntimeService(self, DOCUMENT_DEFINITIONS)
@@ -211,6 +226,12 @@ class WebAppState:
     def get_agent_template(self, name: str) -> dict[str, Any]:
         return self.workspace_runtime.get_agent_template(name)
 
+    async def test_agent_run(self, agent_id: str, content: str) -> dict[str, Any]:
+        return await self.agent_runtime.test_run_agent(agent_id, content)
+
+    async def test_team_run(self, team_id: str, content: str) -> dict[str, Any]:
+        return await self.team_runtime.start_team_run(team_id, content)
+
     def create_agent_template(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.workspace_runtime.create_agent_template(payload)
 
@@ -264,6 +285,7 @@ class WebAppState:
 
     async def shutdown_async(self) -> None:
         self.schedule_runtime.stop_runtime()
+        await self.team_runtime.shutdown_async()
         if self.agent is not None:
             await self.agent.close_mcp()
 

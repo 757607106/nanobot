@@ -16,12 +16,17 @@ class SpawnTool(Tool):
         self._origin_channel = "cli"
         self._origin_chat_id = "direct"
         self._session_key = "cli:direct"
+        self._run_context: dict[str, Any] = {}
 
     def set_context(self, channel: str, chat_id: str) -> None:
         """Set the origin context for subagent announcements."""
         self._origin_channel = channel
         self._origin_chat_id = chat_id
         self._session_key = f"{channel}:{chat_id}"
+
+    def set_run_context(self, run_context: dict[str, Any] | None) -> None:
+        """Attach the current parent run context for lineage tracking."""
+        self._run_context = dict(run_context or {})
 
     @property
     def name(self) -> str:
@@ -60,4 +65,10 @@ class SpawnTool(Tool):
             origin_channel=self._origin_channel,
             origin_chat_id=self._origin_chat_id,
             session_key=self._session_key,
+            parent_run_id=self._run_context.get("run_id"),
+            root_run_id=self._run_context.get("root_run_id"),
+            thread_id=self._run_context.get("thread_id"),
+            agent_id=self._run_context.get("agent_id"),
+            team_id=self._run_context.get("team_id"),
+            spawn_depth=int(self._run_context.get("spawn_depth", 0)) + 1,
         )

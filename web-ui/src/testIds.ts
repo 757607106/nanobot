@@ -1,6 +1,7 @@
 export const testIds = {
   app: {
     navChat: 'nav-chat',
+    navStudio: 'nav-studio',
     navChannels: 'nav-channels',
     navMcp: 'nav-mcp',
     logout: 'app-logout',

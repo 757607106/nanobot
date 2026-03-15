@@ -32,6 +32,7 @@ import {
 } from '@ant-design/icons'
 import { RobotOutlined } from '@ant-design/icons'
 import { api } from '../api'
+import { PLATFORM_ASSISTANT_NAME } from '../branding'
 import { createNanobotChatProvider } from '../chat/NanobotChatProvider'
 import {
   buildChatRequestQuery,
@@ -320,7 +321,7 @@ function getMessageTitle(message: ChatMessage) {
     return '你'
   }
   if (message.role === 'assistant') {
-    return 'nanobot'
+    return PLATFORM_ASSISTANT_NAME
   }
   if (message.role === 'tool') {
     return message.name || 'tool'
@@ -1029,7 +1030,7 @@ export default function ChatPage() {
                     setPendingAttachments((prev) => [...prev, createPendingAttachment(firstFile)])
                   }}
                   autoSize={{ minRows: 1, maxRows: 5 }}
-                  placeholder="输入你的问题，或让 nanobot 检查、规划、评审当前工作区..."
+                  placeholder="输入你的问题，或让群策协调多Agent检查、规划、评审当前工作区..."
                   className="chat-sender"
                   prefix={
                     <span data-testid={testIds.chat.fileInput}>

@@ -107,6 +107,12 @@ export default defineConfig(({ mode }) => {
       globals: true,
       setupFiles: './src/test/setup.ts',
       css: true,
+      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      exclude: [
+        'node_modules/**',
+        'e2e/**',
+        'playwright.config.ts',
+      ],
       server: {
         deps: {
           inline: [

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Alert, Button, Card, Divider, Input, Typography } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import { PLATFORM_BADGE_LABEL, PLATFORM_BRAND_NAME, PLATFORM_SUBTITLE } from '../branding'
 import { testIds } from '../testIds'
 import { useThemeMode } from '../themeMode'
 
@@ -72,11 +73,11 @@ export default function LoginPage() {
     <div className={`auth-screen theme-${resolvedTheme}`}>
       <div className="auth-shell">
         <section className="auth-showcase">
-          <div className="auth-badge">NANOBOT ADMIN ACCESS</div>
+          <div className="auth-badge">{PLATFORM_BADGE_LABEL}</div>
           <div className="auth-showcase-copy">
-            <Typography.Title level={1}>nanobot Web Console</Typography.Title>
+            <Typography.Title level={1}>{PLATFORM_BRAND_NAME}</Typography.Title>
             <Typography.Paragraph>
-              把会话、调度、技能、配置和系统运行状态放进统一工作台，但先把入口守住。
+              {PLATFORM_SUBTITLE}，把多Agent协作、会话、调度、技能、配置和系统运行状态收进统一入口。
             </Typography.Paragraph>
           </div>
 
@@ -96,7 +97,7 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <Card className="auth-card" bordered={false}>
+        <Card className="auth-card" variant="borderless">
           <div className="auth-card-head">
             <span className="auth-kicker">{statusLabel}</span>
             <Typography.Title level={3}>{title}</Typography.Title>

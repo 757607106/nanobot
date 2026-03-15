@@ -432,6 +432,345 @@ export interface AgentTemplateMutationResult {
   success: boolean
 }
 
+export interface AgentDefinition {
+  agentId: string
+  tenantId: string
+  instanceId: string
+  name: string
+  description: string
+  systemPrompt: string
+  rules: string[]
+  model?: string | null
+  backend?: string | null
+  enabled: boolean
+  toolAllowlist: string[]
+  mcpServerIds: string[]
+  skillIds: string[]
+  knowledgeBindingIds: string[]
+  tags: string[]
+  memoryScope: string
+  sourceTemplateName?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AgentDefinitionMutationInput {
+  name: string
+  description?: string
+  systemPrompt: string
+  rules?: string[]
+  model?: string | null
+  backend?: string | null
+  enabled?: boolean
+  toolAllowlist?: string[]
+  mcpServerIds?: string[]
+  skillIds?: string[]
+  knowledgeBindingIds?: string[]
+  tags?: string[]
+  memoryScope?: string
+  templateName?: string
+}
+
+export interface TeamDefinition {
+  teamId: string
+  tenantId: string
+  instanceId: string
+  name: string
+  description: string
+  leaderAgentId: string
+  memberAgentIds: string[]
+  workflowMode: string
+  sharedKnowledgeBindingIds: string[]
+  memberAccessPolicy: Record<string, unknown>
+  tags: string[]
+  enabled: boolean
+  memberCount: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface TeamDefinitionMutationInput {
+  name: string
+  description?: string
+  leaderAgentId: string
+  memberAgentIds?: string[]
+  workflowMode?: string
+  sharedKnowledgeBindingIds?: string[]
+  memberAccessPolicy?: Record<string, unknown>
+  tags?: string[]
+  enabled?: boolean
+}
+
+export interface TeamMemorySnapshot {
+  teamId: string
+  content: string
+  fileName: string
+  candidateCount: number
+  updatedAt?: string
+}
+
+export interface TeamThreadSummary {
+  threadId: string
+  session: SessionSummary
+}
+
+export interface TeamThreadMessages {
+  threadId: string
+  messages: ChatMessage[]
+  total: number
+}
+
+export interface MemoryCandidate {
+  candidateId: string
+  tenantId: string
+  instanceId: string
+  scope: string
+  sourceKind: string
+  title: string
+  content: string
+  teamId?: string | null
+  agentId?: string | null
+  runId?: string | null
+  status: string
+  createdAt?: string
+  updatedAt?: string
+  appliedAt?: string | null
+}
+
+export interface MemorySearchHit {
+  sourceType: string
+  sourceId: string
+  title: string
+  content: string
+  preview: string
+  score: number
+  metadata: Record<string, unknown>
+}
+
+export interface MemorySearchResult {
+  query: string
+  requestedMode: string
+  effectiveMode: string
+  items: MemorySearchHit[]
+  total: number
+}
+
+export interface MemorySourceDetail {
+  sourceType: string
+  sourceId: string
+  title: string
+  content: string
+  metadata: Record<string, unknown>
+}
+
+export interface KnowledgeRetrievalProfile {
+  mode: 'keyword' | 'semantic' | 'hybrid' | string
+  topK: number
+  chunkTopK: number
+  chunkSize: number
+  chunkOverlap: number
+  citationRequired: boolean
+  rerankEnabled: boolean
+  metadataFilters: Record<string, unknown>
+}
+
+export interface KnowledgeBaseDefinition {
+  kbId: string
+  tenantId: string
+  instanceId: string
+  name: string
+  description: string
+  enabled: boolean
+  tags: string[]
+  retrievalProfile: KnowledgeRetrievalProfile
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface KnowledgeBaseMutationInput {
+  name: string
+  description?: string
+  enabled?: boolean
+  tags?: string[]
+  retrievalProfile?: Partial<KnowledgeRetrievalProfile>
+}
+
+export interface KnowledgeDocument {
+  docId: string
+  kbId: string
+  tenantId: string
+  instanceId: string
+  sourceId?: string | null
+  sourceType: string
+  title: string
+  mimeType?: string | null
+  fileName?: string | null
+  sourceUri?: string | null
+  filePath?: string | null
+  parsedPath?: string | null
+  checksum?: string | null
+  parserName?: string | null
+  docStatus: string
+  chunkCount: number
+  metadata: Record<string, unknown>
+  errorSummary?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface KnowledgeIngestJob {
+  jobId: string
+  tenantId: string
+  instanceId: string
+  kbId: string
+  docId: string
+  status: string
+  trackId: string
+  errorSummary?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface KnowledgeSource {
+  sourceId: string
+  kbId: string
+  tenantId: string
+  instanceId: string
+  sourceType: string
+  title: string
+  enabled: boolean
+  sourceUri?: string | null
+  latestDocId?: string | null
+  syncCount: number
+  lastSyncedAt?: string | null
+  config: Record<string, unknown>
+  docCount: number
+  syncSupported: boolean
+  latestDocument?: KnowledgeDocument | null
+  latestJob?: KnowledgeIngestJob | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface KnowledgeHit {
+  chunkId: string
+  kbId: string
+  kbName: string
+  docId: string
+  title: string
+  content: string
+  preview: string
+  score: number
+  metadata: Record<string, unknown>
+  citation: {
+    kbId: string
+    kbName: string
+    docId: string
+    title: string
+    sourceType?: string | null
+    sourceUri?: string | null
+    fileName?: string | null
+    mimeType?: string | null
+    chunkOrdinal?: number | null
+  }
+}
+
+export interface KnowledgeRetrieveResult {
+  hits: KnowledgeHit[]
+  requestedMode: string
+  effectiveMode: string
+  filters: Record<string, unknown>
+}
+
+export interface AgentRunSummary {
+  runId: string
+  tenantId: string
+  instanceId: string
+  kind: 'agent' | 'subagent' | 'team'
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancel_requested' | 'cancelled' | 'timed_out'
+  label: string
+  taskPreview: string
+  agentId?: string | null
+  teamId?: string | null
+  threadId?: string | null
+  parentRunId?: string | null
+  rootRunId?: string | null
+  sessionKey?: string | null
+  originChannel?: string | null
+  originChatId?: string | null
+  spawnDepth: number
+  controlScope: 'top_level' | 'child' | 'leader' | 'member'
+  workspacePath?: string | null
+  memoryScope?: string | null
+  knowledgeScope?: string | null
+  createdAt?: string
+  startedAt?: string | null
+  finishedAt?: string | null
+  lastErrorCode?: string | null
+  lastErrorMessage?: string | null
+  resultSummary?: {
+    content?: string | null
+    toolsUsed?: string[]
+    tools_used?: string[]
+    metadata?: Record<string, unknown>
+  } | null
+  artifactPath?: string | null
+  childrenCount?: number
+  events?: Array<{
+    eventId?: number | null
+    runId: string
+    eventType: string
+    payload?: Record<string, unknown>
+    createdAt?: string
+  }>
+  children?: AgentRunTreeNode[]
+}
+
+export interface AgentRunTreeNode extends AgentRunSummary {
+  children?: AgentRunTreeNode[]
+}
+
+export interface AgentRunListResponse {
+  items: AgentRunSummary[]
+  total: number
+}
+
+export interface RunCancelResult extends AgentRunSummary {
+  taskCancellationSent: boolean
+}
+
+export interface RunArtifactDetail {
+  runId: string
+  artifactPath: string
+  fileName: string
+  contentType: string
+  content: string
+}
+
+export interface AgentTestRunResult {
+  run: AgentRunSummary
+  session: SessionSummary
+  assistantMessage: ChatMessage | null
+  messages: ChatMessage[]
+  pendingKnowledgeBindings: string[]
+  knowledgeHits: KnowledgeHit[]
+  appliedBindings: {
+    toolAllowlist: string[]
+    mcpServerIds: string[]
+    skillIds: string[]
+    knowledgeBindingIds: string[]
+  }
+}
+
+export interface TeamTestRunResult {
+  team: TeamDefinition
+  run: AgentRunSummary
+  leaderRun: AgentRunSummary | null
+  memberRuns: AgentRunSummary[]
+  finalAssistantMessage: ChatMessage | null
+  teamKnowledgeHits: KnowledgeHit[]
+}
+
 export interface AgentTemplateImportResult {
   imported: Array<{
     name: string

@@ -24,6 +24,8 @@ FALLBACK_TOOL_CATALOG: dict[str, str] = {
     "exec": "Run a shell command inside the workspace.",
     "web_search": "Search the web for public information.",
     "web_fetch": "Fetch and summarize a web page.",
+    "message": "Send a message back to the active user or chat session.",
+    "spawn": "Spawn a background subagent for a scoped task.",
     "cron": "Create or manage scheduled jobs.",
 }
 

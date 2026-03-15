@@ -20,6 +20,12 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const AutomationPage = lazy(() => import('./pages/AutomationPage'))
 const SetupPage = lazy(() => import('./pages/SetupPage'))
 const SkillsPage = lazy(() => import('./pages/SkillsPage'))
+const StudioLayoutPage = lazy(() => import('./pages/StudioLayoutPage'))
+const AgentsPage = lazy(() => import('./pages/AgentsPage'))
+const TeamsPage = lazy(() => import('./pages/TeamsPage'))
+const MemoryAuditPage = lazy(() => import('./pages/MemoryAuditPage'))
+const RunsPage = lazy(() => import('./pages/RunsPage'))
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage'))
 const SystemLayoutPage = lazy(() => import('./pages/SystemLayoutPage'))
 const SystemPage = lazy(() => import('./pages/SystemPage'))
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
@@ -216,6 +222,29 @@ export function AppRoutes() {
         <Route path="channels" element={withRouteSuspense(<ChannelsPage />)} />
         <Route path="channels/:channelName" element={withRouteSuspense(<ChannelDetailPage />)} />
         <Route path="models" element={withRouteSuspense(<ModelsPage />)} />
+        <Route path="studio" element={withRouteSuspense(<StudioLayoutPage />)}>
+          <Route index element={<Navigate to="agents" replace />} />
+          <Route path="agents" element={withRouteSuspense(<AgentsPage />)} />
+          <Route path="agents/new" element={withRouteSuspense(<AgentsPage />)} />
+          <Route path="agents/:agentId" element={withRouteSuspense(<AgentsPage />)} />
+          <Route path="teams" element={withRouteSuspense(<TeamsPage />)} />
+          <Route path="teams/new" element={withRouteSuspense(<TeamsPage />)} />
+          <Route path="teams/:teamId" element={withRouteSuspense(<TeamsPage />)} />
+          <Route path="memory" element={withRouteSuspense(<MemoryAuditPage />)} />
+          <Route path="memory/:teamId" element={withRouteSuspense(<MemoryAuditPage />)} />
+          <Route
+            path="runs"
+            element={withRouteSuspense(<RunsPage />)}
+          />
+          <Route path="runs/:runId" element={withRouteSuspense(<RunsPage />)} />
+          <Route
+            path="knowledge"
+            element={withRouteSuspense(<KnowledgePage />)}
+          />
+          <Route path="knowledge/new" element={withRouteSuspense(<KnowledgePage />)} />
+          <Route path="knowledge/:kbId" element={withRouteSuspense(<KnowledgePage />)} />
+          <Route path="templates" element={withRouteSuspense(<TemplatesPage />)} />
+        </Route>
         <Route path="mcp" element={withRouteSuspense(<McpPage />)} />
         <Route path="mcp/:serverName" element={withRouteSuspense(<McpServerDetailPage />)} />
         <Route path="prompt" element={withRouteSuspense(<MainPromptPage />)} />

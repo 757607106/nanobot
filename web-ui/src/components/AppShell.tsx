@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Drawer, Grid, Layout, Menu, Segmented, Typography } from 'antd'
 import {
   ApiOutlined,
+  ApartmentOutlined,
   BookOutlined,
   ClusterOutlined,
   DesktopOutlined,
@@ -15,6 +16,12 @@ import {
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import {
+  PLATFORM_BADGE_LABEL,
+  PLATFORM_BRAND_MARK,
+  PLATFORM_BRAND_NAME,
+  PLATFORM_SUBTITLE,
+} from '../branding'
 import { testIds } from '../testIds'
 import { useThemeMode, type ThemePreference } from '../themeMode'
 
@@ -35,6 +42,13 @@ const primaryRoutes: AppRoute[] = [
     label: '对话',
     summary: '围绕当前工作区会话开展对话。',
     testId: testIds.app.navChat,
+  },
+  {
+    key: '/studio',
+    icon: <ApartmentOutlined />,
+    label: '协作',
+    summary: '管理数字员工、团队、运行记录与知识位点。',
+    testId: testIds.app.navStudio,
   },
   {
     key: '/models',
@@ -151,11 +165,12 @@ export default function AppShell() {
   const navigationContent = (
     <div className="app-sider-panel">
       <div className="brand-block">
-        <div className="brand-chip">NANOBOT CONSOLE</div>
+        <div className="brand-chip">{PLATFORM_BADGE_LABEL}</div>
         <div className="brand-head">
-          <div className="brand-mark">N</div>
+          <div className="brand-mark">{PLATFORM_BRAND_MARK}</div>
           <div className="brand-copy">
-            <Typography.Title level={2}>nanobot</Typography.Title>
+            <Typography.Title level={2}>{PLATFORM_BRAND_NAME}</Typography.Title>
+            <Typography.Text type="secondary">{PLATFORM_SUBTITLE}</Typography.Text>
           </div>
         </div>
       </div>

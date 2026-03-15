@@ -1,4 +1,12 @@
 import type {
+  AgentDefinition,
+  AgentDefinitionMutationInput,
+  AgentRunListResponse,
+  AgentRunSummary,
+  AgentRunTreeNode,
+  AgentTestRunResult,
+  RunCancelResult,
+  RunArtifactDetail,
   AgentTemplateExportResult,
   AgentTemplateImportResult,
   AgentTemplateItem,
@@ -23,12 +31,21 @@ import type {
   CronJobListResponse,
   CronStatus,
   InstalledSkill,
+  KnowledgeBaseDefinition,
+  KnowledgeBaseMutationInput,
+  KnowledgeDocument,
+  KnowledgeIngestJob,
+  KnowledgeSource,
+  KnowledgeRetrieveResult,
   MarketplaceSkill,
   McpRepositoryAnalysis,
   McpRepositoryInstallResult,
   McpProbeResult,
   McpRepairPlan,
   McpTestChatData,
+  MemoryCandidate,
+  MemorySearchResult,
+  MemorySourceDetail,
   McpServerDeleteResult,
   McpServerEntry,
   McpServerMutationResult,
@@ -44,6 +61,12 @@ import type {
   SetupStatus,
   StreamEvent,
   SystemStatus,
+  TeamDefinition,
+  TeamDefinitionMutationInput,
+  TeamMemorySnapshot,
+  TeamThreadMessages,
+  TeamThreadSummary,
+  TeamTestRunResult,
   ValidationRunResult,
   WhatsAppBindingStatus,
   WorkspaceDocument,
@@ -459,6 +482,301 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getCalendarJobs: () => request<CronJob[]>('/calendar/jobs'),
+  getKnowledgeBases: (enabled?: boolean) => {
+    const params = new URLSearchParams()
+    if (typeof enabled === 'boolean') {
+      params.set('enabled', String(enabled))
+    }
+    const search = params.toString()
+    return request<KnowledgeBaseDefinition[]>(`/knowledge-bases${search ? `?${search}` : ''}`)
+  },
+  getKnowledgeBase: (kbId: string) => request<KnowledgeBaseDefinition>(`/knowledge-bases/${encodeURIComponent(kbId)}`),
+  createKnowledgeBase: (payload: KnowledgeBaseMutationInput) =>
+    request<KnowledgeBaseDefinition>('/knowledge-bases', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateKnowledgeBase: (kbId: string, payload: Partial<KnowledgeBaseMutationInput>) =>
+    request<KnowledgeBaseDefinition>(`/knowledge-bases/${encodeURIComponent(kbId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteKnowledgeBase: (kbId: string) =>
+    request<{ deleted: boolean }>(`/knowledge-bases/${encodeURIComponent(kbId)}`, {
+      method: 'DELETE',
+    }),
+  getKnowledgeDocuments: (kbId: string) =>
+    request<KnowledgeDocument[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/documents`),
+  getKnowledgeSources: (kbId: string) =>
+    request<KnowledgeSource[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/sources`),
+  updateKnowledgeSource: (
+    kbId: string,
+    sourceId: string,
+    payload: {
+      title?: string
+      enabled?: boolean
+      url?: string
+      items?: Array<{ question: string; answer: string }>
+    },
+  ) =>
+    request<KnowledgeSource>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/sources/${encodeURIComponent(sourceId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+    ),
+  deleteKnowledgeDocument: (kbId: string, docId: string) =>
+    request<{ deleted: boolean }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(docId)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
+  deleteKnowledgeDocuments: (kbId: string, docIds: string[]) =>
+    request<{ deletedCount: number; docIds: string[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/documents/delete`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ docIds }),
+      },
+    ),
+  getKnowledgeJobs: (kbId: string) =>
+    request<KnowledgeIngestJob[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/jobs`),
+  uploadKnowledgeDocuments: (kbId: string, formData: FormData) =>
+    request<{ documents: KnowledgeDocument[]; jobs: KnowledgeIngestJob[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/documents`,
+      {
+        method: 'POST',
+        body: formData,
+        skipJsonContentType: true,
+      },
+    ),
+  addKnowledgeSource: (
+    kbId: string,
+    payload:
+      | { sourceType: 'web_url'; url: string; title?: string }
+      | { sourceType: 'faq_table'; title?: string; items: Array<{ question: string; answer: string }> },
+  ) =>
+    request<{ documents: KnowledgeDocument[]; jobs: KnowledgeIngestJob[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/documents`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    ),
+  reindexKnowledgeBase: (kbId: string, payload?: { docIds?: string[] }) =>
+    request<{ documents: KnowledgeDocument[]; jobs: KnowledgeIngestJob[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/reindex`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload ?? {}),
+      },
+    ),
+  syncKnowledgeSource: (kbId: string, sourceId: string) =>
+    request<{ source: KnowledgeSource; document: KnowledgeDocument; job: KnowledgeIngestJob }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/sources/${encodeURIComponent(sourceId)}/sync`,
+      {
+        method: 'POST',
+      },
+    ),
+  retrieveKnowledgeBase: (
+    kbId: string,
+    payload: {
+      query: string
+      mode?: string
+      limit?: number
+      filters?: Record<string, unknown>
+    },
+  ) =>
+    request<KnowledgeRetrieveResult>(`/knowledge-bases/${encodeURIComponent(kbId)}/retrieve-test`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getAgents: (enabled?: boolean) => {
+    const params = new URLSearchParams()
+    if (typeof enabled === 'boolean') {
+      params.set('enabled', String(enabled))
+    }
+    const search = params.toString()
+    return request<AgentDefinition[]>(`/agents${search ? `?${search}` : ''}`)
+  },
+  getAgent: (agentId: string) => request<AgentDefinition>(`/agents/${encodeURIComponent(agentId)}`),
+  createAgent: (payload: AgentDefinitionMutationInput) =>
+    request<AgentDefinition>('/agents', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateAgent: (agentId: string, payload: Partial<AgentDefinitionMutationInput>) =>
+    request<AgentDefinition>(`/agents/${encodeURIComponent(agentId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteAgent: (agentId: string) =>
+    request<{ deleted: boolean }>(`/agents/${encodeURIComponent(agentId)}`, {
+      method: 'DELETE',
+    }),
+  copyAgent: (agentId: string, name?: string) =>
+    request<AgentDefinition>(`/agents/${encodeURIComponent(agentId)}/copy`, {
+      method: 'POST',
+      body: JSON.stringify(name ? { name } : {}),
+    }),
+  setAgentEnabled: (agentId: string, enabled: boolean) =>
+    request<AgentDefinition>(`/agents/${encodeURIComponent(agentId)}/${enabled ? 'enable' : 'disable'}`, {
+      method: 'POST',
+    }),
+  testRunAgent: (agentId: string, content: string) =>
+    request<AgentTestRunResult>(`/agents/${encodeURIComponent(agentId)}/test-run`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+  getTeams: (enabled?: boolean) => {
+    const params = new URLSearchParams()
+    if (typeof enabled === 'boolean') {
+      params.set('enabled', String(enabled))
+    }
+    const search = params.toString()
+    return request<TeamDefinition[]>(`/teams${search ? `?${search}` : ''}`)
+  },
+  getTeam: (teamId: string) => request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}`),
+  getTeamThread: (teamId: string) =>
+    request<TeamThreadSummary>(`/teams/${encodeURIComponent(teamId)}/thread`),
+  getTeamThreadMessages: (teamId: string, limit = 40) => {
+    const query = new URLSearchParams()
+    query.set('limit', String(limit))
+    return request<TeamThreadMessages>(`/teams/${encodeURIComponent(teamId)}/thread/messages?${query.toString()}`)
+  },
+  createTeam: (payload: TeamDefinitionMutationInput) =>
+    request<TeamDefinition>('/teams', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateTeam: (teamId: string, payload: Partial<TeamDefinitionMutationInput>) =>
+    request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteTeam: (teamId: string) =>
+    request<{ deleted: boolean }>(`/teams/${encodeURIComponent(teamId)}`, {
+      method: 'DELETE',
+    }),
+  copyTeam: (teamId: string, name?: string) =>
+    request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}/copy`, {
+      method: 'POST',
+      body: JSON.stringify(name ? { name } : {}),
+    }),
+  setTeamEnabled: (teamId: string, enabled: boolean) =>
+    request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}/${enabled ? 'enable' : 'disable'}`, {
+      method: 'POST',
+    }),
+  runTeam: (teamId: string, content: string) =>
+    request<TeamTestRunResult>(`/teams/${encodeURIComponent(teamId)}/runs`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+  retryTeamRun: (teamId: string, runId: string, appendContext?: string) =>
+    request<TeamTestRunResult>(`/teams/${encodeURIComponent(teamId)}/runs/${encodeURIComponent(runId)}/retry`, {
+      method: 'POST',
+      body: JSON.stringify({ appendContext: appendContext ?? null }),
+    }),
+  getTeamMemory: (teamId: string) =>
+    request<TeamMemorySnapshot>(`/teams/${encodeURIComponent(teamId)}/memory`),
+  updateTeamMemory: (teamId: string, content: string) =>
+    request<TeamMemorySnapshot>(`/teams/${encodeURIComponent(teamId)}/memory`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+  getMemoryCandidates: (params?: {
+    teamId?: string
+    status?: string
+    scope?: string
+    limit?: number
+  }) => {
+    const query = new URLSearchParams()
+    if (params?.teamId) {
+      query.set('teamId', params.teamId)
+    }
+    if (params?.status) {
+      query.set('status', params.status)
+    }
+    if (params?.scope) {
+      query.set('scope', params.scope)
+    }
+    if (params?.limit) {
+      query.set('limit', String(params.limit))
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return request<{ items: MemoryCandidate[]; total: number }>(`/memory-candidates${suffix}`)
+  },
+  applyMemoryCandidate: (candidateId: string) =>
+    request<MemoryCandidate>(`/memory-candidates/${encodeURIComponent(candidateId)}/apply`, {
+      method: 'POST',
+    }),
+  rejectMemoryCandidate: (candidateId: string) =>
+    request<MemoryCandidate>(`/memory-candidates/${encodeURIComponent(candidateId)}/reject`, {
+      method: 'POST',
+    }),
+  searchMemory: (payload: { query: string; teamId?: string; limit?: number; mode?: string }) =>
+    request<MemorySearchResult>('/memory-search', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getMemorySource: (payload: { sourceType: string; sourceId: string; teamId?: string }) =>
+    request<MemorySourceDetail>('/memory-get', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getRuns: (params?: {
+    status?: string
+    kind?: string
+    agentId?: string
+    teamId?: string
+    sessionKey?: string
+    parentRunId?: string
+    rootRunId?: string
+    threadId?: string
+    limit?: number
+  }) => {
+    const query = new URLSearchParams()
+    if (params?.status) {
+      query.set('status', params.status)
+    }
+    if (params?.kind) {
+      query.set('kind', params.kind)
+    }
+    if (params?.agentId) {
+      query.set('agentId', params.agentId)
+    }
+    if (params?.teamId) {
+      query.set('teamId', params.teamId)
+    }
+    if (params?.sessionKey) {
+      query.set('sessionKey', params.sessionKey)
+    }
+    if (params?.parentRunId) {
+      query.set('parentRunId', params.parentRunId)
+    }
+    if (params?.rootRunId) {
+      query.set('rootRunId', params.rootRunId)
+    }
+    if (params?.threadId) {
+      query.set('threadId', params.threadId)
+    }
+    if (params?.limit) {
+      query.set('limit', String(params.limit))
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return request<AgentRunListResponse>(`/runs${suffix}`)
+  },
+  getRun: (runId: string) => request<AgentRunSummary>(`/runs/${encodeURIComponent(runId)}`),
+  getRunTree: (runId: string) => request<AgentRunTreeNode>(`/runs/${encodeURIComponent(runId)}/tree`),
+  getRunArtifact: (runId: string) => request<RunArtifactDetail>(`/runs/${encodeURIComponent(runId)}/artifact`),
+  getRunChildren: (runId: string) =>
+    request<AgentRunListResponse>(`/runs/${encodeURIComponent(runId)}/children`),
+  cancelRun: (runId: string) =>
+    request<RunCancelResult>(`/runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+    }),
   getAgentTemplates: () => request<AgentTemplateItem[]>('/agent-templates'),
   getAgentTemplate: (templateName: string) =>
     request<AgentTemplateItem>(`/agent-templates/${encodeURIComponent(templateName)}`),

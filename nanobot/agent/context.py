@@ -24,7 +24,13 @@ class ContextBuilder:
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
 
-    def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
+    def build_system_prompt(
+        self,
+        skill_names: list[str] | None = None,
+        extra_system_prompt: str | None = None,
+        include_workspace_memory: bool = True,
+        memory_sections: list[tuple[str, str]] | None = None,
+    ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
         parts = [self._get_identity()]
 
@@ -32,15 +38,33 @@ class ContextBuilder:
         if bootstrap:
             parts.append(bootstrap)
 
-        memory = self.memory.get_memory_context()
-        if memory:
-            parts.append(f"# Memory\n\n{memory}")
+        if extra_system_prompt:
+            parts.append(f"# Agent Profile\n\n{extra_system_prompt.strip()}")
 
-        always_skills = self.skills.get_always_skills()
-        if always_skills:
-            always_content = self.skills.load_skills_for_context(always_skills)
-            if always_content:
-                parts.append(f"# Active Skills\n\n{always_content}")
+        memory_parts: list[str] = []
+        if include_workspace_memory:
+            workspace_memory = self.memory.read_long_term().strip()
+            if workspace_memory:
+                memory_parts.append(f"## Workspace Shared Memory\n\n{workspace_memory}")
+        for heading, content in memory_sections or []:
+            title = str(heading or "").strip()
+            body = str(content or "").strip()
+            if not title or not body:
+                continue
+            memory_parts.append(f"## {title}\n\n{body}")
+        if memory_parts:
+            memory_body = "\n\n".join(memory_parts)
+            parts.append(f"# Memory\n\n{memory_body}")
+
+        active_skill_names: list[str] = []
+        for name in (skill_names or []) + self.skills.get_always_skills():
+            normalized = str(name or "").strip()
+            if normalized and normalized not in active_skill_names:
+                active_skill_names.append(normalized)
+        if active_skill_names:
+            active_content = self.skills.load_skills_for_context(active_skill_names)
+            if active_content:
+                parts.append(f"# Active Skills\n\n{active_content}")
 
         skills_summary = self.skills.build_skills_summary()
         if skills_summary:
@@ -123,6 +147,9 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
         history: list[dict[str, Any]],
         current_message: str,
         skill_names: list[str] | None = None,
+        extra_system_prompt: str | None = None,
+        include_workspace_memory: bool = True,
+        memory_sections: list[tuple[str, str]] | None = None,
         media: list[str] | None = None,
         channel: str | None = None,
         chat_id: str | None = None,
@@ -139,7 +166,15 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
             merged = [{"type": "text", "text": runtime_ctx}] + user_content
 
         return [
-            {"role": "system", "content": self.build_system_prompt(skill_names)},
+            {
+                "role": "system",
+                "content": self.build_system_prompt(
+                    skill_names,
+                    extra_system_prompt,
+                    include_workspace_memory=include_workspace_memory,
+                    memory_sections=memory_sections,
+                ),
+            },
             *history,
             {"role": "user", "content": merged},
         ]

@@ -64,6 +64,36 @@ class PlatformInstance:
     def setup_state_path(self) -> Path:
         return self.data_dir / "web-setup.json"
 
+    def agent_runs_db_path(self) -> Path:
+        return self.data_dir / "web-agent-runs.db"
+
+    def agent_definitions_db_path(self) -> Path:
+        return self.data_dir / "web-agents.db"
+
+    def agent_artifacts_dir(self) -> Path:
+        return ensure_dir(self.data_dir / "agent-artifacts")
+
+    def agent_run_exports_dir(self) -> Path:
+        return ensure_dir(self.data_dir / "agent-run-exports")
+
+    def knowledge_db_path(self) -> Path:
+        return self.data_dir / "web-knowledge.db"
+
+    def team_definitions_db_path(self) -> Path:
+        return self.data_dir / "web-teams.db"
+
+    def memory_db_path(self) -> Path:
+        return self.data_dir / "web-memory.db"
+
+    def team_memory_dir(self) -> Path:
+        return ensure_dir(self.data_dir / "team-memory")
+
+    def knowledge_files_dir(self) -> Path:
+        return ensure_dir(self.data_dir / "knowledge-files")
+
+    def knowledge_parsed_dir(self) -> Path:
+        return ensure_dir(self.data_dir / "knowledge-parsed")
+
     def mcp_registry_path(self) -> Path:
         return self.data_dir / "web-mcp-registry.json"
 

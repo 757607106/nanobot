@@ -4,10 +4,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockApi = vi.hoisted(() => ({
   createSession: vi.fn(),
+  applyMemoryCandidate: vi.fn(),
+  createAgent: vi.fn(),
   createAgentTemplate: vi.fn(),
+  createTeam: vi.fn(),
   createCalendarEvent: vi.fn(),
+  createKnowledgeBase: vi.fn(),
+  copyAgent: vi.fn(),
+  copyTeam: vi.fn(),
+  deleteAgent: vi.fn(),
+  deleteTeam: vi.fn(),
+  deleteKnowledgeBase: vi.fn(),
+  deleteKnowledgeDocument: vi.fn(),
+  deleteKnowledgeDocuments: vi.fn(),
   deleteSession: vi.fn(),
   health: vi.fn(),
+  getAgent: vi.fn(),
+  getAgents: vi.fn(),
   getAgentTemplate: vi.fn(),
   getAgentTemplates: vi.fn(),
   getAuthStatus: vi.fn(),
@@ -18,6 +31,18 @@ const mockApi = vi.hoisted(() => ({
   getCalendarSettings: vi.fn(),
   getChannel: vi.fn(),
   getChannels: vi.fn(),
+  getKnowledgeBase: vi.fn(),
+  getKnowledgeBases: vi.fn(),
+  getKnowledgeSources: vi.fn(),
+  getMemoryCandidates: vi.fn(),
+  getMemorySource: vi.fn(),
+  getTeam: vi.fn(),
+  getTeamThread: vi.fn(),
+  getTeamThreadMessages: vi.fn(),
+  getTeamMemory: vi.fn(),
+  getTeams: vi.fn(),
+  getKnowledgeDocuments: vi.fn(),
+  getKnowledgeJobs: vi.fn(),
   getWhatsAppBindingStatus: vi.fn(),
   testChannel: vi.fn(),
   getDocument: vi.fn(),
@@ -30,12 +55,16 @@ const mockApi = vi.hoisted(() => ({
   getOpsLogs: vi.fn(),
   getProfile: vi.fn(),
   searchMarketplaceSkills: vi.fn(),
+  searchMemory: vi.fn(),
   getSetupStatus: vi.fn(),
   probeMcpServer: vi.fn(),
+  rejectMemoryCandidate: vi.fn(),
   runMcpRepair: vi.fn(),
   sendMcpTestChatMessage: vi.fn(),
   clearMcpTestChat: vi.fn(),
+  cancelRun: vi.fn(),
   runValidation: vi.fn(),
+  runTeam: vi.fn(),
   setMcpServerEnabled: vi.fn(),
   rotateProfilePassword: vi.fn(),
   triggerOpsAction: vi.fn(),
@@ -53,7 +82,12 @@ const mockApi = vi.hoisted(() => ({
   getMessages: vi.fn(),
   getConfig: vi.fn(),
   getConfigMeta: vi.fn(),
+  getRun: vi.fn(),
+  getRunArtifact: vi.fn(),
+  getRunTree: vi.fn(),
+  getRunChildren: vi.fn(),
   getSystemStatus: vi.fn(),
+  getRuns: vi.fn(),
   getCronStatus: vi.fn(),
   getCronJobs: vi.fn(),
   getInstalledSkills: vi.fn(),
@@ -63,8 +97,21 @@ const mockApi = vi.hoisted(() => ({
   reloadAgentTemplates: vi.fn(),
   resetDocument: vi.fn(),
   renameSession: vi.fn(),
+  retryTeamRun: vi.fn(),
+  retrieveKnowledgeBase: vi.fn(),
+  reindexKnowledgeBase: vi.fn(),
+  syncKnowledgeSource: vi.fn(),
   installMarketplaceSkill: vi.fn(),
+  setAgentEnabled: vi.fn(),
+  setTeamEnabled: vi.fn(),
+  testRunAgent: vi.fn(),
+  uploadKnowledgeDocuments: vi.fn(),
   uploadSkillZip: vi.fn(),
+  updateAgent: vi.fn(),
+  updateTeam: vi.fn(),
+  updateKnowledgeBase: vi.fn(),
+  updateKnowledgeSource: vi.fn(),
+  updateTeamMemory: vi.fn(),
   updateDocument: vi.fn(),
   updateAgentTemplate: vi.fn(),
   updateCalendarEvent: vi.fn(),
@@ -73,6 +120,7 @@ const mockApi = vi.hoisted(() => ({
   updateChannelDelivery: vi.fn(),
   startWhatsAppBinding: vi.fn(),
   stopWhatsAppBinding: vi.fn(),
+  addKnowledgeSource: vi.fn(),
   updateSetupAgentDefaults: vi.fn(),
   updateSetupChannel: vi.fn(),
   updateSetupProvider: vi.fn(),
@@ -131,6 +179,7 @@ vi.mock('@ant-design/icons', async () => {
 
   return {
     ApiOutlined: makeIcon('api'),
+    ApartmentOutlined: makeIcon('apartment'),
     AppstoreOutlined: makeIcon('appstore'),
     ArrowLeftOutlined: makeIcon('arrow-left'),
     BookOutlined: makeIcon('book'),
@@ -140,11 +189,14 @@ vi.mock('@ant-design/icons', async () => {
     CodeOutlined: makeIcon('code'),
     DeleteOutlined: makeIcon('delete'),
     DesktopOutlined: makeIcon('desktop'),
+    DatabaseOutlined: makeIcon('database'),
     DownloadOutlined: makeIcon('download'),
     EditOutlined: makeIcon('edit'),
+    ExperimentOutlined: makeIcon('experiment'),
     EyeOutlined: makeIcon('eye'),
     FileTextOutlined: makeIcon('file-text'),
     FolderOpenOutlined: makeIcon('folder-open'),
+    GlobalOutlined: makeIcon('global'),
     LinkOutlined: makeIcon('link'),
     LogoutOutlined: makeIcon('logout'),
     MenuOutlined: makeIcon('menu'),
@@ -155,6 +207,7 @@ vi.mock('@ant-design/icons', async () => {
     PauseCircleOutlined: makeIcon('pause'),
     PlayCircleOutlined: makeIcon('play'),
     PlusOutlined: makeIcon('plus'),
+    CopyOutlined: makeIcon('copy'),
     ProfileOutlined: makeIcon('profile'),
     ReloadOutlined: makeIcon('reload'),
     RobotOutlined: makeIcon('robot'),
@@ -542,6 +595,18 @@ vi.mock('antd', async () => {
     />
   )
 
+  const Checkbox = ({ checked, className, disabled, onChange, children }: Props) => (
+    <label className={className}>
+      <input
+        type="checkbox"
+        disabled={Boolean(disabled)}
+        checked={Boolean(checked)}
+        onChange={(event) => onChange?.(event)}
+      />
+      {children}
+    </label>
+  )
+
   const Segmented = ({ options = [] }: Props) => (
     <div>
       {options.map((option, index) => (
@@ -676,6 +741,7 @@ vi.mock('antd', async () => {
     App: AppProvider,
     Button,
     Card,
+    Checkbox,
     Col,
     ConfigProvider,
     Divider,
@@ -719,10 +785,15 @@ import McpServerDetailPage from '../pages/McpServerDetailPage'
 import ModelsPage from '../pages/ModelsPage'
 import OperationsPage from '../pages/OperationsPage'
 import ProfilePage from '../pages/ProfilePage'
+import KnowledgePage from '../pages/KnowledgePage'
+import MemoryAuditPage from '../pages/MemoryAuditPage'
+import RunsPage from '../pages/RunsPage'
 import SkillsPage from '../pages/SkillsPage'
 import SetupPage from '../pages/SetupPage'
+import StudioLayoutPage from '../pages/StudioLayoutPage'
 import SystemLayoutPage from '../pages/SystemLayoutPage'
 import SystemPage from '../pages/SystemPage'
+import TeamsPage from '../pages/TeamsPage'
 import TemplatesPage from '../pages/TemplatesPage'
 import ValidationPage from '../pages/ValidationPage'
 import { renderWithProviders } from '../test/renderApp'
@@ -1329,6 +1400,78 @@ function makeAgentTemplate() {
   return makeAgentTemplates()[1]
 }
 
+function makeAgents() {
+  return [
+    {
+      agentId: 'support-lead',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      name: 'Support Lead',
+      description: 'Coordinate support response quality.',
+      systemPrompt: 'Coordinate the support team.',
+      rules: ['Route work clearly'],
+      model: 'deepseek/deepseek-chat',
+      backend: null,
+      enabled: true,
+      toolAllowlist: ['read_file'],
+      mcpServerIds: [],
+      skillIds: [],
+      knowledgeBindingIds: ['support-kb'],
+      tags: ['support'],
+      memoryScope: 'agent_profile',
+      sourceTemplateName: null,
+      createdAt: '2026-03-14T09:00:00Z',
+      updatedAt: '2026-03-14T09:00:00Z',
+    },
+    {
+      agentId: 'support-member',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      name: 'Support Member',
+      description: 'Prepare support-ready drafts.',
+      systemPrompt: 'Handle assigned support tasks.',
+      rules: ['Ground answers in knowledge'],
+      model: 'deepseek/deepseek-chat',
+      backend: null,
+      enabled: true,
+      toolAllowlist: ['read_file'],
+      mcpServerIds: [],
+      skillIds: [],
+      knowledgeBindingIds: ['support-kb'],
+      tags: ['support'],
+      memoryScope: 'agent_profile',
+      sourceTemplateName: null,
+      createdAt: '2026-03-14T09:05:00Z',
+      updatedAt: '2026-03-14T09:05:00Z',
+    },
+  ]
+}
+
+function makeTeams() {
+  return [
+    {
+      teamId: 'support-team',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      name: 'Support Team',
+      description: 'Coordinate support replies and QA.',
+      leaderAgentId: 'support-lead',
+      memberAgentIds: ['support-member'],
+      workflowMode: 'parallel_fanout',
+      sharedKnowledgeBindingIds: ['support-kb'],
+      memberAccessPolicy: {
+        teamSharedKnowledge: 'members_read',
+        teamSharedMemory: 'leader_write_member_read',
+      },
+      tags: ['support'],
+      enabled: true,
+      memberCount: 2,
+      createdAt: '2026-03-14T09:10:00Z',
+      updatedAt: '2026-03-14T09:10:00Z',
+    },
+  ]
+}
+
 function makeValidTemplateTools() {
   return [
     { name: 'read_file', description: 'Read a file from the workspace.' },
@@ -1463,11 +1606,696 @@ describe('web app smoke pages', () => {
     })
     mockApi.getAgentTemplates.mockResolvedValue(makeAgentTemplates())
     mockApi.getAgentTemplate.mockResolvedValue(makeAgentTemplate())
+    mockApi.getAgents.mockResolvedValue(makeAgents())
+    mockApi.getAgent.mockResolvedValue(makeAgents()[0])
     mockApi.getCalendarEvents.mockResolvedValue(makeCalendarEvents())
     mockApi.getCalendarJobs.mockResolvedValue(makeCalendarJobs())
     mockApi.getCalendarSettings.mockResolvedValue(makeCalendarSettings())
     mockApi.getChannel.mockResolvedValue(makeChannelDetail())
     mockApi.getChannels.mockResolvedValue(makeChannelsList())
+    mockApi.getKnowledgeBases.mockResolvedValue([
+      {
+        kbId: 'support-kb',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        name: 'Support KB',
+        description: 'Customer support knowledge base',
+        enabled: true,
+        tags: ['support'],
+        retrievalProfile: {
+          mode: 'hybrid',
+          topK: 8,
+          chunkTopK: 20,
+          chunkSize: 800,
+          chunkOverlap: 120,
+          citationRequired: true,
+          rerankEnabled: false,
+          metadataFilters: {},
+        },
+      },
+    ])
+    mockApi.getKnowledgeBase.mockResolvedValue({
+      kbId: 'support-kb',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      name: 'Support KB',
+      description: 'Customer support knowledge base',
+      enabled: true,
+      tags: ['support'],
+      retrievalProfile: {
+        mode: 'hybrid',
+        topK: 8,
+        chunkTopK: 20,
+        chunkSize: 800,
+        chunkOverlap: 120,
+        citationRequired: true,
+        rerankEnabled: false,
+        metadataFilters: {},
+      },
+    })
+    mockApi.getKnowledgeDocuments.mockResolvedValue([])
+    mockApi.getKnowledgeSources.mockResolvedValue([
+      {
+        sourceId: 'src_support_url',
+        kbId: 'support-kb',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        sourceType: 'web_url',
+        title: 'Support Help Center',
+        enabled: true,
+        sourceUri: 'https://example.com/help/worker-restart',
+        latestDocId: 'doc_support_url',
+        syncCount: 2,
+        lastSyncedAt: '2026-03-14T10:20:00Z',
+        config: {
+          url: 'https://example.com/help/worker-restart',
+          title: 'Support Help Center',
+        },
+        docCount: 1,
+        syncSupported: true,
+        latestDocument: {
+          docId: 'doc_support_url',
+          kbId: 'support-kb',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          sourceId: 'src_support_url',
+          sourceType: 'web_url',
+          title: 'Support Help Center',
+          sourceUri: 'https://example.com/help/worker-restart',
+          docStatus: 'indexed',
+          chunkCount: 4,
+          metadata: {},
+          createdAt: '2026-03-14T10:18:00Z',
+          updatedAt: '2026-03-14T10:20:00Z',
+        },
+        latestJob: {
+          jobId: 'job_support_url',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          kbId: 'support-kb',
+          docId: 'doc_support_url',
+          status: 'succeeded',
+          trackId: 'track_support_url',
+          createdAt: '2026-03-14T10:18:00Z',
+          updatedAt: '2026-03-14T10:20:00Z',
+        },
+        createdAt: '2026-03-14T10:18:00Z',
+        updatedAt: '2026-03-14T10:20:00Z',
+      },
+    ])
+    mockApi.getKnowledgeJobs.mockResolvedValue([])
+    mockApi.syncKnowledgeSource.mockResolvedValue({
+      source: {
+        sourceId: 'src_support_url',
+        kbId: 'support-kb',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        sourceType: 'web_url',
+        title: 'Support Help Center',
+        enabled: true,
+        sourceUri: 'https://example.com/help/worker-restart',
+        latestDocId: 'doc_support_url',
+        syncCount: 3,
+        lastSyncedAt: '2026-03-14T10:25:00Z',
+        config: {
+          url: 'https://example.com/help/worker-restart',
+          title: 'Support Help Center',
+        },
+        docCount: 1,
+        syncSupported: true,
+        latestDocument: null,
+        latestJob: null,
+      },
+      document: {
+        docId: 'doc_support_url',
+        kbId: 'support-kb',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        sourceId: 'src_support_url',
+        sourceType: 'web_url',
+        title: 'Support Help Center',
+        sourceUri: 'https://example.com/help/worker-restart',
+        docStatus: 'uploaded',
+        chunkCount: 4,
+        metadata: {},
+      },
+      job: {
+        jobId: 'job_support_url_sync',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        kbId: 'support-kb',
+        docId: 'doc_support_url',
+        status: 'queued',
+        trackId: 'track_support_url_sync',
+      },
+    })
+    mockApi.updateKnowledgeSource.mockResolvedValue({
+      sourceId: 'src_support_url',
+      kbId: 'support-kb',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      sourceType: 'web_url',
+      title: 'Support Help Center',
+      enabled: true,
+      sourceUri: 'https://example.com/help/worker-restart',
+      latestDocId: 'doc_support_url',
+      syncCount: 2,
+      lastSyncedAt: '2026-03-14T10:20:00Z',
+      config: {
+        url: 'https://example.com/help/worker-restart',
+        title: 'Support Help Center',
+      },
+      docCount: 1,
+      syncSupported: true,
+      latestDocument: {
+        docId: 'doc_support_url',
+        kbId: 'support-kb',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        sourceId: 'src_support_url',
+        sourceType: 'web_url',
+        title: 'Support Help Center',
+        sourceUri: 'https://example.com/help/worker-restart',
+        docStatus: 'indexed',
+        chunkCount: 4,
+        metadata: {},
+      },
+      latestJob: null,
+    })
+    mockApi.getTeams.mockResolvedValue(makeTeams())
+    mockApi.getTeam.mockResolvedValue(makeTeams()[0])
+    mockApi.getTeamThread.mockResolvedValue({
+      threadId: 'team-thread:support-team',
+      session: {
+        id: 'team-thread:support-team',
+        sessionId: 'team-thread:support-team',
+        title: 'Team Thread · Support Team',
+        createdAt: '2026-03-14T10:09:00Z',
+        updatedAt: '2026-03-14T10:12:00Z',
+        messageCount: 4,
+      },
+    })
+    mockApi.getTeamThreadMessages.mockResolvedValue({
+      threadId: 'team-thread:support-team',
+      total: 4,
+      messages: [
+        {
+          id: 'msg_1',
+          sessionId: 'team-thread:support-team',
+          sequence: 1,
+          role: 'user',
+          content: 'Initial support request',
+          createdAt: '2026-03-14T10:09:00Z',
+        },
+        {
+          id: 'msg_2',
+          sessionId: 'team-thread:support-team',
+          sequence: 2,
+          role: 'assistant',
+          content: 'First team summary',
+          createdAt: '2026-03-14T10:09:10Z',
+        },
+      ],
+    })
+    mockApi.getTeamMemory.mockResolvedValue({
+      teamId: 'support-team',
+      content: 'Triage first, then summarize impact and next actions clearly.',
+      fileName: 'support-team.md',
+      candidateCount: 1,
+      updatedAt: '2026-03-14T10:10:00Z',
+    })
+    mockApi.updateTeamMemory.mockResolvedValue({
+      teamId: 'support-team',
+      content: 'Triage first, then summarize impact and next actions clearly.',
+      fileName: 'support-team.md',
+      candidateCount: 1,
+      updatedAt: '2026-03-14T10:10:00Z',
+    })
+    mockApi.getMemoryCandidates.mockResolvedValue({
+      total: 1,
+      items: [
+        {
+          candidateId: 'memcand_1',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          scope: 'team_shared',
+          sourceKind: 'member_result',
+          title: 'Support Team · Research memory',
+          content: 'Always confirm region and customer impact before escalation.',
+          teamId: 'support-team',
+          agentId: 'reviewer-agent',
+          runId: 'run_team_1',
+          status: 'proposed',
+          createdAt: '2026-03-14T10:11:00Z',
+          updatedAt: '2026-03-14T10:11:00Z',
+          appliedAt: null,
+        },
+      ],
+    })
+    mockApi.applyMemoryCandidate.mockResolvedValue({
+      candidateId: 'memcand_1',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      scope: 'team_shared',
+      sourceKind: 'member_result',
+      title: 'Support Team · Research memory',
+      content: 'Always confirm region and customer impact before escalation.',
+      teamId: 'support-team',
+      agentId: 'reviewer-agent',
+      runId: 'run_team_1',
+      status: 'applied',
+      createdAt: '2026-03-14T10:11:00Z',
+      updatedAt: '2026-03-14T10:12:00Z',
+      appliedAt: '2026-03-14T10:12:00Z',
+    })
+    mockApi.rejectMemoryCandidate.mockResolvedValue({
+      candidateId: 'memcand_1',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      scope: 'team_shared',
+      sourceKind: 'member_result',
+      title: 'Support Team · Research memory',
+      content: 'Always confirm region and customer impact before escalation.',
+      teamId: 'support-team',
+      agentId: 'reviewer-agent',
+      runId: 'run_team_1',
+      status: 'rejected',
+      createdAt: '2026-03-14T10:11:00Z',
+      updatedAt: '2026-03-14T10:12:00Z',
+      appliedAt: null,
+    })
+    mockApi.searchMemory.mockResolvedValue({
+      query: 'impact',
+      total: 1,
+      items: [
+        {
+          sourceType: 'team_memory',
+          sourceId: 'support-team',
+          title: 'Team Shared Memory · support-team',
+          content: 'Triage first, then summarize impact and next actions clearly.',
+          preview: 'Triage first, then summarize impact and next actions clearly.',
+          score: 2,
+          metadata: {},
+        },
+      ],
+    })
+    mockApi.getMemorySource.mockResolvedValue({
+      sourceType: 'team_memory',
+      sourceId: 'support-team',
+      title: 'Team Shared Memory · support-team',
+      content: 'Triage first, then summarize impact and next actions clearly.',
+      metadata: {},
+    })
+    mockApi.getRuns.mockResolvedValue({
+      items: [
+        {
+          runId: 'run_123',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          kind: 'agent',
+          status: 'succeeded',
+          label: 'Support KB validation',
+          taskPreview: 'Check the support knowledge base response quality.',
+          agentId: 'support-agent',
+          teamId: null,
+          threadId: null,
+          parentRunId: null,
+          rootRunId: 'run_123',
+          sessionKey: 'web:run-session',
+          originChannel: 'web',
+          originChatId: 'run-session',
+          spawnDepth: 0,
+          controlScope: 'top_level',
+          workspacePath: '/tmp/workspace',
+          memoryScope: 'agent_profile',
+          knowledgeScope: 'support-kb',
+          resultSummary: {
+            content: 'Knowledge retrieval completed successfully.',
+            metadata: {},
+            toolsUsed: [],
+          },
+          childrenCount: 1,
+          createdAt: '2026-03-14T10:00:00Z',
+          startedAt: '2026-03-14T10:00:02Z',
+          finishedAt: '2026-03-14T10:00:06Z',
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          artifactPath: 'run_123.md',
+        },
+      ],
+      total: 1,
+    })
+    mockApi.getRun.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      kind: 'agent',
+      status: 'succeeded',
+      label: 'Support KB validation',
+      taskPreview: 'Check the support knowledge base response quality.',
+      agentId: 'support-agent',
+      teamId: null,
+      threadId: null,
+      parentRunId: null,
+      rootRunId: 'run_123',
+      sessionKey: 'web:run-session',
+      originChannel: 'web',
+      originChatId: 'run-session',
+      spawnDepth: 0,
+      controlScope: 'top_level',
+      workspacePath: '/tmp/workspace',
+      memoryScope: 'agent_profile',
+      knowledgeScope: 'support-kb',
+      resultSummary: {
+        content: 'Knowledge retrieval completed successfully.',
+        metadata: {},
+        toolsUsed: [],
+      },
+      childrenCount: 1,
+      createdAt: '2026-03-14T10:00:00Z',
+      startedAt: '2026-03-14T10:00:02Z',
+      finishedAt: '2026-03-14T10:00:06Z',
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      artifactPath: 'run_123.md',
+      events: [
+        {
+          runId: 'run_123',
+          eventType: 'queued',
+          payload: { label: 'Support KB validation' },
+          createdAt: '2026-03-14T10:00:00Z',
+        },
+        {
+          runId: 'run_123',
+          eventType: 'completed',
+          payload: { artifactPath: 'run_123.md' },
+          createdAt: '2026-03-14T10:00:06Z',
+        },
+      ],
+    })
+    mockApi.getRunArtifact.mockResolvedValue({
+      runId: 'run_123',
+      artifactPath: 'run_123.md',
+      fileName: 'run_123.md',
+      contentType: 'text/markdown',
+      content: '# Run Artifact\n\nKnowledge retrieval completed successfully.\n',
+    })
+    mockApi.getRunTree.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      kind: 'agent',
+      status: 'succeeded',
+      label: 'Support KB validation',
+      taskPreview: 'Check the support knowledge base response quality.',
+      agentId: 'support-agent',
+      teamId: null,
+      threadId: null,
+      parentRunId: null,
+      rootRunId: 'run_123',
+      sessionKey: 'web:run-session',
+      originChannel: 'web',
+      originChatId: 'run-session',
+      spawnDepth: 0,
+      controlScope: 'top_level',
+      workspacePath: '/tmp/workspace',
+      memoryScope: 'agent_profile',
+      knowledgeScope: 'support-kb',
+      resultSummary: {
+        content: 'Knowledge retrieval completed successfully.',
+        metadata: {},
+        toolsUsed: [],
+      },
+      childrenCount: 1,
+      createdAt: '2026-03-14T10:00:00Z',
+      startedAt: '2026-03-14T10:00:02Z',
+      finishedAt: '2026-03-14T10:00:06Z',
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      artifactPath: 'run_123.md',
+      children: [
+        {
+          runId: 'run_child_1',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          kind: 'subagent',
+          status: 'succeeded',
+          label: 'Retrieve support chunks',
+          taskPreview: 'Collect supporting chunks from the KB.',
+          agentId: 'support-agent',
+          teamId: null,
+          threadId: null,
+          parentRunId: 'run_123',
+          rootRunId: 'run_123',
+          sessionKey: 'web:run-session',
+          originChannel: 'web',
+          originChatId: 'run-session',
+          spawnDepth: 1,
+          controlScope: 'child',
+          workspacePath: '/tmp/workspace',
+          memoryScope: 'agent_profile',
+          knowledgeScope: 'support-kb',
+          resultSummary: {
+            content: 'Collected relevant knowledge chunks.',
+            metadata: {},
+            toolsUsed: [],
+          },
+          childrenCount: 0,
+          createdAt: '2026-03-14T10:00:03Z',
+          startedAt: '2026-03-14T10:00:03Z',
+          finishedAt: '2026-03-14T10:00:05Z',
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          artifactPath: null,
+          children: [],
+        },
+      ],
+    })
+    mockApi.getRunChildren.mockResolvedValue({
+      items: [
+        {
+          runId: 'run_child_1',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          kind: 'subagent',
+          status: 'succeeded',
+          label: 'Retrieve support chunks',
+          taskPreview: 'Collect supporting chunks from the KB.',
+          agentId: 'support-agent',
+          teamId: null,
+          threadId: null,
+          parentRunId: 'run_123',
+          rootRunId: 'run_123',
+          sessionKey: 'web:run-session',
+          originChannel: 'web',
+          originChatId: 'run-session',
+          spawnDepth: 1,
+          controlScope: 'child',
+          workspacePath: '/tmp/workspace',
+          memoryScope: 'agent_profile',
+          knowledgeScope: 'support-kb',
+          resultSummary: {
+            content: 'Collected relevant knowledge chunks.',
+            metadata: {},
+            toolsUsed: [],
+          },
+          childrenCount: 0,
+          createdAt: '2026-03-14T10:00:03Z',
+          startedAt: '2026-03-14T10:00:03Z',
+          finishedAt: '2026-03-14T10:00:05Z',
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          artifactPath: null,
+        },
+      ],
+      total: 1,
+    })
+    mockApi.cancelRun.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      kind: 'agent',
+      status: 'cancel_requested',
+      label: 'Support KB validation',
+      taskPreview: 'Check the support knowledge base response quality.',
+      agentId: 'support-agent',
+      teamId: null,
+      threadId: null,
+      parentRunId: null,
+      rootRunId: 'run_123',
+      sessionKey: 'web:run-session',
+      originChannel: 'web',
+      originChatId: 'run-session',
+      spawnDepth: 0,
+      controlScope: 'top_level',
+      workspacePath: '/tmp/workspace',
+      memoryScope: 'agent_profile',
+      knowledgeScope: 'support-kb',
+      resultSummary: {
+        content: 'Knowledge retrieval completed successfully.',
+        metadata: {},
+        toolsUsed: [],
+      },
+      childrenCount: 1,
+      createdAt: '2026-03-14T10:00:00Z',
+      startedAt: '2026-03-14T10:00:02Z',
+      finishedAt: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      artifactPath: null,
+      taskCancellationSent: true,
+    })
+    mockApi.createKnowledgeBase.mockResolvedValue({
+      kbId: 'support-kb',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      name: 'Support KB',
+      description: 'Customer support knowledge base',
+      enabled: true,
+      tags: ['support'],
+      retrievalProfile: {
+        mode: 'hybrid',
+        topK: 8,
+        chunkTopK: 20,
+        chunkSize: 800,
+        chunkOverlap: 120,
+        citationRequired: true,
+        rerankEnabled: false,
+        metadataFilters: {},
+      },
+    })
+    mockApi.updateKnowledgeBase.mockResolvedValue({
+      kbId: 'support-kb',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      name: 'Support KB',
+      description: 'Customer support knowledge base',
+      enabled: true,
+      tags: ['support'],
+      retrievalProfile: {
+        mode: 'hybrid',
+        topK: 8,
+        chunkTopK: 20,
+        chunkSize: 800,
+        chunkOverlap: 120,
+        citationRequired: true,
+        rerankEnabled: false,
+        metadataFilters: {},
+      },
+    })
+    mockApi.deleteKnowledgeBase.mockResolvedValue({ deleted: true })
+    mockApi.createAgent.mockResolvedValue(makeAgents()[0])
+    mockApi.updateAgent.mockResolvedValue(makeAgents()[0])
+    mockApi.copyAgent.mockResolvedValue({
+      ...makeAgents()[0],
+      agentId: 'support-lead-copy',
+      name: 'Support Lead Copy',
+    })
+    mockApi.deleteAgent.mockResolvedValue({ deleted: true })
+    mockApi.setAgentEnabled.mockResolvedValue(makeAgents()[0])
+    mockApi.createTeam.mockResolvedValue(makeTeams()[0])
+    mockApi.updateTeam.mockResolvedValue(makeTeams()[0])
+    mockApi.copyTeam.mockResolvedValue({
+      ...makeTeams()[0],
+      teamId: 'support-team-copy',
+      name: 'Support Team Copy',
+    })
+    mockApi.deleteTeam.mockResolvedValue({ deleted: true })
+    mockApi.setTeamEnabled.mockResolvedValue(makeTeams()[0])
+    mockApi.runTeam.mockResolvedValue({
+      team: makeTeams()[0],
+      run: {
+        runId: 'team_run_1',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        kind: 'team',
+        status: 'succeeded',
+        label: 'Support Team',
+        taskPreview: 'Coordinate support reply quality.',
+        agentId: null,
+        teamId: 'support-team',
+        threadId: null,
+        parentRunId: null,
+        rootRunId: 'team_run_1',
+        sessionKey: 'team-test:support-team:team_run_1',
+        originChannel: 'web',
+        originChatId: 'support-team',
+        spawnDepth: 0,
+        controlScope: 'top_level',
+        workspacePath: '/tmp/workspace',
+        memoryScope: 'team_thread',
+        knowledgeScope: 'team_bindings',
+        resultSummary: {
+          content: 'Final support summary ready for the operator.',
+          metadata: {},
+          toolsUsed: [],
+        },
+        childrenCount: 3,
+        createdAt: '2026-03-14T10:10:00Z',
+        startedAt: '2026-03-14T10:10:01Z',
+        finishedAt: '2026-03-14T10:10:08Z',
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        artifactPath: null,
+      },
+      leaderRun: {
+        ...makeTeams()[0],
+      } as any,
+      memberRuns: [],
+      finalAssistantMessage: {
+        role: 'assistant',
+        content: 'Final support summary ready for the operator.',
+      },
+      teamKnowledgeHits: [],
+    })
+    mockApi.retryTeamRun.mockResolvedValue({
+      team: makeTeams()[0],
+      run: {
+        runId: 'team_run_retry_1',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        kind: 'team',
+        status: 'queued',
+        label: 'Support Team',
+        taskPreview: 'Coordinate support reply quality.',
+        agentId: null,
+        teamId: 'support-team',
+        threadId: null,
+        parentRunId: null,
+        rootRunId: 'team_run_retry_1',
+        sessionKey: 'team-test:support-team:team_run_retry_1',
+        originChannel: 'web',
+        originChatId: 'support-team',
+        spawnDepth: 0,
+        controlScope: 'top_level',
+        workspacePath: '/tmp/workspace',
+        memoryScope: 'team_thread',
+        knowledgeScope: 'team_bindings',
+        resultSummary: null,
+        childrenCount: 0,
+        createdAt: '2026-03-14T10:12:00Z',
+        startedAt: null,
+        finishedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        artifactPath: null,
+      },
+      leaderRun: null,
+      memberRuns: [],
+      finalAssistantMessage: null,
+      teamKnowledgeHits: [],
+    })
+    mockApi.deleteKnowledgeDocument.mockResolvedValue({ deleted: true })
+    mockApi.deleteKnowledgeDocuments.mockResolvedValue({ deletedCount: 1, docIds: ['doc-1'] })
+    mockApi.uploadKnowledgeDocuments.mockResolvedValue({ documents: [], jobs: [] })
+    mockApi.addKnowledgeSource.mockResolvedValue({ documents: [], jobs: [] })
+    mockApi.reindexKnowledgeBase.mockResolvedValue({ documents: [], jobs: [] })
+    mockApi.retrieveKnowledgeBase.mockResolvedValue({
+      hits: [],
+      requestedMode: 'hybrid',
+      effectiveMode: 'keyword',
+      filters: {},
+    })
     mockApi.getWhatsAppBindingStatus.mockResolvedValue(makeWhatsAppBindingStatus())
     mockApi.getDocuments.mockResolvedValue(makeDocuments())
     mockApi.getDocument.mockResolvedValue(makeDocument())
@@ -1780,6 +2608,7 @@ describe('web app smoke pages', () => {
 
     expect(await screen.findByText('主路径')).toBeInTheDocument()
     expect(await screen.findByText('对话', { selector: '.nav-item-title' })).toBeInTheDocument()
+    expect(screen.getByText('协作', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('模型', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('渠道', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('技能', { selector: '.nav-item-title' })).toBeInTheDocument()
@@ -1793,6 +2622,130 @@ describe('web app smoke pages', () => {
     expect(screen.queryByText('运维', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('资料', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect((await screen.findAllByText('admin')).length).toBeGreaterThan(0)
+  })
+
+  it('renders collaboration tabs inside the studio domain', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/teams']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio" element={<StudioLayoutPage />}>
+            <Route path="teams" element={<div>Teams Placeholder</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Agents')).toBeInTheDocument()
+    expect(screen.getByText('Teams')).toBeInTheDocument()
+    expect(screen.getByText('记忆')).toBeInTheDocument()
+    expect(screen.getByText('Runs')).toBeInTheDocument()
+    expect(screen.getByText('知识库')).toBeInTheDocument()
+    expect(screen.getByText('模板')).toBeInTheDocument()
+  })
+
+  it('renders memory audit page with candidate and search panels', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/memory/support-team']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/memory/:teamId" element={<MemoryAuditPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('记忆审计')).toBeInTheDocument()
+    expect(screen.getByText('Candidate Queue')).toBeInTheDocument()
+    expect(screen.getByText('Unified Memory Search')).toBeInTheDocument()
+    expect(screen.getByText('Thread Replay')).toBeInTheDocument()
+  })
+
+  it('renders knowledge page with catalog and retrieval panels', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/knowledge/support-kb']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/knowledge/:kbId" element={<KnowledgePage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Knowledge Catalog')).toBeInTheDocument()
+    expect(screen.getByText('检索测试')).toBeInTheDocument()
+    expect(screen.getByText('来源治理')).toBeInTheDocument()
+    expect(await screen.findByText('Support Help Center')).toBeInTheDocument()
+    expect(screen.getByText('Source Detail')).toBeInTheDocument()
+    expect(screen.getByText('选择当前筛选结果')).toBeInTheDocument()
+    expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
+  })
+
+  it('renders teams page with catalog and team run panels', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/teams/support-team']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/teams/:teamId" element={<TeamsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Team Catalog')).toBeInTheDocument()
+    expect(screen.getByText('Team Thread')).toBeInTheDocument()
+    expect(screen.getByText('Team Memory Governance')).toBeInTheDocument()
+    expect(screen.getByText('Team Test Run')).toBeInTheDocument()
+    expect(screen.getAllByText('Support Team').length).toBeGreaterThan(0)
+  })
+
+  it('renders runs page with detail and timeline panels', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/runs/run_123']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/runs/:runId" element={<RunsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Run Catalog')).toBeInTheDocument()
+    expect(screen.getByText('Thread Audit')).toBeInTheDocument()
+    expect(screen.getByText('Event Timeline')).toBeInTheDocument()
+    expect(screen.getByText('Run Artifact')).toBeInTheDocument()
+    expect(screen.getAllByText('Support KB validation').length).toBeGreaterThan(0)
   })
 
   it('renders validation inside the system domain', async () => {
@@ -1935,7 +2888,7 @@ describe('web app smoke pages', () => {
     expect(screen.getByText('推荐路径：SkillHub 远端市场')).toBeInTheDocument()
     expect(screen.getByText('兜底路径：手动上传')).toBeInTheDocument()
     expect(screen.getByText('原生可用')).toBeInTheDocument()
-    expect(screen.getByText('包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。')).toBeInTheDocument()
+    expect(screen.getByText('包含标准 `SKILL.md`，可以被 群策技能加载器识别。')).toBeInTheDocument()
   })
 
   it('renders the main prompt page', async () => {

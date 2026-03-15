@@ -96,6 +96,7 @@ class WebConfigRuntimeService:
             session_manager=sessions,
             mcp_servers=config.tools.mcp_servers,
             channels_config=config.channels,
+            run_registry=self.state.runs,
         )
         self.state.config = config
         self.state.bus = bus

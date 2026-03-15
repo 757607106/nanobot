@@ -24,6 +24,7 @@ import {
   UploadOutlined,
 } from '@ant-design/icons'
 import { api } from '../api'
+import { PLATFORM_BRAND_NAME, replaceBrandText } from '../branding'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type { InstalledSkill, MarketplaceSkill } from '../types'
@@ -34,6 +35,13 @@ const MARKET_COMPATIBILITY_META: Record<MarketplaceSkill['compatibility'], { col
   partial: { color: 'warning' },
   unsupported: { color: 'error' },
   unknown: { color: 'default' },
+}
+
+function getSkillAuthorLabel(author?: string | null) {
+  if (!author) {
+    return null
+  }
+  return author.trim().toLowerCase() === 'nanobot' ? PLATFORM_BRAND_NAME : replaceBrandText(author)
 }
 
 export default function SkillsPage() {
@@ -318,7 +326,7 @@ export default function SkillsPage() {
                                 <Space direction="vertical" size={2} style={{ width: '100%' }}>
                                   {skill.compatibilityReasons.map((reason) => (
                                     <Text key={reason} type={skill.compatibility === 'unsupported' ? undefined : 'secondary'}>
-                                      {reason}
+                                      {replaceBrandText(reason)}
                                     </Text>
                                   ))}
                                 </Space>
@@ -450,7 +458,7 @@ export default function SkillsPage() {
                     >
                       <Space direction="vertical" size="small" style={{ width: '100%' }}>
                         <Text type="secondary">{skill.description || '暂无描述。'}</Text>
-                        {skill.author ? <Text type="secondary">作者：{skill.author}</Text> : null}
+                        {skill.author ? <Text type="secondary">作者：{getSkillAuthorLabel(skill.author)}</Text> : null}
                         <div>
                           <Text type="secondary">路径</Text>
                           <div className="mono-block">{skill.path}</div>

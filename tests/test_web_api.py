@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
+import time
 import zipfile
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -14,6 +16,9 @@ from unittest.mock import AsyncMock, patch
 from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
 from nanobot.config.schema import Config, MCPServerConfig
+from nanobot.platform.agents import AgentDefinitionStore
+from nanobot.platform.runs import RunControlScope, RunKind
+from nanobot.providers.base import LLMResponse
 from nanobot.web.api import create_app, run_server
 from nanobot.web import operations as web_operations
 
@@ -64,6 +69,38 @@ def _write_fixture_mcp_repo(repo_dir, *, package_name: str = "@acme/filesystem-m
         encoding="utf-8",
     )
     (repo_dir / ".env.example").write_text("MCP_API_KEY=\nOPTIONAL_TOKEN=\n", encoding="utf-8")
+
+
+def _wait_for_knowledge_ingest(
+    web_client: TestClient,
+    *,
+    kb_id: str,
+    doc_id: str,
+    job_id: str,
+    timeout: float = 5.0,
+) -> tuple[dict, dict]:
+    deadline = time.monotonic() + timeout
+    last_document = None
+    last_job = None
+    while time.monotonic() < deadline:
+        documents = web_client.get(f"/api/v1/knowledge-bases/{kb_id}/documents")
+        jobs = web_client.get(f"/api/v1/knowledge-bases/{kb_id}/jobs")
+        assert documents.status_code == 200
+        assert jobs.status_code == 200
+        last_document = next((item for item in documents.json()["data"] if item["docId"] == doc_id), None)
+        last_job = next((item for item in jobs.json()["data"] if item["jobId"] == job_id), None)
+        if (
+            last_document
+            and last_job
+            and last_document["docStatus"] in {"indexed", "error_parsing", "error_indexing"}
+            and last_job["status"] in {"succeeded", "failed"}
+        ):
+            return last_document, last_job
+        time.sleep(0.05)
+    raise AssertionError(
+        f"Knowledge ingest did not finish within {timeout}s. "
+        f"Last document={last_document!r}, last job={last_job!r}"
+    )
 
 
 @pytest.fixture
@@ -1265,6 +1302,1149 @@ def test_web_api_health_and_session_crud(web_client: TestClient) -> None:
     assert deleted.json()["data"] == {"deleted": True}
 
 
+def test_web_api_runs_list_detail_children_and_cancel(web_client: TestClient) -> None:
+    parent = web_client.app.state.runs.create_run(
+        kind=RunKind.AGENT,
+        label="Main agent run",
+        task_preview="Coordinate work",
+        agent_id="main-agent",
+        session_key="web:session-1",
+        origin_channel="web",
+        origin_chat_id="session-1",
+    )
+    child = web_client.app.state.runs.create_run(
+        kind=RunKind.SUBAGENT,
+        label="Research subagent",
+        task_preview="Collect references",
+        agent_id="main-agent",
+        session_key="web:session-1",
+        origin_channel="web",
+        origin_chat_id="session-1",
+        parent_run_id=parent.run_id,
+        root_run_id=parent.run_id,
+        spawn_depth=1,
+        control_scope=RunControlScope.CHILD,
+    )
+
+    listed = web_client.get(
+        "/api/v1/runs",
+        params={"sessionKey": "web:session-1", "kind": "subagent", "agentId": "main-agent"},
+    )
+    assert listed.status_code == 200
+    assert listed.json()["data"]["total"] == 1
+    assert listed.json()["data"]["items"][0]["runId"] == child.run_id
+
+    detail = web_client.get(f"/api/v1/runs/{child.run_id}")
+    assert detail.status_code == 200
+    assert detail.json()["data"]["runId"] == child.run_id
+    assert detail.json()["data"]["status"] == "queued"
+
+    children = web_client.get(f"/api/v1/runs/{parent.run_id}/children")
+    assert children.status_code == 200
+    assert children.json()["data"]["total"] == 1
+    assert children.json()["data"]["items"][0]["runId"] == child.run_id
+
+    tree = web_client.get(f"/api/v1/runs/{child.run_id}/tree")
+    assert tree.status_code == 200
+    assert tree.json()["data"]["runId"] == parent.run_id
+    assert tree.json()["data"]["children"][0]["runId"] == child.run_id
+
+    cancelled = web_client.post(f"/api/v1/runs/{child.run_id}/cancel")
+    assert cancelled.status_code == 202
+    assert cancelled.json()["data"]["runId"] == child.run_id
+    assert cancelled.json()["data"]["status"] == "cancel_requested"
+    assert cancelled.json()["data"]["taskCancellationSent"] is False
+
+
+def test_web_api_agent_test_run_executes_and_persists_recent_run(web_client: TestClient, monkeypatch) -> None:
+    workspace = web_client.app.state.web.config.workspace_path
+    skill_dir = workspace / "skills" / "briefing-skill"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: briefing-skill\ndescription: Briefing helper\n---\nAlways summarize findings clearly.\n",
+        encoding="utf-8",
+    )
+    web_client.app.state.web.workspace_runtime.reload_agent_templates()
+
+    created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Ops Briefing Agent",
+            "description": "Summarize and coordinate.",
+            "systemPrompt": "You are an operations briefing agent.",
+            "toolAllowlist": ["read_file", "list_dir"],
+            "skillIds": ["briefing-skill"],
+            "knowledgeBindingIds": ["kb-ops"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert created.status_code == 201
+    agent = created.json()["data"]
+
+    kb_created = web_client.post(
+        "/api/v1/knowledge-bases",
+        json={
+            "name": "Ops KB",
+            "retrievalProfile": {"mode": "hybrid", "chunkSize": 400, "chunkOverlap": 40},
+        },
+    )
+    assert kb_created.status_code == 201
+    kb_id = kb_created.json()["data"]["kbId"]
+
+    faq_ingest = web_client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/documents",
+        json={
+            "sourceType": "faq_table",
+            "title": "Ops FAQ",
+            "items": [
+                {
+                    "question": "How do we restart nanobot?",
+                    "answer": "Use supervisorctl restart nanobot after checking service health.",
+                }
+            ],
+        },
+    )
+    assert faq_ingest.status_code == 202
+    faq_payload = faq_ingest.json()["data"]
+    faq_document, faq_job = _wait_for_knowledge_ingest(
+        web_client,
+        kb_id=kb_id,
+        doc_id=faq_payload["documents"][0]["docId"],
+        job_id=faq_payload["jobs"][0]["jobId"],
+    )
+    assert faq_document["docStatus"] == "indexed"
+    assert faq_job["status"] == "succeeded"
+
+    patched = web_client.put(
+        f"/api/v1/agents/{agent['agentId']}",
+        json={"knowledgeBindingIds": [kb_id]},
+    )
+    assert patched.status_code == 200
+
+    provider = web_client.app.state.web.agent.provider
+
+    async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
+        assert model == "openai/gpt-4o-mini"
+        assert {tool["function"]["name"] for tool in tools} == {"read_file", "list_dir"}
+        assert "You are an operations briefing agent." in messages[0]["content"]
+        assert "Always summarize findings clearly." in messages[0]["content"]
+        assert "supervisorctl restart nanobot" in messages[0]["content"]
+        return LLMResponse(content="Agent test reply", tool_calls=[])
+
+    provider.chat_with_retry = fake_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    tested = web_client.post(
+        f"/api/v1/agents/{agent['agentId']}/test-run",
+        json={"content": "Summarize how to restart nanobot for the operator."},
+    )
+    assert tested.status_code == 200
+    payload = tested.json()["data"]
+    assert payload["run"]["kind"] == "agent"
+    assert payload["run"]["status"] == "succeeded"
+    assert payload["run"]["artifactPath"] == f"{payload['run']['runId']}.md"
+    assert payload["assistantMessage"]["content"] == "Agent test reply"
+    assert payload["pendingKnowledgeBindings"] == [kb_id]
+    assert len(payload["knowledgeHits"]) >= 1
+    assert payload["appliedBindings"]["skillIds"] == ["briefing-skill"]
+    assert any(event["eventType"] == "bindings_resolved" for event in payload["run"]["events"])
+    assert any(event["eventType"] == "knowledge_retrieved" for event in payload["run"]["events"])
+    artifact = web_client.get(f"/api/v1/runs/{payload['run']['runId']}/artifact")
+    assert artifact.status_code == 200
+    artifact_data = artifact.json()["data"]
+    assert artifact_data["artifactPath"] == payload["run"]["artifactPath"]
+    assert "Agent test reply" in artifact_data["content"]
+    assert "supervisorctl restart nanobot" in artifact_data["content"]
+
+    listed = web_client.get(
+        "/api/v1/runs",
+        params={"agentId": agent["agentId"], "kind": "agent"},
+    )
+    assert listed.status_code == 200
+    assert listed.json()["data"]["total"] == 1
+    assert listed.json()["data"]["items"][0]["runId"] == payload["run"]["runId"]
+
+
+def test_web_api_agent_test_run_accepts_legacy_runtime_tools(
+    web_client: TestClient,
+    monkeypatch,
+) -> None:
+    created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Legacy Runtime Agent",
+            "systemPrompt": "Use runtime tools when appropriate.",
+            "toolAllowlist": ["read_file", "message", "spawn"],
+        },
+    )
+    assert created.status_code == 201
+    agent = created.json()["data"]
+
+    provider = web_client.app.state.web.agent.provider
+
+    async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
+        assert "Use runtime tools when appropriate." in messages[0]["content"]
+        assert {tool["function"]["name"] for tool in tools} == {"read_file", "message", "spawn"}
+        return LLMResponse(content="Legacy runtime tools ok", tool_calls=[])
+
+    provider.chat_with_retry = fake_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    tested = web_client.post(
+        f"/api/v1/agents/{agent['agentId']}/test-run",
+        json={"content": "Do a quick compatibility check."},
+    )
+    assert tested.status_code == 200
+    payload = tested.json()["data"]
+    assert payload["run"]["status"] == "succeeded"
+    assert payload["assistantMessage"]["content"] == "Legacy runtime tools ok"
+    assert payload["appliedBindings"]["toolAllowlist"] == ["read_file", "message", "spawn"]
+
+
+def test_web_api_team_crud_copy_and_toggle(web_client: TestClient) -> None:
+    leader = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Team Lead",
+            "systemPrompt": "Coordinate the team.",
+        },
+    )
+    assert leader.status_code == 201
+    member = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Team Member",
+            "systemPrompt": "Do the assigned work.",
+        },
+    )
+    assert member.status_code == 201
+
+    created = web_client.post(
+        "/api/v1/teams",
+        json={
+            "name": "Support Team",
+            "description": "Handle support workflows",
+            "leaderAgentId": leader.json()["data"]["agentId"],
+            "memberAgentIds": [member.json()["data"]["agentId"]],
+            "workflowMode": "parallel_fanout",
+            "sharedKnowledgeBindingIds": ["kb-support"],
+        },
+    )
+    assert created.status_code == 201
+    team = created.json()["data"]
+    assert team["teamId"] == "support-team"
+    assert team["memberCount"] == 2
+
+    listed = web_client.get("/api/v1/teams")
+    assert listed.status_code == 200
+    assert listed.json()["data"][0]["teamId"] == team["teamId"]
+
+    fetched = web_client.get(f"/api/v1/teams/{team['teamId']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["data"]["leaderAgentId"] == leader.json()["data"]["agentId"]
+
+    updated = web_client.put(
+        f"/api/v1/teams/{team['teamId']}",
+        json={
+            "workflowMode": "sequential_handoff",
+            "memberAccessPolicy": {"teamSharedKnowledge": "members_read"},
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"]["workflowMode"] == "sequential_handoff"
+
+    copied = web_client.post(f"/api/v1/teams/{team['teamId']}/copy")
+    assert copied.status_code == 201
+    assert copied.json()["data"]["name"] == "Support Team Copy"
+
+    disabled = web_client.post(f"/api/v1/teams/{team['teamId']}/disable")
+    assert disabled.status_code == 200
+    assert disabled.json()["data"]["enabled"] is False
+
+    enabled = web_client.post(f"/api/v1/teams/{team['teamId']}/enable")
+    assert enabled.status_code == 200
+    assert enabled.json()["data"]["enabled"] is True
+
+    deleted = web_client.delete(f"/api/v1/teams/{team['teamId']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["data"]["deleted"] is True
+
+
+def test_web_api_team_creation_validates_agent_references(web_client: TestClient) -> None:
+    created = web_client.post(
+        "/api/v1/teams",
+        json={
+            "name": "Broken Team",
+            "leaderAgentId": "missing-agent",
+        },
+    )
+    assert created.status_code == 400
+    assert created.json()["error"]["code"] == "TEAM_VALIDATION_ERROR"
+
+
+def test_web_api_team_run_executes_member_and_leader_runs(web_client: TestClient, monkeypatch) -> None:
+    leader = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Support Lead",
+            "systemPrompt": "Leader system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert leader.status_code == 201
+
+    researcher = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Support Researcher",
+            "systemPrompt": "Research member prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert researcher.status_code == 201
+
+    reviewer = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Support Reviewer",
+            "systemPrompt": "QA member prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert reviewer.status_code == 201
+
+    kb_created = web_client.post(
+        "/api/v1/knowledge-bases",
+        json={
+            "name": "Support Team KB",
+            "retrievalProfile": {"mode": "hybrid", "chunkSize": 400, "chunkOverlap": 40},
+        },
+    )
+    assert kb_created.status_code == 201
+    kb_id = kb_created.json()["data"]["kbId"]
+
+    faq_ingest = web_client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/documents",
+        json={
+            "sourceType": "faq_table",
+            "title": "Support FAQ",
+            "items": [
+                {
+                    "question": "What should we do during a customer outage?",
+                    "answer": "Escalate to tier 2 after confirming the impacted service and region.",
+                }
+            ],
+        },
+    )
+    assert faq_ingest.status_code == 202
+    faq_payload = faq_ingest.json()["data"]
+    uploaded_document, uploaded_job = _wait_for_knowledge_ingest(
+        web_client,
+        kb_id=kb_id,
+        doc_id=faq_payload["documents"][0]["docId"],
+        job_id=faq_payload["jobs"][0]["jobId"],
+    )
+    assert uploaded_document["docStatus"] == "indexed"
+    assert uploaded_job["status"] == "succeeded"
+
+    team_created = web_client.post(
+        "/api/v1/teams",
+        json={
+            "name": "Support Team",
+            "leaderAgentId": leader.json()["data"]["agentId"],
+            "memberAgentIds": [
+                researcher.json()["data"]["agentId"],
+                reviewer.json()["data"]["agentId"],
+            ],
+            "workflowMode": "parallel_fanout",
+            "sharedKnowledgeBindingIds": [kb_id],
+            "memberAccessPolicy": {
+                "teamSharedKnowledge": "members_read",
+                "teamSharedMemory": "leader_write_member_read",
+            },
+        },
+    )
+    assert team_created.status_code == 201
+    team_id = team_created.json()["data"]["teamId"]
+
+    provider = web_client.app.state.web.agent.provider
+
+    async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
+        _ = tools, kwargs
+        assert model == "openai/gpt-4o-mini"
+        system = messages[0]["content"]
+        user = messages[1]["content"]
+        if "Leader system prompt" in system:
+            assert "Member Contributions" in user
+            assert "Escalate to tier 2" in user
+            return LLMResponse(content="Leader final summary", tool_calls=[])
+        if "Research member prompt" in system:
+            assert "Team Assignment" in user
+            assert "Escalate to tier 2" in user
+            return LLMResponse(content="Research member result", tool_calls=[])
+        if "QA member prompt" in system:
+            assert "Team Assignment" in user
+            return LLMResponse(content="QA member result", tool_calls=[])
+        raise AssertionError(f"Unexpected prompt: {system}")
+
+    provider.chat_with_retry = fake_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    tested = web_client.post(
+        f"/api/v1/teams/{team_id}/runs",
+        json={"content": "Prepare a support response plan for an outage report."},
+    )
+    assert tested.status_code == 200
+    payload = tested.json()["data"]
+    assert payload["run"]["kind"] == "team"
+    assert payload["run"]["status"] in {"queued", "running"}
+    assert payload["leaderRun"] is None
+    assert payload["memberRuns"] == []
+    assert payload["finalAssistantMessage"] is None
+
+    deadline = time.time() + 3.0
+    final_run = payload["run"]
+    while time.time() < deadline:
+        detail = web_client.get(f"/api/v1/runs/{payload['run']['runId']}")
+        assert detail.status_code == 200
+        final_run = detail.json()["data"]
+        if final_run["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+
+    assert final_run["status"] == "succeeded"
+    assert final_run["resultSummary"]["content"] == "Leader final summary"
+    assert final_run["artifactPath"] == f"{payload['run']['runId']}.md"
+    assert final_run["threadId"] == f"team-thread:{team_id}"
+
+    listed = web_client.get(
+        "/api/v1/runs",
+        params={"teamId": team_id, "kind": "team"},
+    )
+    assert listed.status_code == 200
+    assert listed.json()["data"]["total"] == 1
+    assert listed.json()["data"]["items"][0]["runId"] == payload["run"]["runId"]
+
+    children = web_client.get(f"/api/v1/runs/{payload['run']['runId']}/children")
+    assert children.status_code == 200
+    assert children.json()["data"]["total"] == 3
+    leader_runs = [item for item in children.json()["data"]["items"] if item["controlScope"] == "leader"]
+    member_runs = [item for item in children.json()["data"]["items"] if item["controlScope"] == "member"]
+    assert len(leader_runs) == 1
+    assert len(member_runs) == 2
+    assert all(item["threadId"] == f"team-thread:{team_id}" for item in children.json()["data"]["items"])
+
+    tree = web_client.get(f"/api/v1/runs/{payload['run']['runId']}/tree")
+    assert tree.status_code == 200
+    assert tree.json()["data"]["runId"] == payload["run"]["runId"]
+    assert len(tree.json()["data"]["children"]) == 3
+
+    artifact = web_client.get(f"/api/v1/runs/{payload['run']['runId']}/artifact")
+    assert artifact.status_code == 200
+    artifact_data = artifact.json()["data"]
+    assert artifact_data["artifactPath"] == final_run["artifactPath"]
+    assert "Leader final summary" in artifact_data["content"]
+    assert "Research member result" in artifact_data["content"]
+
+    thread = web_client.get(f"/api/v1/teams/{team_id}/thread")
+    assert thread.status_code == 200
+    assert thread.json()["data"]["threadId"] == f"team-thread:{team_id}"
+
+    thread_messages = web_client.get(f"/api/v1/teams/{team_id}/thread/messages")
+    assert thread_messages.status_code == 200
+    assert thread_messages.json()["data"]["total"] >= 2
+    assert thread_messages.json()["data"]["messages"][0]["role"] == "user"
+    assert thread_messages.json()["data"]["messages"][-1]["content"] == "Leader final summary"
+
+
+def test_web_api_team_run_cancel_requests_background_task(web_client: TestClient, monkeypatch) -> None:
+    leader = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Cancel Lead",
+            "systemPrompt": "Leader system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert leader.status_code == 201
+
+    member = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Cancel Member",
+            "systemPrompt": "Member system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert member.status_code == 201
+
+    team_created = web_client.post(
+        "/api/v1/teams",
+        json={
+            "name": "Cancelable Team",
+            "leaderAgentId": leader.json()["data"]["agentId"],
+            "memberAgentIds": [member.json()["data"]["agentId"]],
+            "workflowMode": "parallel_fanout",
+        },
+    )
+    assert team_created.status_code == 201
+    team_id = team_created.json()["data"]["teamId"]
+
+    provider = web_client.app.state.web.agent.provider
+
+    async def slow_chat_with_retry(*, messages, tools, model, **kwargs):
+        _ = messages, tools, model, kwargs
+        await asyncio.sleep(1.0)
+        return LLMResponse(content="Should not complete", tool_calls=[])
+
+    provider.chat_with_retry = slow_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    started = web_client.post(
+        f"/api/v1/teams/{team_id}/runs",
+        json={"content": "Start a long-running cancellation check."},
+    )
+    assert started.status_code == 200
+    run_id = started.json()["data"]["run"]["runId"]
+
+    cancelled = web_client.post(f"/api/v1/runs/{run_id}/cancel")
+    assert cancelled.status_code == 202
+    assert cancelled.json()["data"]["taskCancellationSent"] is True
+
+    deadline = time.time() + 3.0
+    final_run = cancelled.json()["data"]
+    while time.time() < deadline:
+        detail = web_client.get(f"/api/v1/runs/{run_id}")
+        assert detail.status_code == 200
+        final_run = detail.json()["data"]
+        if final_run["status"] == "cancelled":
+            break
+        time.sleep(0.05)
+
+    assert final_run["status"] == "cancelled"
+
+
+def test_web_api_team_run_retry_with_append_context(web_client: TestClient, monkeypatch) -> None:
+    leader = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Retry Lead",
+            "systemPrompt": "Leader system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert leader.status_code == 201
+
+    member = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Retry Member",
+            "systemPrompt": "Member system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert member.status_code == 201
+
+    team_created = web_client.post(
+        "/api/v1/teams",
+        json={
+            "name": "Retry Team",
+            "leaderAgentId": leader.json()["data"]["agentId"],
+            "memberAgentIds": [member.json()["data"]["agentId"]],
+            "workflowMode": "parallel_fanout",
+        },
+    )
+    assert team_created.status_code == 201
+    team_id = team_created.json()["data"]["teamId"]
+
+    provider = web_client.app.state.web.agent.provider
+    seen_user_messages: list[str] = []
+
+    async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
+        _ = tools, model, kwargs
+        system = messages[0]["content"]
+        user = messages[1]["content"]
+        seen_user_messages.append(user)
+        if "Leader system prompt" in system:
+            if "Use a warmer tone." in user:
+                return LLMResponse(content="Leader summary with appended context", tool_calls=[])
+            return LLMResponse(content="Leader summary", tool_calls=[])
+        return LLMResponse(content="Member summary", tool_calls=[])
+
+    provider.chat_with_retry = fake_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    started = web_client.post(
+        f"/api/v1/teams/{team_id}/runs",
+        json={"content": "Draft a support-ready response."},
+    )
+    assert started.status_code == 200
+    first_run_id = started.json()["data"]["run"]["runId"]
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        detail = web_client.get(f"/api/v1/runs/{first_run_id}")
+        assert detail.status_code == 200
+        if detail.json()["data"]["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+
+    retried = web_client.post(
+        f"/api/v1/teams/{team_id}/runs/{first_run_id}/retry",
+        json={"appendContext": "Use a warmer tone."},
+    )
+    assert retried.status_code == 200
+    retry_run_id = retried.json()["data"]["run"]["runId"]
+
+    deadline = time.time() + 3.0
+    retry_run = retried.json()["data"]["run"]
+    while time.time() < deadline:
+        detail = web_client.get(f"/api/v1/runs/{retry_run_id}")
+        assert detail.status_code == 200
+        retry_run = detail.json()["data"]
+        if retry_run["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+
+    assert retry_run["status"] == "succeeded"
+    assert retry_run["resultSummary"]["content"] == "Leader summary with appended context"
+    assert any("Additional Context" in message for message in seen_user_messages)
+    assert any("Use a warmer tone." in message for message in seen_user_messages)
+
+
+def test_web_api_team_thread_reuses_prior_turns(web_client: TestClient, monkeypatch) -> None:
+    leader = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Thread Lead",
+            "systemPrompt": "Leader system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert leader.status_code == 201
+
+    member = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Thread Member",
+            "systemPrompt": "Member system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert member.status_code == 201
+
+    team_created = web_client.post(
+        "/api/v1/teams",
+        json={
+            "name": "Thread Team",
+            "leaderAgentId": leader.json()["data"]["agentId"],
+            "memberAgentIds": [member.json()["data"]["agentId"]],
+            "workflowMode": "parallel_fanout",
+        },
+    )
+    assert team_created.status_code == 201
+    team_id = team_created.json()["data"]["teamId"]
+
+    provider = web_client.app.state.web.agent.provider
+
+    async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
+        _ = tools, model, kwargs
+        system = messages[0]["content"]
+        user = messages[1]["content"]
+        if "Member system prompt" in system:
+            if "Follow-up request" in user:
+                assert "Previous Team Thread Turns" in user
+                assert "First team summary" in user
+                return LLMResponse(content="Follow-up member note", tool_calls=[])
+            return LLMResponse(content="First member note", tool_calls=[])
+        if "Leader system prompt" in system:
+            if "Follow-up request" in user:
+                assert "Previous Team Thread Turns" in user
+                assert "First team summary" in user
+                return LLMResponse(content="Follow-up team summary", tool_calls=[])
+            return LLMResponse(content="First team summary", tool_calls=[])
+        raise AssertionError(f"Unexpected prompt: {system}")
+
+    provider.chat_with_retry = fake_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    started = web_client.post(
+        f"/api/v1/teams/{team_id}/runs",
+        json={"content": "Initial request"},
+    )
+    assert started.status_code == 200
+    first_run_id = started.json()["data"]["run"]["runId"]
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        detail = web_client.get(f"/api/v1/runs/{first_run_id}")
+        assert detail.status_code == 200
+        if detail.json()["data"]["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+
+    second = web_client.post(
+        f"/api/v1/teams/{team_id}/runs",
+        json={"content": "Follow-up request"},
+    )
+    assert second.status_code == 200
+    second_run_id = second.json()["data"]["run"]["runId"]
+
+    deadline = time.time() + 3.0
+    final_run = second.json()["data"]["run"]
+    while time.time() < deadline:
+        detail = web_client.get(f"/api/v1/runs/{second_run_id}")
+        assert detail.status_code == 200
+        final_run = detail.json()["data"]
+        if final_run["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+
+    assert final_run["status"] == "succeeded"
+    assert final_run["resultSummary"]["content"] == "Follow-up team summary"
+
+    thread = web_client.get(f"/api/v1/teams/{team_id}/thread")
+    assert thread.status_code == 200
+    assert thread.json()["data"]["threadId"] == f"team-thread:{team_id}"
+    assert thread.json()["data"]["session"]["messageCount"] == 4
+
+    thread_messages = web_client.get(f"/api/v1/teams/{team_id}/thread/messages")
+    assert thread_messages.status_code == 200
+    payload = thread_messages.json()["data"]
+    assert payload["total"] == 4
+    contents = [item["content"] for item in payload["messages"]]
+    assert contents == [
+        "Initial request",
+        "First team summary",
+        "Follow-up request",
+        "Follow-up team summary",
+    ]
+
+
+def test_web_api_team_memory_scope_and_candidates(web_client: TestClient, monkeypatch) -> None:
+    workspace = web_client.app.state.web.config.workspace_path
+    memory_dir = workspace / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    (memory_dir / "MEMORY.md").write_text("# Workspace Shared Memory\n\nWORKSPACE SECRET\n", encoding="utf-8")
+
+    leader = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Memory Lead",
+            "systemPrompt": "Leader prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+            "memoryScope": "workspace_shared",
+        },
+    )
+    assert leader.status_code == 201
+
+    member = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Memory Member",
+            "systemPrompt": "Member prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+            "memoryScope": "workspace_shared",
+        },
+    )
+    assert member.status_code == 201
+
+    team_created = web_client.post(
+        "/api/v1/teams",
+        json={
+            "name": "Memory Team",
+            "leaderAgentId": leader.json()["data"]["agentId"],
+            "memberAgentIds": [member.json()["data"]["agentId"]],
+            "workflowMode": "parallel_fanout",
+            "memberAccessPolicy": {
+                "teamSharedKnowledge": "explicit_only",
+                "teamSharedMemory": "leader_write_member_read",
+            },
+        },
+    )
+    assert team_created.status_code == 201
+    team_id = team_created.json()["data"]["teamId"]
+
+    updated_memory = web_client.put(
+        f"/api/v1/teams/{team_id}/memory",
+        json={"content": "Team shared rule: start with triage and state the impact clearly."},
+    )
+    assert updated_memory.status_code == 200
+
+    provider = web_client.app.state.web.agent.provider
+
+    async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
+        _ = tools, kwargs
+        assert model == "openai/gpt-4o-mini"
+        system = messages[0]["content"]
+        user = messages[1]["content"]
+        if "Leader prompt" in system:
+            assert "WORKSPACE SECRET" in system
+            assert "Team shared rule: start with triage" in system
+            assert "Member Contributions" in user
+            return LLMResponse(content="Leader memory-aware summary", tool_calls=[])
+        if "Member prompt" in system:
+            assert "Team shared rule: start with triage" in system
+            assert "WORKSPACE SECRET" not in system
+            assert "Team Assignment" in user
+            return LLMResponse(content="Member memory candidate", tool_calls=[])
+        raise AssertionError(f"Unexpected prompt: {system}")
+
+    provider.chat_with_retry = fake_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    started = web_client.post(
+        f"/api/v1/teams/{team_id}/runs",
+        json={"content": "Handle a customer escalation update."},
+    )
+    assert started.status_code == 200
+    root_run_id = started.json()["data"]["run"]["runId"]
+
+    deadline = time.time() + 3.0
+    final_run = started.json()["data"]["run"]
+    while time.time() < deadline:
+        detail = web_client.get(f"/api/v1/runs/{root_run_id}")
+        assert detail.status_code == 200
+        final_run = detail.json()["data"]
+        if final_run["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+
+    assert final_run["status"] == "succeeded"
+    assert any(event["eventType"] == "memory_candidate_proposed" for event in final_run["events"])
+
+    candidates = web_client.get("/api/v1/memory-candidates", params={"teamId": team_id, "status": "proposed"})
+    assert candidates.status_code == 200
+    assert candidates.json()["data"]["total"] == 1
+    candidate = candidates.json()["data"]["items"][0]
+    assert candidate["agentId"] == member.json()["data"]["agentId"]
+    assert candidate["status"] == "proposed"
+
+    applied = web_client.post(f"/api/v1/memory-candidates/{candidate['candidateId']}/apply")
+    assert applied.status_code == 200
+    assert applied.json()["data"]["status"] == "applied"
+
+    team_memory = web_client.get(f"/api/v1/teams/{team_id}/memory")
+    assert team_memory.status_code == 200
+    assert "Member memory candidate" in team_memory.json()["data"]["content"]
+
+    search = web_client.post(
+        "/api/v1/memory-search",
+        json={"query": "WORKSPACE SECRET", "teamId": team_id, "limit": 5, "mode": "keyword"},
+    )
+    assert search.status_code == 200
+    search_payload = search.json()["data"]
+    assert search_payload["effectiveMode"] == "keyword"
+    assert search_payload["total"] >= 1
+    assert any(item["sourceType"] == "workspace_memory" for item in search_payload["items"])
+
+    team_search = web_client.post(
+        "/api/v1/memory-search",
+        json={"query": "Member memory candidate", "teamId": team_id, "limit": 5, "mode": "hybrid"},
+    )
+    assert team_search.status_code == 200
+    team_search_payload = team_search.json()["data"]
+    assert team_search_payload["effectiveMode"] == "hybrid"
+    assert any(item["sourceType"] == "team_memory" for item in team_search_payload["items"])
+
+    thread_search = web_client.post(
+        "/api/v1/memory-search",
+        json={"query": "customer escalation update", "teamId": team_id, "limit": 10, "mode": "semantic"},
+    )
+    assert thread_search.status_code == 200
+    thread_search_payload = thread_search.json()["data"]
+    assert thread_search_payload["effectiveMode"] == "semantic"
+    assert any(item["sourceType"] == "team_thread" for item in thread_search_payload["items"])
+
+    artifact_search = web_client.post(
+        "/api/v1/memory-search",
+        json={"query": "Leader memory-aware summary", "teamId": team_id, "limit": 10, "mode": "hybrid"},
+    )
+    assert artifact_search.status_code == 200
+    artifact_search_payload = artifact_search.json()["data"]
+    artifact_hit = next(item for item in artifact_search_payload["items"] if item["sourceType"] == "run_artifact")
+    assert artifact_hit["metadata"]["teamId"] == team_id
+    assert "Leader memory-aware summary" in artifact_hit["content"]
+
+    thread_source = web_client.post(
+        "/api/v1/memory-get",
+        json={"sourceType": "team_thread", "sourceId": f"team-thread:{team_id}", "teamId": team_id},
+    )
+    assert thread_source.status_code == 200
+    thread_source_payload = thread_source.json()["data"]
+    assert thread_source_payload["sourceType"] == "team_thread"
+    assert "Handle a customer escalation update." in thread_source_payload["content"]
+
+    artifact_source = web_client.post(
+        "/api/v1/memory-get",
+        json={"sourceType": "run_artifact", "sourceId": root_run_id, "teamId": team_id},
+    )
+    assert artifact_source.status_code == 200
+    artifact_source_payload = artifact_source.json()["data"]
+    assert artifact_source_payload["sourceType"] == "run_artifact"
+    assert "Leader memory-aware summary" in artifact_source_payload["content"]
+
+    memory_source = web_client.post(
+        "/api/v1/memory-get",
+        json={"sourceType": "memory_candidate", "sourceId": candidate["candidateId"], "teamId": team_id},
+    )
+    assert memory_source.status_code == 200
+    memory_source_payload = memory_source.json()["data"]
+    assert memory_source_payload["sourceType"] == "memory_candidate"
+    assert memory_source_payload["sourceId"] == candidate["candidateId"]
+    assert "Member memory candidate" in memory_source_payload["content"]
+
+
+def test_web_api_knowledge_base_crud_upload_and_retrieve(web_client: TestClient) -> None:
+    created = web_client.post(
+        "/api/v1/knowledge-bases",
+        json={
+            "name": "Support KB",
+            "description": "Customer support knowledge base",
+            "retrievalProfile": {"mode": "hybrid", "chunkSize": 400, "chunkOverlap": 40},
+        },
+    )
+    assert created.status_code == 201
+    kb = created.json()["data"]
+    assert kb["kbId"] == "support-kb"
+
+    uploaded = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents",
+        files={"file": ("runbook.md", b"# Runbook\n\nReset the token cache before restarting the worker.\n", "text/markdown")},
+    )
+    assert uploaded.status_code == 202
+    upload_payload = uploaded.json()["data"]
+    assert upload_payload["documents"][0]["docStatus"] == "uploaded"
+    assert upload_payload["jobs"][0]["status"] == "queued"
+
+    uploaded_document, uploaded_job = _wait_for_knowledge_ingest(
+        web_client,
+        kb_id=kb["kbId"],
+        doc_id=upload_payload["documents"][0]["docId"],
+        job_id=upload_payload["jobs"][0]["jobId"],
+    )
+    assert uploaded_document["title"] == "runbook.md"
+    assert uploaded_document["docStatus"] == "indexed"
+    assert uploaded_job["status"] == "succeeded"
+
+    retrieved = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/retrieve-test",
+        json={"query": "restart the worker", "mode": "hybrid"},
+    )
+    assert retrieved.status_code == 200
+    data = retrieved.json()["data"]
+    assert data["effectiveMode"] == "hybrid"
+    assert len(data["hits"]) >= 1
+    assert "runbook.md" == data["hits"][0]["citation"]["title"]
+
+    semantic = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/retrieve-test",
+        json={"query": "restarting workers", "mode": "semantic"},
+    )
+    assert semantic.status_code == 200
+    semantic_payload = semantic.json()["data"]
+    assert semantic_payload["effectiveMode"] == "semantic"
+    assert len(semantic_payload["hits"]) >= 1
+
+    reindexed = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/reindex",
+        json={"docIds": [upload_payload["documents"][0]["docId"]]},
+    )
+    assert reindexed.status_code == 202
+    reindex_payload = reindexed.json()["data"]
+    assert reindex_payload["documents"][0]["docStatus"] == "uploaded"
+    assert reindex_payload["jobs"][0]["status"] == "queued"
+
+    reindexed_document, reindex_job = _wait_for_knowledge_ingest(
+        web_client,
+        kb_id=kb["kbId"],
+        doc_id=reindex_payload["documents"][0]["docId"],
+        job_id=reindex_payload["jobs"][0]["jobId"],
+    )
+    assert reindexed_document["docStatus"] == "indexed"
+    assert reindex_job["status"] == "succeeded"
+
+    deleted_doc = web_client.delete(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents/{upload_payload['documents'][0]['docId']}"
+    )
+    assert deleted_doc.status_code == 200
+    assert deleted_doc.json()["data"] == {"deleted": True}
+
+
+def test_web_api_knowledge_base_batch_delete_documents(web_client: TestClient) -> None:
+    created = web_client.post(
+        "/api/v1/knowledge-bases",
+        json={
+            "name": "Operations KB",
+            "description": "Runbooks and FAQ",
+        },
+    )
+    assert created.status_code == 201
+    kb = created.json()["data"]
+
+    upload = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents",
+        files=[
+            ("file", ("runbook.md", b"# Runbook\n\nRestart the worker after draining the queue.\n", "text/markdown")),
+            ("file", ("faq.md", b"# FAQ\n\nReset the token cache before retrying login.\n", "text/markdown")),
+        ],
+    )
+    assert upload.status_code == 202
+    upload_payload = upload.json()["data"]
+    doc_ids = [item["docId"] for item in upload_payload["documents"]]
+    job_ids = [item["jobId"] for item in upload_payload["jobs"]]
+
+    for doc_id, job_id in zip(doc_ids, job_ids, strict=True):
+        document, job = _wait_for_knowledge_ingest(
+            web_client,
+            kb_id=kb["kbId"],
+            doc_id=doc_id,
+            job_id=job_id,
+        )
+        assert document["docStatus"] == "indexed"
+        assert job["status"] == "succeeded"
+
+    deleted = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents/delete",
+        json={"docIds": doc_ids},
+    )
+    assert deleted.status_code == 200
+    deleted_payload = deleted.json()["data"]
+    assert deleted_payload["deletedCount"] == 2
+    assert deleted_payload["docIds"] == doc_ids
+
+    listed_docs = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/documents")
+    assert listed_docs.status_code == 200
+    assert listed_docs.json()["data"] == []
+
+
+def test_web_api_knowledge_sources_list_and_sync(web_client: TestClient) -> None:
+    created = web_client.post(
+        "/api/v1/knowledge-bases",
+        json={
+            "name": "Support Sources",
+            "description": "Source governance test",
+        },
+    )
+    assert created.status_code == 201
+    kb = created.json()["data"]
+
+    faq_created = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents",
+        json={
+            "sourceType": "faq_table",
+            "title": "Support FAQ",
+            "items": [
+                {
+                    "question": "How do we restart the worker?",
+                    "answer": "Drain the queue and restart the worker.",
+                }
+            ],
+        },
+    )
+    assert faq_created.status_code == 202
+    faq_payload = faq_created.json()["data"]
+    document, job = _wait_for_knowledge_ingest(
+        web_client,
+        kb_id=kb["kbId"],
+        doc_id=faq_payload["documents"][0]["docId"],
+        job_id=faq_payload["jobs"][0]["jobId"],
+    )
+    assert document["docStatus"] == "indexed"
+    assert job["status"] == "succeeded"
+
+    sources = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/sources")
+    assert sources.status_code == 200
+    source_payload = sources.json()["data"]
+    assert len(source_payload) == 1
+    source = source_payload[0]
+    assert source["sourceType"] == "faq_table"
+    assert source["syncSupported"] is True
+    assert source["docCount"] == 1
+    assert source["latestDocument"]["docId"] == faq_payload["documents"][0]["docId"]
+
+    updated = web_client.put(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/sources/{source['sourceId']}",
+        json={
+            "title": "Support FAQ v2",
+            "enabled": False,
+            "items": [
+                {
+                    "question": "How do we restart the worker?",
+                    "answer": "Pause intake, then restart the worker safely.",
+                }
+            ],
+        },
+    )
+    assert updated.status_code == 200
+    updated_payload = updated.json()["data"]
+    assert updated_payload["title"] == "Support FAQ v2"
+    assert updated_payload["enabled"] is False
+    assert updated_payload["config"]["items"][0]["answer"] == "Pause intake, then restart the worker safely."
+
+    reenabled = web_client.put(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/sources/{source['sourceId']}",
+        json={"enabled": True},
+    )
+    assert reenabled.status_code == 200
+    assert reenabled.json()["data"]["enabled"] is True
+
+    synced = web_client.post(f"/api/v1/knowledge-bases/{kb['kbId']}/sources/{source['sourceId']}/sync")
+    assert synced.status_code == 202
+    synced_payload = synced.json()["data"]
+    assert synced_payload["source"]["syncCount"] == 2
+    assert synced_payload["document"]["docStatus"] == "uploaded"
+    assert synced_payload["job"]["status"] == "queued"
+
+    synced_document, synced_job = _wait_for_knowledge_ingest(
+        web_client,
+        kb_id=kb["kbId"],
+        doc_id=synced_payload["document"]["docId"],
+        job_id=synced_payload["job"]["jobId"],
+    )
+    assert synced_document["docStatus"] == "indexed"
+    assert synced_job["status"] == "succeeded"
+
+
 def test_web_api_cron_crud_and_run(web_client: TestClient) -> None:
     calls: list[str] = []
 
@@ -1586,9 +2766,92 @@ def test_web_api_agent_templates_page_data_exposes_builtin_and_workspace_semanti
     assert detail_payload["skills"] == ["skill-creator"]
     assert detail_payload["tools"] == ["read_file", "list_dir"]
 
-    exported = web_client.post("/api/v1/agent-templates/export", json={"names": ["ops-helper"]})
-    assert exported.status_code == 200
-    assert "ops-helper" in exported.json()["data"]["content"]
+
+def test_web_api_valid_template_tools_include_runtime_message_and_spawn(web_client: TestClient) -> None:
+    response = web_client.get("/api/v1/agent-templates/tools/valid")
+    assert response.status_code == 200
+    names = {item["name"] for item in response.json()["data"]}
+    assert {"read_file", "message", "spawn", "cron"} <= names
+
+
+def test_web_api_agents_crud_copy_and_toggle(web_client: TestClient) -> None:
+    listed_initial = web_client.get("/api/v1/agents")
+    assert listed_initial.status_code == 200
+    assert listed_initial.json()["data"] == []
+
+    created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Repo Analyst",
+            "templateName": "analyst",
+            "description": "Investigate repository-level issues",
+            "mcpServerIds": ["filesystem"],
+            "knowledgeBindingIds": ["kb-product"],
+        },
+    )
+    assert created.status_code == 201
+    agent = created.json()["data"]
+    assert agent["agentId"] == "repo-analyst"
+    assert agent["sourceTemplateName"] == "analyst"
+    assert agent["mcpServerIds"] == ["filesystem"]
+    assert agent["knowledgeBindingIds"] == ["kb-product"]
+    assert agent["toolAllowlist"] != []
+
+    fetched = web_client.get(f"/api/v1/agents/{agent['agentId']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["data"]["name"] == "Repo Analyst"
+
+    updated = web_client.put(
+        f"/api/v1/agents/{agent['agentId']}",
+        json={
+            "description": "Updated analyst description",
+            "toolAllowlist": ["read_file", "web_search"],
+            "skillIds": ["skill-creator"],
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"]["description"] == "Updated analyst description"
+    assert updated.json()["data"]["toolAllowlist"] == ["read_file", "web_search"]
+    assert updated.json()["data"]["skillIds"] == ["skill-creator"]
+
+    copied = web_client.post(f"/api/v1/agents/{agent['agentId']}/copy")
+    assert copied.status_code == 201
+    assert copied.json()["data"]["name"] == "Repo Analyst Copy"
+
+    disabled = web_client.post(f"/api/v1/agents/{agent['agentId']}/disable")
+    assert disabled.status_code == 200
+    assert disabled.json()["data"]["enabled"] is False
+
+    enabled_list = web_client.get("/api/v1/agents", params={"enabled": "true"})
+    assert enabled_list.status_code == 200
+    assert len(enabled_list.json()["data"]) == 1
+    assert enabled_list.json()["data"][0]["name"] == "Repo Analyst Copy"
+
+    enabled_again = web_client.post(f"/api/v1/agents/{agent['agentId']}/enable")
+    assert enabled_again.status_code == 200
+    assert enabled_again.json()["data"]["enabled"] is True
+
+    deleted = web_client.delete(f"/api/v1/agents/{agent['agentId']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["data"] == {"deleted": True}
+
+
+def test_web_api_agents_creation_persists_in_instance_scoped_store(web_client: TestClient) -> None:
+    created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Workspace Agent",
+            "systemPrompt": "Help with workspace tasks.",
+        },
+    )
+    assert created.status_code == 201
+    agent_id = created.json()["data"]["agentId"]
+
+    db_path = web_client.app.state.instance.agent_definitions_db_path()
+    store = AgentDefinitionStore(db_path)
+    persisted = store.get(agent_id)
+    assert persisted is not None
+    assert persisted.instance_id == web_client.app.state.instance.id
 
 
 def test_web_api_skill_upload_list_and_delete(web_client: TestClient) -> None:
