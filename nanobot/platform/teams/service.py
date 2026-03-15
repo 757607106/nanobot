@@ -6,7 +6,7 @@ import re
 from dataclasses import replace
 from typing import Any, Callable
 
-from nanobot.platform.teams.models import TeamDefinition, default_member_access_policy, now_iso
+from nanobot.platform.teams.models import TeamDefinition, _migrate_workflow_mode, default_member_access_policy, now_iso
 from nanobot.platform.teams.store import TeamDefinitionStore
 
 
@@ -31,9 +31,7 @@ class TeamDefinitionService:
     """Instance-scoped CRUD service for team definitions."""
 
     _ALLOWED_WORKFLOW_MODES = {
-        "parallel_fanout",
-        "sequential_handoff",
-        "leader_summary",
+        "supervisor",
     }
 
     def __init__(
@@ -129,7 +127,8 @@ class TeamDefinitionService:
         return resolved
 
     def _normalize_workflow_mode(self, value: Any) -> str:
-        workflow_mode = self._normalize_text(value, field_name="workflowMode") or "parallel_fanout"
+        raw = self._normalize_text(value, field_name="workflowMode") or "supervisor"
+        workflow_mode = _migrate_workflow_mode(raw)
         if workflow_mode not in self._ALLOWED_WORKFLOW_MODES:
             allowed = ", ".join(sorted(self._ALLOWED_WORKFLOW_MODES))
             raise TeamDefinitionValidationError(f"workflowMode must be one of: {allowed}.")

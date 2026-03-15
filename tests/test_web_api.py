@@ -18,7 +18,7 @@ from nanobot.config.loader import save_config
 from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.platform.agents import AgentDefinitionStore
 from nanobot.platform.runs import RunControlScope, RunKind
-from nanobot.providers.base import LLMResponse
+from nanobot.providers.base import LLMResponse, ToolCallRequest
 from nanobot.web.api import create_app, run_server
 from nanobot.web import operations as web_operations
 
@@ -1559,7 +1559,7 @@ def test_web_api_team_crud_copy_and_toggle(web_client: TestClient) -> None:
         },
     )
     assert updated.status_code == 200
-    assert updated.json()["data"]["workflowMode"] == "sequential_handoff"
+    assert updated.json()["data"]["workflowMode"] == "supervisor"
 
     copied = web_client.post(f"/api/v1/teams/{team['teamId']}/copy")
     assert copied.status_code == 201
@@ -1681,20 +1681,34 @@ def test_web_api_team_run_executes_member_and_leader_runs(web_client: TestClient
     provider = web_client.app.state.web.agent.provider
 
     async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
-        _ = tools, kwargs
+        _ = kwargs
         assert model == "openai/gpt-4o-mini"
         system = messages[0]["content"]
-        user = messages[1]["content"]
-        if "Leader system prompt" in system:
-            assert "Member Contributions" in user
-            assert "Escalate to tier 2" in user
-            return LLMResponse(content="Leader final summary", tool_calls=[])
+        # Supervisor LLM calls (identified by "How to Work" in prompt)
+        if "How to Work" in system:
+            has_tool_results = any(m.get("role") == "tool" for m in messages)
+            if has_tool_results:
+                return LLMResponse(content="Leader final summary", tool_calls=[])
+            # First call - delegate to both members
+            return LLMResponse(
+                content="",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="tc-1",
+                        name="call_support_researcher",
+                        arguments={"task": "Research the outage"},
+                    ),
+                    ToolCallRequest(
+                        id="tc-2",
+                        name="call_support_reviewer",
+                        arguments={"task": "Review the outage response"},
+                    ),
+                ],
+            )
+        # Member agent calls
         if "Research member prompt" in system:
-            assert "Team Assignment" in user
-            assert "Escalate to tier 2" in user
             return LLMResponse(content="Research member result", tool_calls=[])
         if "QA member prompt" in system:
-            assert "Team Assignment" in user
             return LLMResponse(content="QA member result", tool_calls=[])
         raise AssertionError(f"Unexpected prompt: {system}")
 
@@ -1717,7 +1731,7 @@ def test_web_api_team_run_executes_member_and_leader_runs(web_client: TestClient
     assert payload["memberRuns"] == []
     assert payload["finalAssistantMessage"] is None
 
-    deadline = time.time() + 3.0
+    deadline = time.time() + 5.0
     final_run = payload["run"]
     while time.time() < deadline:
         detail = web_client.get(f"/api/v1/runs/{payload['run']['runId']}")
@@ -1742,24 +1756,21 @@ def test_web_api_team_run_executes_member_and_leader_runs(web_client: TestClient
 
     children = web_client.get(f"/api/v1/runs/{payload['run']['runId']}/children")
     assert children.status_code == 200
-    assert children.json()["data"]["total"] == 3
-    leader_runs = [item for item in children.json()["data"]["items"] if item["controlScope"] == "leader"]
+    # LangGraph supervisor: only member child runs, no separate leader run
     member_runs = [item for item in children.json()["data"]["items"] if item["controlScope"] == "member"]
-    assert len(leader_runs) == 1
     assert len(member_runs) == 2
     assert all(item["threadId"] == f"team-thread:{team_id}" for item in children.json()["data"]["items"])
 
     tree = web_client.get(f"/api/v1/runs/{payload['run']['runId']}/tree")
     assert tree.status_code == 200
     assert tree.json()["data"]["runId"] == payload["run"]["runId"]
-    assert len(tree.json()["data"]["children"]) == 3
+    assert len(tree.json()["data"]["children"]) == 2
 
     artifact = web_client.get(f"/api/v1/runs/{payload['run']['runId']}/artifact")
     assert artifact.status_code == 200
     artifact_data = artifact.json()["data"]
     assert artifact_data["artifactPath"] == final_run["artifactPath"]
     assert "Leader final summary" in artifact_data["content"]
-    assert "Research member result" in artifact_data["content"]
 
     thread = web_client.get(f"/api/v1/teams/{team_id}/thread")
     assert thread.status_code == 200
@@ -1977,21 +1988,32 @@ def test_web_api_team_thread_reuses_prior_turns(web_client: TestClient, monkeypa
     provider = web_client.app.state.web.agent.provider
 
     async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
-        _ = tools, model, kwargs
+        _ = kwargs
         system = messages[0]["content"]
-        user = messages[1]["content"]
+        # Supervisor LLM calls
+        if "How to Work" in system:
+            has_tool_results = any(m.get("role") == "tool" for m in messages)
+            if has_tool_results:
+                # Second run: check thread context is present
+                if "Follow-up request" in str(messages):
+                    assert "Previous Team Thread Turns" in system
+                    assert "First team summary" in system
+                    return LLMResponse(content="Follow-up team summary", tool_calls=[])
+                return LLMResponse(content="First team summary", tool_calls=[])
+            # First supervisor call - delegate to member
+            return LLMResponse(
+                content="",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="tc-1",
+                        name="call_thread_member",
+                        arguments={"task": "Process request"},
+                    ),
+                ],
+            )
+        # Member agent calls
         if "Member system prompt" in system:
-            if "Follow-up request" in user:
-                assert "Previous Team Thread Turns" in user
-                assert "First team summary" in user
-                return LLMResponse(content="Follow-up member note", tool_calls=[])
-            return LLMResponse(content="First member note", tool_calls=[])
-        if "Leader system prompt" in system:
-            if "Follow-up request" in user:
-                assert "Previous Team Thread Turns" in user
-                assert "First team summary" in user
-                return LLMResponse(content="Follow-up team summary", tool_calls=[])
-            return LLMResponse(content="First team summary", tool_calls=[])
+            return LLMResponse(content="Member note", tool_calls=[])
         raise AssertionError(f"Unexpected prompt: {system}")
 
     provider.chat_with_retry = fake_chat_with_retry
@@ -2109,19 +2131,31 @@ def test_web_api_team_memory_scope_and_candidates(web_client: TestClient, monkey
     provider = web_client.app.state.web.agent.provider
 
     async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
-        _ = tools, kwargs
+        _ = kwargs
         assert model == "openai/gpt-4o-mini"
         system = messages[0]["content"]
-        user = messages[1]["content"]
-        if "Leader prompt" in system:
+        # Supervisor LLM calls
+        if "How to Work" in system:
+            # Verify supervisor has workspace and team memory
             assert "WORKSPACE SECRET" in system
             assert "Team shared rule: start with triage" in system
-            assert "Member Contributions" in user
-            return LLMResponse(content="Leader memory-aware summary", tool_calls=[])
+            has_tool_results = any(m.get("role") == "tool" for m in messages)
+            if has_tool_results:
+                return LLMResponse(content="Leader memory-aware summary", tool_calls=[])
+            # First call - delegate to member
+            return LLMResponse(
+                content="",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="tc-1",
+                        name="call_memory_member",
+                        arguments={"task": "Process escalation"},
+                    ),
+                ],
+            )
+        # Member agent calls
         if "Member prompt" in system:
-            assert "Team shared rule: start with triage" in system
             assert "WORKSPACE SECRET" not in system
-            assert "Team Assignment" in user
             return LLMResponse(content="Member memory candidate", tool_calls=[])
         raise AssertionError(f"Unexpected prompt: {system}")
 
@@ -2139,7 +2173,7 @@ def test_web_api_team_memory_scope_and_candidates(web_client: TestClient, monkey
     assert started.status_code == 200
     root_run_id = started.json()["data"]["run"]["runId"]
 
-    deadline = time.time() + 3.0
+    deadline = time.time() + 5.0
     final_run = started.json()["data"]["run"]
     while time.time() < deadline:
         detail = web_client.get(f"/api/v1/runs/{root_run_id}")

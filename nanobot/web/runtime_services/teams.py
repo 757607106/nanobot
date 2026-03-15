@@ -1,4 +1,4 @@
-"""Team-definition runtime helpers for test runs and basic team orchestration."""
+"""Team-definition runtime helpers for test runs and LangGraph-based team orchestration."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from loguru import logger
 
 from nanobot.platform.teams import TeamDefinitionNotFoundError
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
+from nanobot.web.runtime_services.langgraph_supervisor import LangGraphTeamRunner
 
 
 class WebTeamRuntimeService:
@@ -133,192 +134,6 @@ class WebTeamRuntimeService:
                 },
             )
 
-    def _build_member_task(
-        self,
-        team: dict[str, Any],
-        task: str,
-        *,
-        prior_results: list[dict[str, str]] | None = None,
-        team_thread_context_block: str | None = None,
-        shared_knowledge_block: str | None = None,
-    ) -> str:
-        sections = [
-            f"# Team Assignment\nYou are working inside team '{team['name']}'.",
-            f"Workflow Mode: {team['workflowMode']}",
-            "Your goal is to produce a concise, evidence-aware contribution for the team leader.",
-            f"# Original Request\n{task}",
-        ]
-        if team_thread_context_block:
-            sections.append(team_thread_context_block)
-        if prior_results:
-            lines = [
-                f"- {item['agentName']}: {item['content']}"
-                for item in prior_results
-                if item.get("content")
-            ]
-            if lines:
-                sections.append("# Previous Member Contributions\n" + "\n".join(lines))
-        if shared_knowledge_block:
-            sections.append(shared_knowledge_block)
-        sections.append(
-            "# Output Requirements\n"
-            "Give a compact result the leader can reuse directly. "
-            "Call out important evidence, constraints, or open questions."
-        )
-        return "\n\n".join(section for section in sections if section)
-
-    def _build_leader_task(
-        self,
-        team: dict[str, Any],
-        task: str,
-        member_results: list[dict[str, str]],
-        *,
-        team_thread_context_block: str | None = None,
-        shared_knowledge_block: str | None = None,
-    ) -> str:
-        sections = [
-            f"# Team Leader Summary\nYou are the leader of team '{team['name']}'.",
-            f"Workflow Mode: {team['workflowMode']}",
-            f"# Original Request\n{task}",
-        ]
-        if team_thread_context_block:
-            sections.append(team_thread_context_block)
-        if shared_knowledge_block:
-            sections.append(shared_knowledge_block)
-        contribution_lines = [
-            f"## {item['agentName']}\n{item['content']}"
-            for item in member_results
-            if item.get("content")
-        ]
-        if contribution_lines:
-            sections.append("# Member Contributions\n" + "\n\n".join(contribution_lines))
-        sections.append(
-            "# Output Requirements\n"
-            "Return a final answer for the user. Synthesize the member contributions naturally, "
-            "and mention uncertainties when the team did not fully resolve them."
-        )
-        return "\n\n".join(section for section in sections if section)
-
-    async def _run_member_agents(
-        self,
-        team: dict[str, Any],
-        task: str,
-        *,
-        root_run_id: str,
-        thread_id: str,
-        team_thread_context_block: str | None = None,
-        shared_knowledge_block: str | None = None,
-        team_memory_sections: list[tuple[str, str]] | None = None,
-    ) -> list[dict[str, Any]]:
-        workflow_mode = team.get("workflowMode") or "parallel_fanout"
-        member_ids = list(team.get("memberAgentIds") or [])
-        member_results: list[dict[str, Any]] = []
-
-        if workflow_mode == "sequential_handoff":
-            prior_results: list[dict[str, str]] = []
-            for member_id in member_ids:
-                member = self.state.app_agents.get_agent(member_id)
-                self.state.runs.append_event(
-                    root_run_id,
-                    "member_scheduled",
-                    {"agentId": member_id, "agentName": member["name"], "workflowMode": workflow_mode},
-                )
-                run_result = await self.state.agent_runtime.run_agent_definition(
-                    member,
-                    task=self._build_member_task(
-                        team,
-                        task,
-                        prior_results=prior_results,
-                        team_thread_context_block=team_thread_context_block,
-                        shared_knowledge_block=shared_knowledge_block,
-                    ),
-                    label=f"{team['name']} · {member['name']}",
-                    session_key=self._child_session_key(team["teamId"], root_run_id, "member", member_id),
-                    session_id=self._child_session_id(team["teamId"], root_run_id, "member", member_id),
-                    session_title=f"Team Run · {team['name']} · {member['name']}",
-                    origin_chat_id=team["teamId"],
-                    control_scope=RunControlScope.MEMBER,
-                    team_id=team["teamId"],
-                    thread_id=thread_id,
-                    parent_run_id=root_run_id,
-                    root_run_id=root_run_id,
-                    spawn_depth=1,
-                    include_workspace_memory=False,
-                    memory_sections=team_memory_sections or [],
-                )
-                content = (
-                    run_result.get("assistantMessage", {}) or {}
-                ).get("content") or (
-                    run_result.get("run", {}).get("resultSummary", {}) or {}
-                ).get("content") or ""
-                prior_results.append({"agentName": member["name"], "content": content})
-                member_results.append(run_result)
-                self._propose_memory_candidate(
-                    root_run_id=root_run_id,
-                    team=team,
-                    agent=member,
-                    run_result=run_result,
-                )
-                self.state.runs.append_event(
-                    root_run_id,
-                    "member_completed",
-                    {"agentId": member_id, "agentName": member["name"], "runId": run_result["run"]["runId"]},
-                )
-            return member_results
-
-        tasks = []
-        members: list[dict[str, Any]] = []
-        for member_id in member_ids:
-            member = self.state.app_agents.get_agent(member_id)
-            members.append(member)
-            self.state.runs.append_event(
-                root_run_id,
-                "member_scheduled",
-                {"agentId": member_id, "agentName": member["name"], "workflowMode": workflow_mode},
-            )
-            tasks.append(
-                self.state.agent_runtime.run_agent_definition(
-                    member,
-                    task=self._build_member_task(
-                        team,
-                        task,
-                        team_thread_context_block=team_thread_context_block,
-                        shared_knowledge_block=shared_knowledge_block,
-                    ),
-                    label=f"{team['name']} · {member['name']}",
-                    session_key=self._child_session_key(team["teamId"], root_run_id, "member", member_id),
-                    session_id=self._child_session_id(team["teamId"], root_run_id, "member", member_id),
-                    session_title=f"Team Run · {team['name']} · {member['name']}",
-                    origin_chat_id=team["teamId"],
-                    control_scope=RunControlScope.MEMBER,
-                    team_id=team["teamId"],
-                    thread_id=thread_id,
-                    parent_run_id=root_run_id,
-                    root_run_id=root_run_id,
-                    spawn_depth=1,
-                    include_workspace_memory=False,
-                    memory_sections=team_memory_sections or [],
-                )
-            )
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for member, result in zip(members, results, strict=False):
-            if isinstance(result, BaseException):
-                raise result
-            member_results.append(result)
-            self._propose_memory_candidate(
-                root_run_id=root_run_id,
-                team=team,
-                agent=member,
-                run_result=result,
-            )
-            self.state.runs.append_event(
-                root_run_id,
-                "member_completed",
-                {"agentId": member["agentId"], "agentName": member["name"], "runId": result["run"]["runId"]},
-            )
-        return member_results
-
     def _prepare_team_run(self, team_id: str, content: str) -> tuple[dict[str, Any], str, str, str, str | None]:
         if not self.state.agent or not self.state.sessions or not self.state.runs:
             raise RuntimeError("Web team runtime is not available.")
@@ -437,17 +252,6 @@ class WebTeamRuntimeService:
         )
 
     @staticmethod
-    def _format_member_results_markdown(member_results: list[dict[str, str]]) -> str:
-        sections: list[str] = []
-        for item in member_results:
-            agent_name = str(item.get("agentName") or "member").strip()
-            content = str(item.get("content") or "").strip()
-            if not content:
-                continue
-            sections.append(f"### {agent_name}\n\n{content}")
-        return "\n\n".join(sections)
-
-    @staticmethod
     def _format_knowledge_hits_markdown(hits: list[dict[str, Any]]) -> str:
         sections: list[str] = []
         for index, hit in enumerate(hits, start=1):
@@ -473,7 +277,6 @@ class WebTeamRuntimeService:
         thread_id: str,
         team_thread_context_block: str | None = None,
     ) -> None:
-        leader = self.state.app_agents.get_agent(team["leaderAgentId"])
         shared_knowledge_result = self._retrieve_team_knowledge(team, task)
         shared_knowledge_hits = list(shared_knowledge_result.get("hits") or [])
         shared_knowledge_block = None
@@ -498,76 +301,46 @@ class WebTeamRuntimeService:
                     "hitCount": len(shared_knowledge_hits),
                 },
             )
-            member_policy = str((team.get("memberAccessPolicy") or {}).get("teamSharedKnowledge") or "explicit_only")
-            shared_memory_policy = str(
-                (team.get("memberAccessPolicy") or {}).get("teamSharedMemory") or "leader_write_member_read"
+
+            member_access_policy = team.get("memberAccessPolicy") or {}
+
+            # --- LangGraph Supervisor Execution ---
+            self.state.runs.append_event(
+                root_run_id,
+                "supervisor_started",
+                {
+                    "leaderAgentId": team["leaderAgentId"],
+                    "memberAgentIds": team.get("memberAgentIds", []),
+                },
             )
-            member_results = await self._run_member_agents(
+
+            runner = LangGraphTeamRunner(
+                agent_runtime=self.state.agent_runtime,
+                runs=self.state.runs,
+                config_runtime=self.state.config_runtime,
+            )
+            result = await runner.run(
                 team,
                 task,
-                root_run_id=root_run_id,
-                thread_id=thread_id,
+                root_run_id,
+                thread_id,
                 team_thread_context_block=team_thread_context_block,
-                shared_knowledge_block=shared_knowledge_block if member_policy == "members_read" else None,
-                team_memory_sections=team_memory_sections if shared_memory_policy == "leader_write_member_read" else [],
+                shared_knowledge_block=shared_knowledge_block,
+                team_memory_sections=team_memory_sections,
+                member_access_policy=member_access_policy,
+                propose_memory_candidate=self._propose_memory_candidate,
             )
-            compact_member_results = []
-            for item in member_results:
-                agent_id = item["run"].get("agentId")
-                agent_name = next(
-                    (
-                        run_agent["name"]
-                        for run_agent in [leader, *[self.state.app_agents.get_agent(agent_id) for agent_id in team.get("memberAgentIds", [])]]
-                        if run_agent["agentId"] == agent_id
-                    ),
-                    agent_id or "member",
-                )
-                content_preview = (
-                    (item.get("assistantMessage") or {}).get("content")
-                    or (item["run"].get("resultSummary") or {}).get("content")
-                    or ""
-                )
-                compact_member_results.append({"agentName": agent_name, "content": content_preview})
 
             self.state.runs.append_event(
                 root_run_id,
-                "leader_scheduled",
-                {"agentId": leader["agentId"], "agentName": leader["name"]},
-            )
-            leader_result = await self.state.agent_runtime.run_agent_definition(
-                leader,
-                task=self._build_leader_task(
-                    team,
-                    task,
-                    compact_member_results,
-                    team_thread_context_block=team_thread_context_block,
-                    shared_knowledge_block=shared_knowledge_block,
-                ),
-                label=f"{team['name']} · {leader['name']}",
-                session_key=self._child_session_key(team["teamId"], root_run_id, "leader", leader["agentId"]),
-                session_id=self._child_session_id(team["teamId"], root_run_id, "leader", leader["agentId"]),
-                session_title=f"Team Run · {team['name']} · Leader",
-                origin_chat_id=team["teamId"],
-                control_scope=RunControlScope.LEADER,
-                team_id=team["teamId"],
-                thread_id=thread_id,
-                parent_run_id=root_run_id,
-                root_run_id=root_run_id,
-                spawn_depth=1,
-                include_workspace_memory=str(leader.get("memoryScope") or "agent_profile") == "workspace_shared",
-                memory_sections=team_memory_sections,
-            )
-            self.state.runs.append_event(
-                root_run_id,
-                "leader_completed",
-                {"agentId": leader["agentId"], "agentName": leader["name"], "runId": leader_result["run"]["runId"]},
+                "supervisor_completed",
+                {
+                    "leaderAgentId": team["leaderAgentId"],
+                    "memberRunIds": result.member_run_ids,
+                },
             )
 
-            final_content = (
-                (leader_result.get("assistantMessage") or {}).get("content")
-                or (leader_result["run"].get("resultSummary") or {}).get("content")
-                or ""
-            )
+            final_content = result.final_content
             self._append_team_thread_message(
                 team,
                 role="assistant",
@@ -582,15 +355,14 @@ class WebTeamRuntimeService:
                     "kind": "team",
                     "team_id": team["teamId"],
                     "thread_id": thread_id,
-                    "workflow_mode": team.get("workflowMode"),
-                    "leader_agent_id": leader["agentId"],
-                    "member_count": len(member_results),
+                    "workflow_mode": "supervisor",
+                    "leader_agent_id": team["leaderAgentId"],
+                    "member_run_count": len(result.member_run_ids),
                     "shared_knowledge_hits": len(shared_knowledge_hits),
                 },
                 sections=[
                     ("Original Task", task),
                     ("Final Answer", final_content),
-                    ("Member Contributions", self._format_member_results_markdown(compact_member_results)),
                     ("Shared Knowledge", self._format_knowledge_hits_markdown(shared_knowledge_hits)),
                 ],
             )
@@ -599,8 +371,7 @@ class WebTeamRuntimeService:
                 RunResultSummary(
                     content=final_content,
                     metadata={
-                        "memberRunIds": [item["run"]["runId"] for item in member_results],
-                        "leaderRunId": leader_result["run"]["runId"],
+                        "memberRunIds": result.member_run_ids,
                         "sharedKnowledgeHitCount": len(shared_knowledge_hits),
                     },
                 ),
@@ -610,8 +381,7 @@ class WebTeamRuntimeService:
                 root_run_id,
                 "team_completed",
                 {
-                    "leaderRunId": leader_result["run"]["runId"],
-                    "memberRunIds": [item["run"]["runId"] for item in member_results],
+                    "memberRunIds": result.member_run_ids,
                     "sharedKnowledgeHitCount": len(shared_knowledge_hits),
                 },
             )

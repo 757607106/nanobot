@@ -53,6 +53,7 @@ def test_team_definition_service_crud_and_copy(tmp_path) -> None:
     assert created["teamId"] == "research-team"
     assert created["memberCount"] == 3
     assert created["leaderAgentId"] == leader["agentId"]
+    assert created["workflowMode"] == "supervisor"  # legacy mode auto-migrated
 
     fetched = service.get_team(created["teamId"])
     assert fetched["name"] == "Research Team"
@@ -66,7 +67,7 @@ def test_team_definition_service_crud_and_copy(tmp_path) -> None:
         },
     )
     assert updated["enabled"] is False
-    assert updated["workflowMode"] == "sequential_handoff"
+    assert updated["workflowMode"] == "supervisor"  # legacy mode auto-migrated
 
     copied = service.copy_team(created["teamId"])
     assert copied["name"] == "Research Team Copy"

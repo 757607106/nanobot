@@ -19,6 +19,18 @@ def default_member_access_policy() -> dict[str, Any]:
     }
 
 
+_LEGACY_WORKFLOW_MODES = {
+    "parallel_fanout": "supervisor",
+    "sequential_handoff": "supervisor",
+    "leader_summary": "supervisor",
+}
+
+
+def _migrate_workflow_mode(mode: str) -> str:
+    """Map legacy workflow modes to 'supervisor'."""
+    return _LEGACY_WORKFLOW_MODES.get(mode, mode)
+
+
 @dataclass(slots=True)
 class TeamDefinition:
     """Instance-scoped reusable team definition."""
@@ -30,7 +42,7 @@ class TeamDefinition:
     leader_agent_id: str
     description: str = ""
     member_agent_ids: list[str] = field(default_factory=list)
-    workflow_mode: str = "parallel_fanout"
+    workflow_mode: str = "supervisor"
     shared_knowledge_binding_ids: list[str] = field(default_factory=list)
     member_access_policy: dict[str, Any] = field(default_factory=default_member_access_policy)
     tags: list[str] = field(default_factory=list)
@@ -61,7 +73,7 @@ class TeamDefinition:
             leader_agent_id=stored.get("leader_agent_id") or "",
             description=stored.get("description", ""),
             member_agent_ids=list(stored.get("member_agent_ids") or []),
-            workflow_mode=stored.get("workflow_mode") or "parallel_fanout",
+            workflow_mode=_migrate_workflow_mode(stored.get("workflow_mode") or "supervisor"),
             shared_knowledge_binding_ids=list(stored.get("shared_knowledge_binding_ids") or []),
             member_access_policy=dict(stored.get("member_access_policy") or default_member_access_policy()),
             tags=list(stored.get("tags") or []),
