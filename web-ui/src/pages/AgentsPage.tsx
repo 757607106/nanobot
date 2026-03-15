@@ -4,6 +4,7 @@ import {
   App,
   Button,
   Card,
+  Collapse,
   Empty,
   Input,
   List,
@@ -434,27 +435,26 @@ export default function AgentsPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="P1 Agent 最小闭环"
-        title="数字员工 Agents"
-        description="先把单个 Agent 做成可创建、可绑定、可测试运行的闭环。Teams、知识库治理和团队时间线会在后续阶段接进来。"
+        eyebrow="协作"
+        title="AI员工"
+        description="创建员工、配置能力边界，并直接做一次试运行。高级运行参数默认收起，先把员工职责和可用能力说明白。"
         stats={[
-          { label: '已创建 Agents', value: agents.length },
+          { label: '已创建员工', value: agents.length },
           { label: '启用中', value: enabledCount },
-          { label: '最近运行', value: recentRuns.length },
-          { label: '已挂载知识库', value: knowledgeBases.length },
+          { label: '最近执行', value: recentRuns.length },
+          { label: '可用知识库', value: knowledgeBases.length },
         ]}
         badges={[
-          <Tag key="scope" color="processing">tools / MCP / skills 已接 test-run</Tag>,
-          <Tag key="rag" color="success">知识库绑定已接 agent test-run</Tag>,
+          <Tag key="scope" color="processing">支持能力绑定</Tag>,
+          <Tag key="rag" color="success">支持知识库试运行</Tag>,
         ]}
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
               刷新
             </Button>
-            <Button onClick={() => navigate('/studio/templates')}>查看模板</Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/agents/new')}>
-              新建 Agent
+              新建员工
             </Button>
           </Space>
         )}
@@ -464,13 +464,13 @@ export default function AgentsPage() {
 
       <div className="page-grid studio-agents-grid">
         <Card className="config-panel-card studio-agent-list-card">
-          <div className="config-card-header">
-            <div className="page-section-title">
-              <Typography.Title level={4}>Agent Catalog</Typography.Title>
-              <Text type="secondary">选择已有数字员工，或者创建新的执行单元。</Text>
+            <div className="config-card-header">
+              <div className="page-section-title">
+                <Typography.Title level={4}>员工列表</Typography.Title>
+                <Text type="secondary">选择已有员工，或新建一个新的 AI 员工。</Text>
+              </div>
+              <Tag color="blue">{agents.length}</Tag>
             </div>
-            <Tag color="blue">{agents.length}</Tag>
-          </div>
 
           {agents.length === 0 ? (
             <Empty
@@ -478,7 +478,7 @@ export default function AgentsPage() {
               description="当前还没有可复用 Agent。"
             >
               <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/agents/new')}>
-                创建第一个 Agent
+                创建第一个员工
               </Button>
             </Empty>
           ) : (
@@ -515,10 +515,10 @@ export default function AgentsPage() {
           <Card className="config-panel-card studio-agent-editor-card" loading={loadingDetail}>
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>{currentAgent ? 'Agent Detail' : 'New Agent'}</Typography.Title>
-                <Text type="secondary">保存角色、模型、能力边界和记忆策略。</Text>
+                <Typography.Title level={4}>{currentAgent ? '员工设置' : '新建员工'}</Typography.Title>
+                <Text type="secondary">先定义员工职责，再补充它可以使用的工具、技能和知识库。</Text>
               </div>
-              {currentAgent?.sourceTemplateName ? <Tag color="purple">模板：{currentAgent.sourceTemplateName}</Tag> : null}
+              {currentAgent?.sourceTemplateName ? <Tag color="purple">来自模板：{currentAgent.sourceTemplateName}</Tag> : null}
             </div>
 
             <div className="studio-form-grid">
@@ -532,7 +532,7 @@ export default function AgentsPage() {
               </div>
 
               <div className="studio-form-field">
-                <Text type="secondary">模型覆盖</Text>
+                <Text type="secondary">模型</Text>
                 <Input
                   value={form.model}
                   onChange={(event) => updateForm('model', event.target.value)}
@@ -540,17 +540,8 @@ export default function AgentsPage() {
                 />
               </div>
 
-              <div className="studio-form-field">
-                <Text type="secondary">Backend</Text>
-                <Input
-                  value={form.backend}
-                  onChange={(event) => updateForm('backend', event.target.value)}
-                  placeholder="可选，例如 claude_code"
-                />
-              </div>
-
               <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">描述</Text>
+                <Text type="secondary">职责说明</Text>
                 <TextArea
                   value={form.description}
                   onChange={(event) => updateForm('description', event.target.value)}
@@ -560,7 +551,7 @@ export default function AgentsPage() {
               </div>
 
               <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">System Prompt</Text>
+                <Text type="secondary">角色说明</Text>
                 <TextArea
                   value={form.systemPrompt}
                   onChange={(event) => updateForm('systemPrompt', event.target.value)}
@@ -570,7 +561,7 @@ export default function AgentsPage() {
               </div>
 
               <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">运行规则</Text>
+                <Text type="secondary">工作规则</Text>
                 <TextArea
                   value={form.rulesText}
                   onChange={(event) => updateForm('rulesText', event.target.value)}
@@ -580,7 +571,7 @@ export default function AgentsPage() {
               </div>
 
               <div className="studio-form-field">
-                <Text type="secondary">Tools</Text>
+                <Text type="secondary">工具</Text>
                 <Select
                   mode="multiple"
                   value={form.toolAllowlist}
@@ -594,18 +585,7 @@ export default function AgentsPage() {
               </div>
 
               <div className="studio-form-field">
-                <Text type="secondary">MCP</Text>
-                <Select
-                  mode="multiple"
-                  value={form.mcpServerIds}
-                  onChange={(value) => updateForm('mcpServerIds', value)}
-                  options={mcpOptions}
-                  placeholder="选择可挂载的 MCP Server"
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">Skills</Text>
+                <Text type="secondary">技能</Text>
                 <Select
                   mode="multiple"
                   value={form.skillIds}
@@ -618,21 +598,8 @@ export default function AgentsPage() {
                 />
               </div>
 
-              <div className="studio-form-field">
-                <Text type="secondary">Memory Scope</Text>
-                <Select
-                  value={form.memoryScope}
-                  onChange={(value) => updateForm('memoryScope', value)}
-                  options={[
-                    { value: 'agent_profile', label: 'agent_profile' },
-                    { value: 'team_shared', label: 'team_shared' },
-                    { value: 'workspace_shared', label: 'workspace_shared' },
-                  ]}
-                />
-              </div>
-
               <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">Knowledge Bindings</Text>
+                <Text type="secondary">可使用知识库</Text>
                 <Select
                   mode="multiple"
                   value={form.knowledgeBindingIds}
@@ -658,11 +625,55 @@ export default function AgentsPage() {
               </div>
             </div>
 
+            <Collapse
+              className="studio-inline-collapse"
+              items={[
+                {
+                  key: 'advanced',
+                  label: '高级设置',
+                  children: (
+                    <div className="studio-form-grid">
+                      <div className="studio-form-field">
+                        <Text type="secondary">外部连接</Text>
+                        <Select
+                          mode="multiple"
+                          value={form.mcpServerIds}
+                          onChange={(value) => updateForm('mcpServerIds', value)}
+                          options={mcpOptions}
+                          placeholder="选择可挂载的外部连接"
+                        />
+                      </div>
+                      <div className="studio-form-field">
+                        <Text type="secondary">记忆范围</Text>
+                        <Select
+                          value={form.memoryScope}
+                          onChange={(value) => updateForm('memoryScope', value)}
+                          options={[
+                            { value: 'agent_profile', label: '仅员工自身' },
+                            { value: 'team_shared', label: '团队共享' },
+                            { value: 'workspace_shared', label: '工作区共享' },
+                          ]}
+                        />
+                      </div>
+                      <div className="studio-form-field studio-form-field-span-2">
+                        <Text type="secondary">兼容后端</Text>
+                        <Input
+                          value={form.backend}
+                          onChange={(event) => updateForm('backend', event.target.value)}
+                          placeholder="仅在需要兼容特定运行后端时填写"
+                        />
+                      </div>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+
             <Alert
               className="studio-inline-alert"
               type="info"
               showIcon
-              message="当前版本的知识库绑定已可在 agent test-run 中触发真实检索；知识库页面、team binding 和更完整的检索治理会继续在 T59 后续阶段补齐。"
+              message="员工试运行已经会真实装配工具、技能、外部连接和知识库；高级设置默认收起，避免把运行时实现细节直接暴露给普通用户。"
             />
 
             <div className="studio-form-actions">
@@ -674,7 +685,7 @@ export default function AgentsPage() {
                   删除
                 </Button>
                 <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSave()} loading={saving}>
-                  保存 Agent
+                  保存员工
                 </Button>
               </Space>
             </div>
@@ -683,8 +694,8 @@ export default function AgentsPage() {
           <Card className="config-panel-card studio-agent-run-card">
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>Agent Test Run</Typography.Title>
-                <Text type="secondary">真实验证当前 Agent 的 prompt、model、tools、MCP、skills 和知识库检索装配。</Text>
+                <Typography.Title level={4}>员工试运行</Typography.Title>
+                <Text type="secondary">给当前员工一个真实任务，确认它的角色说明、能力绑定和知识库是否按预期工作。</Text>
               </div>
               {currentAgent ? <Tag color="blue">{currentAgent.agentId}</Tag> : <Tag>未保存</Tag>}
             </div>
@@ -708,11 +719,11 @@ export default function AgentsPage() {
                   loading={testing}
                   disabled={!currentAgent}
                 >
-                  发起测试运行
+                  开始试运行
                 </Button>
                 {currentAgent ? (
                   <Button onClick={() => void loadRecentRuns(currentAgent.agentId)} loading={loadingRuns}>
-                    刷新最近运行
+                    刷新最近执行
                   </Button>
                 ) : null}
               </Space>
@@ -728,7 +739,7 @@ export default function AgentsPage() {
             ) : null}
 
             <div className="studio-runs-header">
-              <Typography.Title level={5}>Recent Runs</Typography.Title>
+              <Typography.Title level={5}>最近执行</Typography.Title>
             </div>
 
             {loadingRuns ? (
@@ -736,7 +747,7 @@ export default function AgentsPage() {
                 <Spin />
               </div>
             ) : recentRuns.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有该 Agent 的运行记录。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个员工还没有执行记录。" />
             ) : (
               <List
                 className="studio-run-list"

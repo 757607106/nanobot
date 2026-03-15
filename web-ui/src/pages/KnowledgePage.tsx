@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Checkbox,
+  Collapse,
   Empty,
   Input,
   InputNumber,
@@ -14,6 +15,7 @@ import {
   Space,
   Spin,
   Tag,
+  Tabs,
   Typography,
 } from 'antd'
 import {
@@ -198,6 +200,7 @@ export default function KnowledgePage() {
   const [retrieveHits, setRetrieveHits] = useState<KnowledgeHit[]>([])
   const [retrieveMode, setRetrieveMode] = useState('hybrid')
   const [retrieveEffectiveMode, setRetrieveEffectiveMode] = useState<string | null>(null)
+  const [activeSection, setActiveSection] = useState<'overview' | 'ingest' | 'sources' | 'testing'>('overview')
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -709,9 +712,9 @@ export default function KnowledgePage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="T59 企业知识库第一阶段"
+        eyebrow="企业知识库"
         title="知识库"
-        description="先把知识库定义、文档接入、状态回看和检索测试做实，再继续推进 team binding、连接器同步和更完整的检索治理。"
+        description="集中管理企业资料、问答内容和网页来源，并在绑定给 AI 员工前先完成接入、校验和检索测试。"
         stats={[
           { label: '知识库总数', value: knowledgeBases.length },
           { label: '启用中', value: enabledCount },
@@ -720,8 +723,8 @@ export default function KnowledgePage() {
           { label: '最近任务', value: jobs.length },
         ]}
         badges={[
-          <Tag key="engine" color="processing">embedded SQLite / local files</Tag>,
-          <Tag key="mode">local keyword / semantic / hybrid</Tag>,
+          <Tag key="engine" color="processing">支持内容接入</Tag>,
+          <Tag key="mode">支持检索测试</Tag>,
         ]}
         actions={(
           <Space wrap>
@@ -748,8 +751,8 @@ export default function KnowledgePage() {
         <Card className="config-panel-card studio-knowledge-list-card">
           <div className="config-card-header">
             <div className="page-section-title">
-              <Typography.Title level={4}>Knowledge Catalog</Typography.Title>
-              <Text type="secondary">先选定一个知识库，再对它做入库和检索测试。</Text>
+              <Typography.Title level={4}>知识库列表</Typography.Title>
+              <Text type="secondary">先选定一个知识库，再对它做内容接入、来源治理和检索测试。</Text>
             </div>
             <Tag color="blue">{knowledgeBases.length}</Tag>
           </div>
@@ -779,8 +782,14 @@ export default function KnowledgePage() {
                     </div>
                     <Text type="secondary">{item.description || '暂未补充说明。'}</Text>
                     <div className="studio-agent-list-meta">
-                      <Tag>{item.retrievalProfile.mode}</Tag>
-                      <Tag>{item.tags.length} tags</Tag>
+                      <Tag>
+                        {item.retrievalProfile.mode === 'keyword'
+                          ? '标准'
+                          : item.retrievalProfile.mode === 'hybrid'
+                            ? '平衡'
+                            : '深度'}
+                      </Tag>
+                      <Tag>{item.tags.length} 个标签</Tag>
                     </div>
                   </div>
                 </List.Item>
@@ -790,11 +799,23 @@ export default function KnowledgePage() {
         </Card>
 
         <div className="page-stack">
+          <Tabs
+            activeKey={activeSection}
+            onChange={(value) => setActiveSection(value as 'overview' | 'ingest' | 'sources' | 'testing')}
+            items={[
+              { key: 'overview', label: '基础设置' },
+              { key: 'ingest', label: '内容接入' },
+              { key: 'sources', label: '来源与文档' },
+              { key: 'testing', label: '检索测试' },
+            ]}
+          />
+
+          {activeSection === 'overview' ? (
           <Card className="config-panel-card studio-knowledge-editor-card" loading={loadingDetail}>
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>{currentKb ? 'Knowledge Base Detail' : 'New Knowledge Base'}</Typography.Title>
-                <Text type="secondary">管理知识库名称、检索模式和切片参数。</Text>
+                <Typography.Title level={4}>{currentKb ? '知识库设置' : '新建知识库'}</Typography.Title>
+                <Text type="secondary">管理知识库名称、用途说明、检索方式和启用状态。</Text>
               </div>
               {currentKb ? <Tag color="purple">{currentKb.kbId}</Tag> : <Tag>未保存</Tag>}
             </div>
@@ -826,15 +847,15 @@ export default function KnowledgePage() {
                   value={form.mode}
                   onChange={(value) => updateForm('mode', String(value))}
                   options={[
-                    { label: 'keyword', value: 'keyword' },
-                    { label: 'hybrid', value: 'hybrid' },
-                    { label: 'semantic', value: 'semantic' },
+                    { label: '标准', value: 'keyword' },
+                    { label: '平衡', value: 'hybrid' },
+                    { label: '深度', value: 'semantic' },
                   ]}
                 />
               </div>
 
               <div className="studio-form-field">
-                <Text type="secondary">Tags</Text>
+                <Text type="secondary">标签</Text>
                 <Input
                   value={form.tags.join(', ')}
                   onChange={(event) => updateForm(
@@ -844,36 +865,49 @@ export default function KnowledgePage() {
                       .map((item) => item.trim())
                       .filter(Boolean),
                   )}
-                  placeholder="用逗号分隔，例如 support, faq, policy"
+                  placeholder="用逗号分隔，例如：客服、FAQ、制度"
                 />
               </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">Top K</Text>
-                <InputNumber min={1} max={20} value={form.topK} onChange={(value) => updateForm('topK', Number(value) || 8)} />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">Chunk Top K</Text>
-                <InputNumber min={1} max={50} value={form.chunkTopK} onChange={(value) => updateForm('chunkTopK', Number(value) || 20)} />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">Chunk Size</Text>
-                <InputNumber min={200} max={4000} value={form.chunkSize} onChange={(value) => updateForm('chunkSize', Number(value) || 800)} />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">Chunk Overlap</Text>
-                <InputNumber min={0} max={1000} value={form.chunkOverlap} onChange={(value) => updateForm('chunkOverlap', Number(value) || 120)} />
-              </div>
             </div>
+
+            <Collapse
+              className="studio-inline-collapse"
+              items={[
+                {
+                  key: 'advanced',
+                  label: '高级检索设置',
+                  children: (
+                    <div className="studio-form-grid">
+                      <div className="studio-form-field">
+                        <Text type="secondary">召回条数</Text>
+                        <InputNumber min={1} max={20} value={form.topK} onChange={(value) => updateForm('topK', Number(value) || 8)} />
+                      </div>
+
+                      <div className="studio-form-field">
+                        <Text type="secondary">片段候选数</Text>
+                        <InputNumber min={1} max={50} value={form.chunkTopK} onChange={(value) => updateForm('chunkTopK', Number(value) || 20)} />
+                      </div>
+
+                      <div className="studio-form-field">
+                        <Text type="secondary">单片段长度</Text>
+                        <InputNumber min={200} max={4000} value={form.chunkSize} onChange={(value) => updateForm('chunkSize', Number(value) || 800)} />
+                      </div>
+
+                      <div className="studio-form-field">
+                        <Text type="secondary">片段重叠</Text>
+                        <InputNumber min={0} max={1000} value={form.chunkOverlap} onChange={(value) => updateForm('chunkOverlap', Number(value) || 120)} />
+                      </div>
+                    </div>
+                  ),
+                },
+              ]}
+            />
 
             <Alert
               className="studio-inline-alert"
               type="info"
               showIcon
-              message="当前版本优先保证企业知识库主链可解释、可追踪、可测试。检索引擎已提供本地可解释的 keyword / semantic / hybrid 基线，后续再视需要接入 embedding 或 rerank。"
+              message="优先保证知识库主链可解释、可追踪、可测试。大多数场景先用默认设置即可。"
             />
 
             <div className="studio-form-actions">
@@ -895,7 +929,9 @@ export default function KnowledgePage() {
               </Space>
             </div>
           </Card>
+          ) : null}
 
+          {activeSection === 'ingest' ? (
           <Card className="config-panel-card studio-knowledge-ingest-card">
             <div className="config-card-header">
               <div className="page-section-title">
@@ -1009,7 +1045,10 @@ export default function KnowledgePage() {
               </div>
             ) : null}
           </Card>
+          ) : null}
 
+          {activeSection === 'sources' ? (
+            <>
           <Card className="config-panel-card studio-knowledge-source-card">
             <div className="config-card-header">
               <div className="page-section-title">
@@ -1082,8 +1121,8 @@ export default function KnowledgePage() {
                   <Card size="small" className="config-panel-card">
                     <div className="config-card-header">
                       <div className="page-section-title">
-                        <Typography.Title level={5}>Source Detail</Typography.Title>
-                        <Text type="secondary">在同步前先管理来源标题、启停状态，以及 URL / FAQ 的原始配置。</Text>
+                        <Typography.Title level={5}>来源详情</Typography.Title>
+                        <Text type="secondary">在同步前先管理来源标题、启停状态，以及网页地址或问答内容。</Text>
                       </div>
                       <Tag color="blue">{selectedSource.sourceType}</Tag>
                     </div>
@@ -1121,12 +1160,12 @@ export default function KnowledgePage() {
 
                       {selectedSource.sourceType === 'faq_table' ? (
                         <div className="studio-form-field studio-form-field-span-2">
-                          <Text type="secondary">FAQ JSON</Text>
+                          <Text type="secondary">问答条目</Text>
                           <TextArea
                             value={sourceEditor.faqItemsText}
                             onChange={(event) => updateSourceEditor('faqItemsText', event.target.value)}
                             rows={8}
-                            placeholder='[{"question":"...","answer":"..."}]'
+                            placeholder='[{"question":"问题","answer":"答案"}]'
                           />
                         </div>
                       ) : null}
@@ -1171,7 +1210,7 @@ export default function KnowledgePage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>文档与状态</Typography.Title>
-                  <Text type="secondary">看当前文档的入库结果、切片数和错误摘要。</Text>
+                  <Text type="secondary">查看当前文档的入库结果、片段数量和错误摘要。</Text>
                 </div>
                 <Tag>{filteredDocuments.length}/{documents.length}</Tag>
               </div>
@@ -1321,8 +1360,8 @@ export default function KnowledgePage() {
             <Card className="config-panel-card studio-knowledge-job-card">
               <div className="config-card-header">
                 <div className="page-section-title">
-                  <Typography.Title level={4}>Ingest Jobs</Typography.Title>
-                  <Text type="secondary">后台入库会留下 job 轨迹，便于回看失败阶段和处理进度。</Text>
+                  <Typography.Title level={4}>入库任务</Typography.Title>
+                  <Text type="secondary">后台入库会留下处理轨迹，便于回看失败阶段和处理进度。</Text>
                 </div>
                 <Tag>{filteredJobs.length}/{jobs.length}</Tag>
               </div>
@@ -1370,16 +1409,23 @@ export default function KnowledgePage() {
               )}
             </Card>
           </div>
+            </>
+          ) : null}
 
-          <Card className="config-panel-card studio-knowledge-retrieve-card">
+          {activeSection === 'testing' ? (
+            <Card className="config-panel-card studio-knowledge-retrieve-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>检索测试</Typography.Title>
                 <Text type="secondary">先看召回片段和 citation，再决定要不要绑定给 agent。</Text>
               </div>
-              {currentKb ? <Tag color="cyan">{retrieveMode}</Tag> : null}
+              {currentKb ? (
+                <Tag color="cyan">
+                  {retrieveMode === 'keyword' ? '标准' : retrieveMode === 'hybrid' ? '平衡' : '深度'}
+                </Tag>
+              ) : null}
               {currentKb && retrieveEffectiveMode && retrieveEffectiveMode !== retrieveMode ? (
-                <Tag color="purple">effective {retrieveEffectiveMode}</Tag>
+                <Tag color="purple">实际使用 {retrieveEffectiveMode}</Tag>
               ) : null}
             </div>
 
@@ -1401,9 +1447,9 @@ export default function KnowledgePage() {
                   value={retrieveMode}
                   onChange={(value) => setRetrieveMode(String(value))}
                   options={[
-                    { label: 'keyword', value: 'keyword' },
-                    { label: 'hybrid', value: 'hybrid' },
-                    { label: 'semantic', value: 'semantic' },
+                    { label: '标准', value: 'keyword' },
+                    { label: '平衡', value: 'hybrid' },
+                    { label: '深度', value: 'semantic' },
                   ]}
                 />
               </div>
@@ -1422,8 +1468,8 @@ export default function KnowledgePage() {
                 </Button>
                 <Text type="secondary">
                   {retrieveEffectiveMode
-                    ? `当前生效模式：${retrieveEffectiveMode}`
-                    : '当前采用本地可解释的 keyword / semantic / hybrid 检索基线。'}
+                    ? `当前使用：${retrieveEffectiveMode}`
+                    : '标准适合快速匹配，平衡适合通用问答，深度适合更宽松的语义召回。'}
                 </Text>
               </Space>
             </div>
@@ -1454,7 +1500,8 @@ export default function KnowledgePage() {
                 )}
               />
             )}
-          </Card>
+            </Card>
+          ) : null}
         </div>
       </div>
     </div>

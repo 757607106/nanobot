@@ -615,7 +615,20 @@ vi.mock('antd', async () => {
     </div>
   )
 
-  const Tabs = ({ items = [] }: Props) => (
+  const Tabs = ({ items = [], onChange }: Props) => (
+    <div>
+      {items.map((item, index) => (
+        <section key={item.key ?? index}>
+          <button type="button" onClick={() => onChange?.(item.key)}>
+            {item.label as React.ReactNode}
+          </button>
+          <div>{item.children as React.ReactNode}</div>
+        </section>
+      ))}
+    </div>
+  )
+
+  const Collapse = ({ items = [] }: Props) => (
     <div>
       {items.map((item, index) => (
         <section key={item.key ?? index}>
@@ -743,6 +756,7 @@ vi.mock('antd', async () => {
     Card,
     Checkbox,
     Col,
+    Collapse,
     ConfigProvider,
     Divider,
     Drawer,
@@ -2643,12 +2657,12 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Agents')).toBeInTheDocument()
-    expect(screen.getByText('Teams')).toBeInTheDocument()
-    expect(screen.getByText('记忆')).toBeInTheDocument()
-    expect(screen.getByText('Runs')).toBeInTheDocument()
+    expect(await screen.findByText('AI员工')).toBeInTheDocument()
+    expect(screen.getByText('团队')).toBeInTheDocument()
+    expect(screen.queryByText('记忆')).not.toBeInTheDocument()
+    expect(screen.getByText('执行记录')).toBeInTheDocument()
     expect(screen.getByText('知识库')).toBeInTheDocument()
-    expect(screen.getByText('模板')).toBeInTheDocument()
+    expect(screen.queryByText('模板')).not.toBeInTheDocument()
   })
 
   it('renders memory audit page with candidate and search panels', async () => {
@@ -2668,10 +2682,10 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('记忆审计')).toBeInTheDocument()
-    expect(screen.getByText('Candidate Queue')).toBeInTheDocument()
-    expect(screen.getByText('Unified Memory Search')).toBeInTheDocument()
-    expect(screen.getByText('Thread Replay')).toBeInTheDocument()
+    expect(await screen.findByText('团队记忆审计')).toBeInTheDocument()
+    expect(screen.getByText('候选记录')).toBeInTheDocument()
+    expect(screen.getByText('记忆检索')).toBeInTheDocument()
+    expect(screen.getByText('对话回放')).toBeInTheDocument()
   })
 
   it('renders knowledge page with catalog and retrieval panels', async () => {
@@ -2691,13 +2705,18 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Knowledge Catalog')).toBeInTheDocument()
+    expect(await screen.findByText('知识库列表')).toBeInTheDocument()
+    expect(screen.getByText('基础设置')).toBeInTheDocument()
+    expect(screen.getByText('内容接入')).toBeInTheDocument()
+    expect(screen.getByText('来源与文档')).toBeInTheDocument()
     expect(screen.getByText('检索测试')).toBeInTheDocument()
-    expect(screen.getByText('来源治理')).toBeInTheDocument()
-    expect(await screen.findByText('Support Help Center')).toBeInTheDocument()
-    expect(screen.getByText('Source Detail')).toBeInTheDocument()
-    expect(screen.getByText('选择当前筛选结果')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByText('来源与文档'))
+    expect(await screen.findByText('Support Help Center')).toBeInTheDocument()
+    expect(await screen.findByText('来源治理')).toBeInTheDocument()
+    expect(screen.getByText('来源详情')).toBeInTheDocument()
+    expect(screen.getByText('选择当前筛选结果')).toBeInTheDocument()
   })
 
   it('renders teams page with catalog and team run panels', async () => {
@@ -2717,11 +2736,17 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Team Catalog')).toBeInTheDocument()
-    expect(screen.getByText('Team Thread')).toBeInTheDocument()
-    expect(screen.getByText('Team Memory Governance')).toBeInTheDocument()
-    expect(screen.getByText('Team Test Run')).toBeInTheDocument()
+    expect(await screen.findByText('团队列表')).toBeInTheDocument()
+    expect(screen.getAllByText('团队配置').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Support Team').length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByText('团队运行'))
+    expect(await screen.findByText('团队对话')).toBeInTheDocument()
+    expect(screen.getByText('团队试运行')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('团队记忆'))
+    expect(await screen.findByText('记忆候选')).toBeInTheDocument()
+    expect(screen.getByText('保存团队记忆')).toBeInTheDocument()
   })
 
   it('renders runs page with detail and timeline panels', async () => {
@@ -2741,10 +2766,10 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Run Catalog')).toBeInTheDocument()
-    expect(screen.getByText('Thread Audit')).toBeInTheDocument()
-    expect(screen.getByText('Event Timeline')).toBeInTheDocument()
-    expect(screen.getByText('Run Artifact')).toBeInTheDocument()
+    expect(await screen.findByText('执行列表')).toBeInTheDocument()
+    expect(screen.getByText('对话记录')).toBeInTheDocument()
+    expect(screen.getByText('过程记录')).toBeInTheDocument()
+    expect(screen.getByText('结果文档')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB validation').length).toBeGreaterThan(0)
   })
 

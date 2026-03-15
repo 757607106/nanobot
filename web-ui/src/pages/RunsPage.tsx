@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Empty, List, Select, Space, Spin, Tag, Typography } from 'antd'
+import { Alert, App, Button, Card, Collapse, Empty, List, Select, Space, Spin, Tag, Typography } from 'antd'
 import { PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
@@ -347,16 +347,16 @@ export default function RunsPage() {
       <PageHero
         className="page-hero-compact studio-hero"
         eyebrow="运行观测"
-        title="Runs"
-        description="当前已经覆盖 agent / subagent / 首版 team run。活动中的运行会自动刷新，方便直接追踪 leader/member fan-out、team thread 和回收汇总。"
+        title="执行记录"
+        description="查看 AI 员工和团队任务的执行过程、结果摘要和失败原因。运行中的任务会自动刷新。"
         stats={[
           { label: '当前列表', value: runs.length },
           { label: '运行中', value: activeCount },
           { label: '失败', value: failedCount },
         ]}
         badges={[
-          <Tag key="registry" color="processing">instance-scoped run registry</Tag>,
-          <Tag key="runtime" color="geekblue">team root run + child runs</Tag>,
+          <Tag key="registry" color="processing">支持任务追踪</Tag>,
+          <Tag key="runtime" color="geekblue">支持团队执行树</Tag>,
         ]}
         actions={(
           <Space wrap>
@@ -392,8 +392,8 @@ export default function RunsPage() {
         <Card className="config-panel-card studio-runs-list-card">
           <div className="config-card-header">
             <div className="page-section-title">
-              <Typography.Title level={4}>Run Catalog</Typography.Title>
-              <Text type="secondary">按状态和类型筛选，优先看最近的运行。</Text>
+              <Typography.Title level={4}>执行列表</Typography.Title>
+              <Text type="secondary">按状态和类型筛选，优先查看最近的执行记录。</Text>
             </div>
             <Tag color="blue">{runs.length}</Tag>
           </div>
@@ -461,7 +461,7 @@ export default function RunsPage() {
                     <div className="studio-agent-list-meta">
                       {run.agentId ? <Tag>{run.agentId}</Tag> : null}
                       {run.teamId ? <Tag>{run.teamId}</Tag> : null}
-                      {typeof run.childrenCount === 'number' ? <Tag>{run.childrenCount} children</Tag> : null}
+                      {typeof run.childrenCount === 'number' ? <Tag>{run.childrenCount} 个子任务</Tag> : null}
                     </div>
                     {run.lastErrorMessage ? <Text type="danger">{run.lastErrorMessage}</Text> : null}
                   </div>
@@ -475,8 +475,8 @@ export default function RunsPage() {
           <Card className="config-panel-card" loading={loadingDetail}>
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>{selectedRun ? selectedRun.label : 'Run Detail'}</Typography.Title>
-                <Text type="secondary">查看当前 run 的状态、作用域、错误摘要和结果摘要。</Text>
+                <Typography.Title level={4}>{selectedRun ? selectedRun.label : '执行详情'}</Typography.Title>
+                <Text type="secondary">查看当前执行的状态、任务摘要、结果摘要和失败原因。</Text>
               </div>
               {selectedRun ? <Tag color="purple">{selectedRun.runId}</Tag> : <Tag>未选择</Tag>}
             </div>
@@ -495,36 +495,12 @@ export default function RunsPage() {
                     <Tag>{selectedRun.kind}</Tag>
                   </div>
                   <div className="studio-form-field">
-                    <Text type="secondary">Agent</Text>
+                    <Text type="secondary">员工</Text>
                     <Text>{selectedRun.agentId || '未绑定'}</Text>
                   </div>
                   <div className="studio-form-field">
-                    <Text type="secondary">Team</Text>
+                    <Text type="secondary">团队</Text>
                     <Text>{selectedRun.teamId || '未绑定'}</Text>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">Session Key</Text>
-                    <Text>{selectedRun.sessionKey || '无'}</Text>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">Thread</Text>
-                    <Text>{selectedRun.threadId || '无'}</Text>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">Parent Run</Text>
-                    <Text>{selectedRun.parentRunId || '无'}</Text>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">Root Run</Text>
-                    <Text>{selectedRun.rootRunId || selectedRun.runId}</Text>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">控制作用域</Text>
-                    <Text>{selectedRun.controlScope}</Text>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">Spawn Depth</Text>
-                    <Text>{selectedRun.spawnDepth}</Text>
                   </div>
                 </div>
 
@@ -532,6 +508,44 @@ export default function RunsPage() {
                   <Text type="secondary">任务摘要</Text>
                   <Paragraph className="studio-run-preview">{selectedRun.taskPreview}</Paragraph>
                 </div>
+
+                <Collapse
+                  className="studio-inline-collapse"
+                  items={[
+                    {
+                      key: 'tech',
+                      label: '技术详情',
+                      children: (
+                        <div className="studio-run-detail-grid">
+                          <div className="studio-form-field">
+                            <Text type="secondary">Session Key</Text>
+                            <Text>{selectedRun.sessionKey || '无'}</Text>
+                          </div>
+                          <div className="studio-form-field">
+                            <Text type="secondary">Thread</Text>
+                            <Text>{selectedRun.threadId || '无'}</Text>
+                          </div>
+                          <div className="studio-form-field">
+                            <Text type="secondary">Parent Run</Text>
+                            <Text>{selectedRun.parentRunId || '无'}</Text>
+                          </div>
+                          <div className="studio-form-field">
+                            <Text type="secondary">Root Run</Text>
+                            <Text>{selectedRun.rootRunId || selectedRun.runId}</Text>
+                          </div>
+                          <div className="studio-form-field">
+                            <Text type="secondary">控制作用域</Text>
+                            <Text>{selectedRun.controlScope}</Text>
+                          </div>
+                          <div className="studio-form-field">
+                            <Text type="secondary">Spawn Depth</Text>
+                            <Text>{selectedRun.spawnDepth}</Text>
+                          </div>
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
 
                 {selectedRun.resultSummary?.content ? (
                   <div className="studio-run-result">
@@ -556,17 +570,17 @@ export default function RunsPage() {
                     </Button>
                     {selectedRun.teamId ? (
                       <Button onClick={() => navigate(`/studio/teams/${selectedRun.teamId}`)}>
-                        查看 Team
+                        查看团队
                       </Button>
                     ) : null}
                     {selectedRun.rootRunId && selectedRun.rootRunId !== selectedRun.runId ? (
                       <Button onClick={() => navigate(`/studio/runs/${selectedRun.rootRunId}`)}>
-                        跳到 Root Run
+                        查看根任务
                       </Button>
                     ) : null}
                     {selectedRun.teamId ? (
                       <Button onClick={() => navigate(`/studio/memory/${selectedRun.teamId}`)}>
-                        查看 Memory 审计
+                        查看团队记忆
                       </Button>
                     ) : null}
                     <Button
@@ -576,7 +590,7 @@ export default function RunsPage() {
                       loading={cancelling}
                       disabled={!isCancelable(selectedRun.status)}
                     >
-                      请求取消
+                      请求停止
                     </Button>
                   </Space>
                 </div>
@@ -588,14 +602,14 @@ export default function RunsPage() {
             <Card className="config-panel-card">
               <div className="config-card-header">
                 <div className="page-section-title">
-                  <Typography.Title level={4}>Children</Typography.Title>
-                  <Text type="secondary">直接子运行，方便先看这一层 fan-out。</Text>
+                  <Typography.Title level={4}>子任务</Typography.Title>
+                  <Text type="secondary">查看当前执行直接派生出来的子任务。</Text>
                 </div>
                 <Tag>{children.length}</Tag>
               </div>
 
               {children.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前 run 没有直接 children。" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行没有直接子任务。" />
               ) : (
                 <List
                   className="studio-run-list"
@@ -624,8 +638,8 @@ export default function RunsPage() {
             <Card className="config-panel-card">
               <div className="config-card-header">
                 <div className="page-section-title">
-                  <Typography.Title level={4}>Run Tree</Typography.Title>
-                  <Text type="secondary">从 root run 回看 leader/member 结构，避免只看扁平列表。</Text>
+                  <Typography.Title level={4}>任务树</Typography.Title>
+                  <Text type="secondary">从整棵任务树回看负责人和成员是如何协作完成的。</Text>
                 </div>
                 {runTree ? <Tag>{runTree.runId}</Tag> : null}
               </div>
@@ -642,30 +656,30 @@ export default function RunsPage() {
 
           <Card className="config-panel-card">
             <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>Thread Audit</Typography.Title>
-                <Text type="secondary">把当前 team run 所属 thread 的最近消息拉到 Runs 内，方便直接核对线程上下文。</Text>
+                <div className="page-section-title">
+                <Typography.Title level={4}>对话记录</Typography.Title>
+                <Text type="secondary">把当前团队任务所属的最近对话拉到这里，方便直接核对上下文。</Text>
               </div>
               {threadSummary?.threadId ? <Tag color="cyan">{threadSummary.threadId}</Tag> : null}
             </div>
 
             {!selectedRun?.teamId || !selectedRun.threadId ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前 run 没有可审计的 team thread。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行没有可查看的团队对话。" />
             ) : loadingThreadAudit ? (
               <div className="center-box">
                 <Spin />
               </div>
             ) : threadMessages.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前 thread 还没有可回看的消息。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前对话还没有可回看的消息。" />
             ) : (
               <div className="page-stack">
                 <div className="studio-form-actions">
                   <Space wrap>
                     <Button onClick={() => void loadRunDetail(selectedRun.runId)} loading={loadingDetail}>
-                      刷新 Thread
+                      刷新对话
                     </Button>
                     <Button onClick={() => navigate(`/studio/runs?threadId=${encodeURIComponent(selectedRun.threadId || '')}`)}>
-                      按 Thread 过滤 Runs
+                      按对话筛选
                     </Button>
                   </Space>
                 </div>
@@ -677,7 +691,7 @@ export default function RunsPage() {
                       <div className="studio-run-list-copy">
                         <div className="studio-run-list-head">
                           <Space wrap>
-                            <strong>{item.role === 'user' ? 'User Turn' : item.role === 'assistant' ? 'Team Reply' : item.role}</strong>
+                            <strong>{item.role === 'user' ? '用户消息' : item.role === 'assistant' ? '团队回复' : item.role}</strong>
                             <Tag color={item.role === 'user' ? 'blue' : 'success'}>{item.role}</Tag>
                           </Space>
                           <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
@@ -695,15 +709,15 @@ export default function RunsPage() {
 
           <Card className="config-panel-card">
             <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>Event Timeline</Typography.Title>
-                <Text type="secondary">活动中的 run 会自动刷新，适合直接追踪 team orchestration 的过程。</Text>
+                <div className="page-section-title">
+                <Typography.Title level={4}>过程记录</Typography.Title>
+                <Text type="secondary">这里按时间记录执行过程中发生了什么，适合排查失败和回看协作过程。</Text>
               </div>
               {selectedRun ? <Tag>{selectedRun.events?.length || 0}</Tag> : null}
             </div>
 
             {!selectedRun?.events?.length ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前 run 还没有事件记录。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行还没有过程记录。" />
             ) : (
               <List
                 className="studio-event-list"
@@ -732,9 +746,9 @@ export default function RunsPage() {
 
           <Card className="config-panel-card">
             <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>Run Artifact</Typography.Title>
-                <Text type="secondary">把这次运行的关键结果归档成 Markdown，方便回看和导出。</Text>
+                <div className="page-section-title">
+                <Typography.Title level={4}>结果文档</Typography.Title>
+                <Text type="secondary">把这次执行的关键结果归档成 Markdown，方便回看和导出。</Text>
               </div>
               {selectedRun?.artifactPath ? <Tag>{selectedRun.artifactPath}</Tag> : null}
             </div>
@@ -746,13 +760,13 @@ export default function RunsPage() {
                 <Spin />
               </div>
             ) : !artifact ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前运行还没有可读取的 artifact。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行还没有可读取的结果文档。" />
             ) : (
               <div className="page-stack">
                 <div className="studio-form-actions">
                   <Space wrap>
                     <Button onClick={() => void loadRunDetail(selectedRun.runId)} loading={loadingDetail}>
-                      刷新 Artifact
+                      刷新结果文档
                     </Button>
                     <Button onClick={handleDownloadArtifact}>
                       下载 Markdown

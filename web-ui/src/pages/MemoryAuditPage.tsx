@@ -247,9 +247,9 @@ export default function MemoryAuditPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="T57 记忆治理"
-        title="记忆审计"
-        description="把团队共享记忆、候选记忆、线程回放和统一检索拉到同一张审计台上，先把可追溯性做实，再继续推进语义层。"
+        eyebrow="团队记忆"
+        title="团队记忆审计"
+        description="回看团队共享记忆、候选内容、对话记录和检索结果，帮助你核对团队记忆是否准确。"
         stats={[
           { label: '团队数', value: teams.length },
           { label: '待审候选', value: pendingCount },
@@ -257,8 +257,8 @@ export default function MemoryAuditPage() {
           { label: '最近 Runs', value: recentRuns.length },
         ]}
         badges={[
-          <Tag key="mode" color="processing">local semantic audit desk</Tag>,
-          <Tag key="scope">team memory + thread + artifacts</Tag>,
+          <Tag key="mode" color="processing">支持候选审核</Tag>,
+          <Tag key="scope">支持记忆检索</Tag>,
         ]}
         actions={(
           <Space wrap>
@@ -280,8 +280,8 @@ export default function MemoryAuditPage() {
         <Card className="config-panel-card studio-agent-list-card">
           <div className="config-card-header">
             <div className="page-section-title">
-              <Typography.Title level={4}>Team Scope</Typography.Title>
-              <Text type="secondary">先选定一个团队，再审计它的共享长期记忆和短期线程。</Text>
+              <Typography.Title level={4}>团队列表</Typography.Title>
+              <Text type="secondary">先选定一个团队，再查看它的共享记忆和团队对话。</Text>
             </div>
             <Tag color="blue">{teams.length}</Tag>
           </div>
@@ -325,8 +325,8 @@ export default function MemoryAuditPage() {
           <Card className="config-panel-card" loading={loadingDetail}>
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>Audit Snapshot</Typography.Title>
-                <Text type="secondary">先看当前团队的共享长期记忆和线程规模，再决定从哪一块继续排查。</Text>
+                <Typography.Title level={4}>审计概览</Typography.Title>
+                <Text type="secondary">先看当前团队的共享记忆、最近执行和对话规模，再决定从哪一块继续排查。</Text>
               </div>
               {currentTeam ? <Tag color="purple">{currentTeam.teamId}</Tag> : <Tag>未选择</Tag>}
             </div>
@@ -394,11 +394,11 @@ export default function MemoryAuditPage() {
 
           <div className="page-grid studio-knowledge-detail-grid">
             <Card className="config-panel-card" loading={loadingDetail}>
-              <div className="config-card-header">
-                <div className="page-section-title">
-                  <Typography.Title level={4}>Candidate Queue</Typography.Title>
-                  <Text type="secondary">把候选记忆和状态变化独立拉出来，避免只能在 Teams 详情里零碎处理。</Text>
-                </div>
+                <div className="config-card-header">
+                  <div className="page-section-title">
+                    <Typography.Title level={4}>候选记录</Typography.Title>
+                    <Text type="secondary">把候选记忆和状态变化独立拉出来，方便集中审核和处理。</Text>
+                  </div>
                 <Tag color={pendingCount > 0 ? 'processing' : 'default'}>{filteredCandidates.length}/{memoryCandidates.length}</Tag>
               </div>
 
@@ -457,18 +457,18 @@ export default function MemoryAuditPage() {
             </Card>
 
             <Card className="config-panel-card" loading={loadingDetail}>
-              <div className="config-card-header">
-                <div className="page-section-title">
-                  <Typography.Title level={4}>Thread Replay</Typography.Title>
-                  <Text type="secondary">这里回看团队级多轮短期记忆，方便核对某条候选记忆究竟来自哪次上下文。</Text>
-                </div>
-                {teamThread ? <Tag color="cyan">{teamThread.session.messageCount} messages</Tag> : null}
+                <div className="config-card-header">
+                  <div className="page-section-title">
+                    <Typography.Title level={4}>对话回放</Typography.Title>
+                    <Text type="secondary">这里回看团队级多轮对话，方便核对某条候选记忆究竟来自哪次上下文。</Text>
+                  </div>
+                {teamThread ? <Tag color="cyan">{teamThread.session.messageCount} 条消息</Tag> : null}
               </div>
 
               {!currentTeam ? (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择一个 Team。" />
               ) : teamThreadMessages.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个 Team 还没有 thread 消息。" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个团队还没有对话记录。" />
               ) : (
                 <List
                   className="studio-run-list"
@@ -478,7 +478,7 @@ export default function MemoryAuditPage() {
                       <div className="studio-run-list-copy">
                         <div className="studio-run-list-head">
                           <Space wrap>
-                            <strong>{item.role === 'user' ? 'User Turn' : 'Team Reply'}</strong>
+                            <strong>{item.role === 'user' ? '用户消息' : '团队回复'}</strong>
                             <Tag color={item.role === 'user' ? 'blue' : 'success'}>{item.role}</Tag>
                           </Space>
                           <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
@@ -497,8 +497,8 @@ export default function MemoryAuditPage() {
           <Card className="config-panel-card" loading={loadingDetail}>
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>Unified Memory Search</Typography.Title>
-                <Text type="secondary">在一处检索 team memory、候选记忆、thread transcript 和 run artifacts，先把证据链串起来。</Text>
+                <Typography.Title level={4}>记忆检索</Typography.Title>
+                <Text type="secondary">在一处检索团队记忆、候选内容、团队对话和结果文档，先把证据链串起来。</Text>
               </div>
               {currentTeam ? <Tag color="blue">{currentTeam.name}</Tag> : null}
             </div>
@@ -525,15 +525,15 @@ export default function MemoryAuditPage() {
                 value={memorySearchMode}
                 onChange={(value) => setMemorySearchMode(String(value))}
                 options={[
-                  { label: 'keyword', value: 'keyword' },
-                  { label: 'hybrid', value: 'hybrid' },
-                  { label: 'semantic', value: 'semantic' },
+                  { label: '标准', value: 'keyword' },
+                  { label: '平衡', value: 'hybrid' },
+                  { label: '深度', value: 'semantic' },
                 ]}
               />
               <Text type="secondary">
                 {memorySearchEffectiveMode
-                  ? `当前生效模式：${memorySearchEffectiveMode}`
-                  : '当前采用本地可解释的 keyword / semantic / hybrid 检索基线。'}
+                  ? `当前使用：${memorySearchEffectiveMode}`
+                  : '标准适合快速查找，平衡适合通用检索，深度适合更宽松的语义召回。'}
               </Text>
             </div>
 

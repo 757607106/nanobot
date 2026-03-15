@@ -2,15 +2,19 @@ import { Tabs } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 const studioRoutes = [
-  { key: '/studio/agents', label: 'Agents' },
-  { key: '/studio/teams', label: 'Teams' },
-  { key: '/studio/memory', label: '记忆' },
-  { key: '/studio/runs', label: 'Runs' },
+  { key: '/studio/agents', label: 'AI员工' },
+  { key: '/studio/teams', label: '团队' },
+  { key: '/studio/runs', label: '执行记录' },
   { key: '/studio/knowledge', label: '知识库' },
-  { key: '/studio/templates', label: '模板' },
 ]
 
 function resolveActiveKey(pathname: string) {
+  if (pathname === '/studio/memory' || pathname.startsWith('/studio/memory/')) {
+    return '/studio/teams'
+  }
+  if (pathname === '/studio/templates' || pathname.startsWith('/studio/templates/')) {
+    return '/studio/agents'
+  }
   const matched = studioRoutes.find((item) => pathname === item.key || pathname.startsWith(`${item.key}/`))
   return matched?.key ?? '/studio/agents'
 }
