@@ -14,6 +14,7 @@ from nanobot.platform.teams import (
     TeamDefinitionValidationError,
 )
 from nanobot.web.http import APIError, _json_response, _ok
+from nanobot.web.tenant_context import get_tenant_id
 
 router = APIRouter()
 
@@ -31,7 +32,8 @@ def list_teams(
     request: Request,
     enabled: bool | None = Query(default=None),
 ) -> JSONResponse:
-    return _json_response(200, _ok(request.app.state.teams.list_teams(enabled=enabled)))
+    tenant_id = get_tenant_id(request)
+    return _json_response(200, _ok(request.app.state.teams.list_teams(tenant_id=tenant_id, enabled=enabled)))
 
 
 @router.post("/api/v1/teams")
@@ -40,7 +42,8 @@ def create_team(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        data = request.app.state.teams.create_team(payload)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.teams.create_team(payload, tenant_id=tenant_id)
     except TeamDefinitionConflictError as exc:
         raise APIError(409, "TEAM_CONFLICT", str(exc)) from exc
     except TeamDefinitionValidationError as exc:
@@ -172,4 +175,5 @@ async def retry_team_run(
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     except ValueError as exc:
         raise APIError(400, "TEAM_RUN_RETRY_INVALID", str(exc)) from exc
+    return _json_response(200, _ok(data))
     return _json_response(200, _ok(data))

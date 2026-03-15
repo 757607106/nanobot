@@ -14,6 +14,7 @@ from nanobot.platform.agents import (
     AgentDefinitionValidationError,
 )
 from nanobot.web.http import APIError, _json_response, _ok
+from nanobot.web.tenant_context import get_tenant_id
 
 router = APIRouter()
 
@@ -44,7 +45,8 @@ def list_agents(
     request: Request,
     enabled: bool | None = Query(default=None),
 ) -> JSONResponse:
-    return _json_response(200, _ok(request.app.state.agents.list_agents(enabled=enabled)))
+    tenant_id = get_tenant_id(request)
+    return _json_response(200, _ok(request.app.state.agents.list_agents(tenant_id=tenant_id, enabled=enabled)))
 
 
 @router.post("/api/v1/agents")
@@ -53,8 +55,10 @@ def create_agent(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
+        tenant_id = get_tenant_id(request)
         data = request.app.state.agents.create_agent(
             payload,
+            tenant_id=tenant_id,
             default_model=request.app.state.web.config.agents.defaults.model,
             default_tools=_default_tools(request),
             template_snapshot=_resolve_template_snapshot(request, payload),
@@ -148,4 +152,5 @@ async def test_run_agent(
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     except ValueError as exc:
         raise APIError(400, "AGENT_TEST_RUN_INVALID", str(exc)) from exc
+    return _json_response(200, _ok(data))
     return _json_response(200, _ok(data))

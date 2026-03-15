@@ -97,6 +97,12 @@ class PlatformInstance:
     def mcp_registry_path(self) -> Path:
         return self.data_dir / "web-mcp-registry.json"
 
+    def tenants_db_path(self) -> Path:
+        return self.data_dir / "web-tenants.db"
+
+    def channel_bindings_db_path(self) -> Path:
+        return self.data_dir / "web-channel-bindings.db"
+
     def mcp_installs_dir(self) -> Path:
         return ensure_dir(self.data_dir / "mcp-installs")
 

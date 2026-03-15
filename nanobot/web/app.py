@@ -16,22 +16,28 @@ from nanobot import __version__
 from nanobot.config.loader import get_config_path
 from nanobot.config.schema import Config
 from nanobot.platform.agents import AgentDefinitionService, AgentDefinitionStore
+from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBindingStore
 from nanobot.platform.instances import PlatformInstanceService
-from nanobot.platform.memory import TeamMemoryService, TeamMemoryStore
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
+from nanobot.platform.memory import TeamMemoryService, TeamMemoryStore
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.platform.teams import TeamDefinitionService, TeamDefinitionStore
+from nanobot.platform.tenants import TenantService, TenantStore
 from nanobot.web.auth import SESSION_COOKIE_NAME, WebAuthManager
-from nanobot.web.channels import WebChannelService
 from nanobot.web.channel_testing import WebChannelTestService
+from nanobot.web.channels import WebChannelService
 from nanobot.web.frontend import (
     _frontend_dev_is_ready,
     _resolve_frontend_source_dir,
     _resolve_npm_command,
     _resolve_static_dir,
-    _run_frontend_dev_server as _frontend_run_frontend_dev_server,
-    _run_static_server as _frontend_run_static_server,
     _static_response,
+)
+from nanobot.web.frontend import (
+    _run_frontend_dev_server as _frontend_run_frontend_dev_server,
+)
+from nanobot.web.frontend import (
+    _run_static_server as _frontend_run_static_server,
 )
 from nanobot.web.http import APIError, _err, _json_response
 from nanobot.web.mcp_registry import WebMCPRegistryManager
@@ -41,20 +47,23 @@ from nanobot.web.operations import WebOperationsService
 from nanobot.web.routers import (
     agents_router,
     auth_router,
-    chat_router,
+    channel_bindings_router,
     channels_router,
+    chat_router,
     knowledge_router,
-    memory_router,
     mcp_router,
+    memory_router,
     operations_router,
     runs_router,
     schedule_router,
     setup_router,
     teams_router,
+    tenants_router,
     workspace_router,
 )
 from nanobot.web.runtime import WebAppState
 from nanobot.web.setup import WebSetupManager
+from nanobot.web.tenant_context import tenant_auth_middleware
 from nanobot.web.whatsapp_binding import WebWhatsAppBindingService
 
 
@@ -95,6 +104,13 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         RunStore(instance.agent_runs_db_path()),
         instance_id=instance.id,
         artifact_dir=instance.agent_artifacts_dir(),
+    )
+    tenants_service = TenantService(TenantStore(instance.tenants_db_path()))
+    channel_bindings_service = ChannelBindingService(
+        ChannelBindingStore(instance.channel_bindings_db_path()),
+        instance_id=instance.id,
+        agent_lookup=agents.require_agent,
+        team_lookup=teams.require_team,
     )
 
     def build_team_artifact_sources(team_id: str) -> list[dict[str, Any]]:
@@ -148,6 +164,8 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         app.state.teams = teams
         app.state.runs = runs
         app.state.setup = setup
+        app.state.tenants_service = tenants_service
+        app.state.channel_bindings_service = channel_bindings_service
         try:
             memory.bind_runtime_sources(
                 team_thread_source_loader=app.state.web.team_runtime.get_team_thread_memory_source,
@@ -179,6 +197,8 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.state.teams = teams
     app.state.runs = runs
     app.state.setup = setup
+    app.state.tenants_service = tenants_service
+    app.state.channel_bindings_service = channel_bindings_service
 
     @app.exception_handler(APIError)
     async def handle_api_error(_request: Request, exc: APIError) -> JSONResponse:
@@ -212,15 +232,23 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
             if path.startswith("/api/v1/auth/"):
                 response.headers["Cache-Control"] = "no-store"
             return response
+        # If tenant context was set via API key, skip cookie auth
+        tenant_ctx = getattr(request.state, "tenant", None)
+        if tenant_ctx is not None and tenant_ctx.key_id is not None:
+            return await call_next(request)
         if not request.app.state.auth.get_authenticated_user(request.cookies.get(SESSION_COOKIE_NAME)):
             return _json_response(401, _err("AUTH_REQUIRED", "Authentication required."))
         return await call_next(request)
+
+    # Tenant auth middleware runs before enforce_web_auth (registered after = runs first)
+    app.middleware("http")(tenant_auth_middleware)
 
     app.include_router(agents_router)
     app.include_router(auth_router)
     app.include_router(setup_router)
     app.include_router(mcp_router)
     app.include_router(channels_router)
+    app.include_router(channel_bindings_router)
     app.include_router(knowledge_router)
     app.include_router(memory_router)
     app.include_router(operations_router)
@@ -228,6 +256,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.include_router(schedule_router)
     app.include_router(workspace_router)
     app.include_router(teams_router)
+    app.include_router(tenants_router)
     app.include_router(chat_router)
 
     @app.api_route(

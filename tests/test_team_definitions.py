@@ -18,6 +18,7 @@ def _create_agent(service: AgentDefinitionService, name: str) -> dict:
             "name": name,
             "systemPrompt": f"You are {name}.",
         },
+        tenant_id="default",
         default_model="deepseek/deepseek-chat",
         default_tools=["read_file", "write_file"],
         template_snapshot=None,
@@ -43,17 +44,16 @@ def test_team_definition_service_crud_and_copy(tmp_path) -> None:
         {
             "name": "Research Team",
             "description": "Handle research and review.",
-            "leaderAgentId": leader["agentId"],
+            "supervisorAgentId": leader["agentId"],
             "memberAgentIds": [researcher["agentId"], reviewer["agentId"]],
-            "workflowMode": "parallel_fanout",
             "sharedKnowledgeBindingIds": ["kb-shared"],
             "tags": ["research"],
-        }
+        },
+        tenant_id="default",
     )
     assert created["teamId"] == "research-team"
     assert created["memberCount"] == 3
-    assert created["leaderAgentId"] == leader["agentId"]
-    assert created["workflowMode"] == "supervisor"  # legacy mode auto-migrated
+    assert created["supervisorAgentId"] == leader["agentId"]
 
     fetched = service.get_team(created["teamId"])
     assert fetched["name"] == "Research Team"
@@ -62,12 +62,10 @@ def test_team_definition_service_crud_and_copy(tmp_path) -> None:
         created["teamId"],
         {
             "description": "Updated description",
-            "workflowMode": "sequential_handoff",
             "enabled": False,
         },
     )
     assert updated["enabled"] is False
-    assert updated["workflowMode"] == "supervisor"  # legacy mode auto-migrated
 
     copied = service.copy_team(created["teamId"])
     assert copied["name"] == "Research Team Copy"
@@ -76,7 +74,7 @@ def test_team_definition_service_crud_and_copy(tmp_path) -> None:
     enabled = service.set_enabled(created["teamId"], True)
     assert enabled["enabled"] is True
 
-    listed = service.list_teams()
+    listed = service.list_teams(tenant_id="default")
     assert len(listed) == 2
 
     assert service.delete_team(created["teamId"]) is True
@@ -101,9 +99,10 @@ def test_team_definition_service_validates_agent_membership_and_conflicts(tmp_pa
     created = service.create_team(
         {
             "name": "Delivery Team",
-            "leaderAgentId": leader["agentId"],
+            "supervisorAgentId": leader["agentId"],
             "memberAgentIds": [member["agentId"]],
-        }
+        },
+        tenant_id="default",
     )
     assert created["teamId"] == "delivery-team"
 
@@ -111,23 +110,26 @@ def test_team_definition_service_validates_agent_membership_and_conflicts(tmp_pa
         service.create_team(
             {
                 "name": "Delivery Team",
-                "leaderAgentId": leader["agentId"],
-            }
+                "supervisorAgentId": leader["agentId"],
+            },
+            tenant_id="default",
         )
 
     with pytest.raises(TeamDefinitionValidationError):
         service.create_team(
             {
                 "name": "Invalid Team",
-                "leaderAgentId": "missing-agent",
-            }
+                "supervisorAgentId": "missing-agent",
+            },
+            tenant_id="default",
         )
 
     with pytest.raises(TeamDefinitionValidationError):
         service.create_team(
             {
                 "name": "Self Referencing Team",
-                "leaderAgentId": leader["agentId"],
+                "supervisorAgentId": leader["agentId"],
                 "memberAgentIds": [leader["agentId"]],
-            }
+            },
+            tenant_id="default",
         )

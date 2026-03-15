@@ -6,7 +6,12 @@ import re
 from dataclasses import replace
 from typing import Any, Callable
 
-from nanobot.platform.teams.models import TeamDefinition, _migrate_workflow_mode, default_member_access_policy, now_iso
+from nanobot.platform.teams.models import (
+    SupervisorConfig,
+    TeamDefinition,
+    default_member_access_policy,
+    now_iso,
+)
 from nanobot.platform.teams.store import TeamDefinitionStore
 
 
@@ -30,21 +35,17 @@ def _slugify(value: str) -> str:
 class TeamDefinitionService:
     """Instance-scoped CRUD service for team definitions."""
 
-    _ALLOWED_WORKFLOW_MODES = {
-        "supervisor",
-    }
+    _ALLOWED_RESPONSE_MODES = {"synthesize", "last_member", "custom"}
 
     def __init__(
         self,
         store: TeamDefinitionStore,
         *,
         instance_id: str,
-        tenant_id: str = "default",
         agent_lookup: Callable[[str], Any] | None = None,
     ):
         self.store = store
         self.instance_id = instance_id
-        self.tenant_id = tenant_id
         self.agent_lookup = agent_lookup
 
     @staticmethod
@@ -91,8 +92,49 @@ class TeamDefinitionService:
             normalized[name] = item
         return normalized or default_member_access_policy()
 
-    def _ensure_unique_name(self, name: str, *, exclude_team_id: str | None = None) -> None:
-        existing = self.store.get_by_name(name, tenant_id=self.tenant_id, instance_id=self.instance_id)
+    def _normalize_supervisor_config(self, value: Any) -> SupervisorConfig:
+        if value is None:
+            return SupervisorConfig()
+        if not isinstance(value, dict):
+            raise TeamDefinitionValidationError("supervisorConfig must be an object.")
+        recursion_limit = value.get("recursionLimit") or value.get("recursion_limit") or 25
+        try:
+            recursion_limit = int(recursion_limit)
+        except (TypeError, ValueError) as exc:
+            raise TeamDefinitionValidationError("recursionLimit must be an integer.") from exc
+        if recursion_limit < 5 or recursion_limit > 100:
+            raise TeamDefinitionValidationError("recursionLimit must be between 5 and 100.")
+
+        max_calls = value.get("maxMemberCallsPerRun") or value.get("max_member_calls_per_run") or 20
+        try:
+            max_calls = int(max_calls)
+        except (TypeError, ValueError) as exc:
+            raise TeamDefinitionValidationError("maxMemberCallsPerRun must be an integer.") from exc
+        if max_calls < 1 or max_calls > 50:
+            raise TeamDefinitionValidationError("maxMemberCallsPerRun must be between 1 and 50.")
+
+        response_mode = str(
+            value.get("responseMode") or value.get("response_mode") or "synthesize"
+        ).strip()
+        if response_mode not in self._ALLOWED_RESPONSE_MODES:
+            allowed = ", ".join(sorted(self._ALLOWED_RESPONSE_MODES))
+            raise TeamDefinitionValidationError(f"responseMode must be one of: {allowed}.")
+
+        supervisor_prompt_template = str(
+            value.get("supervisorPromptTemplate") or value.get("supervisor_prompt_template") or ""
+        ).strip()
+
+        return SupervisorConfig(
+            recursion_limit=recursion_limit,
+            max_member_calls_per_run=max_calls,
+            supervisor_prompt_template=supervisor_prompt_template,
+            response_mode=response_mode,
+        )
+
+    def _ensure_unique_name(
+        self, name: str, *, tenant_id: str, exclude_team_id: str | None = None,
+    ) -> None:
+        existing = self.store.get_by_name(name, tenant_id=tenant_id, instance_id=self.instance_id)
         if existing is None:
             return
         if exclude_team_id and existing.team_id == exclude_team_id:
@@ -108,10 +150,10 @@ class TeamDefinitionService:
             counter += 1
         return candidate
 
-    def _next_copy_name(self, name: str) -> str:
+    def _next_copy_name(self, name: str, *, tenant_id: str) -> str:
         candidate = f"{name} Copy"
         counter = 2
-        while self.store.get_by_name(candidate, tenant_id=self.tenant_id, instance_id=self.instance_id) is not None:
+        while self.store.get_by_name(candidate, tenant_id=tenant_id, instance_id=self.instance_id) is not None:
             candidate = f"{name} Copy {counter}"
             counter += 1
         return candidate
@@ -122,50 +164,46 @@ class TeamDefinitionService:
             return resolved
         try:
             self.agent_lookup(resolved)
-        except Exception as exc:  # pragma: no cover - defensive wrapper for injected lookup
+        except Exception as exc:
             raise TeamDefinitionValidationError(f"{field_name} '{resolved}' does not exist.") from exc
         return resolved
 
-    def _normalize_workflow_mode(self, value: Any) -> str:
-        raw = self._normalize_text(value, field_name="workflowMode") or "supervisor"
-        workflow_mode = _migrate_workflow_mode(raw)
-        if workflow_mode not in self._ALLOWED_WORKFLOW_MODES:
-            allowed = ", ".join(sorted(self._ALLOWED_WORKFLOW_MODES))
-            raise TeamDefinitionValidationError(f"workflowMode must be one of: {allowed}.")
-        return workflow_mode
-
-    def _normalize_member_agent_ids(self, value: Any, *, leader_agent_id: str) -> list[str]:
+    def _normalize_member_agent_ids(self, value: Any, *, supervisor_agent_id: str) -> list[str]:
         member_agent_ids = self._normalize_string_list(value, field_name="memberAgentIds")
-        if leader_agent_id in member_agent_ids:
-            raise TeamDefinitionValidationError("memberAgentIds must not include the leader agent.")
+        if supervisor_agent_id in member_agent_ids:
+            raise TeamDefinitionValidationError("memberAgentIds must not include the supervisor agent.")
         return [
             self._validate_agent_reference(agent_id, field_name="memberAgentIds")
             for agent_id in member_agent_ids
         ]
 
-    def _normalize_create_payload(self, payload: dict[str, Any]) -> TeamDefinition:
+    def _normalize_create_payload(self, payload: dict[str, Any], *, tenant_id: str) -> TeamDefinition:
         name = self._normalize_text(self._get_value(payload, "name"), required=True, field_name="name")
-        self._ensure_unique_name(name)
-        leader_agent_id = self._validate_agent_reference(
-            self._get_value(payload, "leaderAgentId", "leader_agent_id"),
-            field_name="leaderAgentId",
+        self._ensure_unique_name(name, tenant_id=tenant_id)
+        supervisor_agent_id = self._validate_agent_reference(
+            self._get_value(payload, "supervisorAgentId", "supervisor_agent_id"),
+            field_name="supervisorAgentId",
         )
         member_agent_ids = self._normalize_member_agent_ids(
             self._get_value(payload, "memberAgentIds", "member_agent_ids"),
-            leader_agent_id=leader_agent_id,
+            supervisor_agent_id=supervisor_agent_id,
         )
+        supervisor_config = self._normalize_supervisor_config(
+            self._get_value(payload, "supervisorConfig", "supervisor_config"),
+        )
+        team_thread_raw = self._get_value(payload, "teamThreadEnabled", "team_thread_enabled")
+        team_thread_enabled = True if team_thread_raw is None else bool(team_thread_raw)
+
         now = now_iso()
         return TeamDefinition(
             team_id=self._next_team_id(name),
-            tenant_id=self.tenant_id,
+            tenant_id=tenant_id,
             instance_id=self.instance_id,
             name=name,
-            leader_agent_id=leader_agent_id,
+            supervisor_agent_id=supervisor_agent_id,
             description=self._normalize_text(self._get_value(payload, "description"), field_name="description"),
             member_agent_ids=member_agent_ids,
-            workflow_mode=self._normalize_workflow_mode(
-                self._get_value(payload, "workflowMode", "workflow_mode"),
-            ),
+            supervisor_config=supervisor_config,
             shared_knowledge_binding_ids=self._normalize_string_list(
                 self._get_value(payload, "sharedKnowledgeBindingIds", "shared_knowledge_binding_ids"),
                 field_name="sharedKnowledgeBindingIds",
@@ -175,6 +213,7 @@ class TeamDefinitionService:
             ),
             tags=self._normalize_string_list(self._get_value(payload, "tags"), field_name="tags"),
             enabled=True if self._get_value(payload, "enabled") is None else bool(self._get_value(payload, "enabled")),
+            team_thread_enabled=team_thread_enabled,
             created_at=now,
             updated_at=now,
         )
@@ -183,9 +222,9 @@ class TeamDefinitionService:
         updates = {
             "name": self._get_value(payload, "name"),
             "description": self._get_value(payload, "description"),
-            "leader_agent_id": self._get_value(payload, "leaderAgentId", "leader_agent_id"),
+            "supervisor_agent_id": self._get_value(payload, "supervisorAgentId", "supervisor_agent_id"),
             "member_agent_ids": self._get_value(payload, "memberAgentIds", "member_agent_ids"),
-            "workflow_mode": self._get_value(payload, "workflowMode", "workflow_mode"),
+            "supervisor_config": self._get_value(payload, "supervisorConfig", "supervisor_config"),
             "shared_knowledge_binding_ids": self._get_value(
                 payload,
                 "sharedKnowledgeBindingIds",
@@ -194,18 +233,19 @@ class TeamDefinitionService:
             "member_access_policy": self._get_value(payload, "memberAccessPolicy", "member_access_policy"),
             "tags": self._get_value(payload, "tags"),
             "enabled": self._get_value(payload, "enabled"),
+            "team_thread_enabled": self._get_value(payload, "teamThreadEnabled", "team_thread_enabled"),
         }
 
         name = existing.name
         if updates["name"] is not None:
             name = self._normalize_text(updates["name"], required=True, field_name="name")
-            self._ensure_unique_name(name, exclude_team_id=existing.team_id)
+            self._ensure_unique_name(name, tenant_id=existing.tenant_id, exclude_team_id=existing.team_id)
 
-        leader_agent_id = existing.leader_agent_id
-        if updates["leader_agent_id"] is not None:
-            leader_agent_id = self._validate_agent_reference(
-                updates["leader_agent_id"],
-                field_name="leaderAgentId",
+        supervisor_agent_id = existing.supervisor_agent_id
+        if updates["supervisor_agent_id"] is not None:
+            supervisor_agent_id = self._validate_agent_reference(
+                updates["supervisor_agent_id"],
+                field_name="supervisorAgentId",
             )
 
         member_agent_ids = (
@@ -213,8 +253,20 @@ class TeamDefinitionService:
             if updates["member_agent_ids"] is None
             else self._normalize_member_agent_ids(
                 updates["member_agent_ids"],
-                leader_agent_id=leader_agent_id,
+                supervisor_agent_id=supervisor_agent_id,
             )
+        )
+
+        supervisor_config = (
+            existing.supervisor_config
+            if updates["supervisor_config"] is None
+            else self._normalize_supervisor_config(updates["supervisor_config"])
+        )
+
+        team_thread_enabled = (
+            existing.team_thread_enabled
+            if updates["team_thread_enabled"] is None
+            else bool(updates["team_thread_enabled"])
         )
 
         return replace(
@@ -223,11 +275,9 @@ class TeamDefinitionService:
             description=existing.description
             if updates["description"] is None
             else self._normalize_text(updates["description"], field_name="description"),
-            leader_agent_id=leader_agent_id,
+            supervisor_agent_id=supervisor_agent_id,
             member_agent_ids=member_agent_ids,
-            workflow_mode=existing.workflow_mode
-            if updates["workflow_mode"] is None
-            else self._normalize_workflow_mode(updates["workflow_mode"]),
+            supervisor_config=supervisor_config,
             shared_knowledge_binding_ids=existing.shared_knowledge_binding_ids
             if updates["shared_knowledge_binding_ids"] is None
             else self._normalize_string_list(
@@ -241,6 +291,7 @@ class TeamDefinitionService:
             if updates["tags"] is None
             else self._normalize_string_list(updates["tags"], field_name="tags"),
             enabled=existing.enabled if updates["enabled"] is None else bool(updates["enabled"]),
+            team_thread_enabled=team_thread_enabled,
             updated_at=now_iso(),
         )
 
@@ -250,11 +301,11 @@ class TeamDefinitionService:
             raise TeamDefinitionNotFoundError(team_id)
         return team
 
-    def list_teams(self, *, enabled: bool | None = None) -> list[dict[str, Any]]:
+    def list_teams(self, *, tenant_id: str, enabled: bool | None = None) -> list[dict[str, Any]]:
         return [
             team.to_dict()
             for team in self.store.list_all(
-                tenant_id=self.tenant_id,
+                tenant_id=tenant_id,
                 instance_id=self.instance_id,
                 enabled=enabled,
             )
@@ -263,8 +314,8 @@ class TeamDefinitionService:
     def get_team(self, team_id: str) -> dict[str, Any]:
         return self.require_team(team_id).to_dict()
 
-    def create_team(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self.store.create(self._normalize_create_payload(payload)).to_dict()
+    def create_team(self, payload: dict[str, Any], *, tenant_id: str) -> dict[str, Any]:
+        return self.store.create(self._normalize_create_payload(payload, tenant_id=tenant_id)).to_dict()
 
     def update_team(self, team_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         updated = self.store.update(self._apply_update(self.require_team(team_id), payload))
@@ -280,8 +331,11 @@ class TeamDefinitionService:
     def copy_team(self, team_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         source = self.require_team(team_id)
-        name = self._normalize_text(payload.get("name"), field_name="name") or self._next_copy_name(source.name)
-        self._ensure_unique_name(name)
+        name = (
+            self._normalize_text(payload.get("name"), field_name="name")
+            or self._next_copy_name(source.name, tenant_id=source.tenant_id)
+        )
+        self._ensure_unique_name(name, tenant_id=source.tenant_id)
         now = now_iso()
         clone = replace(
             source,

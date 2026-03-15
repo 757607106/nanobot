@@ -35,11 +35,9 @@ class AgentDefinitionService:
         store: AgentDefinitionStore,
         *,
         instance_id: str,
-        tenant_id: str = "default",
     ):
         self.store = store
         self.instance_id = instance_id
-        self.tenant_id = tenant_id
 
     @staticmethod
     def _get_value(payload: dict[str, Any], *keys: str) -> Any:
@@ -71,8 +69,31 @@ class AgentDefinitionService:
             result.append(text)
         return result
 
-    def _ensure_unique_name(self, name: str, *, exclude_agent_id: str | None = None) -> None:
-        existing = self.store.get_by_name(name, tenant_id=self.tenant_id, instance_id=self.instance_id)
+    @staticmethod
+    def _normalize_positive_int(
+        value: Any,
+        *,
+        field_name: str,
+        default: int,
+        min_val: int = 1,
+        max_val: int = 3600,
+    ) -> int:
+        if value is None:
+            return default
+        try:
+            result = int(value)
+        except (TypeError, ValueError) as exc:
+            raise AgentDefinitionValidationError(f"{field_name} must be an integer.") from exc
+        if result < min_val or result > max_val:
+            raise AgentDefinitionValidationError(
+                f"{field_name} must be between {min_val} and {max_val}."
+            )
+        return result
+
+    def _ensure_unique_name(
+        self, name: str, *, tenant_id: str, exclude_agent_id: str | None = None,
+    ) -> None:
+        existing = self.store.get_by_name(name, tenant_id=tenant_id, instance_id=self.instance_id)
         if existing is None:
             return
         if exclude_agent_id and existing.agent_id == exclude_agent_id:
@@ -88,10 +109,10 @@ class AgentDefinitionService:
             counter += 1
         return candidate
 
-    def _next_copy_name(self, name: str) -> str:
+    def _next_copy_name(self, name: str, *, tenant_id: str) -> str:
         candidate = f"{name} Copy"
         counter = 2
-        while self.store.get_by_name(candidate, tenant_id=self.tenant_id, instance_id=self.instance_id) is not None:
+        while self.store.get_by_name(candidate, tenant_id=tenant_id, instance_id=self.instance_id) is not None:
             candidate = f"{name} Copy {counter}"
             counter += 1
         return candidate
@@ -100,6 +121,7 @@ class AgentDefinitionService:
         self,
         payload: dict[str, Any],
         *,
+        tenant_id: str,
         default_model: str | None,
         default_tools: list[str],
         template_snapshot: dict[str, Any] | None,
@@ -110,7 +132,7 @@ class AgentDefinitionService:
             required=True,
             field_name="name",
         )
-        self._ensure_unique_name(name)
+        self._ensure_unique_name(name, tenant_id=tenant_id)
 
         description = self._normalize_text(
             self._get_value(payload, "description") if "description" in payload else template_snapshot.get("description"),
@@ -176,10 +198,26 @@ class AgentDefinitionService:
             field_name="sourceTemplateName",
         ) or None
 
+        team_role_hint = self._normalize_text(
+            self._get_value(payload, "teamRoleHint", "team_role_hint"),
+            field_name="teamRoleHint",
+        )
+        max_execution_timeout_seconds = self._normalize_positive_int(
+            self._get_value(payload, "maxExecutionTimeoutSeconds", "max_execution_timeout_seconds"),
+            field_name="maxExecutionTimeoutSeconds",
+            default=300,
+            min_val=10,
+            max_val=3600,
+        )
+        output_format_hint = self._normalize_text(
+            self._get_value(payload, "outputFormatHint", "output_format_hint"),
+            field_name="outputFormatHint",
+        )
+
         now = now_iso()
         return AgentDefinition(
             agent_id=self._next_agent_id(name),
-            tenant_id=self.tenant_id,
+            tenant_id=tenant_id,
             instance_id=self.instance_id,
             name=name,
             description=description,
@@ -195,6 +233,9 @@ class AgentDefinitionService:
             tags=tags,
             memory_scope=memory_scope,
             source_template_name=source_template_name,
+            team_role_hint=team_role_hint,
+            max_execution_timeout_seconds=max_execution_timeout_seconds,
+            output_format_hint=output_format_hint,
             created_at=now,
             updated_at=now,
         )
@@ -215,12 +256,17 @@ class AgentDefinitionService:
             "tags": self._get_value(payload, "tags"),
             "memory_scope": self._get_value(payload, "memoryScope", "memory_scope"),
             "source_template_name": self._get_value(payload, "sourceTemplateName", "source_template_name"),
+            "team_role_hint": self._get_value(payload, "teamRoleHint", "team_role_hint"),
+            "max_execution_timeout_seconds": self._get_value(
+                payload, "maxExecutionTimeoutSeconds", "max_execution_timeout_seconds",
+            ),
+            "output_format_hint": self._get_value(payload, "outputFormatHint", "output_format_hint"),
         }
 
         name = existing.name
         if updates["name"] is not None:
             name = self._normalize_text(updates["name"], required=True, field_name="name")
-            self._ensure_unique_name(name, exclude_agent_id=existing.agent_id)
+            self._ensure_unique_name(name, tenant_id=existing.tenant_id, exclude_agent_id=existing.agent_id)
 
         return replace(
             existing,
@@ -262,6 +308,21 @@ class AgentDefinitionService:
             source_template_name=existing.source_template_name
             if updates["source_template_name"] is None
             else (self._normalize_text(updates["source_template_name"], field_name="sourceTemplateName") or None),
+            team_role_hint=existing.team_role_hint
+            if updates["team_role_hint"] is None
+            else self._normalize_text(updates["team_role_hint"], field_name="teamRoleHint"),
+            max_execution_timeout_seconds=existing.max_execution_timeout_seconds
+            if updates["max_execution_timeout_seconds"] is None
+            else self._normalize_positive_int(
+                updates["max_execution_timeout_seconds"],
+                field_name="maxExecutionTimeoutSeconds",
+                default=existing.max_execution_timeout_seconds,
+                min_val=10,
+                max_val=3600,
+            ),
+            output_format_hint=existing.output_format_hint
+            if updates["output_format_hint"] is None
+            else self._normalize_text(updates["output_format_hint"], field_name="outputFormatHint"),
             updated_at=now_iso(),
         )
 
@@ -271,11 +332,11 @@ class AgentDefinitionService:
             raise AgentDefinitionNotFoundError(agent_id)
         return agent
 
-    def list_agents(self, *, enabled: bool | None = None) -> list[dict[str, Any]]:
+    def list_agents(self, *, tenant_id: str, enabled: bool | None = None) -> list[dict[str, Any]]:
         return [
             agent.to_dict()
             for agent in self.store.list_all(
-                tenant_id=self.tenant_id,
+                tenant_id=tenant_id,
                 instance_id=self.instance_id,
                 enabled=enabled,
             )
@@ -288,12 +349,14 @@ class AgentDefinitionService:
         self,
         payload: dict[str, Any],
         *,
+        tenant_id: str,
         default_model: str | None,
         default_tools: list[str],
         template_snapshot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         agent = self._normalize_create_payload(
             payload,
+            tenant_id=tenant_id,
             default_model=default_model,
             default_tools=default_tools,
             template_snapshot=template_snapshot,
@@ -314,8 +377,11 @@ class AgentDefinitionService:
     def copy_agent(self, agent_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         source = self.require_agent(agent_id)
-        name = self._normalize_text(payload.get("name"), field_name="name") or self._next_copy_name(source.name)
-        self._ensure_unique_name(name)
+        name = (
+            self._normalize_text(payload.get("name"), field_name="name")
+            or self._next_copy_name(source.name, tenant_id=source.tenant_id)
+        )
+        self._ensure_unique_name(name, tenant_id=source.tenant_id)
         now = now_iso()
         clone = replace(
             source,

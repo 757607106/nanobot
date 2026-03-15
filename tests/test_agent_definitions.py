@@ -25,6 +25,7 @@ def test_agent_definition_service_crud_and_copy(tmp_path) -> None:
             "skillIds": ["skill-creator"],
             "tags": ["research"],
         },
+        tenant_id="default",
         default_model="deepseek/deepseek-chat",
         default_tools=["read_file", "write_file", "web_search"],
         template_snapshot=None,
@@ -54,7 +55,7 @@ def test_agent_definition_service_crud_and_copy(tmp_path) -> None:
     enabled = service.set_enabled(created["agentId"], True)
     assert enabled["enabled"] is True
 
-    listed = service.list_agents()
+    listed = service.list_agents(tenant_id="default")
     assert len(listed) == 2
 
     assert service.delete_agent(created["agentId"]) is True
@@ -72,6 +73,7 @@ def test_agent_definition_service_uses_template_snapshot_and_detects_conflicts(t
         {
             "name": "Coder Agent",
         },
+        tenant_id="default",
         default_model="deepseek/deepseek-chat",
         default_tools=["read_file", "write_file", "edit_file"],
         template_snapshot={
@@ -96,6 +98,7 @@ def test_agent_definition_service_uses_template_snapshot_and_detects_conflicts(t
                 "name": "Coder Agent",
                 "systemPrompt": "Another prompt",
             },
+            tenant_id="default",
             default_model="deepseek/deepseek-chat",
             default_tools=["read_file"],
             template_snapshot=None,

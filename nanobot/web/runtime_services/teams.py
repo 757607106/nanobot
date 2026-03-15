@@ -7,8 +7,9 @@ from typing import Any
 
 from loguru import logger
 
-from nanobot.platform.teams import TeamDefinitionNotFoundError
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
+from nanobot.platform.teams import TeamDefinitionNotFoundError
+from nanobot.platform.teams.models import SupervisorConfig
 from nanobot.web.runtime_services.langgraph_supervisor import LangGraphTeamRunner
 
 
@@ -134,6 +135,15 @@ class WebTeamRuntimeService:
                 },
             )
 
+    @staticmethod
+    def _extract_supervisor_config(team: dict[str, Any]) -> SupervisorConfig:
+        raw = team.get("supervisorConfig")
+        if raw is None:
+            return SupervisorConfig()
+        if isinstance(raw, SupervisorConfig):
+            return raw
+        return SupervisorConfig.from_dict(raw)
+
     def _prepare_team_run(self, team_id: str, content: str) -> tuple[dict[str, Any], str, str, str, str | None]:
         if not self.state.agent or not self.state.sessions or not self.state.runs:
             raise RuntimeError("Web team runtime is not available.")
@@ -167,6 +177,9 @@ class WebTeamRuntimeService:
             root_run.run_id,
             session_key=self._root_session_key(team["teamId"], root_run.run_id),
         )
+
+        supervisor_config = self._extract_supervisor_config(team)
+
         self.state.runs.append_event(
             root_run.run_id,
             "team_run_requested",
@@ -180,9 +193,9 @@ class WebTeamRuntimeService:
             root_run.run_id,
             "team_definition_resolved",
             {
-                "leaderAgentId": team["leaderAgentId"],
+                "supervisorAgentId": team["supervisorAgentId"],
                 "memberAgentIds": team.get("memberAgentIds", []),
-                "workflowMode": team.get("workflowMode"),
+                "supervisorConfig": supervisor_config.to_dict(),
                 "sharedKnowledgeBindingIds": team.get("sharedKnowledgeBindingIds", []),
                 "memberAccessPolicy": team.get("memberAccessPolicy") or {},
             },
@@ -283,6 +296,7 @@ class WebTeamRuntimeService:
         if shared_knowledge_hits:
             shared_knowledge_block = self.state.agent_runtime._build_knowledge_prompt_block(shared_knowledge_hits)
         team_memory_sections = self._get_team_memory_sections(team["teamId"])
+        supervisor_config = self._extract_supervisor_config(team)
 
         try:
             current = self.state.runs.require_run(root_run_id)
@@ -309,8 +323,9 @@ class WebTeamRuntimeService:
                 root_run_id,
                 "supervisor_started",
                 {
-                    "leaderAgentId": team["leaderAgentId"],
+                    "supervisorAgentId": team["supervisorAgentId"],
                     "memberAgentIds": team.get("memberAgentIds", []),
+                    "supervisorConfig": supervisor_config.to_dict(),
                 },
             )
 
@@ -324,6 +339,7 @@ class WebTeamRuntimeService:
                 task,
                 root_run_id,
                 thread_id,
+                supervisor_config=supervisor_config,
                 team_thread_context_block=team_thread_context_block,
                 shared_knowledge_block=shared_knowledge_block,
                 team_memory_sections=team_memory_sections,
@@ -335,7 +351,7 @@ class WebTeamRuntimeService:
                 root_run_id,
                 "supervisor_completed",
                 {
-                    "leaderAgentId": team["leaderAgentId"],
+                    "supervisorAgentId": team["supervisorAgentId"],
                     "memberRunIds": result.member_run_ids,
                 },
             )
@@ -356,7 +372,7 @@ class WebTeamRuntimeService:
                     "team_id": team["teamId"],
                     "thread_id": thread_id,
                     "workflow_mode": "supervisor",
-                    "leader_agent_id": team["leaderAgentId"],
+                    "supervisor_agent_id": team["supervisorAgentId"],
                     "member_run_count": len(result.member_run_ids),
                     "shared_knowledge_hits": len(shared_knowledge_hits),
                 },
@@ -428,7 +444,7 @@ class WebTeamRuntimeService:
         return {
             "team": team,
             "run": self.state.runs.get_run(root_run_id),
-            "leaderRun": None,
+            "supervisorRun": None,
             "memberRuns": [],
             "finalAssistantMessage": None,
             "teamKnowledgeHits": [],

@@ -33,6 +33,9 @@ class AgentDefinition:
     tags: list[str] = field(default_factory=list)
     memory_scope: str = "agent_profile"
     source_template_name: str | None = None
+    team_role_hint: str = ""
+    max_execution_timeout_seconds: int = 300
+    output_format_hint: str = ""
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
 
@@ -51,6 +54,9 @@ class AgentDefinition:
             "tags": self.tags,
             "memory_scope": self.memory_scope,
             "source_template_name": self.source_template_name,
+            "team_role_hint": self.team_role_hint,
+            "max_execution_timeout_seconds": self.max_execution_timeout_seconds,
+            "output_format_hint": self.output_format_hint,
         }
         return json.dumps(payload, ensure_ascii=False)
 
@@ -75,6 +81,9 @@ class AgentDefinition:
             tags=list(stored.get("tags") or []),
             memory_scope=stored.get("memory_scope") or "agent_profile",
             source_template_name=record.get("source_template_name") or stored.get("source_template_name"),
+            team_role_hint=stored.get("team_role_hint") or "",
+            max_execution_timeout_seconds=int(stored.get("max_execution_timeout_seconds") or 300),
+            output_format_hint=stored.get("output_format_hint") or "",
             created_at=record.get("created_at") or now_iso(),
             updated_at=record.get("updated_at") or now_iso(),
         )
@@ -91,6 +100,9 @@ class AgentDefinition:
         payload["knowledgeBindingIds"] = payload.pop("knowledge_binding_ids")
         payload["memoryScope"] = payload.pop("memory_scope")
         payload["sourceTemplateName"] = payload.pop("source_template_name")
+        payload["teamRoleHint"] = payload.pop("team_role_hint")
+        payload["maxExecutionTimeoutSeconds"] = payload.pop("max_execution_timeout_seconds")
+        payload["outputFormatHint"] = payload.pop("output_format_hint")
         payload["createdAt"] = payload.pop("created_at")
         payload["updatedAt"] = payload.pop("updated_at")
         return payload

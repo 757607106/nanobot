@@ -3,13 +3,50 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import Config
+
+if TYPE_CHECKING:
+    from nanobot.web.runtime_services.channel_routing import ChannelRoutingService
+
+
+class _RoutingBusProxy:
+    """Transparent proxy that enriches inbound messages with routing metadata.
+
+    Channels interact with this proxy exactly like a real ``MessageBus``.  On
+    ``publish_inbound``, the proxy resolves a channel-binding target and injects
+    ``_routing_*`` keys into the message metadata before forwarding to the
+    underlying bus.  All other attributes are proxied through unchanged.
+    """
+
+    def __init__(
+        self,
+        inner: MessageBus,
+        routing_service: ChannelRoutingService,
+        tenant_id: str = "default",
+    ):
+        self._inner = inner
+        self._routing = routing_service
+        self._tenant_id = tenant_id
+
+    async def publish_inbound(self, msg: InboundMessage) -> None:
+        target = self._routing.resolve_target(
+            msg.channel, msg.chat_id, tenant_id=self._tenant_id,
+        )
+        if target is not None:
+            msg.metadata["_routing_target_type"] = target.target_type
+            msg.metadata["_routing_target_id"] = target.target_id
+            msg.metadata["_routing_binding_id"] = target.binding_id
+        await self._inner.publish_inbound(msg)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
 
 
 class ChannelManager:
@@ -22,9 +59,25 @@ class ChannelManager:
     - Route outbound messages
     """
 
-    def __init__(self, config: Config, bus: MessageBus):
+    def __init__(
+        self,
+        config: Config,
+        bus: MessageBus,
+        *,
+        routing_service: ChannelRoutingService | None = None,
+        tenant_id: str = "default",
+    ):
         self.config = config
-        self.bus = bus
+        self._raw_bus = bus
+        # When a routing service is provided, channels write through a proxy
+        # that enriches inbound messages with _routing_* metadata.
+        if routing_service is not None:
+            self.bus: MessageBus | _RoutingBusProxy = _RoutingBusProxy(
+                bus, routing_service, tenant_id,
+            )
+            logger.info("Channel routing enabled (tenant={})", tenant_id)
+        else:
+            self.bus = bus
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
 

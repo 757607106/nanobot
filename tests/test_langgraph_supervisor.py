@@ -8,28 +8,36 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.platform.teams.models import _migrate_workflow_mode
+from nanobot.platform.teams.models import SupervisorConfig
 
 
 # ---------------------------------------------------------------------------
-# A. Workflow mode migration
+# A. SupervisorConfig model
 # ---------------------------------------------------------------------------
 
-class TestWorkflowModeMigration:
-    def test_legacy_parallel_fanout_maps_to_supervisor(self):
-        assert _migrate_workflow_mode("parallel_fanout") == "supervisor"
+class TestSupervisorConfig:
+    def test_default_values(self):
+        sc = SupervisorConfig()
+        assert sc.recursion_limit == 25
+        assert sc.max_member_calls_per_run == 20
+        assert sc.response_mode == "synthesize"
 
-    def test_legacy_sequential_handoff_maps_to_supervisor(self):
-        assert _migrate_workflow_mode("sequential_handoff") == "supervisor"
+    def test_from_dict_camel_case(self):
+        sc = SupervisorConfig.from_dict({"recursionLimit": 50, "responseMode": "last_member"})
+        assert sc.recursion_limit == 50
+        assert sc.response_mode == "last_member"
 
-    def test_legacy_leader_summary_maps_to_supervisor(self):
-        assert _migrate_workflow_mode("leader_summary") == "supervisor"
+    def test_from_dict_snake_case(self):
+        sc = SupervisorConfig.from_dict({"recursion_limit": 10, "max_member_calls_per_run": 5})
+        assert sc.recursion_limit == 10
+        assert sc.max_member_calls_per_run == 5
 
-    def test_supervisor_stays_supervisor(self):
-        assert _migrate_workflow_mode("supervisor") == "supervisor"
-
-    def test_unknown_mode_passes_through(self):
-        assert _migrate_workflow_mode("custom_mode") == "custom_mode"
+    def test_roundtrip(self):
+        sc = SupervisorConfig(recursion_limit=30, response_mode="custom")
+        d = sc.to_dict()
+        sc2 = SupervisorConfig.from_dict(d)
+        assert sc2.recursion_limit == 30
+        assert sc2.response_mode == "custom"
 
 
 # ---------------------------------------------------------------------------
@@ -119,13 +127,14 @@ class TestSlugifyToolName:
 
 
 class TestBuildSupervisorPrompt:
-    def test_includes_leader_system_prompt(self):
+    def test_includes_supervisor_system_prompt(self):
         from nanobot.web.runtime_services.langgraph_supervisor import _build_supervisor_prompt
 
         prompt = _build_supervisor_prompt(
             team={"name": "Test Team"},
-            leader={"systemPrompt": "You lead the team."},
+            supervisor={"systemPrompt": "You lead the team."},
             members=[{"name": "Worker", "agentId": "w1", "description": "Does work"}],
+            supervisor_config=SupervisorConfig(),
         )
         assert "You lead the team." in prompt
         assert "Test Team" in prompt
@@ -136,8 +145,9 @@ class TestBuildSupervisorPrompt:
 
         prompt = _build_supervisor_prompt(
             team={"name": "T"},
-            leader={"systemPrompt": ""},
+            supervisor={"systemPrompt": ""},
             members=[],
+            supervisor_config=SupervisorConfig(),
             shared_knowledge_block="# Knowledge\nSome facts.",
         )
         assert "# Knowledge" in prompt
@@ -147,8 +157,9 @@ class TestBuildSupervisorPrompt:
 
         prompt = _build_supervisor_prompt(
             team={"name": "T"},
-            leader={"systemPrompt": ""},
+            supervisor={"systemPrompt": ""},
             members=[],
+            supervisor_config=SupervisorConfig(),
             team_thread_context_block="# Previous turns\nUser: hi",
         )
         assert "# Previous turns" in prompt
@@ -188,6 +199,7 @@ class TestCreateMemberTools:
             shared_knowledge_block=None,
             team_memory_sections=[],
             member_access_policy={},
+            supervisor_config=SupervisorConfig(),
         )
         assert len(tools) == 2
         assert tools[0].name == "call_researcher"
@@ -208,6 +220,7 @@ class TestCreateMemberTools:
             shared_knowledge_block=None,
             team_memory_sections=[],
             member_access_policy={},
+            supervisor_config=SupervisorConfig(),
         )
         assert tools[0].name == "call_my_special_agent"
 

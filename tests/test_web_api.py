@@ -1532,9 +1532,8 @@ def test_web_api_team_crud_copy_and_toggle(web_client: TestClient) -> None:
         json={
             "name": "Support Team",
             "description": "Handle support workflows",
-            "leaderAgentId": leader.json()["data"]["agentId"],
+            "supervisorAgentId": leader.json()["data"]["agentId"],
             "memberAgentIds": [member.json()["data"]["agentId"]],
-            "workflowMode": "parallel_fanout",
             "sharedKnowledgeBindingIds": ["kb-support"],
         },
     )
@@ -1549,17 +1548,15 @@ def test_web_api_team_crud_copy_and_toggle(web_client: TestClient) -> None:
 
     fetched = web_client.get(f"/api/v1/teams/{team['teamId']}")
     assert fetched.status_code == 200
-    assert fetched.json()["data"]["leaderAgentId"] == leader.json()["data"]["agentId"]
+    assert fetched.json()["data"]["supervisorAgentId"] == leader.json()["data"]["agentId"]
 
     updated = web_client.put(
         f"/api/v1/teams/{team['teamId']}",
         json={
-            "workflowMode": "sequential_handoff",
             "memberAccessPolicy": {"teamSharedKnowledge": "members_read"},
         },
     )
     assert updated.status_code == 200
-    assert updated.json()["data"]["workflowMode"] == "supervisor"
 
     copied = web_client.post(f"/api/v1/teams/{team['teamId']}/copy")
     assert copied.status_code == 201
@@ -1583,7 +1580,7 @@ def test_web_api_team_creation_validates_agent_references(web_client: TestClient
         "/api/v1/teams",
         json={
             "name": "Broken Team",
-            "leaderAgentId": "missing-agent",
+            "supervisorAgentId": "missing-agent",
         },
     )
     assert created.status_code == 400
@@ -1662,12 +1659,11 @@ def test_web_api_team_run_executes_member_and_leader_runs(web_client: TestClient
         "/api/v1/teams",
         json={
             "name": "Support Team",
-            "leaderAgentId": leader.json()["data"]["agentId"],
+            "supervisorAgentId": leader.json()["data"]["agentId"],
             "memberAgentIds": [
                 researcher.json()["data"]["agentId"],
                 reviewer.json()["data"]["agentId"],
             ],
-            "workflowMode": "parallel_fanout",
             "sharedKnowledgeBindingIds": [kb_id],
             "memberAccessPolicy": {
                 "teamSharedKnowledge": "members_read",
@@ -1727,7 +1723,7 @@ def test_web_api_team_run_executes_member_and_leader_runs(web_client: TestClient
     payload = tested.json()["data"]
     assert payload["run"]["kind"] == "team"
     assert payload["run"]["status"] in {"queued", "running"}
-    assert payload["leaderRun"] is None
+    assert payload["supervisorRun"] is None
     assert payload["memberRuns"] == []
     assert payload["finalAssistantMessage"] is None
 
@@ -1810,9 +1806,8 @@ def test_web_api_team_run_cancel_requests_background_task(web_client: TestClient
         "/api/v1/teams",
         json={
             "name": "Cancelable Team",
-            "leaderAgentId": leader.json()["data"]["agentId"],
+            "supervisorAgentId": leader.json()["data"]["agentId"],
             "memberAgentIds": [member.json()["data"]["agentId"]],
-            "workflowMode": "parallel_fanout",
         },
     )
     assert team_created.status_code == 201
@@ -1883,9 +1878,8 @@ def test_web_api_team_run_retry_with_append_context(web_client: TestClient, monk
         "/api/v1/teams",
         json={
             "name": "Retry Team",
-            "leaderAgentId": leader.json()["data"]["agentId"],
+            "supervisorAgentId": leader.json()["data"]["agentId"],
             "memberAgentIds": [member.json()["data"]["agentId"]],
-            "workflowMode": "parallel_fanout",
         },
     )
     assert team_created.status_code == 201
@@ -1977,9 +1971,8 @@ def test_web_api_team_thread_reuses_prior_turns(web_client: TestClient, monkeypa
         "/api/v1/teams",
         json={
             "name": "Thread Team",
-            "leaderAgentId": leader.json()["data"]["agentId"],
+            "supervisorAgentId": leader.json()["data"]["agentId"],
             "memberAgentIds": [member.json()["data"]["agentId"]],
-            "workflowMode": "parallel_fanout",
         },
     )
     assert team_created.status_code == 201
@@ -2110,9 +2103,8 @@ def test_web_api_team_memory_scope_and_candidates(web_client: TestClient, monkey
         "/api/v1/teams",
         json={
             "name": "Memory Team",
-            "leaderAgentId": leader.json()["data"]["agentId"],
+            "supervisorAgentId": leader.json()["data"]["agentId"],
             "memberAgentIds": [member.json()["data"]["agentId"]],
-            "workflowMode": "parallel_fanout",
             "memberAccessPolicy": {
                 "teamSharedKnowledge": "explicit_only",
                 "teamSharedMemory": "leader_write_member_read",
