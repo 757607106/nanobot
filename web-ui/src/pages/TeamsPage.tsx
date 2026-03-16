@@ -40,6 +40,7 @@ import type {
   TeamDefinition,
   TeamDefinitionMutationInput,
   TeamMemorySnapshot,
+  TeamTestRunResult,
   TeamThreadSummary,
 } from '../types'
 
@@ -49,21 +50,14 @@ const { TextArea } = Input
 interface TeamFormState {
   name: string
   description: string
-  leaderAgentId: string
+  supervisorAgentId: string
   memberAgentIds: string[]
-  workflowMode: string
   sharedKnowledgeBindingIds: string[]
   teamSharedKnowledgePolicy: string
   teamSharedMemoryPolicy: string
   tags: string[]
   enabled: boolean
 }
-
-const workflowOptions = [
-  { value: 'parallel_fanout', label: '并行协作', description: '负责人把任务分给多个成员并统一汇总。' },
-  { value: 'sequential_handoff', label: '顺序接力', description: '成员按顺序接力完成同一任务。' },
-  { value: 'leader_summary', label: '负责人汇总', description: '负责人主导，成员按需补充分析结果。' },
-]
 
 const teamSharedKnowledgeOptions = [
   { value: 'explicit_only', label: '按明确授权使用' },
@@ -81,9 +75,8 @@ function createEmptyForm(): TeamFormState {
   return {
     name: '',
     description: '',
-    leaderAgentId: '',
+    supervisorAgentId: '',
     memberAgentIds: [],
-    workflowMode: 'parallel_fanout',
     sharedKnowledgeBindingIds: [],
     teamSharedKnowledgePolicy: 'explicit_only',
     teamSharedMemoryPolicy: 'leader_write_member_read',
@@ -96,9 +89,8 @@ function teamToForm(team: TeamDefinition): TeamFormState {
   return {
     name: team.name,
     description: team.description,
-    leaderAgentId: team.leaderAgentId,
+    supervisorAgentId: team.supervisorAgentId,
     memberAgentIds: [...team.memberAgentIds],
-    workflowMode: team.workflowMode || 'parallel_fanout',
     sharedKnowledgeBindingIds: [...team.sharedKnowledgeBindingIds],
     teamSharedKnowledgePolicy: String(team.memberAccessPolicy?.teamSharedKnowledge || 'explicit_only'),
     teamSharedMemoryPolicy: String(team.memberAccessPolicy?.teamSharedMemory || 'leader_write_member_read'),
@@ -111,9 +103,8 @@ function toPayload(form: TeamFormState): TeamDefinitionMutationInput {
   return {
     name: form.name.trim(),
     description: form.description.trim(),
-    leaderAgentId: form.leaderAgentId,
+    supervisorAgentId: form.supervisorAgentId,
     memberAgentIds: [...form.memberAgentIds],
-    workflowMode: form.workflowMode,
     sharedKnowledgeBindingIds: [...form.sharedKnowledgeBindingIds],
     memberAccessPolicy: {
       teamSharedKnowledge: form.teamSharedKnowledgePolicy,
@@ -169,6 +160,7 @@ export default function TeamsPage() {
   }> | null>(null)
   const [selectedMemorySource, setSelectedMemorySource] = useState<MemorySourceDetail | null>(null)
   const [lastResult, setLastResult] = useState<string | null>(null)
+  const [lastTestRunResult, setLastTestRunResult] = useState<TeamTestRunResult | null>(null)
   const [recentRuns, setRecentRuns] = useState<AgentRunSummary[]>([])
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
@@ -204,6 +196,7 @@ export default function TeamsPage() {
       setForm(createEmptyForm())
       setRecentRuns([])
       setLastResult(null)
+      setLastTestRunResult(null)
       setTeamMemory(null)
       setTeamMemoryDraft('')
       setMemoryCandidates([])
@@ -238,8 +231,8 @@ export default function TeamsPage() {
   )
 
   const memberOptions = useMemo(
-    () => agentOptions.filter((item) => item.value !== form.leaderAgentId),
-    [agentOptions, form.leaderAgentId],
+    () => agentOptions.filter((item) => item.value !== form.supervisorAgentId),
+    [agentOptions, form.supervisorAgentId],
   )
 
   const knowledgeOptions = useMemo(() => {
@@ -258,8 +251,8 @@ export default function TeamsPage() {
   }, [form.sharedKnowledgeBindingIds, knowledgeBases])
 
   const selectedLeader = useMemo(
-    () => agents.find((agent) => agent.agentId === form.leaderAgentId) ?? null,
-    [agents, form.leaderAgentId],
+    () => agents.find((agent) => agent.agentId === form.supervisorAgentId) ?? null,
+    [agents, form.supervisorAgentId],
   )
 
   const selectedMembers = useMemo(
@@ -395,8 +388,8 @@ export default function TeamsPage() {
       setError('Team 名称不能为空。')
       return
     }
-    if (!payload.leaderAgentId) {
-      setError('请先选择 leader agent。')
+    if (!payload.supervisorAgentId) {
+      setError('请先选择负责人 (supervisor agent)。')
       return
     }
     try {
@@ -467,6 +460,7 @@ export default function TeamsPage() {
       setTesting(true)
       const result = await api.runTeam(currentTeam.teamId, testPrompt.trim())
       setLastResult(null)
+      setLastTestRunResult(result)
       if (result.run.status === 'queued') {
         message.success('团队运行已启动，已进入队列')
       } else {
@@ -505,8 +499,9 @@ export default function TeamsPage() {
     }
     try {
       setTesting(true)
-      await api.retryTeamRun(currentTeam.teamId, runId, appendContext || undefined)
+      const retryResult = await api.retryTeamRun(currentTeam.teamId, runId, appendContext || undefined)
       setLastResult(null)
+      setLastTestRunResult(retryResult)
       message.success(mode === 'append' ? '已带追加上下文重新发起团队运行' : '已重新发起团队运行')
       await loadRecentRuns(currentTeam.teamId)
       setRunError(null)
@@ -682,7 +677,6 @@ export default function TeamsPage() {
                     </div>
                     <Text type="secondary">{item.description || '暂未补充团队说明。'}</Text>
                     <div className="studio-agent-list-meta">
-                      <Tag>{workflowOptions.find((option) => option.value === item.workflowMode)?.label || item.workflowMode}</Tag>
                       <Tag>{item.memberCount} 名成员</Tag>
                       <Tag>{item.sharedKnowledgeBindingIds.length} 个知识库</Tag>
                     </div>
@@ -724,18 +718,6 @@ export default function TeamsPage() {
                 />
               </div>
 
-              <div className="studio-form-field">
-                <Text type="secondary">协作方式</Text>
-                <Select
-                  value={form.workflowMode}
-                  onChange={(value) => updateForm('workflowMode', value)}
-                  options={workflowOptions.map((item) => ({
-                    value: item.value,
-                    label: `${item.label} · ${item.description}`,
-                  }))}
-                />
-              </div>
-
               <div className="studio-form-field studio-form-switch-field">
                 <Text type="secondary">启用状态</Text>
                 <Switch checked={form.enabled} onChange={(checked) => updateForm('enabled', checked)} />
@@ -754,8 +736,8 @@ export default function TeamsPage() {
               <div className="studio-form-field">
                 <Text type="secondary">负责人</Text>
                 <Select
-                  value={form.leaderAgentId || undefined}
-                  onChange={(value) => updateForm('leaderAgentId', value)}
+                  value={form.supervisorAgentId || undefined}
+                  onChange={(value) => updateForm('supervisorAgentId', value)}
                   options={agentOptions}
                   placeholder="选择负责统筹与汇总的员工"
                 />
@@ -912,10 +894,7 @@ export default function TeamsPage() {
                     <Typography.Title level={4}>团队试运行</Typography.Title>
                     <Text type="secondary">发起一次真实团队任务，验证负责人分工、成员协作和最终汇总结果。</Text>
                   </div>
-                  <Tag color="geekblue">
-                    {workflowOptions.find((item) => item.value === (currentTeam ? currentTeam.workflowMode : form.workflowMode))?.label ||
-                      (currentTeam ? currentTeam.workflowMode : form.workflowMode)}
-                  </Tag>
+                  <Tag color="geekblue">Supervisor 模式</Tag>
                 </div>
 
                 <div className="studio-form-field">
@@ -970,7 +949,7 @@ export default function TeamsPage() {
                 </Space>
 
                 <Paragraph className="studio-result-copy">
-                  {workflowOptions.find((item) => item.value === form.workflowMode)?.description || '将按选定方式进行协作。'}
+                  负责人统筹任务分配，成员协作完成并汇总结果。
                 </Paragraph>
 
                 {activeRecentRun ? (
@@ -987,6 +966,98 @@ export default function TeamsPage() {
                     <Text type="secondary">最近一次返回摘要</Text>
                     <Paragraph className="studio-result-copy">{lastResult}</Paragraph>
                   </div>
+                ) : null}
+
+                {lastTestRunResult ? (
+                  <Collapse
+                    className="studio-inline-collapse"
+                    items={[
+                      {
+                        key: 'decomposition',
+                        label: '运行分解',
+                        children: (
+                          <div className="page-stack">
+                            <div className="studio-form-field">
+                              <Text type="secondary">Supervisor 运行</Text>
+                              {lastTestRunResult.supervisorRun ? (
+                                <div className="studio-run-list-copy">
+                                  <Space wrap>
+                                    <strong>{lastTestRunResult.supervisorRun.label}</strong>
+                                    <Tag color={lastTestRunResult.supervisorRun.status === 'succeeded' ? 'success' : lastTestRunResult.supervisorRun.status === 'failed' ? 'error' : 'processing'}>
+                                      {lastTestRunResult.supervisorRun.status}
+                                    </Tag>
+                                    <Button size="small" onClick={() => navigate(`/studio/runs/${lastTestRunResult.supervisorRun!.runId}`)}>
+                                      查看过程
+                                    </Button>
+                                  </Space>
+                                  {lastTestRunResult.supervisorRun.resultSummary?.content ? (
+                                    <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
+                                      {lastTestRunResult.supervisorRun.resultSummary.content}
+                                    </Paragraph>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <Text type="secondary">暂无 Supervisor 运行记录</Text>
+                              )}
+                            </div>
+
+                            <div className="studio-form-field">
+                              <Text type="secondary">成员运行 ({lastTestRunResult.memberRuns.length})</Text>
+                              {lastTestRunResult.memberRuns.length === 0 ? (
+                                <Text type="secondary">暂无成员运行记录</Text>
+                              ) : (
+                                <List
+                                  className="studio-run-list"
+                                  size="small"
+                                  dataSource={lastTestRunResult.memberRuns}
+                                  renderItem={(memberRun) => (
+                                    <List.Item className="studio-run-list-item">
+                                      <div className="studio-run-list-copy">
+                                        <Space wrap>
+                                          <strong>{memberRun.label}</strong>
+                                          <Tag color={memberRun.status === 'succeeded' ? 'success' : memberRun.status === 'failed' ? 'error' : 'processing'}>
+                                            {memberRun.status}
+                                          </Tag>
+                                          <Button size="small" onClick={() => navigate(`/studio/runs/${memberRun.runId}`)}>
+                                            查看过程
+                                          </Button>
+                                        </Space>
+                                        {memberRun.resultSummary?.content ? (
+                                          <Paragraph className="studio-run-preview" ellipsis={{ rows: 2 }}>
+                                            {memberRun.resultSummary.content}
+                                          </Paragraph>
+                                        ) : null}
+                                      </div>
+                                    </List.Item>
+                                  )}
+                                />
+                              )}
+                            </div>
+
+                            {lastTestRunResult.finalAssistantMessage ? (
+                              <div className="studio-form-field">
+                                <Text type="secondary">最终回复</Text>
+                                <Paragraph className="studio-result-copy">
+                                  {lastTestRunResult.finalAssistantMessage.content}
+                                </Paragraph>
+                              </div>
+                            ) : null}
+
+                            {lastTestRunResult.teamKnowledgeHits.length > 0 ? (
+                              <div className="studio-form-field">
+                                <Text type="secondary">团队知识命中 ({lastTestRunResult.teamKnowledgeHits.length})</Text>
+                                <Space wrap>
+                                  {lastTestRunResult.teamKnowledgeHits.map((hit, idx) => (
+                                    <Tag key={idx} color="gold">{hit.title || hit.docId}</Tag>
+                                  ))}
+                                </Space>
+                              </div>
+                            ) : null}
+                          </div>
+                        ),
+                      },
+                    ]}
+                  />
                 ) : null}
 
                 <div className="studio-runs-header">

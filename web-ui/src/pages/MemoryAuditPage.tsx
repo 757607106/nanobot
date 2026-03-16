@@ -311,7 +311,6 @@ export default function MemoryAuditPage() {
                     </div>
                     <Text type="secondary">{item.description || '暂未补充团队说明。'}</Text>
                     <div className="studio-agent-list-meta">
-                      <Tag>{item.workflowMode}</Tag>
                       <Tag>{item.memberCount} agents</Tag>
                     </div>
                   </div>

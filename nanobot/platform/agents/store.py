@@ -55,12 +55,18 @@ class AgentDefinitionStore:
             return None
         return AgentDefinition.from_record(dict(row))
 
-    def get(self, agent_id: str) -> AgentDefinition | None:
+    def get(self, agent_id: str, *, tenant_id: str | None = None) -> AgentDefinition | None:
         conn = self._connect()
-        row = conn.execute(
-            "SELECT * FROM agent_definitions WHERE agent_id = ?",
-            (agent_id,),
-        ).fetchone()
+        if tenant_id is not None:
+            row = conn.execute(
+                "SELECT * FROM agent_definitions WHERE agent_id = ? AND tenant_id = ?",
+                (agent_id, tenant_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM agent_definitions WHERE agent_id = ?",
+                (agent_id,),
+            ).fetchone()
         conn.close()
         return self._deserialize(row)
 
@@ -137,35 +143,62 @@ class AgentDefinitionStore:
             raise RuntimeError(f"Failed to load created agent definition {agent.agent_id}")
         return created
 
-    def update(self, agent: AgentDefinition) -> AgentDefinition | None:
+    def update(self, agent: AgentDefinition, *, tenant_id: str | None = None) -> AgentDefinition | None:
         conn = self._connect()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE agent_definitions
-            SET name = ?, enabled = ?, source_template_name = ?, config_json = ?, updated_at = ?
-            WHERE agent_id = ?
-            """,
-            (
-                agent.name,
-                1 if agent.enabled else 0,
-                agent.source_template_name,
-                agent.to_storage_json(),
-                agent.updated_at,
-                agent.agent_id,
-            ),
-        )
+        if tenant_id is not None:
+            cursor.execute(
+                """
+                UPDATE agent_definitions
+                SET name = ?, enabled = ?, source_template_name = ?, config_json = ?, updated_at = ?
+                WHERE agent_id = ? AND tenant_id = ?
+                """,
+                (
+                    agent.name,
+                    1 if agent.enabled else 0,
+                    agent.source_template_name,
+                    agent.to_storage_json(),
+                    agent.updated_at,
+                    agent.agent_id,
+                    tenant_id,
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE agent_definitions
+                SET name = ?, enabled = ?, source_template_name = ?, config_json = ?, updated_at = ?
+                WHERE agent_id = ?
+                """,
+                (
+                    agent.name,
+                    1 if agent.enabled else 0,
+                    agent.source_template_name,
+                    agent.to_storage_json(),
+                    agent.updated_at,
+                    agent.agent_id,
+                ),
+            )
         conn.commit()
         updated = cursor.rowcount > 0
         conn.close()
         if not updated:
             return None
-        return self.get(agent.agent_id)
+        return self.get(agent.agent_id, tenant_id=tenant_id)
 
-    def delete(self, agent_id: str) -> bool:
+    def delete(self, agent_id: str, *, tenant_id: str | None = None) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM agent_definitions WHERE agent_id = ?", (agent_id,))
+        if tenant_id is not None:
+            cursor.execute(
+                "DELETE FROM agent_definitions WHERE agent_id = ? AND tenant_id = ?",
+                (agent_id, tenant_id),
+            )
+        else:
+            cursor.execute(
+                "DELETE FROM agent_definitions WHERE agent_id = ?",
+                (agent_id,),
+            )
         deleted = cursor.rowcount > 0
         conn.commit()
         conn.close()

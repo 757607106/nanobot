@@ -54,7 +54,8 @@ def create_team(
 @router.get("/api/v1/teams/{team_id}")
 def get_team(request: Request, team_id: str) -> JSONResponse:
     try:
-        data = request.app.state.teams.get_team(team_id)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.teams.get_team(team_id, tenant_id=tenant_id)
     except TeamDefinitionNotFoundError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     return _json_response(200, _ok(data))
@@ -89,7 +90,8 @@ def update_team(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        data = request.app.state.teams.update_team(team_id, payload)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.teams.update_team(team_id, payload, tenant_id=tenant_id)
     except TeamDefinitionNotFoundError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     except TeamDefinitionConflictError as exc:
@@ -102,7 +104,8 @@ def update_team(
 @router.delete("/api/v1/teams/{team_id}")
 def delete_team(request: Request, team_id: str) -> JSONResponse:
     try:
-        deleted = request.app.state.teams.delete_team(team_id)
+        tenant_id = get_tenant_id(request)
+        deleted = request.app.state.teams.delete_team(team_id, tenant_id=tenant_id)
     except TeamDefinitionNotFoundError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     return _json_response(200, _ok({"deleted": deleted}))
@@ -115,7 +118,8 @@ def copy_team(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        data = request.app.state.teams.copy_team(team_id, payload)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.teams.copy_team(team_id, payload, tenant_id=tenant_id)
     except TeamDefinitionNotFoundError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     except TeamDefinitionConflictError as exc:
@@ -128,7 +132,8 @@ def copy_team(
 @router.post("/api/v1/teams/{team_id}/enable")
 def enable_team(request: Request, team_id: str) -> JSONResponse:
     try:
-        data = request.app.state.teams.set_enabled(team_id, True)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.teams.set_enabled(team_id, True, tenant_id=tenant_id)
     except TeamDefinitionNotFoundError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     return _json_response(200, _ok(data))
@@ -137,7 +142,8 @@ def enable_team(request: Request, team_id: str) -> JSONResponse:
 @router.post("/api/v1/teams/{team_id}/disable")
 def disable_team(request: Request, team_id: str) -> JSONResponse:
     try:
-        data = request.app.state.teams.set_enabled(team_id, False)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.teams.set_enabled(team_id, False, tenant_id=tenant_id)
     except TeamDefinitionNotFoundError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     return _json_response(200, _ok(data))
@@ -175,5 +181,4 @@ async def retry_team_run(
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     except ValueError as exc:
         raise APIError(400, "TEAM_RUN_RETRY_INVALID", str(exc)) from exc
-    return _json_response(200, _ok(data))
     return _json_response(200, _ok(data))

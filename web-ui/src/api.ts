@@ -17,6 +17,8 @@ import type {
   CalendarEvent,
   CalendarEventInput,
   CalendarSettings,
+  ChannelBinding,
+  ChannelBindingMutationInput,
   ChannelDetailResponse,
   ChannelListResponse,
   ChannelProbeResult,
@@ -413,6 +415,30 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+
+  // Channel Bindings
+  getChannelBindings: () => request<ChannelBinding[]>('/channel-bindings'),
+  getChannelBinding: (bindingId: string) => request<ChannelBinding>(`/channel-bindings/${encodeURIComponent(bindingId)}`),
+  createChannelBinding: (payload: ChannelBindingMutationInput) =>
+    request<ChannelBinding>('/channel-bindings', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateChannelBinding: (bindingId: string, payload: Partial<ChannelBindingMutationInput>) =>
+    request<ChannelBinding>(`/channel-bindings/${encodeURIComponent(bindingId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteChannelBinding: (bindingId: string) =>
+    request<{ deleted: boolean }>(`/channel-bindings/${encodeURIComponent(bindingId)}`, {
+      method: 'DELETE',
+    }),
+  resolveChannelBinding: (payload: { channelName: string; chatId: string }) =>
+    request<{ binding: ChannelBinding | null; resolved: boolean }>('/channel-bindings/resolve', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   updateConfig: (config: ConfigData) =>
     request<ConfigData>('/config', {
       method: 'PUT',

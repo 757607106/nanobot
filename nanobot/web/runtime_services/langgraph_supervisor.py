@@ -99,7 +99,7 @@ class NanobotSupervisorLLM(BaseChatModel):
 
     provider: Any = Field(exclude=True)
     model_name: str = ""
-    _bound_tools: list[dict[str, Any]] | None = None
+    bound_tools: list[dict[str, Any]] | None = Field(default=None, exclude=True)
 
     class Config:
         arbitrary_types_allowed = True
@@ -115,13 +115,9 @@ class NanobotSupervisorLLM(BaseChatModel):
         run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = pool.submit(asyncio.run, self._agenerate(messages, stop, run_manager, **kwargs)).result()
-            return result
-        return asyncio.run(self._agenerate(messages, stop, run_manager, **kwargs))
+        raise NotImplementedError(
+            "NanobotSupervisorLLM is async-only. Use _agenerate() via LangGraph's async invoke."
+        )
 
     async def _agenerate(
         self,
@@ -133,8 +129,8 @@ class NanobotSupervisorLLM(BaseChatModel):
         openai_messages = _langchain_to_openai_messages(messages)
 
         tools = None
-        if self._bound_tools:
-            tools = self._bound_tools
+        if self.bound_tools:
+            tools = self.bound_tools
 
         response = await self.provider.chat_with_retry(
             messages=openai_messages,
@@ -155,7 +151,7 @@ class NanobotSupervisorLLM(BaseChatModel):
 
         bound = self.model_copy()
         bound.model_name = self.model_name
-        bound._bound_tools = [convert_to_openai_tool(t) for t in tools]
+        bound.bound_tools = [convert_to_openai_tool(t) for t in tools]
         return bound
 
 

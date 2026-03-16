@@ -326,8 +326,8 @@ class AgentDefinitionService:
             updated_at=now_iso(),
         )
 
-    def require_agent(self, agent_id: str) -> AgentDefinition:
-        agent = self.store.get(agent_id)
+    def require_agent(self, agent_id: str, *, tenant_id: str | None = None) -> AgentDefinition:
+        agent = self.store.get(agent_id, tenant_id=tenant_id)
         if agent is None:
             raise AgentDefinitionNotFoundError(agent_id)
         return agent
@@ -342,8 +342,8 @@ class AgentDefinitionService:
             )
         ]
 
-    def get_agent(self, agent_id: str) -> dict[str, Any]:
-        return self.require_agent(agent_id).to_dict()
+    def get_agent(self, agent_id: str, *, tenant_id: str | None = None) -> dict[str, Any]:
+        return self.require_agent(agent_id, tenant_id=tenant_id).to_dict()
 
     def create_agent(
         self,
@@ -363,20 +363,23 @@ class AgentDefinitionService:
         )
         return self.store.create(agent).to_dict()
 
-    def update_agent(self, agent_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        updated = self.store.update(self._apply_update(self.require_agent(agent_id), payload))
+    def update_agent(self, agent_id: str, payload: dict[str, Any], *, tenant_id: str | None = None) -> dict[str, Any]:
+        updated = self.store.update(
+            self._apply_update(self.require_agent(agent_id, tenant_id=tenant_id), payload),
+            tenant_id=tenant_id,
+        )
         if updated is None:
             raise AgentDefinitionNotFoundError(agent_id)
         return updated.to_dict()
 
-    def delete_agent(self, agent_id: str) -> bool:
-        if not self.store.delete(agent_id):
+    def delete_agent(self, agent_id: str, *, tenant_id: str | None = None) -> bool:
+        if not self.store.delete(agent_id, tenant_id=tenant_id):
             raise AgentDefinitionNotFoundError(agent_id)
         return True
 
-    def copy_agent(self, agent_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def copy_agent(self, agent_id: str, payload: dict[str, Any] | None = None, *, tenant_id: str | None = None) -> dict[str, Any]:
         payload = payload or {}
-        source = self.require_agent(agent_id)
+        source = self.require_agent(agent_id, tenant_id=tenant_id)
         name = (
             self._normalize_text(payload.get("name"), field_name="name")
             or self._next_copy_name(source.name, tenant_id=source.tenant_id)
@@ -392,9 +395,9 @@ class AgentDefinitionService:
         )
         return self.store.create(clone).to_dict()
 
-    def set_enabled(self, agent_id: str, enabled: bool) -> dict[str, Any]:
-        agent = replace(self.require_agent(agent_id), enabled=enabled, updated_at=now_iso())
-        updated = self.store.update(agent)
+    def set_enabled(self, agent_id: str, enabled: bool, *, tenant_id: str | None = None) -> dict[str, Any]:
+        agent = replace(self.require_agent(agent_id, tenant_id=tenant_id), enabled=enabled, updated_at=now_iso())
+        updated = self.store.update(agent, tenant_id=tenant_id)
         if updated is None:
             raise AgentDefinitionNotFoundError(agent_id)
         return updated.to_dict()

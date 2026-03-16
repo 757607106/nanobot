@@ -90,8 +90,8 @@ class ChannelBindingService:
             for b in self.store.list_all(tenant_id=tenant_id, instance_id=self.instance_id)
         ]
 
-    def get_binding(self, binding_id: str) -> dict[str, Any]:
-        binding = self.store.get(binding_id)
+    def get_binding(self, binding_id: str, *, tenant_id: str | None = None) -> dict[str, Any]:
+        binding = self.store.get(binding_id, tenant_id=tenant_id)
         if binding is None:
             raise ChannelBindingNotFoundError(binding_id)
         return binding.to_dict()
@@ -140,8 +140,8 @@ class ChannelBindingService:
         )
         return self.store.create(binding).to_dict()
 
-    def update_binding(self, binding_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        existing = self.store.get(binding_id)
+    def update_binding(self, binding_id: str, payload: dict[str, Any], *, tenant_id: str | None = None) -> dict[str, Any]:
+        existing = self.store.get(binding_id, tenant_id=tenant_id)
         if existing is None:
             raise ChannelBindingNotFoundError(binding_id)
 
@@ -189,12 +189,12 @@ class ChannelBindingService:
             metadata=payload["metadata"] if "metadata" in payload and isinstance(payload["metadata"], dict) else existing.metadata,
             updated_at=now_iso(),
         )
-        result = self.store.update(updated)
+        result = self.store.update(updated, tenant_id=tenant_id)
         if result is None:
             raise ChannelBindingNotFoundError(binding_id)
         return result.to_dict()
 
-    def delete_binding(self, binding_id: str) -> bool:
-        if not self.store.delete(binding_id):
+    def delete_binding(self, binding_id: str, *, tenant_id: str | None = None) -> bool:
+        if not self.store.delete(binding_id, tenant_id=tenant_id):
             raise ChannelBindingNotFoundError(binding_id)
         return True

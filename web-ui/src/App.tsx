@@ -30,6 +30,8 @@ const SystemLayoutPage = lazy(() => import('./pages/SystemLayoutPage'))
 const SystemPage = lazy(() => import('./pages/SystemPage'))
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const ValidationPage = lazy(() => import('./pages/ValidationPage'))
+const ChannelBindingsPage = lazy(() => import('./pages/ChannelBindingsPage'))
+const ChannelsLayoutPage = lazy(() => import('./pages/ChannelsLayoutPage'))
 
 function RouteFallback() {
   return (
@@ -219,7 +221,13 @@ export function AppRoutes() {
         )}
       >
         <Route path="chat" element={withRouteSuspense(<ChatPage />)} />
-        <Route path="channels" element={withRouteSuspense(<ChannelsPage />)} />
+        <Route path="channels" element={withRouteSuspense(<ChannelsLayoutPage />)}>
+          <Route index element={<Navigate to="list" replace />} />
+          <Route path="list" element={withRouteSuspense(<ChannelsPage />)} />
+          <Route path="bindings" element={withRouteSuspense(<ChannelBindingsPage />)} />
+          <Route path="bindings/new" element={withRouteSuspense(<ChannelBindingsPage />)} />
+          <Route path="bindings/:bindingId" element={withRouteSuspense(<ChannelBindingsPage />)} />
+        </Route>
         <Route path="channels/:channelName" element={withRouteSuspense(<ChannelDetailPage />)} />
         <Route path="models" element={withRouteSuspense(<ModelsPage />)} />
         <Route path="studio" element={withRouteSuspense(<StudioLayoutPage />)}>

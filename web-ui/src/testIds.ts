@@ -70,4 +70,8 @@ export const testIds = {
     detailTestInput: 'mcp-detail-test-input',
     detailTestSend: 'mcp-detail-test-send',
   },
+  channelBindings: {
+    save: 'channel-bindings-save',
+    delete: 'channel-bindings-delete',
+  },
 } as const

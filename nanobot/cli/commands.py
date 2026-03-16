@@ -315,12 +315,19 @@ def gateway(
     """Start the nanobot gateway."""
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
+    from nanobot.channels.dispatch import ChannelMessageDispatcher
     from nanobot.channels.manager import ChannelManager
+    from nanobot.config.loader import get_config_path
     from nanobot.config.paths import get_cron_dir
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
     from nanobot.heartbeat.service import HeartbeatService
+    from nanobot.platform.agents import AgentDefinitionService, AgentDefinitionStore
+    from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBindingStore
+    from nanobot.platform.instances import PlatformInstanceService
+    from nanobot.platform.teams import TeamDefinitionService, TeamDefinitionStore
     from nanobot.session.manager import SessionManager
+    from nanobot.web.runtime_services.channel_routing import ChannelRoutingService
 
     if verbose:
         import logging
@@ -340,6 +347,186 @@ def gateway(
     cron_store_path = get_cron_dir() / "jobs.json"
     cron = CronService(cron_store_path)
 
+    # --- Platform services for multi-agent channel routing ---
+    instance = PlatformInstanceService().get_default_instance(get_config_path())
+    agents_service = AgentDefinitionService(
+        AgentDefinitionStore(instance.agent_definitions_db_path()),
+        instance_id=instance.id,
+    )
+    teams_service = TeamDefinitionService(
+        TeamDefinitionStore(instance.team_definitions_db_path()),
+        instance_id=instance.id,
+        agent_lookup=agents_service.require_agent,
+    )
+    channel_bindings = ChannelBindingService(
+        ChannelBindingStore(instance.channel_bindings_db_path()),
+        instance_id=instance.id,
+        agent_lookup=agents_service.require_agent,
+        team_lookup=teams_service.require_team,
+    )
+    routing_service = ChannelRoutingService(channel_bindings)
+
+    # Create channel message dispatcher for routing
+    async def _cli_agent_handler(agent_id, msg):
+        """Route a channel message to a specific agent definition."""
+        from loguru import logger as _log
+
+        try:
+            agent_def = agents_service.get_agent(agent_id)
+        except Exception:
+            _log.warning("Agent definition '{}' not found for channel routing", agent_id)
+            return f"Agent '{agent_id}' not found."
+
+        sys_prompt = str(agent_def.get("systemPrompt") or "").strip()
+        tool_allow = list(agent_def.get("toolAllowlist") or [])
+        skills = list(agent_def.get("skillIds") or [])
+
+        isolated = AgentLoop(
+            bus=bus,
+            provider=provider,
+            workspace=config.workspace_path,
+            model=config.agents.defaults.model,
+            max_iterations=config.agents.defaults.max_tool_iterations,
+            context_window_tokens=config.agents.defaults.context_window_tokens,
+            brave_api_key=config.tools.web.search.api_key or None,
+            web_proxy=config.tools.web.proxy or None,
+            exec_config=config.tools.exec,
+            restrict_to_workspace=config.tools.restrict_to_workspace,
+            session_manager=session_manager,
+            mcp_servers=config.tools.mcp_servers,
+            channels_config=config.channels,
+            tool_allowlist=tool_allow or None,
+            skill_names=skills or None,
+            system_prompt_override=sys_prompt or None,
+        )
+        return await isolated.process_direct(
+            msg.content,
+            session_key=f"agent:{agent_id}:{msg.session_key}",
+            channel=msg.channel,
+            chat_id=msg.chat_id,
+        )
+
+    async def _cli_team_handler(team_id, msg):
+        """Route a channel message to a team via LangGraph supervisor."""
+        from langchain_core.messages import AIMessage, HumanMessage
+        from langchain_core.tools import StructuredTool
+        from langgraph.prebuilt import create_react_agent
+        from loguru import logger as _log
+
+        from nanobot.platform.teams.models import SupervisorConfig
+        from nanobot.web.runtime_services.langgraph_supervisor import (
+            NanobotSupervisorLLM,
+            _build_supervisor_prompt,
+            _slugify_tool_name,
+        )
+
+        try:
+            team = teams_service.get_team(team_id)
+        except Exception:
+            _log.warning("Team definition '{}' not found for channel routing", team_id)
+            return f"Team '{team_id}' not found."
+
+        supervisor_id = team.get("supervisorAgentId")
+        if not supervisor_id:
+            return "Team has no supervisor agent configured."
+
+        try:
+            supervisor = agents_service.get_agent(supervisor_id)
+        except Exception:
+            return f"Supervisor agent '{supervisor_id}' not found."
+
+        member_ids = team.get("memberAgentIds") or []
+        members = []
+        for mid in member_ids:
+            try:
+                members.append(agents_service.get_agent(mid))
+            except Exception:
+                _log.warning("Member agent '{}' not found, skipping", mid)
+
+        supervisor_llm = NanobotSupervisorLLM(
+            provider=provider, model_name=config.agents.defaults.model,
+        )
+        sup_config = SupervisorConfig(**(team.get("supervisorConfig") or {}))
+
+        # Build simplified member tools (each runs an isolated AgentLoop)
+        member_tools: list[StructuredTool] = []
+        for member in members:
+            _m = member
+            _m_name = member["name"]
+            _m_id = member["agentId"]
+            tool_name = f"call_{_slugify_tool_name(_m_name)}"
+            role_hint = str(member.get("teamRoleHint") or "").strip()
+            desc = role_hint or str(
+                member.get("description") or member.get("systemPrompt") or ""
+            ).strip()[:200]
+
+            async def _call_member(
+                task: str,
+                _member=_m,
+                _member_id=_m_id,
+            ) -> str:
+                m_prompt = str(_member.get("systemPrompt") or "").strip()
+                m_tools = list(_member.get("toolAllowlist") or [])
+                m_skills = list(_member.get("skillIds") or [])
+                iso = AgentLoop(
+                    bus=bus,
+                    provider=provider,
+                    workspace=config.workspace_path,
+                    model=config.agents.defaults.model,
+                    max_iterations=config.agents.defaults.max_tool_iterations,
+                    context_window_tokens=config.agents.defaults.context_window_tokens,
+                    brave_api_key=config.tools.web.search.api_key or None,
+                    web_proxy=config.tools.web.proxy or None,
+                    exec_config=config.tools.exec,
+                    restrict_to_workspace=config.tools.restrict_to_workspace,
+                    session_manager=session_manager,
+                    mcp_servers=config.tools.mcp_servers,
+                    channels_config=config.channels,
+                    tool_allowlist=m_tools or None,
+                    skill_names=m_skills or None,
+                    system_prompt_override=m_prompt or None,
+                    include_workspace_memory=False,
+                )
+                return await iso.process_direct(
+                    task,
+                    session_key=f"team:{team_id}:member:{_member_id}",
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                )
+
+            member_tools.append(StructuredTool.from_function(
+                coroutine=_call_member,
+                name=tool_name,
+                description=f"Delegate a task to team member '{_m_name}'. {desc}",
+            ))
+
+        system_prompt = _build_supervisor_prompt(
+            team, supervisor, members, supervisor_config=sup_config,
+        )
+        graph = create_react_agent(
+            model=supervisor_llm, tools=member_tools, prompt=system_prompt,
+        )
+
+        try:
+            result = await graph.ainvoke(
+                {"messages": [HumanMessage(content=msg.content)]},
+                config={"recursion_limit": sup_config.recursion_limit},
+            )
+        except Exception as exc:
+            _log.exception("Team '{}' LangGraph execution failed", team["name"])
+            return f"Team execution error: {exc}"
+
+        for m in reversed(result.get("messages", [])):
+            if isinstance(m, AIMessage) and m.content and not m.tool_calls:
+                return str(m.content)
+        return "(Team produced no response)"
+
+    dispatcher = ChannelMessageDispatcher(
+        bus,
+        agent_handler=_cli_agent_handler,
+        team_handler=_cli_team_handler,
+    )
+
     # Create agent with cron service
     agent = AgentLoop(
         bus=bus,
@@ -356,6 +543,7 @@ def gateway(
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        channel_dispatcher=dispatcher,
     )
 
     # Set cron callback (needs agent)
@@ -399,8 +587,8 @@ def gateway(
         return response
     cron.on_job = on_cron_job
 
-    # Create channel manager
-    channels = ChannelManager(config, bus)
+    # Create channel manager with routing support
+    channels = ChannelManager(config, bus, routing_service=routing_service)
 
     def _pick_heartbeat_target() -> tuple[str, str]:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
@@ -457,6 +645,12 @@ def gateway(
         console.print(f"[green]✓[/green] Channels enabled: {', '.join(channels.enabled_channels)}")
     else:
         console.print("[yellow]Warning: No channels enabled[/yellow]")
+
+    bindings_count = len(channel_bindings.list_bindings())
+    if bindings_count > 0:
+        console.print(f"[green]✓[/green] Channel routing: {bindings_count} binding(s) active")
+    else:
+        console.print("[dim]Channel routing: no bindings configured (messages use default agent)[/dim]")
 
     cron_status = cron.status()
     if cron_status["jobs"] > 0:

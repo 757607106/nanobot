@@ -295,8 +295,8 @@ class TeamDefinitionService:
             updated_at=now_iso(),
         )
 
-    def require_team(self, team_id: str) -> TeamDefinition:
-        team = self.store.get(team_id)
+    def require_team(self, team_id: str, *, tenant_id: str | None = None) -> TeamDefinition:
+        team = self.store.get(team_id, tenant_id=tenant_id)
         if team is None:
             raise TeamDefinitionNotFoundError(team_id)
         return team
@@ -311,26 +311,29 @@ class TeamDefinitionService:
             )
         ]
 
-    def get_team(self, team_id: str) -> dict[str, Any]:
-        return self.require_team(team_id).to_dict()
+    def get_team(self, team_id: str, *, tenant_id: str | None = None) -> dict[str, Any]:
+        return self.require_team(team_id, tenant_id=tenant_id).to_dict()
 
     def create_team(self, payload: dict[str, Any], *, tenant_id: str) -> dict[str, Any]:
         return self.store.create(self._normalize_create_payload(payload, tenant_id=tenant_id)).to_dict()
 
-    def update_team(self, team_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        updated = self.store.update(self._apply_update(self.require_team(team_id), payload))
+    def update_team(self, team_id: str, payload: dict[str, Any], *, tenant_id: str | None = None) -> dict[str, Any]:
+        updated = self.store.update(
+            self._apply_update(self.require_team(team_id, tenant_id=tenant_id), payload),
+            tenant_id=tenant_id,
+        )
         if updated is None:
             raise TeamDefinitionNotFoundError(team_id)
         return updated.to_dict()
 
-    def delete_team(self, team_id: str) -> bool:
-        if not self.store.delete(team_id):
+    def delete_team(self, team_id: str, *, tenant_id: str | None = None) -> bool:
+        if not self.store.delete(team_id, tenant_id=tenant_id):
             raise TeamDefinitionNotFoundError(team_id)
         return True
 
-    def copy_team(self, team_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def copy_team(self, team_id: str, payload: dict[str, Any] | None = None, *, tenant_id: str | None = None) -> dict[str, Any]:
         payload = payload or {}
-        source = self.require_team(team_id)
+        source = self.require_team(team_id, tenant_id=tenant_id)
         name = (
             self._normalize_text(payload.get("name"), field_name="name")
             or self._next_copy_name(source.name, tenant_id=source.tenant_id)
@@ -346,9 +349,9 @@ class TeamDefinitionService:
         )
         return self.store.create(clone).to_dict()
 
-    def set_enabled(self, team_id: str, enabled: bool) -> dict[str, Any]:
-        team = replace(self.require_team(team_id), enabled=enabled, updated_at=now_iso())
-        updated = self.store.update(team)
+    def set_enabled(self, team_id: str, enabled: bool, *, tenant_id: str | None = None) -> dict[str, Any]:
+        team = replace(self.require_team(team_id, tenant_id=tenant_id), enabled=enabled, updated_at=now_iso())
+        updated = self.store.update(team, tenant_id=tenant_id)
         if updated is None:
             raise TeamDefinitionNotFoundError(team_id)
         return updated.to_dict()

@@ -28,6 +28,7 @@ from nanobot.web.runtime_services import (
     WebTeamRuntimeService,
     WebWorkspaceRuntimeService,
 )
+from nanobot.web.runtime_services.channel_runtime import WebChannelRuntimeService
 
 DOCUMENT_DEFINITIONS: dict[str, dict[str, Any]] = {
     "AGENTS.md": {
@@ -92,6 +93,7 @@ class WebAppState:
         self.app_teams = None
         self.app_knowledge = None
         self.app_memory = None
+        self.channel_bindings_service = None  # Set by lifespan before channel_runtime.start()
         self.calendar_repo = get_calendar_repository(config.workspace_path)
 
         self.agent_runtime = WebAgentRuntimeService(self)
@@ -100,6 +102,7 @@ class WebAppState:
         self.schedule_runtime = WebScheduleRuntimeService(self)
         self.workspace_runtime = WebWorkspaceRuntimeService(self, DOCUMENT_DEFINITIONS)
         self.config_runtime = WebConfigRuntimeService(self)
+        self.channel_runtime = WebChannelRuntimeService(self)
         self.cron = CronService(self.instance.cron_dir() / "jobs.json", on_job=self.schedule_runtime.handle_cron_job)
         self.calendar_reminders = CalendarReminderService(self.cron)
         self._cron_loop: asyncio.AbstractEventLoop | None = None
@@ -284,6 +287,7 @@ class WebAppState:
         return self.workspace_runtime.reset_document(document_id)
 
     async def shutdown_async(self) -> None:
+        self.channel_runtime.stop()
         self.schedule_runtime.stop_runtime()
         await self.team_runtime.shutdown_async()
         if self.agent is not None:

@@ -477,9 +477,8 @@ export interface TeamDefinition {
   instanceId: string
   name: string
   description: string
-  leaderAgentId: string
+  supervisorAgentId: string
   memberAgentIds: string[]
-  workflowMode: string
   sharedKnowledgeBindingIds: string[]
   memberAccessPolicy: Record<string, unknown>
   tags: string[]
@@ -492,9 +491,8 @@ export interface TeamDefinition {
 export interface TeamDefinitionMutationInput {
   name: string
   description?: string
-  leaderAgentId: string
+  supervisorAgentId: string
   memberAgentIds?: string[]
-  workflowMode?: string
   sharedKnowledgeBindingIds?: string[]
   memberAccessPolicy?: Record<string, unknown>
   tags?: string[]
@@ -765,7 +763,7 @@ export interface AgentTestRunResult {
 export interface TeamTestRunResult {
   team: TeamDefinition
   run: AgentRunSummary
-  leaderRun: AgentRunSummary | null
+  supervisorRun: AgentRunSummary | null
   memberRuns: AgentRunSummary[]
   finalAssistantMessage: ChatMessage | null
   teamKnowledgeHits: KnowledgeHit[]
@@ -1067,4 +1065,33 @@ export interface OpsActionResponse {
 
 export interface OpsActionTriggerResult {
   item: OpsActionItem
+}
+
+// ---------------------------------------------------------------------------
+// Channel Bindings
+// ---------------------------------------------------------------------------
+
+export interface ChannelBinding {
+  bindingId: string
+  tenantId: string
+  instanceId: string
+  channelName: string
+  channelChatId: string
+  targetType: 'agent' | 'team'
+  targetId: string
+  priority: number
+  enabled: boolean
+  metadata: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ChannelBindingMutationInput {
+  channelName: string
+  channelChatId?: string
+  targetType: 'agent' | 'team'
+  targetId: string
+  priority?: number
+  enabled?: boolean
+  metadata?: Record<string, unknown>
 }

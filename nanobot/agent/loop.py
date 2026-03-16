@@ -68,6 +68,7 @@ class AgentLoop:
         system_prompt_override: str | None = None,
         include_workspace_memory: bool = True,
         memory_sections: list[tuple[str, str]] | None = None,
+        channel_dispatcher: Any | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.bus = bus
@@ -108,6 +109,7 @@ class AgentLoop:
         )
 
         self._running = False
+        self._channel_dispatcher = channel_dispatcher
         self._mcp_servers = mcp_servers or {}
         self._mcp_stack: AsyncExitStack | None = None
         self._mcp_connected = False
@@ -320,7 +322,18 @@ class AgentLoop:
         ))
 
     async def _dispatch(self, msg: InboundMessage) -> None:
-        """Process a message under the global lock."""
+        """Process a message under the global lock.
+
+        If a ``channel_dispatcher`` is configured and the message carries
+        ``_routing_target_type`` metadata, dispatch via the channel
+        dispatcher instead of the default agent processing pipeline.
+        """
+        # Check for channel routing metadata
+        if self._channel_dispatcher is not None:
+            handled = await self._channel_dispatcher.dispatch(msg)
+            if handled:
+                return
+
         async with self._processing_lock:
             try:
                 response = await self._process_message(msg)

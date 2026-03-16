@@ -121,6 +121,12 @@ const mockApi = vi.hoisted(() => ({
   startWhatsAppBinding: vi.fn(),
   stopWhatsAppBinding: vi.fn(),
   addKnowledgeSource: vi.fn(),
+  getChannelBindings: vi.fn(),
+  getChannelBinding: vi.fn(),
+  createChannelBinding: vi.fn(),
+  updateChannelBinding: vi.fn(),
+  deleteChannelBinding: vi.fn(),
+  resolveChannelBinding: vi.fn(),
   updateSetupAgentDefaults: vi.fn(),
   updateSetupChannel: vi.fn(),
   updateSetupProvider: vi.fn(),
@@ -789,7 +795,9 @@ vi.mock('antd', async () => {
 import { AppRoutes } from '../App'
 import AppShell from '../components/AppShell'
 import CalendarPage from '../pages/CalendarPage'
+import ChannelBindingsPage from '../pages/ChannelBindingsPage'
 import ChannelDetailPage from '../pages/ChannelDetailPage'
+import ChannelsLayoutPage from '../pages/ChannelsLayoutPage'
 import ChannelsPage from '../pages/ChannelsPage'
 import ChatPage from '../pages/ChatPage'
 import CronPage from '../pages/CronPage'
@@ -1469,9 +1477,8 @@ function makeTeams() {
       instanceId: 'instance-default',
       name: 'Support Team',
       description: 'Coordinate support replies and QA.',
-      leaderAgentId: 'support-lead',
+      supervisorAgentId: 'support-lead',
       memberAgentIds: ['support-member'],
-      workflowMode: 'parallel_fanout',
       sharedKnowledgeBindingIds: ['support-kb'],
       memberAccessPolicy: {
         teamSharedKnowledge: 'members_read',
@@ -1627,6 +1634,67 @@ describe('web app smoke pages', () => {
     mockApi.getCalendarSettings.mockResolvedValue(makeCalendarSettings())
     mockApi.getChannel.mockResolvedValue(makeChannelDetail())
     mockApi.getChannels.mockResolvedValue(makeChannelsList())
+    mockApi.getChannelBindings.mockResolvedValue([{
+      bindingId: 'cb-test-001',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      channelName: 'telegram',
+      channelChatId: '*',
+      targetType: 'agent',
+      targetId: 'support-lead',
+      priority: 0,
+      enabled: true,
+      metadata: {},
+      createdAt: '2026-03-14T10:00:00Z',
+      updatedAt: '2026-03-14T10:00:00Z',
+    }])
+    mockApi.getChannelBinding.mockResolvedValue({
+      bindingId: 'cb-test-001',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      channelName: 'telegram',
+      channelChatId: '*',
+      targetType: 'agent',
+      targetId: 'support-lead',
+      priority: 0,
+      enabled: true,
+      metadata: {},
+      createdAt: '2026-03-14T10:00:00Z',
+      updatedAt: '2026-03-14T10:00:00Z',
+    })
+    mockApi.createChannelBinding.mockResolvedValue({
+      bindingId: 'cb-test-002',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      channelName: 'discord',
+      channelChatId: '*',
+      targetType: 'team',
+      targetId: 'support-team',
+      priority: 0,
+      enabled: true,
+      metadata: {},
+      createdAt: '2026-03-14T10:05:00Z',
+      updatedAt: '2026-03-14T10:05:00Z',
+    })
+    mockApi.updateChannelBinding.mockResolvedValue({
+      bindingId: 'cb-test-001',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      channelName: 'telegram',
+      channelChatId: '*',
+      targetType: 'agent',
+      targetId: 'support-lead',
+      priority: 1,
+      enabled: true,
+      metadata: {},
+      createdAt: '2026-03-14T10:00:00Z',
+      updatedAt: '2026-03-14T10:06:00Z',
+    })
+    mockApi.deleteChannelBinding.mockResolvedValue({ deleted: true })
+    mockApi.resolveChannelBinding.mockResolvedValue({
+      binding: null,
+      resolved: false,
+    })
     mockApi.getKnowledgeBases.mockResolvedValue([
       {
         kbId: 'support-kb',
@@ -2252,7 +2320,7 @@ describe('web app smoke pages', () => {
         lastErrorMessage: null,
         artifactPath: null,
       },
-      leaderRun: {
+      supervisorRun: {
         ...makeTeams()[0],
       } as any,
       memberRuns: [],
@@ -2294,7 +2362,7 @@ describe('web app smoke pages', () => {
         lastErrorMessage: null,
         artifactPath: null,
       },
-      leaderRun: null,
+      supervisorRun: null,
       memberRuns: [],
       finalAssistantMessage: null,
       teamKnowledgeHits: [],
@@ -2659,6 +2727,7 @@ describe('web app smoke pages', () => {
 
     expect(await screen.findByText('AI员工')).toBeInTheDocument()
     expect(screen.getByText('团队')).toBeInTheDocument()
+    expect(screen.queryByText('渠道绑定')).not.toBeInTheDocument()
     expect(screen.queryByText('记忆')).not.toBeInTheDocument()
     expect(screen.getByText('执行记录')).toBeInTheDocument()
     expect(screen.getByText('知识库')).toBeInTheDocument()
@@ -2747,6 +2816,28 @@ describe('web app smoke pages', () => {
     fireEvent.click(screen.getByText('团队记忆'))
     expect(await screen.findByText('记忆候选')).toBeInTheDocument()
     expect(screen.getByText('保存团队记忆')).toBeInTheDocument()
+  })
+
+  it('renders channel bindings page with list and form', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/channels/bindings/cb-test-001']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/channels/bindings/:bindingId" element={<ChannelBindingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('渠道绑定')).toBeInTheDocument()
+    expect(screen.getByText('绑定列表')).toBeInTheDocument()
+    expect(screen.getAllByText('telegram').length).toBeGreaterThan(0)
   })
 
   it('renders runs page with detail and timeline panels', async () => {
@@ -2969,6 +3060,29 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('把聊天渠道接进实例')).toBeInTheDocument()
     expect(screen.getByText('统一投递行为')).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
+  })
+
+  it('renders channels tabs inside the channels domain', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/channels/list']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/channels" element={<ChannelsLayoutPage />}>
+            <Route path="list" element={<div>Channels Placeholder</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('渠道列表')).toBeInTheDocument()
+    expect(screen.getByText('渠道绑定')).toBeInTheDocument()
   })
 
   it('renders the channel detail page', async () => {

@@ -54,12 +54,18 @@ class TeamDefinitionStore:
             return None
         return TeamDefinition.from_record(dict(row))
 
-    def get(self, team_id: str) -> TeamDefinition | None:
+    def get(self, team_id: str, *, tenant_id: str | None = None) -> TeamDefinition | None:
         conn = self._connect()
-        row = conn.execute(
-            "SELECT * FROM team_definitions WHERE team_id = ?",
-            (team_id,),
-        ).fetchone()
+        if tenant_id is not None:
+            row = conn.execute(
+                "SELECT * FROM team_definitions WHERE team_id = ? AND tenant_id = ?",
+                (team_id, tenant_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM team_definitions WHERE team_id = ?",
+                (team_id,),
+            ).fetchone()
         conn.close()
         return self._deserialize(row)
 
@@ -134,34 +140,60 @@ class TeamDefinitionStore:
             raise RuntimeError(f"Failed to load created team definition {team.team_id}")
         return created
 
-    def update(self, team: TeamDefinition) -> TeamDefinition | None:
+    def update(self, team: TeamDefinition, *, tenant_id: str | None = None) -> TeamDefinition | None:
         conn = self._connect()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE team_definitions
-            SET name = ?, enabled = ?, config_json = ?, updated_at = ?
-            WHERE team_id = ?
-            """,
-            (
-                team.name,
-                1 if team.enabled else 0,
-                team.to_storage_json(),
-                team.updated_at,
-                team.team_id,
-            ),
-        )
+        if tenant_id is not None:
+            cursor.execute(
+                """
+                UPDATE team_definitions
+                SET name = ?, enabled = ?, config_json = ?, updated_at = ?
+                WHERE team_id = ? AND tenant_id = ?
+                """,
+                (
+                    team.name,
+                    1 if team.enabled else 0,
+                    team.to_storage_json(),
+                    team.updated_at,
+                    team.team_id,
+                    tenant_id,
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE team_definitions
+                SET name = ?, enabled = ?, config_json = ?, updated_at = ?
+                WHERE team_id = ?
+                """,
+                (
+                    team.name,
+                    1 if team.enabled else 0,
+                    team.to_storage_json(),
+                    team.updated_at,
+                    team.team_id,
+                ),
+            )
         conn.commit()
         updated = cursor.rowcount > 0
         conn.close()
         if not updated:
             return None
-        return self.get(team.team_id)
+        return self.get(team.team_id, tenant_id=tenant_id)
 
-    def delete(self, team_id: str) -> bool:
+    def delete(self, team_id: str, *, tenant_id: str | None = None) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM team_definitions WHERE team_id = ?", (team_id,))
+        if tenant_id is not None:
+            cursor.execute(
+                "DELETE FROM team_definitions WHERE team_id = ? AND tenant_id = ?",
+                (team_id, tenant_id),
+            )
+        else:
+            cursor.execute(
+                "DELETE FROM team_definitions WHERE team_id = ?",
+                (team_id,),
+            )
         deleted = cursor.rowcount > 0
         conn.commit()
         conn.close()

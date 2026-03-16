@@ -151,6 +151,7 @@ class WebConfigRuntimeService:
         if old_agent is not None:
             asyncio.run(old_agent.close_mcp())
         self.rebuild_runtime(config)
+        self.state.channel_runtime.restart()
         return self.get_config()
 
     def get_system_status(self) -> dict[str, Any]:

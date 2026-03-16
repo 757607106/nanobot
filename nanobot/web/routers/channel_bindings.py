@@ -45,7 +45,8 @@ def create_channel_binding(
 @router.get("/api/v1/channel-bindings/{binding_id}")
 def get_channel_binding(request: Request, binding_id: str) -> JSONResponse:
     try:
-        data = request.app.state.channel_bindings_service.get_binding(binding_id)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.channel_bindings_service.get_binding(binding_id, tenant_id=tenant_id)
     except ChannelBindingNotFoundError as exc:
         raise APIError(404, "CHANNEL_BINDING_NOT_FOUND", "Channel binding not found.") from exc
     return _json_response(200, _ok(data))
@@ -58,7 +59,8 @@ def update_channel_binding(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        data = request.app.state.channel_bindings_service.update_binding(binding_id, payload)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.channel_bindings_service.update_binding(binding_id, payload, tenant_id=tenant_id)
     except ChannelBindingNotFoundError as exc:
         raise APIError(404, "CHANNEL_BINDING_NOT_FOUND", "Channel binding not found.") from exc
     except ChannelBindingConflictError as exc:
@@ -71,7 +73,8 @@ def update_channel_binding(
 @router.delete("/api/v1/channel-bindings/{binding_id}")
 def delete_channel_binding(request: Request, binding_id: str) -> JSONResponse:
     try:
-        deleted = request.app.state.channel_bindings_service.delete_binding(binding_id)
+        tenant_id = get_tenant_id(request)
+        deleted = request.app.state.channel_bindings_service.delete_binding(binding_id, tenant_id=tenant_id)
     except ChannelBindingNotFoundError as exc:
         raise APIError(404, "CHANNEL_BINDING_NOT_FOUND", "Channel binding not found.") from exc
     return _json_response(200, _ok({"deleted": deleted}))

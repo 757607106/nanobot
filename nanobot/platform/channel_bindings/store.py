@@ -56,12 +56,18 @@ class ChannelBindingStore:
             return None
         return ChannelBinding.from_record(dict(row))
 
-    def get(self, binding_id: str) -> ChannelBinding | None:
+    def get(self, binding_id: str, *, tenant_id: str | None = None) -> ChannelBinding | None:
         conn = self._connect()
-        row = conn.execute(
-            "SELECT * FROM channel_bindings WHERE binding_id = ?",
-            (binding_id,),
-        ).fetchone()
+        if tenant_id is not None:
+            row = conn.execute(
+                "SELECT * FROM channel_bindings WHERE binding_id = ? AND tenant_id = ?",
+                (binding_id, tenant_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM channel_bindings WHERE binding_id = ?",
+                (binding_id,),
+            ).fetchone()
         conn.close()
         return self._deserialize(row)
 
@@ -154,39 +160,70 @@ class ChannelBindingStore:
             raise RuntimeError(f"Failed to load created channel binding {binding.binding_id}")
         return created
 
-    def update(self, binding: ChannelBinding) -> ChannelBinding | None:
+    def update(self, binding: ChannelBinding, *, tenant_id: str | None = None) -> ChannelBinding | None:
         conn = self._connect()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE channel_bindings
-            SET channel_name = ?, channel_chat_id = ?, target_type = ?, target_id = ?,
-                priority = ?, enabled = ?, metadata_json = ?, updated_at = ?
-            WHERE binding_id = ?
-            """,
-            (
-                binding.channel_name,
-                binding.channel_chat_id,
-                binding.target_type,
-                binding.target_id,
-                binding.priority,
-                1 if binding.enabled else 0,
-                binding.to_storage_json(),
-                binding.updated_at,
-                binding.binding_id,
-            ),
-        )
+        if tenant_id is not None:
+            cursor.execute(
+                """
+                UPDATE channel_bindings
+                SET channel_name = ?, channel_chat_id = ?, target_type = ?, target_id = ?,
+                    priority = ?, enabled = ?, metadata_json = ?, updated_at = ?
+                WHERE binding_id = ? AND tenant_id = ?
+                """,
+                (
+                    binding.channel_name,
+                    binding.channel_chat_id,
+                    binding.target_type,
+                    binding.target_id,
+                    binding.priority,
+                    1 if binding.enabled else 0,
+                    binding.to_storage_json(),
+                    binding.updated_at,
+                    binding.binding_id,
+                    tenant_id,
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE channel_bindings
+                SET channel_name = ?, channel_chat_id = ?, target_type = ?, target_id = ?,
+                    priority = ?, enabled = ?, metadata_json = ?, updated_at = ?
+                WHERE binding_id = ?
+                """,
+                (
+                    binding.channel_name,
+                    binding.channel_chat_id,
+                    binding.target_type,
+                    binding.target_id,
+                    binding.priority,
+                    1 if binding.enabled else 0,
+                    binding.to_storage_json(),
+                    binding.updated_at,
+                    binding.binding_id,
+                ),
+            )
         conn.commit()
         updated = cursor.rowcount > 0
         conn.close()
         if not updated:
             return None
-        return self.get(binding.binding_id)
+        return self.get(binding.binding_id, tenant_id=tenant_id)
 
-    def delete(self, binding_id: str) -> bool:
+    def delete(self, binding_id: str, *, tenant_id: str | None = None) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM channel_bindings WHERE binding_id = ?", (binding_id,))
+        if tenant_id is not None:
+            cursor.execute(
+                "DELETE FROM channel_bindings WHERE binding_id = ? AND tenant_id = ?",
+                (binding_id, tenant_id),
+            )
+        else:
+            cursor.execute(
+                "DELETE FROM channel_bindings WHERE binding_id = ?",
+                (binding_id,),
+            )
         deleted = cursor.rowcount > 0
         conn.commit()
         conn.close()

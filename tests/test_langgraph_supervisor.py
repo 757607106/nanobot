@@ -240,7 +240,7 @@ class TestNanobotSupervisorLLM:
         from nanobot.web.runtime_services.langgraph_supervisor import NanobotSupervisorLLM
 
         llm = NanobotSupervisorLLM(provider=MagicMock(), model_name="test-model")
-        assert llm._bound_tools is None
+        assert llm.bound_tools is None
 
         # Create a mock tool with proper schema
         mock_tool = MagicMock()
@@ -252,10 +252,10 @@ class TestNanobotSupervisorLLM:
             mock_convert.return_value = {"type": "function", "function": {"name": "test_tool"}}
             bound = llm.bind_tools([mock_tool])
 
-        assert bound._bound_tools is not None
-        assert len(bound._bound_tools) == 1
+        assert bound.bound_tools is not None
+        assert len(bound.bound_tools) == 1
         # Original should be unchanged
-        assert llm._bound_tools is None
+        assert llm.bound_tools is None
 
     @pytest.mark.asyncio
     async def test_agenerate_calls_provider(self):

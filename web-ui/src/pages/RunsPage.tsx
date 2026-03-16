@@ -114,7 +114,6 @@ function eventPayloadSummary(eventType: string, payload?: Record<string, unknown
       return `mode: ${payload.effectiveMode || payload.requestedMode || 'keyword'} · hits: ${payload.hitCount || 0}`
     case 'team_definition_resolved':
       return [
-        `workflow: ${payload.workflowMode || 'parallel_fanout'}`,
         `members: ${Array.isArray(payload.memberAgentIds) ? payload.memberAgentIds.length : 0}`,
         `shared KB: ${Array.isArray(payload.sharedKnowledgeBindingIds) ? payload.sharedKnowledgeBindingIds.length : 0}`,
       ].join(' · ')
@@ -132,11 +131,24 @@ function eventPayloadSummary(eventType: string, payload?: Record<string, unknown
       return [payload.agentName, payload.runId].filter(Boolean).join(' · ')
     case 'team_completed':
       return [
-        `leader: ${payload.leaderRunId || 'n/a'}`,
+        `supervisor: ${payload.supervisorRunId || 'n/a'}`,
         `members: ${Array.isArray(payload.memberRunIds) ? payload.memberRunIds.length : 0}`,
       ].join(' · ')
     default:
       return JSON.stringify(payload, null, 2)
+  }
+}
+
+function controlScopeTag(scope: string) {
+  switch (scope) {
+    case 'leader':
+      return <Tag color="purple">Supervisor</Tag>
+    case 'member':
+      return <Tag color="cyan">成员</Tag>
+    case 'child':
+      return <Tag color="orange">子任务</Tag>
+    default:
+      return null
   }
 }
 
@@ -155,6 +167,7 @@ function renderTreeNode(node: AgentRunTreeNode, selectedRunId: string | null, na
             <strong>{node.label}</strong>
             <Tag>{node.kind}</Tag>
             <Tag color={statusColor(node.status)}>{node.status}</Tag>
+            {controlScopeTag(node.controlScope)}
           </Space>
           <Text type="secondary">{formatDateTimeZh(node.createdAt)}</Text>
         </div>
@@ -452,6 +465,7 @@ export default function RunsPage() {
                         <strong>{run.label}</strong>
                         <Tag color={statusColor(run.status)}>{run.status}</Tag>
                         <Tag>{run.kind}</Tag>
+                        {controlScopeTag(run.controlScope)}
                       </Space>
                       <Text type="secondary">{formatDateTimeZh(run.createdAt)}</Text>
                     </div>
@@ -501,6 +515,10 @@ export default function RunsPage() {
                   <div className="studio-form-field">
                     <Text type="secondary">团队</Text>
                     <Text>{selectedRun.teamId || '未绑定'}</Text>
+                  </div>
+                  <div className="studio-form-field">
+                    <Text type="secondary">角色</Text>
+                    <Space>{controlScopeTag(selectedRun.controlScope) || <Tag>top_level</Tag>}</Space>
                   </div>
                 </div>
 

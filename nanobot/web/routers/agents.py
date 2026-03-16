@@ -73,7 +73,8 @@ def create_agent(
 @router.get("/api/v1/agents/{agent_id}")
 def get_agent(request: Request, agent_id: str) -> JSONResponse:
     try:
-        data = request.app.state.agents.get_agent(agent_id)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.agents.get_agent(agent_id, tenant_id=tenant_id)
     except AgentDefinitionNotFoundError as exc:
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     return _json_response(200, _ok(data))
@@ -86,7 +87,8 @@ def update_agent(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        data = request.app.state.agents.update_agent(agent_id, payload)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.agents.update_agent(agent_id, payload, tenant_id=tenant_id)
     except AgentDefinitionNotFoundError as exc:
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     except AgentDefinitionConflictError as exc:
@@ -99,7 +101,8 @@ def update_agent(
 @router.delete("/api/v1/agents/{agent_id}")
 def delete_agent(request: Request, agent_id: str) -> JSONResponse:
     try:
-        deleted = request.app.state.agents.delete_agent(agent_id)
+        tenant_id = get_tenant_id(request)
+        deleted = request.app.state.agents.delete_agent(agent_id, tenant_id=tenant_id)
     except AgentDefinitionNotFoundError as exc:
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     return _json_response(200, _ok({"deleted": deleted}))
@@ -112,7 +115,8 @@ def copy_agent(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        data = request.app.state.agents.copy_agent(agent_id, payload)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.agents.copy_agent(agent_id, payload, tenant_id=tenant_id)
     except AgentDefinitionNotFoundError as exc:
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     except AgentDefinitionConflictError as exc:
@@ -125,7 +129,8 @@ def copy_agent(
 @router.post("/api/v1/agents/{agent_id}/enable")
 def enable_agent(request: Request, agent_id: str) -> JSONResponse:
     try:
-        data = request.app.state.agents.set_enabled(agent_id, True)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.agents.set_enabled(agent_id, True, tenant_id=tenant_id)
     except AgentDefinitionNotFoundError as exc:
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     return _json_response(200, _ok(data))
@@ -134,7 +139,8 @@ def enable_agent(request: Request, agent_id: str) -> JSONResponse:
 @router.post("/api/v1/agents/{agent_id}/disable")
 def disable_agent(request: Request, agent_id: str) -> JSONResponse:
     try:
-        data = request.app.state.agents.set_enabled(agent_id, False)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.agents.set_enabled(agent_id, False, tenant_id=tenant_id)
     except AgentDefinitionNotFoundError as exc:
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     return _json_response(200, _ok(data))
@@ -152,5 +158,4 @@ async def test_run_agent(
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     except ValueError as exc:
         raise APIError(400, "AGENT_TEST_RUN_INVALID", str(exc)) from exc
-    return _json_response(200, _ok(data))
     return _json_response(200, _ok(data))

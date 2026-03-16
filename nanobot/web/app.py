@@ -175,6 +175,8 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
             app.state.web.app_teams = teams
             app.state.web.app_knowledge = knowledge
             app.state.web.app_memory = memory
+            app.state.web.channel_bindings_service = channel_bindings_service
+            app.state.web.channel_runtime.start()
             yield
         finally:
             app.state.whatsapp_binding.shutdown()
