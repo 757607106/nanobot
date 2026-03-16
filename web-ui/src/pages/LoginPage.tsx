@@ -77,7 +77,7 @@ export default function LoginPage() {
           <div className="auth-showcase-copy">
             <Typography.Title level={1}>{PLATFORM_BRAND_NAME}</Typography.Title>
             <Typography.Paragraph>
-              {PLATFORM_SUBTITLE}，把多Agent协作、会话、调度、技能、配置和系统运行状态收进统一入口。
+              {PLATFORM_SUBTITLE}，多 AI 员工协作、会话、调度与管理，统一工作入口。
             </Typography.Paragraph>
           </div>
 

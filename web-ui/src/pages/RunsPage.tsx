@@ -3,7 +3,9 @@ import { Alert, App, Button, Card, Collapse, Empty, List, Select, Space, Spin, T
 import { PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
+import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
+import { useDevMode } from '../devMode'
 import { formatDateTimeZh } from '../locale'
 import type {
   AgentRunSummary,
@@ -50,7 +52,7 @@ function isCancelable(status: AgentRunSummary['status']) {
   return status === 'queued' || status === 'running'
 }
 
-function eventLabel(eventType: string) {
+function eventLabel(eventType: string, devMode = true) {
   switch (eventType) {
     case 'queued':
       return '已排队'
@@ -65,15 +67,15 @@ function eventLabel(eventType: string) {
     case 'cancelled':
       return '已取消'
     case 'bindings_resolved':
-      return '已装配绑定能力'
+      return devMode ? '已装配绑定能力' : '准备就绪'
     case 'knowledge_retrieved':
-      return '已检索知识库'
+      return devMode ? '已检索知识库' : '准备就绪'
     case 'team_run_requested':
       return '收到团队任务'
     case 'team_definition_resolved':
-      return '已解析 TeamDefinition'
+      return devMode ? '已解析 TeamDefinition' : '准备就绪'
     case 'team_knowledge_retrieved':
-      return '已检索团队共享知识'
+      return devMode ? '已检索团队共享知识' : '准备就绪'
     case 'retry_requested':
       return '已发起重跑'
     case 'memory_candidate_proposed':
@@ -93,7 +95,7 @@ function eventLabel(eventType: string) {
   }
 }
 
-function eventPayloadSummary(eventType: string, payload?: Record<string, unknown>) {
+function eventPayloadSummary(eventType: string, payload?: Record<string, unknown>, devMode = true) {
   if (!payload) {
     return null
   }
@@ -102,13 +104,22 @@ function eventPayloadSummary(eventType: string, payload?: Record<string, unknown
       return String(payload.content || '')
     case 'team_run_requested':
       return String(payload.contentPreview || '')
-    case 'bindings_resolved':
+    case 'bindings_resolved': {
+      if (!devMode) {
+        const total =
+          (Array.isArray(payload.toolAllowlist) ? payload.toolAllowlist.length : 0) +
+          (Array.isArray(payload.mcpServerIds) ? payload.mcpServerIds.length : 0) +
+          (Array.isArray(payload.skillIds) ? payload.skillIds.length : 0) +
+          (Array.isArray(payload.knowledgeBindingIds) ? payload.knowledgeBindingIds.length : 0)
+        return `已加载 ${total} 项能力`
+      }
       return [
         `tools: ${Array.isArray(payload.toolAllowlist) ? payload.toolAllowlist.length : 0}`,
         `mcp: ${Array.isArray(payload.mcpServerIds) ? payload.mcpServerIds.length : 0}`,
         `skills: ${Array.isArray(payload.skillIds) ? payload.skillIds.length : 0}`,
         `kb: ${Array.isArray(payload.knowledgeBindingIds) ? payload.knowledgeBindingIds.length : 0}`,
       ].join(' · ')
+    }
     case 'knowledge_retrieved':
     case 'team_knowledge_retrieved':
       return `mode: ${payload.effectiveMode || payload.requestedMode || 'keyword'} · hits: ${payload.hitCount || 0}`
@@ -185,6 +196,7 @@ function renderTreeNode(node: AgentRunTreeNode, selectedRunId: string | null, na
 }
 
 export default function RunsPage() {
+  const { devMode } = useDevMode()
   const { message } = App.useApp()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -359,9 +371,9 @@ export default function RunsPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="运行观测"
+        eyebrow="执行记录"
         title="执行记录"
-        description="查看 AI 员工和团队任务的执行过程、结果摘要和失败原因。运行中的任务会自动刷新。"
+        description="查看所有 AI 任务的执行状态、过程与结果。运行中的任务会自动刷新。"
         stats={[
           { label: '当前列表', value: runs.length },
           { label: '运行中', value: activeCount },
@@ -437,7 +449,7 @@ export default function RunsPage() {
                 options={[
                   { value: 'all', label: '全部' },
                   { value: 'agent', label: 'agent' },
-                  { value: 'subagent', label: 'subagent' },
+                  ...(devMode ? [{ value: 'subagent', label: 'subagent' }] : []),
                   { value: 'team', label: 'team' },
                 ]}
               />
@@ -527,43 +539,45 @@ export default function RunsPage() {
                   <Paragraph className="studio-run-preview">{selectedRun.taskPreview}</Paragraph>
                 </div>
 
-                <Collapse
-                  className="studio-inline-collapse"
-                  items={[
-                    {
-                      key: 'tech',
-                      label: '技术详情',
-                      children: (
-                        <div className="studio-run-detail-grid">
-                          <div className="studio-form-field">
-                            <Text type="secondary">Session Key</Text>
-                            <Text>{selectedRun.sessionKey || '无'}</Text>
+                <DevOnly>
+                  <Collapse
+                    className="studio-inline-collapse"
+                    items={[
+                      {
+                        key: 'tech',
+                        label: '技术详情',
+                        children: (
+                          <div className="studio-run-detail-grid">
+                            <div className="studio-form-field">
+                              <Text type="secondary">Session Key</Text>
+                              <Text>{selectedRun.sessionKey || '无'}</Text>
+                            </div>
+                            <div className="studio-form-field">
+                              <Text type="secondary">Thread</Text>
+                              <Text>{selectedRun.threadId || '无'}</Text>
+                            </div>
+                            <div className="studio-form-field">
+                              <Text type="secondary">Parent Run</Text>
+                              <Text>{selectedRun.parentRunId || '无'}</Text>
+                            </div>
+                            <div className="studio-form-field">
+                              <Text type="secondary">Root Run</Text>
+                              <Text>{selectedRun.rootRunId || selectedRun.runId}</Text>
+                            </div>
+                            <div className="studio-form-field">
+                              <Text type="secondary">控制作用域</Text>
+                              <Text>{selectedRun.controlScope}</Text>
+                            </div>
+                            <div className="studio-form-field">
+                              <Text type="secondary">Spawn Depth</Text>
+                              <Text>{selectedRun.spawnDepth}</Text>
+                            </div>
                           </div>
-                          <div className="studio-form-field">
-                            <Text type="secondary">Thread</Text>
-                            <Text>{selectedRun.threadId || '无'}</Text>
-                          </div>
-                          <div className="studio-form-field">
-                            <Text type="secondary">Parent Run</Text>
-                            <Text>{selectedRun.parentRunId || '无'}</Text>
-                          </div>
-                          <div className="studio-form-field">
-                            <Text type="secondary">Root Run</Text>
-                            <Text>{selectedRun.rootRunId || selectedRun.runId}</Text>
-                          </div>
-                          <div className="studio-form-field">
-                            <Text type="secondary">控制作用域</Text>
-                            <Text>{selectedRun.controlScope}</Text>
-                          </div>
-                          <div className="studio-form-field">
-                            <Text type="secondary">Spawn Depth</Text>
-                            <Text>{selectedRun.spawnDepth}</Text>
-                          </div>
-                        </div>
-                      ),
-                    },
-                  ]}
-                />
+                        ),
+                      },
+                    ]}
+                  />
+                </DevOnly>
 
                 {selectedRun.resultSummary?.content ? (
                   <div className="studio-run-result">
@@ -745,14 +759,14 @@ export default function RunsPage() {
                     <div className="studio-run-list-copy">
                       <div className="studio-run-list-head">
                         <Space wrap>
-                          <strong>{eventLabel(event.eventType)}</strong>
+                          <strong>{eventLabel(event.eventType, devMode)}</strong>
                           <Tag>{event.eventType}</Tag>
                         </Space>
                         <Text type="secondary">{formatDateTimeZh(event.createdAt)}</Text>
                       </div>
-                      {eventPayloadSummary(event.eventType, event.payload) ? (
+                      {eventPayloadSummary(event.eventType, event.payload, devMode) ? (
                         <Paragraph className="studio-run-preview">
-                          {eventPayloadSummary(event.eventType, event.payload)}
+                          {eventPayloadSummary(event.eventType, event.payload, devMode)}
                         </Paragraph>
                       ) : null}
                     </div>

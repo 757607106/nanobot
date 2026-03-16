@@ -26,6 +26,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import PageHero from '../components/PageHero'
+import DevOnly from '../components/DevOnly'
 import { testIds } from '../testIds'
 import type {
   AgentDefinition,
@@ -128,8 +129,8 @@ export default function ChannelBindingsPage() {
     return [
       { label: '绑定总数', value: total },
       { label: '启用中', value: enabled },
-      { label: 'Agent 绑定', value: agentCount },
-      { label: 'Team 绑定', value: teamCount },
+      { label: '员工绑定', value: agentCount },
+      { label: '团队绑定', value: teamCount },
     ]
   }, [bindings])
 
@@ -291,8 +292,8 @@ export default function ChannelBindingsPage() {
     <div className="page-stack">
       <PageHero
         eyebrow="渠道"
-        title="渠道绑定"
-        description="将外部渠道的消息路由到指定的 AI 员工或团队。"
+        title="消息路由"
+        description="设置消息渠道与 AI 员工或团队的对应关系。"
         stats={stats}
         actions={
           <Space>
@@ -391,7 +392,7 @@ export default function ChannelBindingsPage() {
               <Text type="secondary">聊天 ID</Text>
               <Input
                 value={form.channelChatId}
-                placeholder="* 表示匹配所有聊天"
+                placeholder="默认匹配该渠道所有对话"
                 onChange={(e) => updateForm('channelChatId', e.target.value)}
               />
             </div>
@@ -430,18 +431,20 @@ export default function ChannelBindingsPage() {
             </div>
 
             {/* Priority */}
-            <div className="studio-form-field">
-              <Text type="secondary">优先级</Text>
-              <InputNumber
-                value={form.priority}
-                min={0}
-                onChange={(val) => updateForm('priority', val ?? 0)}
-                style={{ width: '100%' }}
-              />
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                数值越大优先级越高，相同渠道和聊天 ID 时优先匹配高优先级绑定。
-              </Text>
-            </div>
+            <DevOnly>
+              <div className="studio-form-field">
+                <Text type="secondary">优先级</Text>
+                <InputNumber
+                  value={form.priority}
+                  min={0}
+                  onChange={(val) => updateForm('priority', val ?? 0)}
+                  style={{ width: '100%' }}
+                />
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  数值越大优先级越高，相同渠道和聊天 ID 时优先匹配高优先级绑定。
+                </Text>
+              </div>
+            </DevOnly>
 
             {/* Enabled */}
             <div className="studio-form-field">

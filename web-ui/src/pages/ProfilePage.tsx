@@ -191,9 +191,9 @@ export default function ProfilePage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact"
-        eyebrow="Admin Profile"
-        title="管理员资料与安全"
-        description="集中维护管理员资料、头像和密码，不把账号信息混进运行时配置。"
+        eyebrow="账户管理"
+        title="账户信息与安全"
+        description="管理您的账户信息、头像和登录密码。"
         badges={[<Tag key="username">@{profile.username}</Tag>]}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} loading={loading}>

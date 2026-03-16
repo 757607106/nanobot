@@ -3,7 +3,9 @@ import { Alert, App, Button, Card, Empty, Input, Spin, Tag, Typography } from 'a
 import { EditOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
+import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
+import { useDevMode } from '../devMode'
 import { formatDateTimeZh } from '../locale'
 import { testIds } from '../testIds'
 import type {
@@ -33,6 +35,7 @@ const statusMeta: Record<McpServerStatus, { label: string; color: string }> = {
 export default function McpPage() {
   const { message } = App.useApp()
   const navigate = useNavigate()
+  const { devMode } = useDevMode()
   const [data, setData] = useState<McpServerListResponse | null>(null)
   const [analysis, setAnalysis] = useState<McpRepositoryAnalysis | null>(null)
   const [lastInstall, setLastInstall] = useState<McpRepositoryInstallResult | null>(null)
@@ -138,9 +141,9 @@ export default function McpPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact"
-        eyebrow="MCP Registry"
-        title="MCP 扩展目录"
-        description="在这里查看目录、从仓库安装、执行探测，并进入单个 MCP 做隔离测试。"
+        eyebrow={devMode ? 'MCP Registry' : '外部连接'}
+        title={devMode ? 'MCP 扩展目录' : '第三方服务连接'}
+        description={devMode ? '在这里查看目录、从仓库安装、执行探测，并进入单个 MCP 做隔离测试。' : '管理已连接的第三方服务，查看连接状态。'}
         actions={(
           <div className="mcp-hero-actions">
             <Button icon={<ReloadOutlined />} onClick={() => void loadServers()} loading={loading}>
@@ -165,6 +168,7 @@ export default function McpPage() {
         />
       ) : null}
 
+      <DevOnly>
       <Card className="config-panel-card">
         <div className="config-card-header">
           <div className="page-section-title">
@@ -281,6 +285,7 @@ export default function McpPage() {
           />
         ) : null}
       </Card>
+      </DevOnly>
 
       <Card className="config-panel-card">
         <div className="config-card-header">
@@ -307,7 +312,7 @@ export default function McpPage() {
                   <div className="tag-cloud">
                     <Tag color={statusMeta[entry.status].color}>{statusMeta[entry.status].label}</Tag>
                     <Tag>{entry.enabled ? '启用' : '停用'}</Tag>
-                    <Tag>{transportLabels[entry.transport]}</Tag>
+                    <DevOnly><Tag>{transportLabels[entry.transport]}</Tag></DevOnly>
                   </div>
                 </div>
 
@@ -320,13 +325,15 @@ export default function McpPage() {
                     <span>最近探测</span>
                     <strong>{entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '未探测'}</strong>
                   </div>
+                  <DevOnly>
                   <div className="page-meta-card">
                     <span>来源</span>
                     <strong>{entry.sourceLabel}</strong>
                   </div>
+                  </DevOnly>
                 </div>
 
-                <Text type="secondary">{entry.statusDetail}</Text>
+                <DevOnly><Text type="secondary">{entry.statusDetail}</Text></DevOnly>
 
                 {entry.lastError ? (
                   <Alert

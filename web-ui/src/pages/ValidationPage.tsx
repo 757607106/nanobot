@@ -154,9 +154,9 @@ export default function ValidationPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact"
-        eyebrow="Validation Center"
+        eyebrow="配置验证"
         title="配置修复中心"
-        description="统一检查 provider、runtime、gateway、路径与 MCP readiness，并提供可直接跳转的修复入口。"
+        description="检查系统配置完整性，快速定位和修复问题。"
         badges={[<Tag key="summary">{summary.label}</Tag>]}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadValidation()} loading={loading}>

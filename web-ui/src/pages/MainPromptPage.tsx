@@ -227,7 +227,7 @@ export default function MainPromptPage() {
           <Alert
             showIcon
             type="info"
-            message="这不是通用文档中心。"
+            message="这里管理的内容会直接影响所有 AI 员工的行为。"
             description="这里只管工作区引导和长期记忆。"
           />
 

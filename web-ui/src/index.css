@@ -657,6 +657,22 @@ a {
   color: var(--nb-nav-summary) !important;
 }
 
+.sidebar-dev-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--nb-sidebar-footer-mono-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--nb-sidebar-footer-mono-border, rgba(255, 255, 255, 0.08));
+}
+
+.sidebar-dev-toggle .ant-typography {
+  font-size: var(--nb-text-xs) !important;
+}
+
 .app-main-layout {
   min-width: 0;
   min-height: 100vh;

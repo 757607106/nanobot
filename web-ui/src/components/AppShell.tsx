@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Drawer, Grid, Layout, Menu, Segmented, Typography } from 'antd'
+import { Button, Drawer, Grid, Layout, Menu, Segmented, Switch, Typography } from 'antd'
 import {
   ApiOutlined,
   ApartmentOutlined,
@@ -22,6 +22,7 @@ import {
   PLATFORM_BRAND_NAME,
   PLATFORM_SUBTITLE,
 } from '../branding'
+import { useDevMode } from '../devMode'
 import { testIds } from '../testIds'
 import { useThemeMode, type ThemePreference } from '../themeMode'
 
@@ -35,60 +36,62 @@ type AppRoute = {
   testId?: string
 }
 
-const primaryRoutes: AppRoute[] = [
-  {
-    key: '/chat',
-    icon: <MessageOutlined />,
-    label: '对话',
-    summary: '围绕当前工作区会话开展对话。',
-    testId: testIds.app.navChat,
-  },
-  {
-    key: '/studio',
-    icon: <ApartmentOutlined />,
-    label: '协作',
-    summary: '管理数字员工、团队、运行记录与知识位点。',
-    testId: testIds.app.navStudio,
-  },
-  {
-    key: '/models',
-    icon: <SettingOutlined />,
-    label: '模型',
-    summary: '维护默认供应商、Base URL、API Key 与模型。',
-  },
-  {
-    key: '/channels',
-    icon: <ClusterOutlined />,
-    label: '渠道',
-    summary: '管理聊天渠道接入、状态与配置入口。',
-    testId: testIds.app.navChannels,
-  },
-  {
-    key: '/skills',
-    icon: <BookOutlined />,
-    label: '技能',
-    summary: '管理当前工作区可用技能。',
-  },
-  {
-    key: '/mcp',
-    icon: <ApiOutlined />,
-    label: 'MCP',
-    summary: '管理 MCP 服务目录、安装与启停。',
-    testId: testIds.app.navMcp,
-  },
-  {
-    key: '/prompt',
-    icon: <ProfileOutlined />,
-    label: '提示词与记忆',
-    summary: '维护工作区引导与记忆文档。',
-  },
-  {
-    key: '/system',
-    icon: <DesktopOutlined />,
-    label: '系统',
-    summary: '查看健康、验证、自动化和管理员设置。',
-  },
-]
+function buildPrimaryRoutes(devMode: boolean): AppRoute[] {
+  return [
+    {
+      key: '/chat',
+      icon: <MessageOutlined />,
+      label: '对话',
+      summary: '与 AI 员工实时对话交流。',
+      testId: testIds.app.navChat,
+    },
+    {
+      key: '/studio',
+      icon: <ApartmentOutlined />,
+      label: '协作',
+      summary: '管理 AI 员工、团队与知识库。',
+      testId: testIds.app.navStudio,
+    },
+    {
+      key: '/models',
+      icon: <SettingOutlined />,
+      label: '模型',
+      summary: '选择和配置 AI 模型服务。',
+    },
+    {
+      key: '/channels',
+      icon: <ClusterOutlined />,
+      label: '渠道',
+      summary: '连接外部消息渠道与路由。',
+      testId: testIds.app.navChannels,
+    },
+    {
+      key: '/skills',
+      icon: <BookOutlined />,
+      label: '技能',
+      summary: '为 AI 员工安装能力扩展。',
+    },
+    {
+      key: '/mcp',
+      icon: <ApiOutlined />,
+      label: devMode ? 'MCP 扩展' : '外部连接',
+      summary: devMode ? '管理 MCP 服务目录与安装。' : '管理第三方服务对接。',
+      testId: testIds.app.navMcp,
+    },
+    {
+      key: '/prompt',
+      icon: <ProfileOutlined />,
+      label: '行为引导',
+      summary: '定义 AI 的工作方式与长期记忆。',
+    },
+    {
+      key: '/system',
+      icon: <DesktopOutlined />,
+      label: '系统',
+      summary: '系统状态、自动化与账户管理。',
+    },
+  ]
+}
 
 export default function AppShell() {
   const location = useLocation()
@@ -99,7 +102,10 @@ export default function AppShell() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const { preference, resolvedTheme, setPreference } = useThemeMode()
   const { logout, status: authStatus, submitting } = useAuth()
+  const { devMode, setDevMode } = useDevMode()
   const menuTheme = resolvedTheme === 'dark' ? 'dark' : 'light'
+
+  const primaryRoutes = useMemo(() => buildPrimaryRoutes(devMode), [devMode])
 
   async function handleLogout() {
     await logout()
@@ -112,7 +118,7 @@ export default function AppShell() {
 
   const activeRoute = useMemo(
     () => primaryRoutes.find((item) => location.pathname.startsWith(item.key)) ?? primaryRoutes[0],
-    [location.pathname],
+    [location.pathname, primaryRoutes],
   )
   const isChatRoute = activeRoute.key === '/chat'
 
@@ -177,7 +183,7 @@ export default function AppShell() {
 
       <div className="nav-sections">
         <div className="nav-section" key="primary">
-          <Typography.Text className="nav-section-label">主路径</Typography.Text>
+          <Typography.Text className="nav-section-label">功能导航</Typography.Text>
           <Menu
             mode="inline"
             theme={menuTheme}
@@ -193,6 +199,10 @@ export default function AppShell() {
         <Typography.Text type="secondary">管理员</Typography.Text>
         <div className="mono-block mono-block-tight">
           {authStatus?.username || '未登录'}
+        </div>
+        <div className="sidebar-dev-toggle">
+          <Typography.Text>开发者模式</Typography.Text>
+          <Switch size="small" checked={devMode} onChange={setDevMode} />
         </div>
       </div>
     </div>

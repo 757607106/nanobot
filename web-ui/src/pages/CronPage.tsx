@@ -32,6 +32,7 @@ import {
   SearchOutlined,
 } from '@ant-design/icons'
 import { api } from '../api'
+import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type { CronJob, CronJobInput, CronStatus } from '../types'
@@ -274,7 +275,7 @@ export default function CronPage() {
         className="page-hero-compact"
         eyebrow="定时任务"
         title="自动化任务"
-        description="直接连接项目 cron 服务，用来安排固定节奏的总结、检查、同步和提醒。"
+        description="定时触发 AI 任务，自动完成日报总结、数据同步、定期检查等工作。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>
@@ -396,6 +397,7 @@ export default function CronPage() {
                             <span>运行后删除</span>
                             <strong>{job.deleteAfterRun ? '是' : '否'}</strong>
                           </div>
+                          <DevOnly>
                           <div className="page-meta-card">
                             <span>投递目标</span>
                             <strong>
@@ -404,6 +406,7 @@ export default function CronPage() {
                                 : '仅 Agent 执行'}
                             </strong>
                           </div>
+                          </DevOnly>
                         </div>
 
                         <div>
@@ -525,6 +528,7 @@ export default function CronPage() {
               }
 
               return (
+                <DevOnly>
                 <Row gutter={16}>
                   <Col xs={24} md={14}>
                     <Form.Item
@@ -541,10 +545,12 @@ export default function CronPage() {
                     </Form.Item>
                   </Col>
                 </Row>
+                </DevOnly>
               )
             }}
           </Form.Item>
 
+          <DevOnly>
           <Form.Item
             label="记录投递目标"
             name="payloadDeliver"
@@ -575,6 +581,7 @@ export default function CronPage() {
               ) : null
             }
           </Form.Item>
+          </DevOnly>
         </Form>
       </Modal>
     </div>

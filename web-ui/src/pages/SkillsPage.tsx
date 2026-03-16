@@ -25,6 +25,7 @@ import {
 } from '@ant-design/icons'
 import { api } from '../api'
 import { PLATFORM_BRAND_NAME, replaceBrandText } from '../branding'
+import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type { InstalledSkill, MarketplaceSkill } from '../types'
@@ -185,8 +186,8 @@ export default function SkillsPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="技能管理"
-        title="先从技能市场拿能力"
-        description="优先从 SkillHub 远端市场直接安装技能，手动上传只作为兜底；右侧始终展示当前实例已经装好的能力。"
+        title="技能市场"
+        description="从技能市场为 AI 员工安装能力扩展，也支持手动上传自定义技能。"
         actions={(
           <Space wrap>
             <Button
@@ -233,7 +234,7 @@ export default function SkillsPage() {
           <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>推荐路径：SkillHub 远端市场</Typography.Title>
+                <Typography.Title level={4}>技能市场</Typography.Title>
                 <Text type="secondary">直接搜索官方市场并安装到当前工作区。</Text>
               </div>
               <Space wrap size={8}>
@@ -357,7 +358,7 @@ export default function SkillsPage() {
           <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>兜底路径：手动上传</Typography.Title>
+                <Typography.Title level={4}>自定义上传</Typography.Title>
                 <Text type="secondary">市场外的技能目录或 ZIP 包都可以直接上传到当前工作区。</Text>
               </div>
               <Space wrap>
@@ -459,10 +460,12 @@ export default function SkillsPage() {
                       <Space direction="vertical" size="small" style={{ width: '100%' }}>
                         <Text type="secondary">{skill.description || '暂无描述。'}</Text>
                         {skill.author ? <Text type="secondary">作者：{getSkillAuthorLabel(skill.author)}</Text> : null}
-                        <div>
-                          <Text type="secondary">路径</Text>
-                          <div className="mono-block">{skill.path}</div>
-                        </div>
+                        <DevOnly>
+                          <div>
+                            <Text type="secondary">路径</Text>
+                            <div className="mono-block">{skill.path}</div>
+                          </div>
+                        </DevOnly>
                         {skill.tags && skill.tags.length > 0 ? (
                           <Space wrap size={4}>
                             {skill.tags.map((tag) => (

@@ -28,7 +28,9 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
+import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
+import { useDevMode } from '../devMode'
 import { formatDateTimeZh } from '../locale'
 import type {
   AgentDefinition,
@@ -133,6 +135,7 @@ export default function TeamsPage() {
   const { message } = App.useApp()
   const navigate = useNavigate()
   const { teamId } = useParams()
+  const { devMode } = useDevMode()
   const selectedTeamId = teamId && teamId !== 'new' ? teamId : null
 
   const [teams, setTeams] = useState<TeamDefinition[]>([])
@@ -616,7 +619,7 @@ export default function TeamsPage() {
         className="page-hero-compact studio-hero"
         eyebrow="协作团队"
         title="团队"
-        description="把多个 AI 员工组合成一支可协作的团队。你可以设置负责人、成员、共享知识，并直接发起团队任务。"
+        description="将 AI 员工组建成团队，实现多角色协作完成复杂任务。"
         stats={[
           { label: '已创建团队', value: teams.length },
           { label: '启用中', value: enabledCount },
@@ -624,8 +627,8 @@ export default function TeamsPage() {
           { label: '共享知识库', value: sharedKbCount },
         ]}
         badges={[
-          <Tag key="crud" color="processing">支持团队配置</Tag>,
-          <Tag key="runtime" color="geekblue">支持团队试运行</Tag>,
+          <Tag key="crud" color="processing">灵活组队</Tag>,
+          <Tag key="runtime" color="geekblue">即时验证</Tag>,
         ]}
         actions={(
           <Space wrap>
@@ -705,7 +708,7 @@ export default function TeamsPage() {
                 <Typography.Title level={4}>{currentTeam ? '团队配置' : '新建团队'}</Typography.Title>
                 <Text type="secondary">设置负责人、成员、协作方式和可共享的知识资源。</Text>
               </div>
-              {currentTeam ? <Tag color="blue">{currentTeam.teamId}</Tag> : <Tag>未保存</Tag>}
+              {currentTeam ? <DevOnly><Tag color="blue">{currentTeam.teamId}</Tag></DevOnly> : <Tag>未保存</Tag>}
             </div>
 
             <div className="studio-form-grid">
@@ -785,7 +788,7 @@ export default function TeamsPage() {
                   children: (
                     <div className="studio-form-grid">
                       <div className="studio-form-field">
-                        <Text type="secondary">共享知识权限</Text>
+                        <Text type="secondary">知识库使用权限</Text>
                         <Select
                           value={form.teamSharedKnowledgePolicy}
                           onChange={(value) => updateForm('teamSharedKnowledgePolicy', value)}
@@ -794,7 +797,7 @@ export default function TeamsPage() {
                       </div>
 
                       <div className="studio-form-field">
-                        <Text type="secondary">团队记忆权限</Text>
+                        <Text type="secondary">团队记忆共享方式</Text>
                         <Select
                           value={form.teamSharedMemoryPolicy}
                           onChange={(value) => updateForm('teamSharedMemoryPolicy', value)}
@@ -894,7 +897,7 @@ export default function TeamsPage() {
                     <Typography.Title level={4}>团队试运行</Typography.Title>
                     <Text type="secondary">发起一次真实团队任务，验证负责人分工、成员协作和最终汇总结果。</Text>
                   </div>
-                  <Tag color="geekblue">Supervisor 模式</Tag>
+                  <Tag color="geekblue">{devMode ? 'Supervisor 模式' : '负责人汇总模式'}</Tag>
                 </div>
 
                 <div className="studio-form-field">
@@ -978,7 +981,7 @@ export default function TeamsPage() {
                         children: (
                           <div className="page-stack">
                             <div className="studio-form-field">
-                              <Text type="secondary">Supervisor 运行</Text>
+                              <Text type="secondary">{devMode ? 'Supervisor 运行' : '负责人汇总'}</Text>
                               {lastTestRunResult.supervisorRun ? (
                                 <div className="studio-run-list-copy">
                                   <Space wrap>
@@ -997,7 +1000,7 @@ export default function TeamsPage() {
                                   ) : null}
                                 </div>
                               ) : (
-                                <Text type="secondary">暂无 Supervisor 运行记录</Text>
+                                <Text type="secondary">{devMode ? '暂无 Supervisor 运行记录' : '暂无负责人汇总记录'}</Text>
                               )}
                             </div>
 

@@ -2,7 +2,7 @@ import { Tabs } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 const studioRoutes = [
-  { key: '/studio/agents', label: 'AI员工' },
+  { key: '/studio/agents', label: 'AI 员工' },
   { key: '/studio/teams', label: '团队' },
   { key: '/studio/runs', label: '执行记录' },
   { key: '/studio/knowledge', label: '知识库' },

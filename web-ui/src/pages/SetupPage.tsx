@@ -15,6 +15,7 @@ import {
 } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api'
+import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
 import { providerDescriptions } from '../configMeta'
 import {
@@ -280,8 +281,8 @@ export default function SetupPage() {
       <div className="setup-shell">
         <PageHero
           eyebrow="FIRST-RUN SETUP"
-          title="先把实例接通，再放行工作台"
-          description="把供应商、可选频道和默认 Agent 参数确认下来，后续就不需要去配置页翻整份 JSON。"
+          title="欢迎使用群策"
+          description="只需三步完成初始化，即可开始使用 AI 协作能力。"
           className="page-hero-compact"
           badges={setupStatus.steps.map((step) => (
             <span className="hero-badge" key={step.key}>
@@ -332,7 +333,7 @@ export default function SetupPage() {
             <Card className="surface-card setup-panel-card">
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
-                  <Typography.Title level={4}>1. 模型供应商</Typography.Title>
+                  <Typography.Title level={4}>1. 选择 AI 服务</Typography.Title>
                   <Typography.Paragraph>
                     选择当前实例默认使用的 provider，并补齐模型名与基础认证信息。
                   </Typography.Paragraph>
@@ -364,10 +365,10 @@ export default function SetupPage() {
 
                 {!providerMeta?.isOauth ? (
                   <label className="setup-field">
-                    <span>API Key</span>
+                    <span>访问密钥</span>
                     <Input.Password
                       value={config.providers[providerName]?.apiKey || ''}
-                      placeholder={providerMeta?.isLocal ? '本地供应商通常可留空' : '填写访问凭证'}
+                      placeholder={providerMeta?.isLocal ? '本地供应商通常可留空' : '填写服务商提供的密钥'}
                       onChange={(event) => updateProviderField('apiKey', event.target.value)}
                       data-testid={testIds.setup.apiKeyInput}
                     />
@@ -379,15 +380,17 @@ export default function SetupPage() {
                 )}
 
                 {!providerMeta?.isOauth ? (
+                <DevOnly>
                   <label className="setup-field">
-                    <span>API Base</span>
+                    <span>服务地址</span>
                     <Input
                       value={String(config.providers[providerName]?.apiBase || '')}
-                      placeholder={providerMeta?.defaultApiBase || '可留空使用默认地址'}
+                      placeholder={providerMeta?.defaultApiBase || '通常无需修改'}
                       onChange={(event) => updateProviderField('apiBase', event.target.value)}
                       data-testid={testIds.setup.apiBaseInput}
                     />
                   </label>
+                </DevOnly>
                 ) : null}
 
                 <div className="setup-actions-row">
@@ -501,7 +504,7 @@ export default function SetupPage() {
             <Card className="surface-card setup-panel-card">
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
-                  <Typography.Title level={4}>3. Agent 默认值</Typography.Title>
+                  <Typography.Title level={4}>3. 默认工作参数</Typography.Title>
                   <Typography.Paragraph>
                     确认工作区、上下文窗口、温度和工具循环边界，后续所有新会话都会继承这里的默认值。
                   </Typography.Paragraph>
@@ -518,7 +521,7 @@ export default function SetupPage() {
 
                 <div className="setup-grid-two">
                   <label className="setup-field">
-                    <span>最大输出 Token</span>
+                    <span>最大回复长度</span>
                     <InputNumber
                       min={1}
                       value={Number(config.agents.defaults.maxTokens || 0)}
@@ -527,7 +530,7 @@ export default function SetupPage() {
                   </label>
 
                   <label className="setup-field">
-                    <span>上下文窗口 Token</span>
+                    <span>对话记忆窗口</span>
                     <InputNumber
                       min={1}
                       value={Number(config.agents.defaults.contextWindowTokens || 0)}
@@ -538,7 +541,7 @@ export default function SetupPage() {
 
                 <div className="setup-grid-two">
                   <label className="setup-field">
-                    <span>温度</span>
+                    <span>创意程度</span>
                     <InputNumber
                       min={0}
                       max={2}
@@ -548,6 +551,7 @@ export default function SetupPage() {
                     />
                   </label>
 
+                  <DevOnly>
                   <label className="setup-field">
                     <span>最大工具迭代次数</span>
                     <InputNumber
@@ -556,10 +560,11 @@ export default function SetupPage() {
                       onChange={(value) => updateDefaults('maxToolIterations', value ?? 0)}
                     />
                   </label>
+                  </DevOnly>
                 </div>
 
                 <label className="setup-field">
-                  <span>推理强度</span>
+                  <span>思考深度</span>
                   <Select
                     value={String(config.agents.defaults.reasoningEffort || 'medium')}
                     options={[

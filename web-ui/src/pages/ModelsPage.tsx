@@ -15,6 +15,7 @@ import {
 } from 'antd'
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { api } from '../api'
+import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
 import { providerCategoryLabels, providerDescriptions } from '../configMeta'
 import { getModelSuggestions } from '../modelCatalog'
@@ -27,11 +28,13 @@ import {
   updateProviderFieldValue,
 } from '../modelConfig'
 import type { ConfigData, ConfigMeta } from '../types'
+import { useDevMode } from '../devMode'
 
 const { Text, Paragraph } = Typography
 
 export default function ModelsPage() {
   const { message } = App.useApp()
+  const { devMode } = useDevMode()
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [configMeta, setConfigMeta] = useState<ConfigMeta | null>(null)
   const [loading, setLoading] = useState(true)
@@ -128,9 +131,9 @@ export default function ModelsPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact"
-        eyebrow="模型配置"
-        title="先把默认模型接通"
-        description="围绕供应商、Base URL、API Key 和模型完成默认配置。"
+        eyebrow="AI 模型"
+        title="AI 模型配置"
+        description="选择 AI 模型服务商并配置连接方式。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadModels()}>
@@ -145,10 +148,6 @@ export default function ModelsPage() {
           { label: '当前供应商', value: selectedProviderMeta.label },
           { label: '当前模型', value: config.agents.defaults.model || '待选择' },
           { label: '认证方式', value: selectedProviderMeta.isOauth ? 'OAuth' : 'API Key' },
-          {
-            label: 'Base URL',
-            value: selectedProviderConfig.apiBase || selectedProviderMeta.defaultApiBase || '供应商默认',
-          },
         ]}
       />
 
@@ -185,16 +184,18 @@ export default function ModelsPage() {
               description={providerDescriptions[selectedProviderMeta.name] || '会直接映射到后端运行时。'}
             />
 
-            <div className="config-meta-row">
-              <div className="config-meta-chip">
-                <span>当前解析结果</span>
-                <strong>{configMeta.resolvedProvider || 'auto'}</strong>
+            <DevOnly>
+              <div className="config-meta-row">
+                <div className="config-meta-chip">
+                  <span>当前解析结果</span>
+                  <strong>{configMeta.resolvedProvider || 'auto'}</strong>
+                </div>
+                <div className="config-meta-chip">
+                  <span>模型关键词</span>
+                  <strong>{selectedProviderMeta.keywords.join(', ') || '未提供'}</strong>
+                </div>
               </div>
-              <div className="config-meta-chip">
-                <span>模型关键词</span>
-                <strong>{selectedProviderMeta.keywords.join(', ') || '未提供'}</strong>
-              </div>
-            </div>
+            </DevOnly>
           </Card>
 
           <Card className="config-panel-card">
@@ -235,7 +236,7 @@ export default function ModelsPage() {
           <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>3. 连接信息</Typography.Title>
+                <Typography.Title level={4}>3. 服务连接</Typography.Title>
                 <Text type="secondary">这里只保留常用连接字段。</Text>
               </div>
             </div>
@@ -251,7 +252,7 @@ export default function ModelsPage() {
               <>
                 <div className="config-field-block">
                   <div className="config-field-label-row">
-                    <Text>API Key</Text>
+                    <Text>访问密钥</Text>
                   </div>
                   <Input.Password
                     value={selectedProviderConfig.apiKey ?? ''}
@@ -260,25 +261,27 @@ export default function ModelsPage() {
                   />
                 </div>
 
-                <div className="config-field-block">
-                  <div className="config-field-label-row">
-                    <Text>Base URL</Text>
-                    {selectedProviderMeta.defaultApiBase ? <Tag>供应商默认地址</Tag> : null}
+                <DevOnly>
+                  <div className="config-field-block">
+                    <div className="config-field-label-row">
+                      <Text>服务地址</Text>
+                      {selectedProviderMeta.defaultApiBase ? <Tag>供应商默认地址</Tag> : null}
+                    </div>
+                    <Input
+                      value={selectedProviderConfig.apiBase ?? ''}
+                      placeholder={selectedProviderMeta.defaultApiBase ?? '留空时使用供应商默认行为'}
+                      onChange={(event) => updateProviderField('apiBase', event.target.value)}
+                    />
+                    {selectedProviderMeta.defaultApiBase ? (
+                      <Space wrap>
+                        <Button onClick={() => updateProviderField('apiBase', selectedProviderMeta.defaultApiBase || '')}>
+                          使用默认地址
+                        </Button>
+                        <Text type="secondary">{selectedProviderMeta.defaultApiBase}</Text>
+                      </Space>
+                    ) : null}
                   </div>
-                  <Input
-                    value={selectedProviderConfig.apiBase ?? ''}
-                    placeholder={selectedProviderMeta.defaultApiBase ?? '留空时使用供应商默认行为'}
-                    onChange={(event) => updateProviderField('apiBase', event.target.value)}
-                  />
-                  {selectedProviderMeta.defaultApiBase ? (
-                    <Space wrap>
-                      <Button onClick={() => updateProviderField('apiBase', selectedProviderMeta.defaultApiBase || '')}>
-                        使用默认地址
-                      </Button>
-                      <Text type="secondary">{selectedProviderMeta.defaultApiBase}</Text>
-                    </Space>
-                  ) : null}
-                </div>
+                </DevOnly>
               </>
             )}
           </Card>
@@ -294,7 +297,7 @@ export default function ModelsPage() {
             <div className="models-settings-grid">
               <div className="config-field-block">
                 <div className="config-field-label-row">
-                  <Text>温度</Text>
+                  <Text>创意程度</Text>
                 </div>
                 <InputNumber
                   min={0}
@@ -308,7 +311,7 @@ export default function ModelsPage() {
 
               <div className="config-field-block">
                 <div className="config-field-label-row">
-                  <Text>推理强度</Text>
+                  <Text>思考深度</Text>
                 </div>
                 <Select
                   allowClear
@@ -325,7 +328,7 @@ export default function ModelsPage() {
 
               <div className="config-field-block">
                 <div className="config-field-label-row">
-                  <Text>最大 Tokens</Text>
+                  <Text>最大回复长度</Text>
                 </div>
                 <InputNumber
                   min={1}
@@ -337,7 +340,7 @@ export default function ModelsPage() {
 
               <div className="config-field-block">
                 <div className="config-field-label-row">
-                  <Text>上下文窗口</Text>
+                  <Text>对话记忆窗口</Text>
                 </div>
                 <InputNumber
                   min={1}
@@ -347,17 +350,19 @@ export default function ModelsPage() {
                 />
               </div>
 
-              <div className="config-field-block">
-                <div className="config-field-label-row">
-                  <Text>最大工具迭代数</Text>
+              <DevOnly>
+                <div className="config-field-block">
+                  <div className="config-field-label-row">
+                    <Text>最大工具迭代数</Text>
+                  </div>
+                  <InputNumber
+                    min={1}
+                    value={config.agents.defaults.maxToolIterations}
+                    style={{ width: '100%' }}
+                    onChange={(value) => updateDefaults('maxToolIterations', value ?? 1)}
+                  />
                 </div>
-                <InputNumber
-                  min={1}
-                  value={config.agents.defaults.maxToolIterations}
-                  style={{ width: '100%' }}
-                  onChange={(value) => updateDefaults('maxToolIterations', value ?? 1)}
-                />
-              </div>
+              </DevOnly>
             </div>
           </Card>
         </div>

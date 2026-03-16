@@ -446,7 +446,7 @@ def gateway(
         supervisor_llm = NanobotSupervisorLLM(
             provider=provider, model_name=config.agents.defaults.model,
         )
-        sup_config = SupervisorConfig(**(team.get("supervisorConfig") or {}))
+        sup_config = SupervisorConfig.from_dict(team.get("supervisorConfig"))
 
         # Build simplified member tools (each runs an isolated AgentLoop)
         member_tools: list[StructuredTool] = []

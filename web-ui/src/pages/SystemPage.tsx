@@ -3,6 +3,8 @@ import { App, Button, Card, Spin, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { api } from '../api'
 import PageHero from '../components/PageHero'
+import DevOnly from '../components/DevOnly'
+import { useDevMode } from '../devMode'
 import { formatUptimeZh } from '../locale'
 import type { SystemStatus } from '../types'
 
@@ -10,6 +12,7 @@ const { Text } = Typography
 
 export default function SystemPage() {
   const { message } = App.useApp()
+  const { devMode } = useDevMode()
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -53,8 +56,10 @@ export default function SystemPage() {
         stats={[
           { label: '运行时长', value: status ? formatUptimeZh(status.web.uptime) : '--' },
           { label: '版本', value: status?.web.version ?? '--' },
-          { label: 'Python', value: status?.environment.python ?? '--' },
-          { label: '平台', value: status?.environment.platform ?? '--' },
+          ...(devMode ? [
+            { label: 'Python', value: status?.environment.python ?? '--' },
+            { label: '平台', value: status?.environment.platform ?? '--' },
+          ] : []),
         ]}
       />
 
@@ -103,6 +108,7 @@ export default function SystemPage() {
           </Card>
 
           <div className="page-stack system-side-stack">
+            <DevOnly>
             <Card className="config-panel-card">
               <div className="config-card-header">
                 <div className="page-section-title">
@@ -129,6 +135,7 @@ export default function SystemPage() {
                 </div>
               </div>
             </Card>
+            </DevOnly>
           </div>
         </div>
       ) : null}

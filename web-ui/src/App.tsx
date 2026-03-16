@@ -4,6 +4,7 @@ import { Button, Spin, Typography } from 'antd'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppShell from './components/AppShell'
 import { AuthProvider, useAuth } from './auth'
+import { DevModeProvider } from './devMode'
 import { SetupProvider, useSetup } from './setup'
 import { testIds } from './testIds'
 
@@ -276,7 +277,9 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <SetupProvider>
-          <AppRoutes />
+          <DevModeProvider>
+            <AppRoutes />
+          </DevModeProvider>
         </SetupProvider>
       </AuthProvider>
     </BrowserRouter>

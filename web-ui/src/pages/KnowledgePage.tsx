@@ -31,6 +31,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import PageHero from '../components/PageHero'
+import DevOnly from '../components/DevOnly'
 import { formatDateTimeZh } from '../locale'
 import type {
   KnowledgeBaseDefinition,
@@ -714,7 +715,7 @@ export default function KnowledgePage() {
         className="page-hero-compact studio-hero"
         eyebrow="企业知识库"
         title="知识库"
-        description="集中管理企业资料、问答内容和网页来源，并在绑定给 AI 员工前先完成接入、校验和检索测试。"
+        description="集中管理企业知识资料，支持文件、网页和问答内容接入，并验证检索效果。"
         stats={[
           { label: '知识库总数', value: knowledgeBases.length },
           { label: '启用中', value: enabledCount },
@@ -883,20 +884,26 @@ export default function KnowledgePage() {
                         <InputNumber min={1} max={20} value={form.topK} onChange={(value) => updateForm('topK', Number(value) || 8)} />
                       </div>
 
-                      <div className="studio-form-field">
-                        <Text type="secondary">片段候选数</Text>
-                        <InputNumber min={1} max={50} value={form.chunkTopK} onChange={(value) => updateForm('chunkTopK', Number(value) || 20)} />
-                      </div>
+                      <DevOnly>
+                        <div className="studio-form-field">
+                          <Text type="secondary">片段候选数</Text>
+                          <InputNumber min={1} max={50} value={form.chunkTopK} onChange={(value) => updateForm('chunkTopK', Number(value) || 20)} />
+                        </div>
+                      </DevOnly>
 
-                      <div className="studio-form-field">
-                        <Text type="secondary">单片段长度</Text>
-                        <InputNumber min={200} max={4000} value={form.chunkSize} onChange={(value) => updateForm('chunkSize', Number(value) || 800)} />
-                      </div>
+                      <DevOnly>
+                        <div className="studio-form-field">
+                          <Text type="secondary">单片段长度</Text>
+                          <InputNumber min={200} max={4000} value={form.chunkSize} onChange={(value) => updateForm('chunkSize', Number(value) || 800)} />
+                        </div>
+                      </DevOnly>
 
-                      <div className="studio-form-field">
-                        <Text type="secondary">片段重叠</Text>
-                        <InputNumber min={0} max={1000} value={form.chunkOverlap} onChange={(value) => updateForm('chunkOverlap', Number(value) || 120)} />
-                      </div>
+                      <DevOnly>
+                        <div className="studio-form-field">
+                          <Text type="secondary">片段重叠</Text>
+                          <InputNumber min={0} max={1000} value={form.chunkOverlap} onChange={(value) => updateForm('chunkOverlap', Number(value) || 120)} />
+                        </div>
+                      </DevOnly>
                     </div>
                   ),
                 },
@@ -907,7 +914,7 @@ export default function KnowledgePage() {
               className="studio-inline-alert"
               type="info"
               showIcon
-              message="优先保证知识库主链可解释、可追踪、可测试。大多数场景先用默认设置即可。"
+              message="大多数场景使用默认设置即可满足需求。"
             />
 
             <div className="studio-form-actions">

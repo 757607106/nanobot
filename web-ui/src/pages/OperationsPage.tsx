@@ -73,7 +73,7 @@ export default function OperationsPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="Operations Center"
-        title="只保留日志与运维动作"
+        title="日志与运维"
         description="查看日志尾部和可用运维动作。"
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadOps()} loading={loading}>

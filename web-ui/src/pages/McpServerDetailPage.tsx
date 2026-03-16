@@ -3,6 +3,7 @@ import { Alert, App, Button, Card, Empty, Input, InputNumber, List, Select, Spac
 import { ArrowLeftOutlined, DeleteOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
+import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import { testIds } from '../testIds'
@@ -359,6 +360,7 @@ export default function McpServerDetailPage() {
               <Switch checked={draft.enabled} onChange={(checked) => setDraft({ ...draft, enabled: checked })} />
             </div>
 
+            <DevOnly>
             <div className="config-field-block">
               <div className="config-field-label-row">
                 <Text>传输方式</Text>
@@ -373,6 +375,7 @@ export default function McpServerDetailPage() {
                 onChange={(value) => setDraft({ ...draft, type: value as DetailDraft['type'] })}
               />
             </div>
+            </DevOnly>
 
             <div className="config-field-block">
               <div className="config-field-label-row">
@@ -386,6 +389,7 @@ export default function McpServerDetailPage() {
               />
             </div>
 
+            <DevOnly>
             {draft.type === 'stdio' ? (
               <>
                 <div className="config-field-block">
@@ -416,7 +420,9 @@ export default function McpServerDetailPage() {
                 <Input value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} />
               </div>
             )}
+            </DevOnly>
 
+            <DevOnly>
             <div className="config-field-block">
               <div className="config-field-label-row">
                 <Text>环境变量 JSON</Text>
@@ -430,6 +436,7 @@ export default function McpServerDetailPage() {
                 data-testid={testIds.mcp.detailEnv}
               />
             </div>
+            </DevOnly>
 
             <div className="config-field-block">
               <div className="config-field-label-row">
@@ -628,6 +635,7 @@ export default function McpServerDetailPage() {
             </div>
           </Card>
 
+          <DevOnly>
           <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
@@ -658,6 +666,7 @@ export default function McpServerDetailPage() {
               </div>
             </div>
           </Card>
+          </DevOnly>
 
           <Card className="config-panel-card">
             <div className="config-card-header">

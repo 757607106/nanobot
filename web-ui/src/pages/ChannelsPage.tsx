@@ -4,6 +4,7 @@ import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import PageHero from '../components/PageHero'
+import DevOnly from '../components/DevOnly'
 import { channelCategoryLabels, channelCategoryOrder, channelMetas } from '../configMeta'
 import { testIds } from '../testIds'
 import type { ChannelDeliverySettings, ChannelListResponse, ChannelStateItem } from '../types'
@@ -99,8 +100,8 @@ export default function ChannelsPage() {
       <PageHero
         className="page-hero-compact"
         eyebrow="渠道接入"
-        title="把聊天渠道接进实例"
-        description="查看渠道列表、启用状态和配置入口。"
+        title="消息渠道"
+        description="连接外部消息渠道，让用户通过各平台与 AI 员工交流。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadChannels()}>
@@ -119,7 +120,7 @@ export default function ChannelsPage() {
       <Card className="config-panel-card">
         <div className="config-card-header">
           <div className="page-section-title">
-            <Typography.Title level={4}>统一投递行为</Typography.Title>
+            <Typography.Title level={4}>消息推送设置</Typography.Title>
             <Text type="secondary">统一控制进度和工具提示是否出现在渠道里。</Text>
           </div>
           <Button
@@ -137,7 +138,7 @@ export default function ChannelsPage() {
           <Col xs={24} md={12}>
             <div className="channel-flag-card">
               <div>
-                <Text strong>发送进度</Text>
+                <Text strong>推送执行进度</Text>
                 <Text type="secondary">把执行进度同步到聊天渠道。</Text>
               </div>
               <Switch
@@ -146,18 +147,20 @@ export default function ChannelsPage() {
               />
             </div>
           </Col>
-          <Col xs={24} md={12}>
-            <div className="channel-flag-card">
-              <div>
-                <Text strong>发送工具提示</Text>
-                <Text type="secondary">在渠道里显示工具调用提示。</Text>
+          <DevOnly>
+            <Col xs={24} md={12}>
+              <div className="channel-flag-card">
+                <div>
+                  <Text strong>推送操作提示</Text>
+                  <Text type="secondary">在渠道里显示工具调用提示。</Text>
+                </div>
+                <Switch
+                  checked={deliveryDraft.sendToolHints}
+                  onChange={(checked) => setDeliveryDraft((current) => ({ ...current, sendToolHints: checked }))}
+                />
               </div>
-              <Switch
-                checked={deliveryDraft.sendToolHints}
-                onChange={(checked) => setDeliveryDraft((current) => ({ ...current, sendToolHints: checked }))}
-              />
-            </div>
-          </Col>
+            </Col>
+          </DevOnly>
         </Row>
       </Card>
 

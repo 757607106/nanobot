@@ -2,8 +2,8 @@ import { Tabs } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 const channelsRoutes = [
-  { key: '/channels/list', label: '渠道列表' },
-  { key: '/channels/bindings', label: '渠道绑定' },
+  { key: '/channels/list', label: '渠道管理' },
+  { key: '/channels/bindings', label: '消息路由' },
 ]
 
 function resolveActiveKey(pathname: string) {

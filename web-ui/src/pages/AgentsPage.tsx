@@ -26,6 +26,8 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
+import DevOnly from '../components/DevOnly'
+import { useDevMode } from '../devMode'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type {
@@ -159,6 +161,7 @@ export default function AgentsPage() {
   const { message } = App.useApp()
   const navigate = useNavigate()
   const { agentId } = useParams()
+  const { devMode } = useDevMode()
   const selectedAgentId = agentId && agentId !== 'new' ? agentId : null
 
   const [agents, setAgents] = useState<AgentDefinition[]>([])
@@ -329,11 +332,11 @@ export default function AgentsPage() {
   async function handleSave() {
     const payload = toPayload(form)
     if (!payload.name) {
-      setError('Agent 名称不能为空。')
+      setError('员工名称不能为空。')
       return
     }
     if (!payload.systemPrompt) {
-      setError('System Prompt 不能为空。')
+      setError('角色说明不能为空。')
       return
     }
     if (!(payload.rules || []).length) {
@@ -437,7 +440,7 @@ export default function AgentsPage() {
         className="page-hero-compact studio-hero"
         eyebrow="协作"
         title="AI员工"
-        description="创建员工、配置能力边界，并直接做一次试运行。高级运行参数默认收起，先把员工职责和可用能力说明白。"
+        description="创建 AI 员工、定义职责与能力，并通过试运行验证效果。"
         stats={[
           { label: '已创建员工', value: agents.length },
           { label: '启用中', value: enabledCount },
@@ -445,8 +448,8 @@ export default function AgentsPage() {
           { label: '可用知识库', value: knowledgeBases.length },
         ]}
         badges={[
-          <Tag key="scope" color="processing">支持能力绑定</Tag>,
-          <Tag key="rag" color="success">支持知识库试运行</Tag>,
+          <Tag key="scope" color="processing">能力可配</Tag>,
+          <Tag key="rag" color="success">知识驱动</Tag>,
         ]}
         actions={(
           <Space wrap>
@@ -475,7 +478,7 @@ export default function AgentsPage() {
           {agents.length === 0 ? (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="当前还没有可复用 Agent。"
+              description="还没有创建 AI 员工"
             >
               <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/agents/new')}>
                 创建第一个员工
@@ -501,8 +504,8 @@ export default function AgentsPage() {
                     <Text type="secondary">{item.description || '暂未补充说明。'}</Text>
                     <div className="studio-agent-list-meta">
                       <Tag>{item.model || '使用实例默认模型'}</Tag>
-                      <Tag>{item.toolAllowlist.length} tools</Tag>
-                      <Tag>{item.skillIds.length} skills</Tag>
+                      <Tag>{`${item.toolAllowlist.length} 个工具`}</Tag>
+                      <Tag>{`${item.skillIds.length} 个技能`}</Tag>
                     </div>
                   </div>
                 </List.Item>
@@ -556,7 +559,7 @@ export default function AgentsPage() {
                   value={form.systemPrompt}
                   onChange={(event) => updateForm('systemPrompt', event.target.value)}
                   rows={8}
-                  placeholder="定义该 Agent 的角色、任务边界和输出方式。"
+                  placeholder="定义这个员工的角色定位、职责边界和输出风格。"
                 />
               </div>
 
@@ -566,7 +569,7 @@ export default function AgentsPage() {
                   value={form.rulesText}
                   onChange={(event) => updateForm('rulesText', event.target.value)}
                   rows={4}
-                  placeholder="每行一条。"
+                  placeholder="每行一条工作规则，例如：先确认任务范围再动手"
                 />
               </div>
 
@@ -610,12 +613,12 @@ export default function AgentsPage() {
               </div>
 
               <div className="studio-form-field">
-                <Text type="secondary">Tags</Text>
+                <Text type="secondary">标签</Text>
                 <Select
                   mode="tags"
                   value={form.tags}
                   onChange={(value) => updateForm('tags', value)}
-                  placeholder="例如 legal, research, reviewer"
+                  placeholder="例如：法务、研究、评审"
                 />
               </div>
 
@@ -634,7 +637,7 @@ export default function AgentsPage() {
                   children: (
                     <div className="studio-form-grid">
                       <div className="studio-form-field">
-                        <Text type="secondary">外部连接</Text>
+                        <Text type="secondary">{devMode ? 'MCP 服务' : '第三方服务连接'}</Text>
                         <Select
                           mode="multiple"
                           value={form.mcpServerIds}
@@ -655,14 +658,16 @@ export default function AgentsPage() {
                           ]}
                         />
                       </div>
-                      <div className="studio-form-field studio-form-field-span-2">
-                        <Text type="secondary">兼容后端</Text>
-                        <Input
-                          value={form.backend}
-                          onChange={(event) => updateForm('backend', event.target.value)}
-                          placeholder="仅在需要兼容特定运行后端时填写"
-                        />
-                      </div>
+                      <DevOnly>
+                        <div className="studio-form-field studio-form-field-span-2">
+                          <Text type="secondary">兼容后端</Text>
+                          <Input
+                            value={form.backend}
+                            onChange={(event) => updateForm('backend', event.target.value)}
+                            placeholder="仅在需要兼容特定运行后端时填写"
+                          />
+                        </div>
+                      </DevOnly>
                     </div>
                   ),
                 },
@@ -673,7 +678,7 @@ export default function AgentsPage() {
               className="studio-inline-alert"
               type="info"
               showIcon
-              message="员工试运行已经会真实装配工具、技能、外部连接和知识库；高级设置默认收起，避免把运行时实现细节直接暴露给普通用户。"
+              message="试运行会使用员工的完整配置真实执行任务，帮助你验证员工效果。"
             />
 
             <div className="studio-form-actions">
@@ -697,7 +702,7 @@ export default function AgentsPage() {
                 <Typography.Title level={4}>员工试运行</Typography.Title>
                 <Text type="secondary">给当前员工一个真实任务，确认它的角色说明、能力绑定和知识库是否按预期工作。</Text>
               </div>
-              {currentAgent ? <Tag color="blue">{currentAgent.agentId}</Tag> : <Tag>未保存</Tag>}
+              {currentAgent ? <DevOnly><Tag color="blue">{currentAgent.agentId}</Tag></DevOnly> : <Tag>未保存</Tag>}
             </div>
 
             <div className="studio-form-field">
