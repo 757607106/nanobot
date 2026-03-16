@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Collapse,
+  Drawer,
   Empty,
   Input,
   List,
@@ -18,18 +19,20 @@ import {
   Typography,
 } from 'antd'
 import {
-  ApartmentOutlined,
   CopyOutlined,
   DeleteOutlined,
   PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
   SearchOutlined,
+  TeamOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
-import PageHero from '../components/PageHero'
 import { useDevMode } from '../devMode'
 import { formatDateTimeZh } from '../locale'
 import type {
@@ -188,10 +191,6 @@ export default function TeamsPage() {
 
   useEffect(() => {
     if (loadingWorkspace) {
-      return
-    }
-    if (!teamId && teams[0]) {
-      navigate(`/studio/teams/${teams[0].teamId}`, { replace: true })
       return
     }
     if (!selectedTeamId) {
@@ -419,13 +418,8 @@ export default function TeamsPage() {
       setDeleting(true)
       await api.deleteTeam(currentTeam.teamId)
       message.success('Team 已删除')
-      const remaining = teams.filter((item) => item.teamId !== currentTeam.teamId)
       await loadWorkspace()
-      if (remaining[0]) {
-        navigate(`/studio/teams/${remaining[0].teamId}`, { replace: true })
-      } else {
-        navigate('/studio/teams/new', { replace: true })
-      }
+      navigate('/studio/teams', { replace: true })
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, '删除 Team 失败'))
     } finally {
@@ -615,82 +609,135 @@ export default function TeamsPage() {
 
   return (
     <div className="page-stack">
-      <PageHero
-        className="page-hero-compact studio-hero"
-        eyebrow="协作团队"
-        title="团队"
-        description="将 AI 员工组建成团队，实现多角色协作完成复杂任务。"
-        stats={[
-          { label: '已创建团队', value: teams.length },
-          { label: '启用中', value: enabledCount },
-          { label: '可选员工', value: agents.length },
-          { label: '共享知识库', value: sharedKbCount },
-        ]}
-        badges={[
-          <Tag key="crud" color="processing">灵活组队</Tag>,
-          <Tag key="runtime" color="geekblue">即时验证</Tag>,
-        ]}
-        actions={(
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
-              刷新
-            </Button>
-            <Button onClick={() => navigate('/studio/runs')}>查看执行记录</Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/teams/new')}>
-              新建团队
+      <div className="stat-card-row">
+        <div className="stat-card">
+          <div className="stat-card-icon" style={{ background: 'var(--ant-color-primary-bg)', color: 'var(--ant-color-primary)' }}>
+            <TeamOutlined />
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{teams.length}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>已创建团队</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-icon" style={{ background: 'var(--ant-color-success-bg)', color: 'var(--ant-color-success)' }}>
+            <CheckCircleOutlined />
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{enabledCount}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>启用中</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-icon" style={{ background: 'var(--ant-color-warning-bg)', color: 'var(--ant-color-warning)' }}>
+            <ClockCircleOutlined />
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{agents.length}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>可选员工</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-icon" style={{ background: 'var(--ant-color-info-bg)', color: 'var(--ant-color-info)' }}>
+            <AppstoreOutlined />
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{sharedKbCount}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>共享知识库</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="page-header-block" style={{ marginBottom: '16px' }}>
+        <div className="page-section-title">
+          <Typography.Title level={4}>所有协作团队</Typography.Title>
+          <Text type="secondary">将 AI 员工组建成团队，实现多角色协作完成复杂任务。</Text>
+        </div>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
+            刷新
+          </Button>
+          <Button onClick={() => navigate('/studio/runs')}>查看执行记录</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/teams/new')}>
+            新建团队
+          </Button>
+        </Space>
+      </div>
+
+      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: '16px' }} /> : null}
+
+      {teams.length === 0 && !loadingWorkspace ? (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="当前还没有可复用团队。"
+          className="page-card"
+        >
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/teams/new')}>
+            创建第一个团队
+          </Button>
+        </Empty>
+      ) : (
+        <div className="studio-grid-layout">
+          {teams.map((item) => (
+            <div
+              key={item.teamId}
+              className="id-badge-card"
+              onClick={() => navigate(`/studio/teams/${item.teamId}`)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="id-badge-body">
+                <div 
+                  className="id-badge-sticker" 
+                  data-status={item.enabled ? 'active' : 'inactive'}
+                >
+                  {item.enabled ? '在线' : '离线'}
+                </div>
+                <div className="id-badge-avatar" style={{ background: 'var(--ant-color-primary-bg)', color: 'var(--ant-color-primary)' }}>
+                  <TeamOutlined />
+                </div>
+                <div className="id-badge-info">
+                  <h4>{item.name}</h4>
+                  <p className="ant-typography-ellipsis ant-typography-ellipsis-single-line" style={{ maxWidth: '180px' }}>
+                    {item.description || '暂未补充团队说明。'}
+                  </p>
+                  <div className="id-badge-id">{item.teamId.split('-')[0].toUpperCase()}</div>
+                </div>
+              </div>
+              <div className="id-badge-stats">
+                <div className="id-badge-stat-item">
+                  <span className="id-badge-stat-label">成员</span>
+                  <span className="id-badge-stat-value">{item.memberCount}</span>
+                </div>
+                <div className="id-badge-stat-item" style={{ borderLeft: '1px solid var(--ant-color-border-secondary)' }}>
+                  <span className="id-badge-stat-label">知识库</span>
+                  <span className="id-badge-stat-value">{item.sharedKnowledgeBindingIds.length}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Drawer
+        title={currentTeam ? '团队设置' : '新建团队'}
+        width={680}
+        onClose={() => navigate('/studio/teams')}
+        open={!!selectedTeamId || teamId === 'new'}
+        styles={{ body: { padding: 0 } }}
+        extra={
+          <Space>
+            {currentTeam && (
+              <Button icon={<CopyOutlined />} onClick={() => void handleCopy()} loading={copying}>
+                复制
+              </Button>
+            )}
+            <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSave()} loading={saving}>
+              保存
             </Button>
           </Space>
-        )}
-      />
-
-      {error ? <Alert type="error" showIcon message={error} /> : null}
-
-      <div className="page-grid studio-agents-grid">
-        <Card className="config-panel-card studio-agent-list-card">
-          <div className="config-card-header">
-            <div className="page-section-title">
-              <Typography.Title level={4}>团队列表</Typography.Title>
-              <Text type="secondary">选择已有团队，或者把多个 AI 员工组装成新的协作单元。</Text>
-            </div>
-            <Tag color="blue">{teams.length}</Tag>
-          </div>
-
-          {teams.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有可复用团队。">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/teams/new')}>
-                创建第一个团队
-              </Button>
-            </Empty>
-          ) : (
-            <List
-              className="studio-agent-list"
-              dataSource={teams}
-              renderItem={(item) => (
-                <List.Item
-                  className={`studio-agent-list-item ${selectedTeamId === item.teamId ? 'is-active' : ''}`}
-                  onClick={() => navigate(`/studio/teams/${item.teamId}`)}
-                >
-                  <div className="studio-agent-list-copy">
-                    <div className="studio-agent-list-head">
-                      <Space size={8}>
-                        <ApartmentOutlined />
-                        <strong>{item.name}</strong>
-                      </Space>
-                      <Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '启用' : '停用'}</Tag>
-                    </div>
-                    <Text type="secondary">{item.description || '暂未补充团队说明。'}</Text>
-                    <div className="studio-agent-list-meta">
-                      <Tag>{item.memberCount} 名成员</Tag>
-                      <Tag>{item.sharedKnowledgeBindingIds.length} 个知识库</Tag>
-                    </div>
-                  </div>
-                </List.Item>
-              )}
-            />
-          )}
-        </Card>
-
-        <div className="page-stack">
+        }
+      >
+        <div className="page-stack" style={{ padding: '24px' }}>
           <Tabs
             activeKey={activePanel}
             onChange={(value) => setActivePanel(value as 'config' | 'runs' | 'memory')}
@@ -1322,7 +1369,7 @@ export default function TeamsPage() {
           ) : null}
 
         </div>
-      </div>
+      </Drawer>
     </div>
   )
 }

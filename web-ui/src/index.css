@@ -40,26 +40,10 @@
   --nb-section-gap: 10px;
   --nb-panel-padding: 16px;
   --nb-panel-padding-mobile: 16px;
-  --nb-body-bg:
-    radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.1), transparent 22%),
-    radial-gradient(circle at 100% 12%, rgba(15, 123, 123, 0.1), transparent 22%),
-    linear-gradient(180deg, #f3f7fa 0%, #edf3f7 54%, #f8fbfd 100%);
-  --nb-body-overlay:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 18%, rgba(255, 255, 255, 0.2)),
-    repeating-linear-gradient(
-      90deg,
-      rgba(15, 23, 42, 0.02) 0,
-      rgba(15, 23, 42, 0.02) 1px,
-      transparent 1px,
-      transparent 96px
-    ),
-    repeating-linear-gradient(
-      180deg,
-      rgba(15, 23, 42, 0.015) 0,
-      rgba(15, 23, 42, 0.015) 1px,
-      transparent 1px,
-      transparent 96px
-    );
+  --nb-body-bg: var(--ant-color-bg-layout, #f8fafc);
+  --nb-body-overlay: 
+    linear-gradient(#e2e8f0 1px, transparent 1px) 0 0 / 20px 20px,
+    linear-gradient(90deg, #e2e8f0 1px, transparent 1px) 0 0 / 20px 20px;
   --nb-header-bg: rgba(255, 255, 255, 0.76);
   --nb-header-border: rgba(255, 255, 255, 0.62);
   --nb-header-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
@@ -194,27 +178,10 @@
   --nb-border-strong: rgba(110, 231, 221, 0.22);
   --nb-shadow: 0 28px 72px rgba(0, 0, 0, 0.34);
   --nb-shadow-soft: 0 16px 40px rgba(0, 0, 0, 0.22);
-  --nb-body-bg:
-    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.18), transparent 22%),
-    radial-gradient(circle at 100% 12%, rgba(31, 143, 136, 0.16), transparent 22%),
-    radial-gradient(circle at 78% 100%, rgba(245, 158, 11, 0.1), transparent 24%),
-    linear-gradient(180deg, #040b16 0%, #07101d 48%, #0a1423 100%);
-  --nb-body-overlay:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18%, rgba(255, 255, 255, 0.015)),
-    repeating-linear-gradient(
-      90deg,
-      rgba(148, 163, 184, 0.05) 0,
-      rgba(148, 163, 184, 0.05) 1px,
-      transparent 1px,
-      transparent 96px
-    ),
-    repeating-linear-gradient(
-      180deg,
-      rgba(148, 163, 184, 0.04) 0,
-      rgba(148, 163, 184, 0.04) 1px,
-      transparent 1px,
-      transparent 96px
-    );
+  --nb-body-bg: var(--ant-color-bg-layout, #0f172a);
+  --nb-body-overlay: 
+    linear-gradient(#1e293b 1px, transparent 1px) 0 0 / 20px 20px,
+    linear-gradient(90deg, #1e293b 1px, transparent 1px) 0 0 / 20px 20px;
   --nb-header-bg: rgba(7, 17, 31, 0.76);
   --nb-header-border: rgba(148, 163, 184, 0.12);
   --nb-header-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
@@ -3456,20 +3423,246 @@ textarea.config-json-editor.ant-input {
   width: 100%;
 }
 
-.studio-artifact-preview {
-  margin: 0;
-  padding: 16px;
+/* ID Badge Card Styles - Pro Max Iteration 2 */
+.id-badge-card {
+  position: relative;
+  background: var(--ant-color-bg-container);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 4px solid rgba(0, 0, 0, 0.1);
   border-radius: 18px;
-  border: 1px solid var(--nb-card-border);
-  background: color-mix(in srgb, var(--nb-card-bg) 90%, #0f172a 10%);
-  color: var(--nb-text-primary);
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 420px;
-  font-size: 12px;
-  line-height: 1.65;
+  padding: 0;
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 8px rgba(0, 0, 0, 0.02),
+    0 8px 24px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: visible;
+  isolation: isolate;
 }
+
+.id-badge-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 4px 6px rgba(0, 0, 0, 0.03),
+    0 12px 24px rgba(0, 0, 0, 0.04),
+    0 24px 48px rgba(0, 0, 0, 0.06);
+  border-color: var(--ant-color-primary);
+  border-bottom-color: var(--ant-color-primary);
+}
+
+.id-badge-card::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 42px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 99px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+
+.id-badge-body {
+  padding: 44px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+}
+
+.id-badge-sticker {
+  position: absolute;
+  top: -6px;
+  right: 12px;
+  padding: 4px 10px;
+  background: #fef08a; /* Sticky note yellow default */
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 2px;
+  font-family: "Marker Felt", "Comic Sans MS", fantasy;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  color: #854d0e;
+  transform: rotate(4deg);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Status variants for sticker */
+.id-badge-sticker[data-status="active"] {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.id-badge-sticker[data-status="inactive"] {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.id-badge-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px; /* Squircle */
+  margin-bottom: 16px;
+  background: var(--ant-color-bg-layout);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.id-badge-info h4 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ant-color-text);
+}
+
+.id-badge-info p {
+  margin: 0;
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  opacity: 0.85;
+}
+
+.id-badge-id {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  color: var(--ant-color-text-tertiary);
+  margin-top: 12px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  display: inline-block;
+  opacity: 0.6;
+  letter-spacing: 0.05em;
+}
+
+.id-badge-team {
+  margin-top: 12px;
+  padding: 3px 8px;
+  background: var(--ant-color-fill-secondary);
+  color: var(--ant-color-text-secondary);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.id-badge-stats {
+  margin-top: auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--ant-color-fill-quaternary);
+  border-top: 1px solid var(--ant-color-border-secondary);
+  padding: 10px 16px;
+  border-radius: 0 0 15px 15px;
+  gap: 1px; /* Divider trick */
+}
+
+.id-badge-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+  position: relative;
+}
+
+.id-badge-stat-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: var(--ant-color-border-secondary);
+}
+
+.id-badge-stat-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ant-color-text-tertiary);
+  font-weight: 600;
+}
+
+.id-badge-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ant-color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-grid-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 24px;
+  padding: 32px;
+  /* Warmer, paper-like background for the grid area */
+  background-color: #f8fafc; 
+  background-image: 
+    linear-gradient(#e2e8f0 1px, transparent 1px),
+    linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+  background-size: 20px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+:root[data-theme='dark'] .studio-grid-layout {
+  background-color: #0f172a;
+  background-image: 
+    linear-gradient(#1e293b 1px, transparent 1px),
+    linear-gradient(90deg, #1e293b 1px, transparent 1px);
+  border-color: rgba(255,255,255,0.06);
+}
+
+.stat-card-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--ant-color-bg-container);
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--ant-box-shadow-tertiary);
+}
+
+.stat-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
 
 .studio-run-tree {
   display: grid;
@@ -3586,6 +3779,70 @@ textarea.config-json-editor.ant-input {
   gap: 8px;
 }
 
+/* Capability Card Grid */
+.capability-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.capability-card {
+  position: relative;
+  cursor: pointer;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--nb-card-subtle-border);
+  background: var(--nb-card-subtle-bg);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 64px;
+}
+
+.capability-card:hover {
+  border-color: color-mix(in srgb, var(--nb-accent) 28%, var(--nb-card-subtle-border));
+}
+
+.capability-card.is-selected {
+  border-color: var(--nb-border-strong);
+  background: color-mix(in srgb, var(--nb-accent) 6%, var(--nb-card-subtle-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nb-accent) 24%, transparent);
+}
+
+.capability-card.is-orphan {
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.capability-card-name {
+  font-size: var(--nb-text-sm);
+  font-weight: 600;
+  color: var(--nb-ink);
+  line-height: var(--nb-line-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 20px;
+}
+
+.capability-card-desc {
+  font-size: var(--nb-text-xs);
+  color: var(--nb-muted);
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-card-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--nb-accent);
+  font-size: 16px;
+}
+
 @media (max-width: 1100px) {
   .studio-agents-grid,
   .studio-knowledge-grid,
@@ -3605,6 +3862,10 @@ textarea.config-json-editor.ant-input {
 
   .studio-form-field-span-2 {
     grid-column: span 1;
+  }
+
+  .capability-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .studio-agent-list-head,

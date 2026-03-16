@@ -2,18 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   App,
+  AutoComplete,
   Button,
   Card,
   Collapse,
   Empty,
   Input,
-  List,
   Select,
   Space,
   Spin,
   Switch,
+  Tabs,
   Tag,
   Typography,
+  Drawer,
 } from 'antd'
 import {
   CopyOutlined,
@@ -23,11 +25,17 @@ import {
   ReloadOutlined,
   RobotOutlined,
   SaveOutlined,
+  TeamOutlined,
+  AppstoreOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
 import { useDevMode } from '../devMode'
+import { getModelSuggestions } from '../modelCatalog'
+import { getPreferredProvider } from '../modelConfig'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type {
@@ -35,6 +43,8 @@ import type {
   AgentDefinitionMutationInput,
   AgentRunSummary,
   AgentTemplateTool,
+  ConfigData,
+  ConfigMeta,
   InstalledSkill,
   KnowledgeBaseDefinition,
   McpServerEntry,
@@ -183,6 +193,10 @@ export default function AgentsPage() {
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [globalConfig, setGlobalConfig] = useState<ConfigData | null>(null)
+  const [globalConfigMeta, setGlobalConfigMeta] = useState<ConfigMeta | null>(null)
+  const [capabilityTab, setCapabilityTab] = useState('tools')
 
   useEffect(() => {
     void loadWorkspace()
@@ -192,100 +206,91 @@ export default function AgentsPage() {
     if (loadingWorkspace) {
       return
     }
-    if (!agentId && agents[0]) {
-      navigate(`/studio/agents/${agents[0].agentId}`, { replace: true })
-      return
-    }
     if (!selectedAgentId) {
       setCurrentAgent(null)
       setRecentRuns([])
       setLastResult(null)
       setForm(createEmptyForm())
+      setIsDrawerOpen(agentId === 'new')
       return
     }
     void loadAgentDetail(selectedAgentId)
     void loadRecentRuns(selectedAgentId)
-  }, [agentId, agents, loadingWorkspace, navigate, selectedAgentId])
+    setIsDrawerOpen(true)
+  }, [agentId, agents, loadingWorkspace, selectedAgentId])
+
+  const handleCloseDrawer = () => {
+    setIsDrawerOpen(false)
+    navigate('/studio/agents')
+  }
 
   const enabledCount = useMemo(() => agents.filter((item) => item.enabled).length, [agents])
 
-  const toolOptions = useMemo(() => {
-    const map = new Map(validTools.map((item) => [item.name, item.description]))
+  const modelSuggestions = useMemo(() => {
+    if (!globalConfig || !globalConfigMeta) return []
+    const provider = getPreferredProvider(globalConfig, globalConfigMeta)
+    return getModelSuggestions(provider, form.model || null).map((m) => ({ value: m, label: m }))
+  }, [globalConfig, globalConfigMeta, form.model])
+
+  const toolCardItems = useMemo(() => {
+    const map = new Map(validTools.map((item) => [item.name, { name: item.name, description: item.description, isOrphan: false }]))
     for (const toolName of form.toolAllowlist) {
       if (!map.has(toolName)) {
-        map.set(toolName, '当前定义中的工具')
+        map.set(toolName, { name: toolName, description: '当前定义中的工具', isOrphan: true })
       }
     }
-    return Array.from(map.entries()).map(([value, description]) => ({
-      value,
-      label: value,
-      description,
-    }))
+    return Array.from(map.entries()).map(([key, meta]) => ({ key, ...meta }))
   }, [form.toolAllowlist, validTools])
 
-  const skillOptions = useMemo(() => {
-    const map = new Map(skills.map((item) => [item.id, item.description || item.name]))
+  const skillCardItems = useMemo(() => {
+    const map = new Map(skills.map((item) => [item.id, { name: item.name, description: item.description || item.name, isOrphan: false }]))
     for (const skillId of form.skillIds) {
       if (!map.has(skillId)) {
-        map.set(skillId, '当前定义中的技能')
+        map.set(skillId, { name: skillId, description: '当前定义中的技能', isOrphan: true })
       }
     }
-    return Array.from(map.entries()).map(([value, description]) => ({
-      value,
-      label: value,
-      description,
-    }))
+    return Array.from(map.entries()).map(([key, meta]) => ({ key, ...meta }))
   }, [form.skillIds, skills])
 
-  const mcpOptions = useMemo(() => {
-    const map = new Map(mcpServers.map((item) => [item.name, item.displayName || item.name]))
+  const mcpCardItems = useMemo(() => {
+    const map = new Map(mcpServers.map((item) => [item.name, { name: item.displayName || item.name, description: `${item.toolCount ?? '?'} 个工具`, isOrphan: false }]))
     for (const serverId of form.mcpServerIds) {
       if (!map.has(serverId)) {
-        map.set(serverId, serverId)
+        map.set(serverId, { name: serverId, description: '当前定义中的服务', isOrphan: true })
       }
     }
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
+    return Array.from(map.entries()).map(([key, meta]) => ({ key, ...meta }))
   }, [form.mcpServerIds, mcpServers])
 
-  const knowledgeOptions = useMemo(() => {
-    const map = new Map(
-      knowledgeBases.map((item) => [
-        item.kbId,
-        {
-          label: item.name,
-          description: item.description || '知识库',
-        },
-      ]),
-    )
+  const knowledgeCardItems = useMemo(() => {
+    const map = new Map(knowledgeBases.map((item) => [item.kbId, { name: item.name, description: item.description || '知识库', isOrphan: false }]))
     for (const kbId of form.knowledgeBindingIds) {
       if (!map.has(kbId)) {
-        map.set(kbId, {
-          label: kbId,
-          description: '当前定义中的知识库绑定',
-        })
+        map.set(kbId, { name: kbId, description: '当前定义中的知识库', isOrphan: true })
       }
     }
-    return Array.from(map.entries()).map(([value, meta]) => ({
-      value,
-      label: `${meta.label} · ${meta.description}`,
-    }))
+    return Array.from(map.entries()).map(([key, meta]) => ({ key, ...meta }))
   }, [form.knowledgeBindingIds, knowledgeBases])
 
   async function loadWorkspace() {
     try {
       setLoadingWorkspace(true)
-      const [agentList, toolCatalog, skillList, mcpRegistry, kbList] = await Promise.all([
+      const [agentList, toolCatalog, skillList, mcpRegistry, kbList, configResult, metaResult] = await Promise.all([
         api.getAgents(),
         api.getValidTemplateTools(),
         api.getInstalledSkills(),
         api.getMcpServers(),
         api.getKnowledgeBases(true),
+        api.getConfig().catch(() => null),
+        api.getConfigMeta().catch(() => null),
       ])
       setAgents(agentList)
       setValidTools(toolCatalog)
       setSkills(skillList)
       setMcpServers(mcpRegistry.items)
       setKnowledgeBases(kbList)
+      setGlobalConfig(configResult)
+      setGlobalConfigMeta(metaResult)
       setError(null)
     } catch (loadError) {
       setError(getErrorMessage(loadError, '加载协作域失败'))
@@ -327,6 +332,42 @@ export default function AgentsPage() {
 
   function updateForm<K extends keyof AgentFormState>(key: K, value: AgentFormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function toggleArrayItem(key: 'toolAllowlist' | 'skillIds' | 'mcpServerIds' | 'knowledgeBindingIds', item: string) {
+    setForm((prev) => ({
+      ...prev,
+      [key]: prev[key].includes(item) ? prev[key].filter((v) => v !== item) : [...prev[key], item],
+    }))
+  }
+
+  function renderCapabilityCards(
+    items: Array<{ key: string; name: string; description: string; isOrphan?: boolean }>,
+    selectedKeys: string[],
+    onToggle: (key: string) => void,
+    emptyText: string,
+  ) {
+    if (items.length === 0) {
+      return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
+    }
+    return (
+      <div className="capability-card-grid">
+        {items.map((item) => {
+          const isSelected = selectedKeys.includes(item.key)
+          return (
+            <div
+              key={item.key}
+              className={`capability-card${isSelected ? ' is-selected' : ''}${item.isOrphan ? ' is-orphan' : ''}`}
+              onClick={() => onToggle(item.key)}
+            >
+              {isSelected && <CheckCircleOutlined className="capability-card-check" />}
+              <div className="capability-card-name">{item.name}</div>
+              <div className="capability-card-desc">{item.description}</div>
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   async function handleSave() {
@@ -436,93 +477,145 @@ export default function AgentsPage() {
 
   return (
     <div className="page-stack">
-      <PageHero
-        className="page-hero-compact studio-hero"
-        eyebrow="协作"
-        title="AI员工"
-        description="创建 AI 员工、定义职责与能力，并通过试运行验证效果。"
-        stats={[
-          { label: '已创建员工', value: agents.length },
-          { label: '启用中', value: enabledCount },
-          { label: '最近执行', value: recentRuns.length },
-          { label: '可用知识库', value: knowledgeBases.length },
-        ]}
-        badges={[
-          <Tag key="scope" color="processing">能力可配</Tag>,
-          <Tag key="rag" color="success">知识驱动</Tag>,
-        ]}
-        actions={(
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
-              刷新
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/agents/new')}>
-              新建员工
+      <div className="stat-card-row">
+        <div className="stat-card">
+          <div className="stat-card-icon" style={{ background: 'var(--ant-color-primary-bg)', color: 'var(--ant-color-primary)' }}>
+            <TeamOutlined />
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{agents.length}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>员工总数</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-icon" style={{ background: 'var(--ant-color-success-bg)', color: 'var(--ant-color-success)' }}>
+            <CheckCircleOutlined />
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{enabledCount}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>启用中</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-icon" style={{ background: 'var(--ant-color-warning-bg)', color: 'var(--ant-color-warning)' }}>
+            <ClockCircleOutlined />
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{recentRuns.length}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>最近执行</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-icon" style={{ background: 'var(--ant-color-info-bg)', color: 'var(--ant-color-info)' }}>
+            <AppstoreOutlined />
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{knowledgeBases.length}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>可用知识库</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="page-header-block" style={{ marginBottom: '16px' }}>
+        <div className="page-section-title">
+          <Typography.Title level={4}>所有数字员工</Typography.Title>
+          <Text type="secondary">查看和管理您的数字员工，点击卡片进行详细配置。</Text>
+        </div>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
+            刷新
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/agents/new')}>
+            创建新员工
+          </Button>
+        </Space>
+      </div>
+
+      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: '16px' }} /> : null}
+
+      {agents.length === 0 && !loadingWorkspace ? (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="还没有创建 AI 员工"
+          className="page-card"
+        >
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/agents/new')}>
+            创建第一个员工
+          </Button>
+        </Empty>
+      ) : (
+        <div className="studio-grid-layout">
+          {agents.map((item) => (
+            <div
+              key={item.agentId}
+              className="id-badge-card"
+              onClick={() => navigate(`/studio/agents/${item.agentId}`)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="id-badge-body">
+                <div 
+                  className="id-badge-sticker" 
+                  data-status={item.enabled ? 'active' : 'inactive'}
+                >
+                  {item.enabled ? '在职' : '离职'}
+                </div>
+                <div className="id-badge-avatar">
+                  {item.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="id-badge-info">
+                  <h4>{item.name}</h4>
+                  <p className="ant-typography-ellipsis ant-typography-ellipsis-single-line" style={{ maxWidth: '180px' }}>
+                    {item.description || '暂无职责说明'}
+                  </p>
+                  <div className="id-badge-id">{item.agentId.split('-')[0].toUpperCase()}</div>
+                </div>
+                {item.tags && item.tags.length > 0 && (
+                  <div className="id-badge-team">
+                    {item.tags[0]}
+                  </div>
+                )}
+              </div>
+              <div className="id-badge-stats">
+                <div className="id-badge-stat-item">
+                  <span className="id-badge-stat-label">模型</span>
+                  <span className="id-badge-stat-value">{item.model ? '定制' : '默认'}</span>
+                </div>
+                <div className="id-badge-stat-item">
+                  <span className="id-badge-stat-label">工具</span>
+                  <span className="id-badge-stat-value">{item.toolAllowlist.length}</span>
+                </div>
+                <div className="id-badge-stat-item">
+                  <span className="id-badge-stat-label">技能</span>
+                  <span className="id-badge-stat-value">{item.skillIds.length}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Drawer
+        title={currentAgent ? '员工设置' : '新建员工'}
+        width={680}
+        onClose={handleCloseDrawer}
+        open={isDrawerOpen}
+        styles={{ body: { padding: 0 } }}
+        extra={
+          <Space>
+            {currentAgent && (
+              <Button icon={<CopyOutlined />} onClick={() => void handleCopy()} loading={copying}>
+                复制
+              </Button>
+            )}
+            <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSave()} loading={saving}>
+              保存
             </Button>
           </Space>
-        )}
-      />
-
-      {error ? <Alert type="error" showIcon message={error} /> : null}
-
-      <div className="page-grid studio-agents-grid">
-        <Card className="config-panel-card studio-agent-list-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>员工列表</Typography.Title>
-                <Text type="secondary">选择已有员工，或新建一个新的 AI 员工。</Text>
-              </div>
-              <Tag color="blue">{agents.length}</Tag>
-            </div>
-
-          {agents.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="还没有创建 AI 员工"
-            >
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/agents/new')}>
-                创建第一个员工
-              </Button>
-            </Empty>
-          ) : (
-            <List
-              className="studio-agent-list"
-              dataSource={agents}
-              renderItem={(item) => (
-                <List.Item
-                  className={`studio-agent-list-item ${selectedAgentId === item.agentId ? 'is-active' : ''}`}
-                  onClick={() => navigate(`/studio/agents/${item.agentId}`)}
-                >
-                  <div className="studio-agent-list-copy">
-                    <div className="studio-agent-list-head">
-                      <Space size={8}>
-                        <RobotOutlined />
-                        <strong>{item.name}</strong>
-                      </Space>
-                      <Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '启用' : '停用'}</Tag>
-                    </div>
-                    <Text type="secondary">{item.description || '暂未补充说明。'}</Text>
-                    <div className="studio-agent-list-meta">
-                      <Tag>{item.model || '使用实例默认模型'}</Tag>
-                      <Tag>{`${item.toolAllowlist.length} 个工具`}</Tag>
-                      <Tag>{`${item.skillIds.length} 个技能`}</Tag>
-                    </div>
-                  </div>
-                </List.Item>
-              )}
-            />
-          )}
-        </Card>
-
-        <div className="page-stack">
-          <Card className="config-panel-card studio-agent-editor-card" loading={loadingDetail}>
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>{currentAgent ? '员工设置' : '新建员工'}</Typography.Title>
-                <Text type="secondary">先定义员工职责，再补充它可以使用的工具、技能和知识库。</Text>
-              </div>
-              {currentAgent?.sourceTemplateName ? <Tag color="purple">来自模板：{currentAgent.sourceTemplateName}</Tag> : null}
-            </div>
+        }
+      >
+        <div className="page-stack" style={{ padding: '24px' }}>
+          <Card bordered={false} className="config-panel-card" loading={loadingDetail}>
+            {currentAgent?.sourceTemplateName ? <Tag color="purple" style={{ marginBottom: '16px' }}>来自模板：{currentAgent.sourceTemplateName}</Tag> : null}
 
             <div className="studio-form-grid">
               <div className="studio-form-field studio-form-field-span-2">
@@ -536,11 +629,31 @@ export default function AgentsPage() {
 
               <div className="studio-form-field">
                 <Text type="secondary">模型</Text>
-                <Input
+                <AutoComplete
                   value={form.model}
-                  onChange={(event) => updateForm('model', event.target.value)}
-                  placeholder="留空则使用实例默认模型"
+                  onChange={(value) => updateForm('model', value)}
+                  options={modelSuggestions}
+                  placeholder="留空则使用默认模型"
+                  allowClear
+                  filterOption={(input, option) =>
+                    (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
                 />
+              </div>
+
+              <div className="studio-form-field">
+                <Text type="secondary">标签</Text>
+                <Select
+                  mode="tags"
+                  value={form.tags}
+                  onChange={(value) => updateForm('tags', value)}
+                  placeholder="例如：法务、研究、评审"
+                />
+              </div>
+
+              <div className="studio-form-field studio-form-switch-field">
+                <Text type="secondary">启用状态</Text>
+                <Switch checked={form.enabled} onChange={(checked) => updateForm('enabled', checked)} />
               </div>
 
               <div className="studio-form-field studio-form-field-span-2">
@@ -572,60 +685,59 @@ export default function AgentsPage() {
                   placeholder="每行一条工作规则，例如：先确认任务范围再动手"
                 />
               </div>
+            </div>
 
-              <div className="studio-form-field">
-                <Text type="secondary">工具</Text>
-                <Select
-                  mode="multiple"
-                  value={form.toolAllowlist}
-                  onChange={(value) => updateForm('toolAllowlist', value)}
-                  options={toolOptions.map((item) => ({
-                    value: item.value,
-                    label: `${item.label} · ${item.description}`,
-                  }))}
-                  placeholder="选择允许使用的内置工具"
-                />
+            <div style={{ marginTop: 16 }}>
+              <div style={{ marginBottom: 12 }}>
+                <Typography.Title level={5} style={{ marginBottom: 4 }}>能力配置</Typography.Title>
+                <Text type="secondary">为这个员工分配工具、技能和外部资源。</Text>
               </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">技能</Text>
-                <Select
-                  mode="multiple"
-                  value={form.skillIds}
-                  onChange={(value) => updateForm('skillIds', value)}
-                  options={skillOptions.map((item) => ({
-                    value: item.value,
-                    label: `${item.label} · ${item.description}`,
-                  }))}
-                  placeholder="选择要注入上下文的技能"
-                />
-              </div>
-
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">可使用知识库</Text>
-                <Select
-                  mode="multiple"
-                  value={form.knowledgeBindingIds}
-                  onChange={(value) => updateForm('knowledgeBindingIds', value)}
-                  options={knowledgeOptions}
-                  placeholder="选择该 Agent 可读取的知识库"
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">标签</Text>
-                <Select
-                  mode="tags"
-                  value={form.tags}
-                  onChange={(value) => updateForm('tags', value)}
-                  placeholder="例如：法务、研究、评审"
-                />
-              </div>
-
-              <div className="studio-form-field studio-form-switch-field">
-                <Text type="secondary">启用状态</Text>
-                <Switch checked={form.enabled} onChange={(checked) => updateForm('enabled', checked)} />
-              </div>
+              <Tabs
+                activeKey={capabilityTab}
+                onChange={setCapabilityTab}
+                items={[
+                  {
+                    key: 'tools',
+                    label: `工具 (${form.toolAllowlist.length})`,
+                    children: renderCapabilityCards(
+                      toolCardItems,
+                      form.toolAllowlist,
+                      (key) => toggleArrayItem('toolAllowlist', key),
+                      '暂无可用内置工具',
+                    ),
+                  },
+                  {
+                    key: 'skills',
+                    label: `技能 (${form.skillIds.length})`,
+                    children: renderCapabilityCards(
+                      skillCardItems,
+                      form.skillIds,
+                      (key) => toggleArrayItem('skillIds', key),
+                      '暂无已安装技能',
+                    ),
+                  },
+                  {
+                    key: 'mcp',
+                    label: `${devMode ? 'MCP 服务' : '外部连接'} (${form.mcpServerIds.length})`,
+                    children: renderCapabilityCards(
+                      mcpCardItems,
+                      form.mcpServerIds,
+                      (key) => toggleArrayItem('mcpServerIds', key),
+                      '暂无可用外部连接',
+                    ),
+                  },
+                  {
+                    key: 'knowledge',
+                    label: `知识库 (${form.knowledgeBindingIds.length})`,
+                    children: renderCapabilityCards(
+                      knowledgeCardItems,
+                      form.knowledgeBindingIds,
+                      (key) => toggleArrayItem('knowledgeBindingIds', key),
+                      '暂无可用知识库',
+                    ),
+                  },
+                ]}
+              />
             </div>
 
             <Collapse
@@ -636,16 +748,6 @@ export default function AgentsPage() {
                   label: '高级设置',
                   children: (
                     <div className="studio-form-grid">
-                      <div className="studio-form-field">
-                        <Text type="secondary">{devMode ? 'MCP 服务' : '第三方服务连接'}</Text>
-                        <Select
-                          mode="multiple"
-                          value={form.mcpServerIds}
-                          onChange={(value) => updateForm('mcpServerIds', value)}
-                          options={mcpOptions}
-                          placeholder="选择可挂载的外部连接"
-                        />
-                      </div>
                       <div className="studio-form-field">
                         <Text type="secondary">记忆范围</Text>
                         <Select
@@ -659,7 +761,7 @@ export default function AgentsPage() {
                         />
                       </div>
                       <DevOnly>
-                        <div className="studio-form-field studio-form-field-span-2">
+                        <div className="studio-form-field">
                           <Text type="secondary">兼容后端</Text>
                           <Input
                             value={form.backend}
@@ -754,11 +856,9 @@ export default function AgentsPage() {
             ) : recentRuns.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个员工还没有执行记录。" />
             ) : (
-              <List
-                className="studio-run-list"
-                dataSource={recentRuns}
-                renderItem={(run) => (
-                  <List.Item className="studio-run-list-item">
+              <div className="studio-run-list">
+                {recentRuns.map((run) => (
+                  <div key={run.runId} className="studio-run-list-item" style={{ marginBottom: '12px' }}>
                     <div className="studio-run-list-copy">
                       <div className="studio-run-list-head">
                         <Space wrap>
@@ -774,13 +874,13 @@ export default function AgentsPage() {
                         <Text type="danger">{run.lastErrorMessage}</Text>
                       ) : null}
                     </div>
-                  </List.Item>
-                )}
-              />
+                  </div>
+                ))}
+              </div>
             )}
           </Card>
         </div>
-      </div>
+      </Drawer>
     </div>
   )
 }
