@@ -725,12 +725,12 @@ export default function AgentsPage() {
                   },
                   {
                     key: 'mcp',
-                    label: `${devMode ? 'MCP 服务' : '外部连接'} (${form.mcpServerIds.length})`,
+                    label: `${devMode ? 'MCP 服务' : '连接'} (${form.mcpServerIds.length})`,
                     children: renderCapabilityCards(
                       mcpCardItems,
                       form.mcpServerIds,
                       (key) => toggleArrayItem('mcpServerIds', key),
-                      '暂无可用外部连接',
+                      '暂无可用连接',
                     ),
                   },
                   {

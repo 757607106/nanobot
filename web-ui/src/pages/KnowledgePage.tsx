@@ -2,22 +2,33 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   App,
+  Badge,
   Button,
   Card,
-  Checkbox,
-  Collapse,
+  Col,
+  Descriptions,
+  Divider,
+  Drawer,
+  Dropdown,
   Empty,
+  Form,
   Input,
   InputNumber,
   List,
+  Modal,
+  Popconfirm,
+  Row,
   Select,
-  Segmented,
   Space,
   Spin,
-  Tag,
+  Table,
   Tabs,
+  Tag,
+  Tooltip,
   Typography,
+  Upload,
 } from 'antd'
+import type { TableProps, UploadFile } from 'antd'
 import {
   CloudUploadOutlined,
   DatabaseOutlined,
@@ -27,12 +38,22 @@ import {
   ReloadOutlined,
   SaveOutlined,
   SearchOutlined,
+  FileTextOutlined,
+  SettingOutlined,
+  ExperimentOutlined,
+  CloudSyncOutlined,
+  MoreOutlined,
+  InboxOutlined,
+  QuestionCircleOutlined,
+  RobotOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import PageHero from '../components/PageHero'
 import DevOnly from '../components/DevOnly'
 import { formatDateTimeZh } from '../locale'
+import { MotionPanel } from '../components/MotionSurface'
 import type {
   KnowledgeBaseDefinition,
   KnowledgeBaseMutationInput,
@@ -42,8 +63,9 @@ import type {
   KnowledgeSource,
 } from '../types'
 
-const { Text, Paragraph } = Typography
+const { Text, Paragraph, Title } = Typography
 const { TextArea } = Input
+const { Dragger } = Upload
 
 type SourceMode = 'file' | 'url' | 'faq'
 
@@ -146,7 +168,7 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-function statusColor(status: string) {
+function statusBadgeStatus(status: string) {
   if (status === 'indexed' || status === 'succeeded') {
     return 'success'
   }
@@ -157,6 +179,18 @@ function statusColor(status: string) {
     return 'processing'
   }
   return 'default'
+}
+
+function statusLabel(status: string) {
+  switch (status) {
+    case 'indexed': return '已索引'
+    case 'parsing': return '解析中'
+    case 'indexing': return '索引中'
+    case 'error_parsing': return '解析失败'
+    case 'error_indexing': return '索引失败'
+    case 'uploaded': return '已上传'
+    default: return status
+  }
 }
 
 function isActiveDocumentStatus(status: string) {
@@ -195,22 +229,20 @@ export default function KnowledgePage() {
   const [faqItems, setFaqItems] = useState<Array<{ question: string; answer: string }>>([])
   const [documentQuery, setDocumentQuery] = useState('')
   const [documentStatusFilter, setDocumentStatusFilter] = useState('all')
-  const [documentSourceFilter, setDocumentSourceFilter] = useState('all')
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([])
-  const [jobStatusFilter, setJobStatusFilter] = useState('all')
   const [retrieveQuery, setRetrieveQuery] = useState('restart the worker')
   const [retrieveHits, setRetrieveHits] = useState<KnowledgeHit[]>([])
   const [retrieveMode, setRetrieveMode] = useState('hybrid')
   const [retrieveEffectiveMode, setRetrieveEffectiveMode] = useState<string | null>(null)
-  const [activeSection, setActiveSection] = useState<'overview' | 'ingest' | 'sources' | 'testing'>('overview')
+  
+  // UI State
+  const [uploadDrawerOpen, setUploadDrawerOpen] = useState(false)
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [ingesting, setIngesting] = useState(false)
   const [reindexingTarget, setReindexingTarget] = useState<string | 'all' | null>(null)
-  const [syncingSourceId, setSyncingSourceId] = useState<string | null>(null)
-  const [savingSourceId, setSavingSourceId] = useState<string | null>(null)
   const [retrieving, setRetrieving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retrieveError, setRetrieveError] = useState<string | null>(null)
@@ -242,88 +274,12 @@ export default function KnowledgePage() {
     void loadKnowledgeDetail(selectedKbId)
   }, [kbId, knowledgeBases, loadingWorkspace, navigate, selectedKbId])
 
-  useEffect(() => {
-    if (isCreatingKb) {
-      setActiveSection('overview')
-    }
-  }, [isCreatingKb])
-
-  const enabledCount = useMemo(
-    () => knowledgeBases.filter((item) => item.enabled).length,
-    [knowledgeBases],
-  )
-  const hasWorkbenchSelection = Boolean(currentKb) || isCreatingKb
-  const syncableSources = useMemo(
-    () => sources.filter((item) => item.syncSupported),
-    [sources],
-  )
-  const selectedSource = useMemo(
-    () => sources.find((item) => item.sourceId === selectedSourceId) ?? null,
-    [selectedSourceId, sources],
-  )
-  const filteredDocuments = useMemo(() => {
-    const query = documentQuery.trim().toLowerCase()
-    return documents.filter((item) => {
-      if (documentStatusFilter !== 'all' && item.docStatus !== documentStatusFilter) {
-        return false
-      }
-      if (documentSourceFilter !== 'all' && item.sourceType !== documentSourceFilter) {
-        return false
-      }
-      if (!query) {
-        return true
-      }
-      return [
-        item.title,
-        item.fileName,
-        item.sourceUri,
-        item.errorSummary,
-      ].some((value) => String(value || '').toLowerCase().includes(query))
-    })
-  }, [documentQuery, documentSourceFilter, documentStatusFilter, documents])
-  const filteredJobs = useMemo(() => {
-    if (jobStatusFilter === 'all') {
-      return jobs
-    }
-    return jobs.filter((item) => item.status === jobStatusFilter)
-  }, [jobStatusFilter, jobs])
-  const failedDocuments = useMemo(
-    () => documents.filter((item) => isFailedDocumentStatus(item.docStatus)),
-    [documents],
-  )
-  const filteredDocumentIds = useMemo(
-    () => filteredDocuments.map((item) => item.docId),
-    [filteredDocuments],
-  )
-  const selectedFilteredDocIds = useMemo(
-    () => filteredDocumentIds.filter((docId) => selectedDocIds.includes(docId)),
-    [filteredDocumentIds, selectedDocIds],
-  )
-  const allFilteredSelected =
-    filteredDocumentIds.length > 0 && selectedFilteredDocIds.length === filteredDocumentIds.length
-  const partiallySelected =
-    selectedFilteredDocIds.length > 0 && selectedFilteredDocIds.length < filteredDocumentIds.length
   const hasActiveIngest = useMemo(
     () =>
       documents.some((item) => isActiveDocumentStatus(item.docStatus)) ||
       jobs.some((item) => isActiveJobStatus(item.status)),
     [documents, jobs],
   )
-  const indexedDocumentCount = useMemo(
-    () => documents.filter((item) => item.docStatus === 'indexed').length,
-    [documents],
-  )
-  const activeDocumentCount = useMemo(
-    () => documents.filter((item) => isActiveDocumentStatus(item.docStatus)).length,
-    [documents],
-  )
-  const selectedModeLabel =
-    form.mode === 'keyword'
-      ? '标准检索'
-      : form.mode === 'hybrid'
-        ? '平衡检索'
-        : '深度检索'
-  const latestJob = jobs[0] ?? null
 
   useEffect(() => {
     if (!currentKb || !hasActiveIngest) {
@@ -334,28 +290,6 @@ export default function KnowledgePage() {
     }, 2000)
     return () => window.clearInterval(timer)
   }, [currentKb, hasActiveIngest])
-
-  useEffect(() => {
-    setSelectedDocIds((current) => current.filter((docId) => documents.some((item) => item.docId === docId)))
-  }, [documents])
-
-  useEffect(() => {
-    if (sources.length === 0) {
-      setSelectedSourceId(null)
-      setSourceEditor(createEmptySourceEditor())
-      return
-    }
-    if (!selectedSourceId || !sources.some((item) => item.sourceId === selectedSourceId)) {
-      setSelectedSourceId(sources[0].sourceId)
-    }
-  }, [selectedSourceId, sources])
-
-  useEffect(() => {
-    if (!selectedSource) {
-      return
-    }
-    setSourceEditor(sourceToEditor(selectedSource))
-  }, [selectedSource])
 
   async function loadWorkspace() {
     try {
@@ -383,10 +317,8 @@ export default function KnowledgePage() {
       setDocuments(docs)
       setSources(sourceList)
       setJobs(jobList)
-      setSelectedDocIds((current) => current.filter((docId) => docs.some((item) => item.docId === docId)))
       setForm(kbToForm(kb))
       setRetrieveMode(kb.retrievalProfile.mode)
-      setRetrieveEffectiveMode(null)
       setError(null)
     } catch (loadError) {
       setError(getErrorMessage(loadError, '加载知识库详情失败'))
@@ -397,10 +329,6 @@ export default function KnowledgePage() {
 
   function updateForm<K extends keyof KnowledgeFormState>(key: K, value: KnowledgeFormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
-  }
-
-  function updateSourceEditor<K extends keyof SourceEditorState>(key: K, value: SourceEditorState[K]) {
-    setSourceEditor((current) => ({ ...current, [key]: value }))
   }
 
   async function handleSave() {
@@ -447,32 +375,17 @@ export default function KnowledgePage() {
     }
   }
 
-  async function refreshCurrentKb() {
-    if (currentKb) {
-      await loadKnowledgeDetail(currentKb.kbId)
-    }
-  }
-
-  async function handleUploadFiles() {
-    if (!currentKb) {
-      setError('请先保存知识库，再上传文档。')
-      return
-    }
-    if (selectedFiles.length === 0) {
-      setError('请先选择要上传的文件。')
-      return
-    }
+  async function handleUploadFiles(fileList: File[]) {
+    if (!currentKb) return
     try {
       setIngesting(true)
       const formData = new FormData()
-      selectedFiles.forEach((file) => formData.append('file', file))
+      fileList.forEach((file) => formData.append('file', file))
       await api.uploadKnowledgeDocuments(currentKb.kbId, formData)
-      message.success(`已提交 ${selectedFiles.length} 个文件，后台正在入库`)
+      message.success(`已提交 ${fileList.length} 个文件，后台正在入库`)
       setSelectedFiles([])
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-      await refreshCurrentKb()
+      setUploadDrawerOpen(false)
+      await loadKnowledgeDetail(currentKb.kbId)
     } catch (ingestError) {
       setError(getErrorMessage(ingestError, '上传知识文档失败'))
     } finally {
@@ -480,50 +393,8 @@ export default function KnowledgePage() {
     }
   }
 
-  function handleAddFaqItem() {
-    const question = faqQuestion.trim()
-    const answer = faqAnswer.trim()
-    if (!question || !answer) {
-      setError('FAQ 问答都不能为空。')
-      return
-    }
-    setFaqItems((current) => [...current, { question, answer }])
-    setFaqQuestion('')
-    setFaqAnswer('')
-    setError(null)
-  }
-
-  async function handleIngestFaq() {
-    if (!currentKb) {
-      setError('请先保存知识库，再导入 FAQ。')
-      return
-    }
-    if (faqItems.length === 0) {
-      setError('请先至少添加一条 FAQ。')
-      return
-    }
-    try {
-      setIngesting(true)
-      await api.addKnowledgeSource(currentKb.kbId, {
-        sourceType: 'faq_table',
-        title: `${currentKb.name} FAQ`,
-        items: faqItems,
-      })
-      message.success(`已提交 ${faqItems.length} 条 FAQ，后台正在入库`)
-      setFaqItems([])
-      await refreshCurrentKb()
-    } catch (ingestError) {
-      setError(getErrorMessage(ingestError, '导入 FAQ 失败'))
-    } finally {
-      setIngesting(false)
-    }
-  }
-
   async function handleIngestUrl() {
-    if (!currentKb) {
-      setError('请先保存知识库，再添加 URL。')
-      return
-    }
+    if (!currentKb) return
     if (!urlInput.trim()) {
       setError('请输入要接入的单个 URL。')
       return
@@ -536,7 +407,8 @@ export default function KnowledgePage() {
       })
       message.success('URL 已提交，后台正在抓取和入库')
       setUrlInput('')
-      await refreshCurrentKb()
+      setUploadDrawerOpen(false)
+      await loadKnowledgeDetail(currentKb.kbId)
     } catch (ingestError) {
       setError(getErrorMessage(ingestError, '接入 URL 失败'))
     } finally {
@@ -545,10 +417,7 @@ export default function KnowledgePage() {
   }
 
   async function handleRetrieve() {
-    if (!currentKb) {
-      setRetrieveError('请先保存知识库。')
-      return
-    }
+    if (!currentKb) return
     if (!retrieveQuery.trim()) {
       setRetrieveError('请输入检索问题。')
       return
@@ -571,66 +440,24 @@ export default function KnowledgePage() {
     }
   }
 
-  async function handleDeleteDocument(document: KnowledgeDocument) {
-    if (!currentKb) {
-      return
-    }
+  async function handleDeleteDocument(docId: string) {
+    if (!currentKb) return
     try {
-      await api.deleteKnowledgeDocument(currentKb.kbId, document.docId)
+      await api.deleteKnowledgeDocument(currentKb.kbId, docId)
       message.success('文档已删除')
-      await refreshCurrentKb()
+      await loadKnowledgeDetail(currentKb.kbId)
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, '删除文档失败'))
     }
   }
 
-  async function handleDeleteDocuments(docIds: string[]) {
-    if (!currentKb) {
-      return
-    }
-    if (docIds.length === 0) {
-      setError('请至少选择一个文档。')
-      return
-    }
-    modal.confirm({
-      title: `删除 ${docIds.length} 个文档`,
-      content: '这会移除对应文档、切片和 ingest 轨迹，适合批量清理失效来源或错误导入。',
-      okText: '确认删除',
-      okButtonProps: { danger: true },
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          const result = await api.deleteKnowledgeDocuments(currentKb.kbId, docIds)
-          message.success(`已删除 ${result.deletedCount} 个文档`)
-          setSelectedDocIds((current) => current.filter((docId) => !result.docIds.includes(docId)))
-          await refreshCurrentKb()
-        } catch (deleteError) {
-          setError(getErrorMessage(deleteError, '批量删除文档失败'))
-        }
-      },
-    })
-  }
-
-  async function handleReindex(docIds?: string[]) {
-    if (!currentKb) {
-      setError('请先保存知识库。')
-      return
-    }
-    if (docIds && docIds.length === 0) {
-      setError('请至少选择一个文档进行重建。')
-      return
-    }
-    const target = docIds && docIds.length === 1 ? docIds[0] : 'all'
+  async function handleReindex(docIds: string[]) {
+    if (!currentKb) return
     try {
-      setReindexingTarget(target)
-      const result = await api.reindexKnowledgeBase(currentKb.kbId, docIds ? { docIds } : {})
-      const docCount = result.documents.length
-      message.success(
-        target === 'all'
-          ? `已提交 ${docCount} 个文档的重建任务`
-          : '文档已提交重建任务',
-      )
-      await refreshCurrentKb()
+      setReindexingTarget('all') // Simplified for now
+      await api.reindexKnowledgeBase(currentKb.kbId, { docIds })
+      message.success(`已提交 ${docIds.length} 个文档的重建任务`)
+      await loadKnowledgeDetail(currentKb.kbId)
     } catch (reindexError) {
       setError(getErrorMessage(reindexError, '提交重建索引失败'))
     } finally {
@@ -638,90 +465,238 @@ export default function KnowledgePage() {
     }
   }
 
-  async function handleSyncSource(source: KnowledgeSource) {
-    if (!currentKb) {
-      setError('请先保存知识库。')
-      return
-    }
-    try {
-      setSyncingSourceId(source.sourceId)
-      const result = await api.syncKnowledgeSource(currentKb.kbId, source.sourceId)
-      message.success(`来源已提交同步：${result.source.title}`)
-      await refreshCurrentKb()
-    } catch (syncError) {
-      setError(getErrorMessage(syncError, '重新同步来源失败'))
-    } finally {
-      setSyncingSourceId(null)
-    }
-  }
+  const documentColumns: TableProps<KnowledgeDocument>['columns'] = [
+    {
+      title: '文档名称',
+      dataIndex: 'title',
+      key: 'title',
+      render: (text, record) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{text || record.fileName}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{record.fileName}</Text>
+        </Space>
+      ),
+    },
+    {
+      title: '类型',
+      dataIndex: 'sourceType',
+      key: 'sourceType',
+      width: 100,
+      render: (text) => <Tag>{text === 'file' ? '文件' : text === 'web_url' ? '网页' : text}</Tag>,
+    },
+    {
+      title: '状态',
+      key: 'status',
+      width: 120,
+      render: (_, record) => <Badge status={statusBadgeStatus(record.docStatus)} text={statusLabel(record.docStatus)} />,
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      width: 180,
+      render: (text) => <Text type="secondary">{formatDateTimeZh(text)}</Text>,
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      render: (_, record) => (
+        <Space>
+          <Tooltip title="重新索引">
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => handleReindex([record.docId])} />
+          </Tooltip>
+          <Popconfirm title="确认删除？" onConfirm={() => handleDeleteDocument(record.docId)}>
+            <Button size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
 
-  async function handleSaveSource() {
-    if (!currentKb || !selectedSource) {
-      setError('请先选择一个来源。')
-      return
-    }
-    const nextTitle = sourceEditor.title.trim()
-    if (!nextTitle) {
-      setError('来源标题不能为空。')
-      return
-    }
-    const payload: {
-      title?: string
-      enabled?: boolean
-      url?: string
-      items?: Array<{ question: string; answer: string }>
-    } = {
-      title: nextTitle,
-      enabled: sourceEditor.enabled,
-    }
-    if (selectedSource.sourceType === 'web_url') {
-      const nextUrl = sourceEditor.url.trim()
-      if (!nextUrl) {
-        setError('URL 来源必须填写地址。')
-        return
-      }
-      payload.url = nextUrl
-    }
-    if (selectedSource.sourceType === 'faq_table') {
-      try {
-        const items = JSON.parse(sourceEditor.faqItemsText)
-        if (!Array.isArray(items)) {
-          throw new Error('FAQ items must be an array.')
-        }
-        payload.items = items as Array<{ question: string; answer: string }>
-      } catch {
-        setError('FAQ 来源编辑区需要填写合法的 JSON 数组。')
-        return
-      }
-    }
-    try {
-      setSavingSourceId(selectedSource.sourceId)
-      await api.updateKnowledgeSource(currentKb.kbId, selectedSource.sourceId, payload)
-      message.success('来源已更新')
-      await refreshCurrentKb()
-    } catch (saveSourceError) {
-      setError(getErrorMessage(saveSourceError, '更新来源失败'))
-    } finally {
-      setSavingSourceId(null)
-    }
-  }
+  // Render Content based on active tab
+  const renderTabContent = (key: string) => {
+    switch (key) {
+      case 'overview':
+        return (
+          <Space direction="vertical" size={24} style={{ width: '100%' }}>
+            <Card title="基础信息" className="page-card" bordered={false}>
+              <Descriptions column={2}>
+                <Descriptions.Item label="名称">{currentKb?.name}</Descriptions.Item>
+                <Descriptions.Item label="状态">
+                  <Badge status={currentKb?.enabled ? 'success' : 'default'} text={currentKb?.enabled ? '已启用' : '已停用'} />
+                </Descriptions.Item>
+                <Descriptions.Item label="文档数量">{documents.length}</Descriptions.Item>
+                <Descriptions.Item label="检索模式">
+                  {currentKb?.retrievalProfile.mode === 'keyword' ? '标准 (Keyword)' : 
+                   currentKb?.retrievalProfile.mode === 'semantic' ? '深度 (Semantic)' : '平衡 (Hybrid)'}
+                </Descriptions.Item>
+                <Descriptions.Item label="描述" span={2}>
+                  {currentKb?.description || '暂无描述'}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
 
-  function toggleDocumentSelection(docId: string, checked: boolean) {
-    setSelectedDocIds((current) => {
-      if (checked) {
-        return current.includes(docId) ? current : [...current, docId]
-      }
-      return current.filter((item) => item !== docId)
-    })
-  }
+            <Card title="最近任务" className="page-card" bordered={false}>
+              {jobs.length > 0 ? (
+                <List
+                  dataSource={jobs.slice(0, 5)}
+                  renderItem={job => (
+                    <List.Item>
+                      <List.Item.Meta
+                        avatar={
+                          job.status === 'failed' ? <Badge status="error" /> : 
+                          job.status === 'completed' ? <Badge status="success" /> : <Badge status="processing" />
+                        }
+                        title={`任务 ID: ${job.jobId.substring(0, 8)}`}
+                        description={formatDateTimeZh(job.createdAt)}
+                      />
+                      <div>{job.status}</div>
+                    </List.Item>
+                  )}
+                />
+              ) : <Empty description="暂无任务记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+            </Card>
+          </Space>
+        )
+      case 'documents':
+        return (
+          <Card 
+            className="page-card" 
+            bordered={false} 
+            bodyStyle={{ padding: 0 }}
+            title="文档管理"
+            extra={
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setUploadDrawerOpen(true)}>
+                添加文档
+              </Button>
+            }
+          >
+            <Table
+              dataSource={documents}
+              columns={documentColumns}
+              rowKey="docId"
+              pagination={{ pageSize: 10 }}
+              loading={loadingDetail}
+            />
+          </Card>
+        )
+      case 'testing':
+        return (
+          <Card className="page-card" bordered={false} title="检索验证">
+            <div style={{ maxWidth: 800, margin: '0 auto' }}>
+              <Space direction="vertical" style={{ width: '100%' }} size={24}>
+                <Space.Compact style={{ width: '100%' }}>
+                  <Input 
+                    size="large"
+                    placeholder="输入问题测试检索效果..." 
+                    value={retrieveQuery}
+                    onChange={(e) => setRetrieveQuery(e.target.value)}
+                    onPressEnter={() => void handleRetrieve()}
+                  />
+                  <Button type="primary" size="large" icon={<SearchOutlined />} onClick={() => void handleRetrieve()} loading={retrieving}>
+                    检索
+                  </Button>
+                </Space.Compact>
 
-  function handleToggleFilteredSelection(checked: boolean) {
-    setSelectedDocIds((current) => {
-      if (checked) {
-        return Array.from(new Set([...current, ...filteredDocumentIds]))
-      }
-      return current.filter((docId) => !filteredDocumentIds.includes(docId))
-    })
+                {retrieveError && <Alert type="error" message={retrieveError} showIcon />}
+
+                {retrieveHits.length > 0 && (
+                  <List
+                    itemLayout="vertical"
+                    dataSource={retrieveHits}
+                    renderItem={(item) => (
+                      <List.Item style={{ padding: '16px', background: 'var(--nb-surface-strong)', borderRadius: 8, marginBottom: 16 }}>
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <Space>
+                            <Tag color="blue">{item.score.toFixed(4)}</Tag>
+                            <Text strong>{String(item.metadata?.title || '未命名文档')}</Text>
+                          </Space>
+                          <Paragraph ellipsis={{ rows: 3, expandable: true }}>
+                            {item.content}
+                          </Paragraph>
+                          <Text type="secondary" style={{ fontSize: 12 }}>Doc ID: {item.docId}</Text>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                )}
+              </Space>
+            </div>
+          </Card>
+        )
+      case 'settings':
+        return (
+          <Card className="page-card" bordered={false} title="知识库配置">
+             <div className="studio-form-grid" style={{ maxWidth: 800 }}>
+              <Row gutter={[24, 24]}>
+                <Col span={24}>
+                  <div className="studio-form-field">
+                    <Text type="secondary">名称</Text>
+                    <Input value={form.name} onChange={(e) => updateForm('name', e.target.value)} />
+                  </div>
+                </Col>
+                <Col span={24}>
+                  <div className="studio-form-field">
+                    <Text type="secondary">描述</Text>
+                    <TextArea value={form.description} onChange={(e) => updateForm('description', e.target.value)} rows={3} />
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div className="studio-form-field">
+                    <Text type="secondary">检索模式</Text>
+                    <Select
+                      value={form.mode}
+                      onChange={(v) => updateForm('mode', v)}
+                      options={[
+                        { label: '标准 (Keyword)', value: 'keyword' },
+                        { label: '平衡 (Hybrid)', value: 'hybrid' },
+                        { label: '深度 (Semantic)', value: 'semantic' },
+                      ]}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div className="studio-form-field">
+                    <Text type="secondary">Chunk Size</Text>
+                    <InputNumber 
+                      value={form.chunkSize} 
+                      onChange={(v) => updateForm('chunkSize', v || 800)} 
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div className="studio-form-field">
+                    <Text type="secondary">Top K</Text>
+                    <InputNumber 
+                      value={form.topK} 
+                      onChange={(v) => updateForm('topK', v || 8)} 
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </Col>
+              </Row>
+              
+              <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--nb-border)' }}>
+                <Space>
+                  <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saving}>
+                    保存配置
+                  </Button>
+                  {currentKb && (
+                    <Popconfirm title="确定删除此知识库？" onConfirm={handleDelete} okButtonProps={{ danger: true }}>
+                      <Button danger icon={<DeleteOutlined />} loading={deleting}>删除</Button>
+                    </Popconfirm>
+                  )}
+                </Space>
+              </div>
+            </div>
+          </Card>
+        )
+      default:
+        return null
+    }
   }
 
   if (loadingWorkspace && knowledgeBases.length === 0 && !selectedKbId) {
@@ -740,15 +715,9 @@ export default function KnowledgePage() {
         title="知识库"
         description="管理知识资料、内容接入与检索验证。"
         stats={[
-          { label: '知识库总数', value: knowledgeBases.length },
-          { label: '启用中', value: enabledCount },
-          { label: '当前来源', value: sources.length },
-          { label: '当前文档', value: documents.length },
-          { label: '最近任务', value: jobs.length },
-        ]}
-        badges={[
-          <Tag key="engine" color="processing">支持内容接入</Tag>,
-          <Tag key="mode">支持检索测试</Tag>,
+          { label: '知识库', value: knowledgeBases.length },
+          { label: '文档', value: documents.length },
+          { label: '任务', value: jobs.length },
         ]}
         actions={(
           <Space wrap>
@@ -756,808 +725,151 @@ export default function KnowledgePage() {
               刷新
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/knowledge/new')}>
-              新建知识库
+              新建
             </Button>
           </Space>
         )}
       />
 
-      {error ? <Alert type="error" showIcon message={error} /> : null}
+      {error ? <Alert type="error" showIcon message={error} style={{ margin: '0 var(--nb-layout-gutter)' }} /> : null}
 
-      <div className="page-grid studio-knowledge-grid">
-        <Card className="config-panel-card studio-knowledge-list-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>知识库列表</Typography.Title>
-                <Text type="secondary">选择后在右侧继续维护。</Text>
-              </div>
-              <Tag color="blue">{knowledgeBases.length}</Tag>
-            </div>
-          {knowledgeBases.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有知识库">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/knowledge/new')}>
-                创建第一个知识库
-              </Button>
-            </Empty>
-          ) : (
-            <List
-              className="studio-knowledge-list"
-              dataSource={knowledgeBases}
-              renderItem={(item) => (
-                <List.Item
-                  className={`studio-knowledge-list-item ${selectedKbId === item.kbId ? 'is-active' : ''}`}
-                  onClick={() => navigate(`/studio/knowledge/${item.kbId}`)}
-                >
-                  <div className="studio-knowledge-list-copy">
-                    <div className="studio-agent-list-head">
-                      <Space size={8}>
-                        <DatabaseOutlined />
-                        <strong>{item.name}</strong>
-                      </Space>
-                      <Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '启用' : '停用'}</Tag>
-                    </div>
-                    <Text type="secondary">{item.description || '未填写说明。'}</Text>
-                    <div className="studio-agent-list-meta">
-                      <Tag>
-                        {item.retrievalProfile.mode === 'keyword'
-                          ? '标准'
-                          : item.retrievalProfile.mode === 'hybrid'
-                            ? '平衡'
-                            : '深度'}
-                      </Tag>
-                      <Tag>{item.tags.length} 个标签</Tag>
-                    </div>
-                  </div>
-                </List.Item>
+      <div className="page-content-wrapper" style={{ padding: '0 var(--nb-layout-gutter)' }}>
+        <Row gutter={[24, 24]}>
+          <Col xs={24} md={6}>
+            <Card title="知识库列表" className="page-card" bordered={false} bodyStyle={{ padding: 0 }}>
+              {knowledgeBases.length === 0 ? (
+                <Empty description="暂无知识库" style={{ padding: 24 }} />
+              ) : (
+                <List
+                  dataSource={knowledgeBases}
+                  renderItem={(item) => (
+                    <List.Item
+                      className={`studio-knowledge-list-item ${selectedKbId === item.kbId ? 'is-active' : ''}`}
+                      onClick={() => navigate(`/studio/knowledge/${item.kbId}`)}
+                      style={{ 
+                        cursor: 'pointer', 
+                        padding: '12px 16px',
+                        borderBottom: '1px solid var(--nb-border)',
+                        background: selectedKbId === item.kbId ? 'var(--nb-card-subtle-bg)' : 'transparent',
+                        borderLeft: selectedKbId === item.kbId ? '3px solid var(--nb-accent)' : '3px solid transparent',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text strong>{item.name}</Text>
+                          <Badge status={item.enabled ? 'success' : 'default'} />
+                        </div>
+                        <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+                          {item.description || '暂无描述'}
+                        </Text>
+                      </div>
+                    </List.Item>
+                  )}
+                />
               )}
-            />
-          )}
-        </Card>
+            </Card>
+          </Col>
 
-        <div className="page-stack">
-          <Card className="config-panel-card" loading={loadingDetail && Boolean(selectedKbId)}>
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>
-                  {currentKb ? currentKb.name : isCreatingKb ? '新建知识库' : '知识库工作台'}
-                </Typography.Title>
-                <Text type="secondary">
-                  {currentKb
-                    ? currentKb.description || '继续维护设置、内容和检索。'
-                    : isCreatingKb
-                      ? '先完成基本信息，再接入内容。'
-                      : '从左侧选择一个知识库。'}
-                </Text>
-              </div>
-              {currentKb ? <Tag color="purple">{currentKb.kbId}</Tag> : <Tag>未保存</Tag>}
-            </div>
-
-            {!hasWorkbenchSelection ? (
+          <Col xs={24} md={18}>
+            {!selectedKbId && !isCreatingKb ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="选择一个知识库或新建。"
+                description="请从左侧选择一个知识库或新建"
+                style={{ background: 'var(--nb-card-bg)', padding: 48, borderRadius: 12 }}
               />
             ) : (
-              <div className="studio-chip-wrap">
-                <Tag>{form.enabled ? '启用' : '停用'}</Tag>
-                <Tag>{selectedModeLabel}</Tag>
-                <Tag>{indexedDocumentCount} 文档</Tag>
-                {latestJob ? <Tag color={statusColor(latestJob.status)}>{latestJob.status}</Tag> : null}
+              <div className="commercial-tabs-container">
+                 <Tabs
+                  items={[
+                    { label: '概览', key: 'overview', children: renderTabContent('overview') },
+                    { label: '文档', key: 'documents', children: renderTabContent('documents') },
+                    { label: '验证', key: 'testing', children: renderTabContent('testing') },
+                    { label: '设置', key: 'settings', children: renderTabContent('settings') },
+                  ]}
+                  type="card"
+                  className="commercial-tabs"
+                />
               </div>
             )}
-          </Card>
-
-          <Tabs
-            activeKey={activeSection}
-            onChange={(value) => setActiveSection(value as 'overview' | 'ingest' | 'sources' | 'testing')}
-            items={[
-              { key: 'overview', label: '基础设置' },
-              { key: 'ingest', label: '内容接入' },
-              { key: 'sources', label: '来源治理' },
-              { key: 'testing', label: '检索验证' },
-            ]}
-          />
-
-          {activeSection === 'overview' ? (
-          <Card className="config-panel-card studio-knowledge-editor-card" loading={loadingDetail}>
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>{currentKb ? '知识库设置' : '新建知识库'}</Typography.Title>
-                <Text type="secondary">管理名称、检索方式和启用状态。</Text>
-              </div>
-              {currentKb ? <Tag color="purple">{currentKb.kbId}</Tag> : <Tag>未保存</Tag>}
-            </div>
-
-            <div className="studio-form-grid">
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">名称</Text>
-                <Input
-                  value={form.name}
-                  onChange={(event) => updateForm('name', event.target.value)}
-                  placeholder="例如：客服知识库、法务制度库"
-                />
-              </div>
-
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">描述</Text>
-                <TextArea
-                  value={form.description}
-                  onChange={(event) => updateForm('description', event.target.value)}
-                  rows={3}
-                  placeholder="说明用途和内容范围。"
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">检索模式</Text>
-                <Segmented
-                  block
-                  value={form.mode}
-                  onChange={(value) => updateForm('mode', String(value))}
-                  options={[
-                    { label: '标准', value: 'keyword' },
-                    { label: '平衡', value: 'hybrid' },
-                    { label: '深度', value: 'semantic' },
-                  ]}
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">标签</Text>
-                <Input
-                  value={form.tags.join(', ')}
-                  onChange={(event) => updateForm(
-                    'tags',
-                    event.target.value
-                      .split(',')
-                      .map((item) => item.trim())
-                      .filter(Boolean),
-                  )}
-                  placeholder="用逗号分隔，例如：客服、FAQ、制度"
-                />
-              </div>
-            </div>
-
-            <Collapse
-              className="studio-inline-collapse"
-              items={[
-                {
-                  key: 'advanced',
-                  label: '高级检索设置',
-                  children: (
-                    <div className="studio-form-grid">
-                      <div className="studio-form-field">
-                        <Text type="secondary">召回条数</Text>
-                        <InputNumber min={1} max={20} value={form.topK} onChange={(value) => updateForm('topK', Number(value) || 8)} />
-                      </div>
-
-                      <DevOnly>
-                        <div className="studio-form-field">
-                          <Text type="secondary">片段候选数</Text>
-                          <InputNumber min={1} max={50} value={form.chunkTopK} onChange={(value) => updateForm('chunkTopK', Number(value) || 20)} />
-                        </div>
-                      </DevOnly>
-
-                      <DevOnly>
-                        <div className="studio-form-field">
-                          <Text type="secondary">单片段长度</Text>
-                          <InputNumber min={200} max={4000} value={form.chunkSize} onChange={(value) => updateForm('chunkSize', Number(value) || 800)} />
-                        </div>
-                      </DevOnly>
-
-                      <DevOnly>
-                        <div className="studio-form-field">
-                          <Text type="secondary">片段重叠</Text>
-                          <InputNumber min={0} max={1000} value={form.chunkOverlap} onChange={(value) => updateForm('chunkOverlap', Number(value) || 120)} />
-                        </div>
-                      </DevOnly>
-                    </div>
-                  ),
-                },
-              ]}
-            />
-
-            <Alert
-              className="studio-inline-alert"
-              type="info"
-              showIcon
-              message="默认设置通常已够用。"
-            />
-
-            <div className="studio-form-actions">
-              <Space wrap>
-                <Button icon={<DeleteOutlined />} danger onClick={() => void handleDelete()} disabled={!currentKb} loading={deleting}>
-                  删除知识库
-                </Button>
-                <Button
-                  icon={<ReloadOutlined />}
-                  onClick={() => void handleReindex()}
-                  disabled={!currentKb || documents.length === 0}
-                  loading={reindexingTarget === 'all'}
-                >
-                  重建全部
-                </Button>
-                <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSave()} loading={saving}>
-                  保存知识库
-                </Button>
-              </Space>
-            </div>
-          </Card>
-          ) : null}
-
-          {activeSection === 'ingest' ? (
-          <Card className="config-panel-card studio-knowledge-ingest-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>接入与入库</Typography.Title>
-                <Text type="secondary">支持文件、单 URL 和 FAQ。</Text>
-              </div>
-              {currentKb ? <Tag color="blue">{currentKb.name}</Tag> : <Tag>请先保存知识库</Tag>}
-            </div>
-
-            <Segmented
-              value={sourceMode}
-              onChange={(value) => setSourceMode(value as SourceMode)}
-              options={[
-                { label: '文件上传', value: 'file' },
-                { label: '单 URL', value: 'url' },
-                { label: 'FAQ', value: 'faq' },
-              ]}
-            />
-
-            {sourceMode === 'file' ? (
-              <div className="page-stack">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))}
-                />
-                <div className="studio-form-actions">
-                  <Space wrap>
-                    <Button icon={<CloudUploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-                      选择文件
-                    </Button>
-                    <Button type="primary" onClick={() => void handleUploadFiles()} loading={ingesting} disabled={!currentKb}>
-                      上传并入库
-                    </Button>
-                  </Space>
-                </div>
-                {selectedFiles.length > 0 ? (
-                  <div className="studio-chip-wrap">
-                    {selectedFiles.map((file) => (
-                      <Tag key={`${file.name}-${file.size}`}>{file.name}</Tag>
-                    ))}
-                  </div>
-                ) : (
-                  <Text type="secondary">支持多文件上传。</Text>
-                )}
-              </div>
-            ) : null}
-
-            {sourceMode === 'url' ? (
-              <div className="page-stack">
-                <div className="studio-form-field">
-                  <Text type="secondary">URL</Text>
-                  <Input
-                    prefix={<GlobalOutlined />}
-                    value={urlInput}
-                    onChange={(event) => setUrlInput(event.target.value)}
-                    placeholder="https://example.com/help/article"
-                  />
-                </div>
-                <div className="studio-form-actions">
-                  <Button type="primary" onClick={() => void handleIngestUrl()} loading={ingesting} disabled={!currentKb}>
-                    抓取并入库
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
-            {sourceMode === 'faq' ? (
-              <div className="page-stack">
-                <div className="studio-form-field">
-                  <Text type="secondary">问题</Text>
-                  <Input
-                    value={faqQuestion}
-                    onChange={(event) => setFaqQuestion(event.target.value)}
-                    placeholder="例如：如何重置客服工作台会话？"
-                  />
-                </div>
-                <div className="studio-form-field">
-                  <Text type="secondary">答案</Text>
-                  <TextArea
-                    value={faqAnswer}
-                    onChange={(event) => setFaqAnswer(event.target.value)}
-                    rows={3}
-                    placeholder="写入标准答案。"
-                  />
-                </div>
-                <div className="studio-form-actions">
-                  <Space wrap>
-                    <Button onClick={handleAddFaqItem}>添加 FAQ 条目</Button>
-                    <Button type="primary" onClick={() => void handleIngestFaq()} loading={ingesting} disabled={!currentKb}>
-                      导入 FAQ
-                    </Button>
-                  </Space>
-                </div>
-                {faqItems.length > 0 ? (
-                  <List
-                    size="small"
-                    dataSource={faqItems}
-                    renderItem={(item, index) => (
-                      <List.Item>
-                        <Space direction="vertical" size={2}>
-                          <strong>{index + 1}. {item.question}</strong>
-                          <Text type="secondary">{item.answer}</Text>
-                        </Space>
-                      </List.Item>
-                    )}
-                  />
-                ) : null}
-              </div>
-            ) : null}
-          </Card>
-          ) : null}
-
-          {activeSection === 'sources' ? (
-            <>
-          <Card className="config-panel-card studio-knowledge-source-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>来源治理</Typography.Title>
-                <Text type="secondary">管理来源状态与同步。</Text>
-              </div>
-              <Tag color="gold">{sources.length} sources</Tag>
-            </div>
-
-            <div className="studio-form-actions">
-              <Space wrap>
-                <Tag color="processing">可同步 {syncableSources.length}</Tag>
-                <Text type="secondary">URL / FAQ 可重复同步；文件记为单次来源。</Text>
-              </Space>
-            </div>
-
-            {sources.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有来源" />
-            ) : (
-              <div className="page-grid studio-knowledge-detail-grid">
-                <List
-                  className="studio-run-list"
-                  dataSource={sources}
-                  renderItem={(item) => (
-                    <List.Item
-                      className={`studio-run-list-item ${selectedSourceId === item.sourceId ? 'is-active' : ''}`}
-                      actions={[
-                        <Button
-                          key={`sync-${item.sourceId}`}
-                          size="small"
-                          type="text"
-                          icon={<ReloadOutlined />}
-                          onClick={() => void handleSyncSource(item)}
-                          disabled={!item.syncSupported}
-                          loading={syncingSourceId === item.sourceId}
-                        >
-                          重新同步
-                        </Button>,
-                      ]}
-                      onClick={() => setSelectedSourceId(item.sourceId)}
-                    >
-                      <div className="studio-run-list-copy">
-                        <div className="studio-run-list-head">
-                          <Space wrap>
-                            <strong>{item.title}</strong>
-                            <Tag>{item.sourceType}</Tag>
-                            <Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '启用' : '停用'}</Tag>
-                            <Tag color={item.syncSupported ? 'processing' : 'default'}>
-                              {item.syncSupported ? '可同步' : '仅历史记录'}
-                            </Tag>
-                          </Space>
-                          <Text type="secondary">{item.lastSyncedAt ? formatDateTimeZh(item.lastSyncedAt) : '尚未同步'}</Text>
-                        </div>
-                        <Text type="secondary">
-                          文档 {item.docCount} · 已同步 {item.syncCount} 次
-                          {item.sourceUri ? ` · ${item.sourceUri}` : ''}
-                        </Text>
-                        {item.latestDocument ? (
-                          <Text type="secondary">
-                            最近文档：{item.latestDocument.title} · {item.latestDocument.docStatus}
-                          </Text>
-                        ) : null}
-                        {item.latestJob?.errorSummary ? <Text type="danger">{item.latestJob.errorSummary}</Text> : null}
-                      </div>
-                    </List.Item>
-                  )}
-                />
-
-                {selectedSource ? (
-                  <Card size="small" className="config-panel-card">
-                    <div className="config-card-header">
-                      <div className="page-section-title">
-                        <Typography.Title level={5}>来源详情</Typography.Title>
-                        <Text type="secondary">管理标题、启停和内容。</Text>
-                      </div>
-                      <Tag color="blue">{selectedSource.sourceType}</Tag>
-                    </div>
-
-                    <div className="studio-form-grid">
-                      <div className="studio-form-field studio-form-field-span-2">
-                        <Text type="secondary">来源标题</Text>
-                        <Input
-                          value={sourceEditor.title}
-                          onChange={(event) => updateSourceEditor('title', event.target.value)}
-                          placeholder="填写来源标题"
-                        />
-                      </div>
-
-                      <div className="studio-form-field studio-form-field-span-2">
-                        <Checkbox
-                          checked={sourceEditor.enabled}
-                          onChange={(event) => updateSourceEditor('enabled', event.target.checked)}
-                        >
-                          启用该来源
-                        </Checkbox>
-                      </div>
-
-                      {selectedSource.sourceType === 'web_url' ? (
-                        <div className="studio-form-field studio-form-field-span-2">
-                          <Text type="secondary">URL</Text>
-                          <Input
-                            prefix={<GlobalOutlined />}
-                            value={sourceEditor.url}
-                            onChange={(event) => updateSourceEditor('url', event.target.value)}
-                            placeholder="https://example.com/help/article"
-                          />
-                        </div>
-                      ) : null}
-
-                      {selectedSource.sourceType === 'faq_table' ? (
-                        <div className="studio-form-field studio-form-field-span-2">
-                          <Text type="secondary">问答条目</Text>
-                          <TextArea
-                            value={sourceEditor.faqItemsText}
-                            onChange={(event) => updateSourceEditor('faqItemsText', event.target.value)}
-                            rows={8}
-                            placeholder='[{"question":"问题","answer":"答案"}]'
-                          />
-                        </div>
-                      ) : null}
-
-                      {selectedSource.sourceType === 'upload_file' ? (
-                        <Alert
-                          className="studio-inline-alert studio-form-field-span-2"
-                          type="info"
-                          showIcon
-                          message="文件来源只支持标题和启停；替换文件请重新上传。"
-                        />
-                      ) : null}
-                    </div>
-
-                    <div className="studio-form-actions">
-                      <Space wrap>
-                        <Button
-                          onClick={() => void handleSaveSource()}
-                          loading={savingSourceId === selectedSource.sourceId}
-                        >
-                          保存来源
-                        </Button>
-                        <Button
-                          type="primary"
-                          icon={<ReloadOutlined />}
-                          onClick={() => void handleSyncSource(selectedSource)}
-                          disabled={!selectedSource.syncSupported}
-                          loading={syncingSourceId === selectedSource.sourceId}
-                        >
-                          立即同步
-                        </Button>
-                      </Space>
-                    </div>
-                  </Card>
-                ) : null}
-              </div>
-            )}
-          </Card>
-
-          <div className="page-grid studio-knowledge-detail-grid">
-            <Card className="config-panel-card studio-knowledge-doc-card">
-              <div className="config-card-header">
-                <div className="page-section-title">
-                  <Typography.Title level={4}>文档与状态</Typography.Title>
-                  <Text type="secondary">查看入库状态、片段数和错误。</Text>
-                </div>
-                <Tag>{filteredDocuments.length}/{documents.length}</Tag>
-              </div>
-
-              <div className="studio-form-grid">
-                <div className="studio-form-field studio-form-field-span-2">
-                  <Text type="secondary">文档筛选</Text>
-                  <Input
-                    value={documentQuery}
-                    onChange={(event) => setDocumentQuery(event.target.value)}
-                    placeholder="按标题、文件名、URL 或错误搜索"
-                  />
-                </div>
-                <div className="studio-form-field">
-                  <Text type="secondary">状态</Text>
-                  <Select
-                    value={documentStatusFilter}
-                    onChange={setDocumentStatusFilter}
-                    options={[
-                      { value: 'all', label: '全部状态' },
-                      { value: 'uploaded', label: 'uploaded' },
-                      { value: 'parsing', label: 'parsing' },
-                      { value: 'parsed', label: 'parsed' },
-                      { value: 'indexing', label: 'indexing' },
-                      { value: 'indexed', label: 'indexed' },
-                      { value: 'error_parsing', label: 'error_parsing' },
-                      { value: 'error_indexing', label: 'error_indexing' },
-                    ]}
-                  />
-                </div>
-                <div className="studio-form-field">
-                  <Text type="secondary">来源</Text>
-                  <Select
-                    value={documentSourceFilter}
-                    onChange={setDocumentSourceFilter}
-                    options={[
-                      { value: 'all', label: '全部来源' },
-                      { value: 'upload_file', label: 'upload_file' },
-                      { value: 'web_url', label: 'web_url' },
-                      { value: 'faq_table', label: 'faq_table' },
-                    ]}
-                  />
-                </div>
-              </div>
-
-              <div className="studio-form-actions">
-                <Space wrap>
-                  <Checkbox
-                    checked={allFilteredSelected}
-                    indeterminate={partiallySelected}
-                    onChange={(event) => handleToggleFilteredSelection(event.target.checked)}
-                    disabled={filteredDocumentIds.length === 0}
-                  >
-                    选择当前筛选结果
-                  </Checkbox>
-                  <Tag color={selectedDocIds.length > 0 ? 'processing' : 'default'}>
-                    已选 {selectedDocIds.length}
-                  </Tag>
-                  <Button
-                    onClick={() => void handleReindex(failedDocuments.map((item) => item.docId))}
-                    disabled={!currentKb || failedDocuments.length === 0}
-                    loading={reindexingTarget === 'all'}
-                  >
-                    重试失败文档
-                  </Button>
-                  <Button
-                    onClick={() => void handleReindex(selectedDocIds)}
-                    disabled={!currentKb || selectedDocIds.length === 0}
-                    loading={reindexingTarget === 'all'}
-                  >
-                    重建选中
-                  </Button>
-                  <Button
-                    danger
-                    onClick={() => void handleDeleteDocuments(selectedDocIds)}
-                    disabled={!currentKb || selectedDocIds.length === 0}
-                  >
-                    删除选中
-                  </Button>
-                  <Button onClick={() => setSelectedDocIds([])} disabled={selectedDocIds.length === 0}>
-                    清空选择
-                  </Button>
-                </Space>
-              </div>
-
-              {filteredDocuments.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={documents.length === 0 ? '还没有文档' : '没有匹配文档'}
-                />
-              ) : (
-                <List
-                  className="studio-doc-list"
-                  dataSource={filteredDocuments}
-                  renderItem={(item) => (
-                    <List.Item
-                      className="studio-doc-list-item"
-                      actions={[
-                        <Button
-                          key={`reindex-${item.docId}`}
-                          type="text"
-                          size="small"
-                          onClick={() => void handleReindex([item.docId])}
-                          loading={reindexingTarget === item.docId}
-                        >
-                          {isFailedDocumentStatus(item.docStatus) ? '重试' : '重建'}
-                        </Button>,
-                        <Button
-                          key={`delete-${item.docId}`}
-                          type="text"
-                          danger
-                          size="small"
-                          onClick={() => void handleDeleteDocument(item)}
-                        >
-                          删除
-                        </Button>,
-                      ]}
-                    >
-                      <Space align="start" size={12} style={{ width: '100%' }}>
-                        <Checkbox
-                          checked={selectedDocIds.includes(item.docId)}
-                          onChange={(event) => toggleDocumentSelection(item.docId, event.target.checked)}
-                        />
-                        <div className="studio-run-list-copy">
-                          <div className="studio-run-list-head">
-                            <Space wrap>
-                              <strong>{item.title}</strong>
-                              <Tag color={statusColor(item.docStatus)}>{item.docStatus}</Tag>
-                              <Tag>{item.sourceType}</Tag>
-                            </Space>
-                            <Text type="secondary">{formatDateTimeZh(item.updatedAt)}</Text>
-                          </div>
-                          <Text type="secondary">
-                            {item.chunkCount} 片段
-                            {item.fileName ? ` · ${item.fileName}` : ''}
-                            {item.sourceUri ? ` · ${item.sourceUri}` : ''}
-                          </Text>
-                          {item.errorSummary ? <Text type="danger">{item.errorSummary}</Text> : null}
-                        </div>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
-              )}
-            </Card>
-
-            <Card className="config-panel-card studio-knowledge-job-card">
-              <div className="config-card-header">
-                <div className="page-section-title">
-                  <Typography.Title level={4}>入库任务</Typography.Title>
-                  <Text type="secondary">查看入库过程和失败信息。</Text>
-                </div>
-                <Tag>{filteredJobs.length}/{jobs.length}</Tag>
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">任务状态</Text>
-                <Select
-                  value={jobStatusFilter}
-                  onChange={setJobStatusFilter}
-                  options={[
-                    { value: 'all', label: '全部任务' },
-                    { value: 'queued', label: 'queued' },
-                    { value: 'running', label: 'running' },
-                    { value: 'succeeded', label: 'succeeded' },
-                    { value: 'failed', label: 'failed' },
-                  ]}
-                />
-              </div>
-
-              {filteredJobs.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={jobs.length === 0 ? '还没有入库任务' : '没有匹配任务'}
-                />
-              ) : (
-                <List
-                  className="studio-run-list"
-                  dataSource={filteredJobs}
-                  renderItem={(item) => (
-                    <List.Item className="studio-run-list-item">
-                      <div className="studio-run-list-copy">
-                        <div className="studio-run-list-head">
-                          <Space wrap>
-                            <strong>{item.jobId}</strong>
-                            <Tag color={statusColor(item.status)}>{item.status}</Tag>
-                          </Space>
-                          <Text type="secondary">{formatDateTimeZh(item.updatedAt)}</Text>
-                        </div>
-                        <Text type="secondary">轨迹：{item.trackId}</Text>
-                        {item.errorSummary ? <Text type="danger">{item.errorSummary}</Text> : null}
-                      </div>
-                    </List.Item>
-                  )}
-                />
-              )}
-            </Card>
-          </div>
-            </>
-          ) : null}
-
-          {activeSection === 'testing' ? (
-            <Card className="config-panel-card studio-knowledge-retrieve-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>检索测试</Typography.Title>
-                <Text type="secondary">查看命中片段与引用。</Text>
-              </div>
-              {currentKb ? (
-                <Tag color="cyan">
-                  {retrieveMode === 'keyword' ? '标准' : retrieveMode === 'hybrid' ? '平衡' : '深度'}
-                </Tag>
-              ) : null}
-              {currentKb && retrieveEffectiveMode && retrieveEffectiveMode !== retrieveMode ? (
-                <Tag color="purple">实际使用 {retrieveEffectiveMode}</Tag>
-              ) : null}
-            </div>
-
-            <div className="studio-form-grid">
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">查询问题</Text>
-                <TextArea
-                  value={retrieveQuery}
-                  onChange={(event) => setRetrieveQuery(event.target.value)}
-                  rows={3}
-                  placeholder="例如：restart the worker"
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">请求模式</Text>
-                <Segmented
-                  block
-                  value={retrieveMode}
-                  onChange={(value) => setRetrieveMode(String(value))}
-                  options={[
-                    { label: '标准', value: 'keyword' },
-                    { label: '平衡', value: 'hybrid' },
-                    { label: '深度', value: 'semantic' },
-                  ]}
-                />
-              </div>
-            </div>
-
-            <div className="studio-form-actions">
-              <Space wrap>
-                <Button
-                  type="primary"
-                  icon={<SearchOutlined />}
-                  onClick={() => void handleRetrieve()}
-                  loading={retrieving}
-                  disabled={!currentKb}
-                >
-                  执行检索测试
-                </Button>
-                <Text type="secondary">
-                  {retrieveEffectiveMode
-                    ? `当前模式：${retrieveEffectiveMode}`
-                    : '可直接比较三种召回模式。'}
-                </Text>
-              </Space>
-            </div>
-
-            {retrieveError ? <Alert type="error" showIcon message={retrieveError} /> : null}
-
-            {retrieveHits.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="执行检索后在这里查看结果。" />
-            ) : (
-              <List
-                className="studio-hit-list"
-                dataSource={retrieveHits}
-                renderItem={(hit) => (
-                  <List.Item className="studio-run-list-item">
-                    <div className="studio-run-list-copy">
-                      <div className="studio-run-list-head">
-                        <Space wrap>
-                          <strong>{hit.citation.title}</strong>
-                          <Tag>{hit.citation.sourceType || 'knowledge'}</Tag>
-                          <Tag color="blue">score {hit.score.toFixed(3)}</Tag>
-                        </Space>
-                        <Text type="secondary">{hit.kbName}</Text>
-                      </div>
-                      <Paragraph className="studio-run-preview">{hit.preview}</Paragraph>
-                      {hit.citation.sourceUri ? <Text type="secondary">{hit.citation.sourceUri}</Text> : null}
-                    </div>
-                  </List.Item>
-                )}
-              />
-            )}
-            </Card>
-          ) : null}
-        </div>
+          </Col>
+        </Row>
       </div>
+
+      <Drawer
+        title="添加文档"
+        open={uploadDrawerOpen}
+        onClose={() => setUploadDrawerOpen(false)}
+        width={500}
+      >
+        <Tabs items={[
+          {
+            label: '上传文件',
+            key: 'file',
+            children: (
+              <div style={{ marginTop: 16 }}>
+                <Dragger
+                  name="file"
+                  multiple
+                  showUploadList={false}
+                  customRequest={({ file, onSuccess }) => {
+                    setTimeout(() => onSuccess?.('ok'), 0)
+                  }}
+                  onChange={(info) => {
+                    if (info.file.status !== 'uploading') {
+                      setSelectedFiles((curr) => [...curr, info.file.originFileObj as File])
+                    }
+                  }}
+                  style={{ padding: 24, background: 'var(--nb-surface-strong)', border: '1px dashed var(--nb-border)' }}
+                >
+                  <p className="ant-upload-drag-icon">
+                    <InboxOutlined style={{ color: 'var(--nb-primary)' }} />
+                  </p>
+                  <p className="ant-upload-text">点击或拖拽文件到此区域</p>
+                  <p className="ant-upload-hint">支持 PDF, Markdown, TXT, DOCX</p>
+                </Dragger>
+                
+                {selectedFiles.length > 0 && (
+                  <div style={{ marginTop: 24 }}>
+                    <List
+                      size="small"
+                      header={<Text strong>已选文件 ({selectedFiles.length})</Text>}
+                      dataSource={selectedFiles}
+                      renderItem={(file, index) => (
+                        <List.Item
+                          actions={[<Button type="text" danger icon={<DeleteOutlined />} onClick={() => setSelectedFiles(curr => curr.filter((_, i) => i !== index))} />]}
+                        >
+                          <Text ellipsis>{file.name}</Text>
+                        </List.Item>
+                      )}
+                    />
+                    <Button type="primary" block style={{ marginTop: 16 }} onClick={() => handleUploadFiles(selectedFiles)} loading={ingesting}>
+                      开始上传
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )
+          },
+          {
+            label: '网页抓取',
+            key: 'url',
+            children: (
+              <Space direction="vertical" style={{ width: '100%', marginTop: 16 }}>
+                <Input 
+                  prefix={<GlobalOutlined />} 
+                  placeholder="https://example.com/page" 
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                />
+                <Button type="primary" block onClick={handleIngestUrl} loading={ingesting}>
+                  开始抓取
+                </Button>
+              </Space>
+            )
+          }
+        ]} />
+      </Drawer>
     </div>
   )
 }

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, InputHTMLAttributes } from 'react'
 import {
-  Alert,
   App,
   Button,
   Card,
@@ -12,10 +11,13 @@ import {
   Row,
   Space,
   Spin,
+  Tabs,
   Tag,
   Typography,
 } from 'antd'
 import {
+  AppstoreOutlined,
+  CloudDownloadOutlined,
   DeleteOutlined,
   DownloadOutlined,
   FolderOpenOutlined,
@@ -30,7 +32,8 @@ import { MotionGroup, MotionPanel } from '../components/MotionSurface'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type { InstalledSkill, MarketplaceSkill } from '../types'
-const { Text } = Typography
+
+const { Text, Paragraph } = Typography
 
 const MARKET_COMPATIBILITY_META: Record<MarketplaceSkill['compatibility'], { color: string }> = {
   native: { color: 'success' },
@@ -59,6 +62,7 @@ export default function SkillsPage() {
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [marketQuery, setMarketQuery] = useState('')
+  const [activeTab, setActiveTab] = useState('installed')
 
   useEffect(() => {
     void loadSkills()
@@ -135,6 +139,7 @@ export default function SkillsPage() {
       const uploaded = await api.uploadSkill(formData)
       message.success(`技能“${uploaded.name}”上传成功`)
       await loadSkills()
+      setActiveTab('installed')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '上传技能失败')
     } finally {
@@ -157,6 +162,7 @@ export default function SkillsPage() {
       const uploaded = await api.uploadSkillZip(formData)
       message.success(`技能“${uploaded.name}”上传成功`)
       await loadSkills()
+      setActiveTab('installed')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '上传 ZIP 技能失败')
     } finally {
@@ -183,6 +189,9 @@ export default function SkillsPage() {
       const installed = await api.installMarketplaceSkill(skill.slug, force)
       message.success(force ? `技能“${installed.name}”已覆盖安装` : `技能“${installed.name}”安装成功`)
       await Promise.all([loadSkills(), loadMarketplaceSkills(marketQuery)])
+      if (!force) {
+        setActiveTab('installed')
+      }
     } catch (error) {
       message.error(error instanceof Error ? error.message : (force ? '覆盖安装技能失败' : '从 SkillHub 安装技能失败'))
     } finally {
@@ -190,40 +199,240 @@ export default function SkillsPage() {
     }
   }
 
+  const renderInstalledView = () => (
+    <div className="tab-content-shell">
+      <div className="toolbar-row" style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder="搜索已安装技能..."
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          style={{ maxWidth: 400, flex: 1 }}
+        />
+        <Space>
+          <Button
+            icon={<FolderOpenOutlined />}
+            loading={uploading}
+            onClick={() => folderInputRef.current?.click()}
+          >
+            上传文件夹
+          </Button>
+          <Button icon={<UploadOutlined />} loading={uploading} onClick={() => zipInputRef.current?.click()}>
+            上传 ZIP
+          </Button>
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadSkills()} />
+        </Space>
+      </div>
+
+      <div className="page-scroll-shell skills-scroll-shell">
+        {loading ? (
+          <div className="center-box" style={{ padding: 40 }}>
+            <Spin size="large" />
+          </div>
+        ) : filteredSkills.length === 0 ? (
+          <Empty
+            description={skills.length === 0 ? '还没有安装技能' : '没有匹配结果'}
+            className="empty-block"
+            style={{ padding: 40 }}
+          />
+        ) : (
+          <Row gutter={[16, 16]} className="skills-grid">
+            {filteredSkills.map((skill) => (
+              <Col xs={24} sm={12} md={8} lg={6} xl={6} key={skill.id}>
+                <MotionPanel className="skill-card-shell" standalone>
+                  <Card
+                    hoverable
+                    className="skill-card"
+                    style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                    bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+                    actions={
+                      skill.isDeletable
+                        ? [
+                            <Popconfirm
+                              key="delete"
+                              title="确定删除这个技能吗？"
+                              okText="删除"
+                              cancelText="取消"
+                              okButtonProps={{ danger: true }}
+                              onConfirm={() => void handleDelete(skill.id)}
+                            >
+                              <Button
+                                type="text"
+                                danger
+                                icon={<DeleteOutlined />}
+                                loading={deletingId === skill.id}
+                                block
+                              >
+                                删除
+                              </Button>
+                            </Popconfirm>,
+                          ]
+                        : [<Button key="builtin" type="text" disabled>系统内置</Button>]
+                    }
+                  >
+                    <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                       <Space direction="vertical" size={2} style={{ flex: 1, minWidth: 0 }}>
+                         <Text strong ellipsis style={{ fontSize: 16 }}>{skill.name}</Text>
+                         <Space size={6}>
+                            <Tag bordered={false} style={{ margin: 0 }}>{skill.version || '1.0.0'}</Tag>
+                            <Tag color={skill.source === 'workspace' ? 'green' : 'blue'} bordered={false} style={{ margin: 0 }}>
+                              {skill.source === 'workspace' ? '工作区' : '内置'}
+                            </Tag>
+                         </Space>
+                       </Space>
+                    </div>
+                    
+                    <div style={{ flex: 1, marginBottom: 16 }}>
+                      <Paragraph type="secondary" ellipsis={{ rows: 2, expandable: false }} style={{ marginBottom: 0, minHeight: 44 }}>
+                        {skill.description || '暂无描述。'}
+                      </Paragraph>
+                    </div>
+
+                    <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                      {skill.author ? <Text type="secondary" style={{ fontSize: 12 }}>作者：{getSkillAuthorLabel(skill.author)}</Text> : null}
+                      {skill.tags && skill.tags.length > 0 ? (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', height: 24, overflow: 'hidden' }}>
+                          {skill.tags.map((tag) => (
+                            <Tag key={tag} style={{ margin: 0, fontSize: 12, lineHeight: '20px' }}>{tag}</Tag>
+                          ))}
+                        </div>
+                      ) : null}
+                    </Space>
+                  </Card>
+                </MotionPanel>
+              </Col>
+            ))}
+          </Row>
+        )}
+      </div>
+    </div>
+  )
+
+  const renderMarketView = () => (
+    <div className="tab-content-shell">
+      <div className="toolbar-row" style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <Input.Search
+          allowClear
+          enterButton="搜索市场"
+          prefix={<SearchOutlined />}
+          placeholder="搜索 SkillHub 市场..."
+          value={marketQuery}
+          onChange={(event) => setMarketQuery(event.target.value)}
+          onSearch={(value) => void handleMarketplaceSearch(value)}
+          style={{ maxWidth: 400, flex: 1 }}
+        />
+        <Space>
+          <Button icon={<ReloadOutlined />} loading={marketLoading} onClick={() => void handleMarketplaceSearch(marketQuery)}>
+            刷新
+          </Button>
+          <Button href="https://skillhub.tencent.com/" target="_blank" rel="noreferrer">
+            SkillHub 官网
+          </Button>
+        </Space>
+      </div>
+
+      <div className="page-scroll-shell skills-scroll-shell">
+        {marketLoading ? (
+          <div className="center-box" style={{ padding: 40 }}>
+            <Spin size="large" />
+          </div>
+        ) : marketplaceSkills.length === 0 ? (
+          <Empty description="没有找到匹配的技能" className="empty-block" style={{ padding: 40 }} />
+        ) : (
+          <Row gutter={[16, 16]} className="skills-grid">
+            {marketplaceSkills.map((skill) => {
+              const alreadyInstalled = installedSkillIds.has(skill.slug)
+              return (
+                <Col xs={24} sm={12} md={8} lg={6} xl={6} key={skill.slug}>
+                  <MotionPanel className="skill-card-shell" standalone>
+                    <Card
+                      hoverable
+                      className="skill-card"
+                      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                      bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+                      actions={
+                        alreadyInstalled
+                          ? [
+                              <Button
+                                key="reinstall"
+                                type="text"
+                                icon={<ReloadOutlined />}
+                                loading={installingId === skill.slug}
+                                onClick={() => void handleInstallMarketplaceSkill(skill, true)}
+                                block
+                              >
+                                覆盖安装
+                              </Button>,
+                            ]
+                          : [
+                              <Button
+                                key="install"
+                                type="primary"
+                                ghost
+                                icon={<CloudDownloadOutlined />}
+                                loading={installingId === skill.slug}
+                                onClick={() => void handleInstallMarketplaceSkill(skill)}
+                                block
+                              >
+                                安装
+                              </Button>,
+                            ]
+                      }
+                    >
+                      <div style={{ marginBottom: 12 }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                            <Text strong ellipsis style={{ fontSize: 16, flex: 1 }}>{skill.name}</Text>
+                            {alreadyInstalled && <Tag color="success" style={{ margin: 0 }}>已安装</Tag>}
+                         </div>
+                         <Space size={6}>
+                            <Tag bordered={false} style={{ margin: 0 }}>{skill.version}</Tag>
+                            <Tag color={MARKET_COMPATIBILITY_META[skill.compatibility]?.color || 'default'} bordered={false} style={{ margin: 0 }}>
+                              {skill.compatibilityLabel}
+                            </Tag>
+                         </Space>
+                      </div>
+
+                      <div style={{ flex: 1, marginBottom: 16 }}>
+                        <Paragraph type="secondary" ellipsis={{ rows: 2, expandable: false }} style={{ marginBottom: 0, minHeight: 44 }}>
+                          {skill.description || '暂无描述。'}
+                        </Paragraph>
+                      </div>
+
+                      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--nb-text-secondary)' }}>
+                            <span>下载 {skill.downloads}</span>
+                            <span>{skill.updatedAt ? formatDateTimeZh(skill.updatedAt).split(' ')[0] : '-'}</span>
+                         </div>
+                        {skill.tags && skill.tags.length > 0 ? (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', height: 24, overflow: 'hidden' }}>
+                            {skill.tags.map((tag) => (
+                              <Tag key={tag} style={{ margin: 0, fontSize: 12, lineHeight: '20px' }}>{tag}</Tag>
+                            ))}
+                          </div>
+                        ) : null}
+                      </Space>
+                    </Card>
+                  </MotionPanel>
+                </Col>
+              )
+            })}
+          </Row>
+        )}
+      </div>
+    </div>
+  )
+
   return (
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="技能管理"
-        title="技能市场"
-        description="管理技能安装与工作区扩展。"
-        badges={[
-          <Tag key="preferred" color="processing">优先工作区安装</Tag>,
-          <Tag key="market">SkillHub</Tag>,
-        ]}
-        actions={(
-          <Space wrap>
-            <Button
-              type="primary"
-              icon={<FolderOpenOutlined />}
-              loading={uploading}
-              onClick={() => folderInputRef.current?.click()}
-            >
-              上传文件夹
-            </Button>
-            <Button icon={<UploadOutlined />} loading={uploading} onClick={() => zipInputRef.current?.click()}>
-              上传 ZIP
-            </Button>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadSkills()}>
-              刷新
-            </Button>
-          </Space>
-        )}
+        eyebrow="扩展能力"
+        title="技能中心"
+        description="管理工作区已安装的技能，或从 SkillHub 市场发现新能力。"
         stats={[
-          { label: '技能总数', value: skills.length },
-          { label: '工作区技能', value: workspaceSkillCount },
-          { label: '内置技能', value: builtInSkillCount },
-          { label: '市场结果', value: marketplaceSkills.length },
+          { label: '已安装', value: skills.length },
+          { label: '市场资源', value: marketplaceSkills.length },
         ]}
       />
 
@@ -243,262 +452,36 @@ export default function SkillsPage() {
         onChange={(event) => void handleZipSelect(event)}
       />
 
-      <div className="page-grid skills-page-grid">
-        <MotionGroup className="page-stack skills-market-stack">
-          <MotionPanel hover={false}>
-            <Card className="config-panel-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>技能市场</Typography.Title>
-                <Text type="secondary">直接搜索官方市场并安装到当前工作区。</Text>
-              </div>
-              <Space wrap size={8}>
-                <Tag color="processing">推荐</Tag>
-                <Tag>{marketplaceSkills.length} 个结果</Tag>
-              </Space>
-            </div>
-
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Input.Search
-                allowClear
-                enterButton="搜索 SkillHub"
-                prefix={<SearchOutlined />}
-                placeholder="输入技能名称、描述或关键词"
-                value={marketQuery}
-                onChange={(event) => setMarketQuery(event.target.value)}
-                onSearch={(value) => void handleMarketplaceSearch(value)}
-              />
-              <Space wrap>
-                <Button icon={<ReloadOutlined />} loading={marketLoading} onClick={() => void handleMarketplaceSearch(marketQuery)}>
-                  刷新结果
-                </Button>
-                <Button href="https://skillhub.tencent.com/" target="_blank" rel="noreferrer">
-                  打开 SkillHub 官网
-                </Button>
-              </Space>
-
-              <div className="page-scroll-shell skills-scroll-shell">
-                {marketLoading ? (
-                  <div className="center-box">
-                    <Spin />
-                  </div>
-                ) : marketplaceSkills.length === 0 ? (
-                  <Empty description="SkillHub 暂时没有匹配技能" className="empty-block" />
-                ) : (
-                  <Row gutter={[16, 16]} className="skills-grid">
-                    {marketplaceSkills.map((skill) => {
-                      const alreadyInstalled = installedSkillIds.has(skill.slug)
-                      return (
-                        <Col xs={24} md={12} key={skill.slug}>
-                          <MotionPanel className="skill-card-shell" standalone>
-                            <Card
-                              title={
-                                <Space wrap>
-                                  <span>{skill.name}</span>
-                                  {skill.version ? <Tag>{skill.version}</Tag> : null}
-                                </Space>
-                              }
-                              extra={
-                                <Space>
-                                  <Tag color="blue">{skill.source}</Tag>
-                                  {alreadyInstalled ? <Tag color="success">已安装</Tag> : null}
-                                </Space>
-                              }
-                              actions={
-                                alreadyInstalled
-                                  ? [
-                                      <Button
-                                        key="reinstall"
-                                        type="text"
-                                        icon={<ReloadOutlined />}
-                                        loading={installingId === skill.slug}
-                                        onClick={() => void handleInstallMarketplaceSkill(skill, true)}
-                                      >
-                                        覆盖安装
-                                      </Button>,
-                                    ]
-                                  : [
-                                      <Button
-                                        key="install"
-                                        type="text"
-                                        icon={<DownloadOutlined />}
-                                        loading={installingId === skill.slug}
-                                        onClick={() => void handleInstallMarketplaceSkill(skill)}
-                                      >
-                                        安装到工作区
-                                      </Button>,
-                                    ]
-                              }
-                            >
-                              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                                <Text type="secondary">{skill.description || '暂无描述。'}</Text>
-                                <Space wrap size={8}>
-                                  <Tag color={MARKET_COMPATIBILITY_META[skill.compatibility]?.color || 'default'}>
-                                    {skill.compatibilityLabel}
-                                  </Tag>
-                                  {typeof skill.downloads === 'number' ? <Tag>下载 {skill.downloads}</Tag> : null}
-                                  {skill.updatedAt ? <Tag>更新于 {formatDateTimeZh(skill.updatedAt)}</Tag> : null}
-                                </Space>
-                                {skill.compatibilityReasons && skill.compatibilityReasons.length > 0 ? (
-                                  <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                                    {skill.compatibilityReasons.map((reason) => (
-                                      <Text key={reason} type={skill.compatibility === 'unsupported' ? undefined : 'secondary'}>
-                                        {replaceBrandText(reason)}
-                                      </Text>
-                                    ))}
-                                  </Space>
-                                ) : null}
-                                {skill.tags && skill.tags.length > 0 ? (
-                                  <Space wrap size={4}>
-                                    {skill.tags.map((tag) => (
-                                      <Tag key={tag}>{tag}</Tag>
-                                    ))}
-                                  </Space>
-                                ) : null}
-                                {skill.homepage ? (
-                                  <Button type="link" href={skill.homepage} target="_blank" rel="noreferrer" style={{ paddingInline: 0 }}>
-                                    查看市场详情
-                                  </Button>
-                                ) : null}
-                              </Space>
-                            </Card>
-                          </MotionPanel>
-                        </Col>
-                      )
-                    })}
-                  </Row>
-                )}
-              </div>
-            </Space>
-            </Card>
-          </MotionPanel>
-
-          <MotionPanel hover={false}>
-            <Card className="config-panel-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>自定义上传</Typography.Title>
-                <Text type="secondary">市场外的技能目录或 ZIP 包都可以直接上传到当前工作区。</Text>
-              </div>
-              <Space wrap>
-                <Button
-                  type="primary"
-                  icon={<FolderOpenOutlined />}
-                  loading={uploading}
-                  onClick={() => folderInputRef.current?.click()}
-                >
-                  上传技能目录
-                </Button>
-                <Button icon={<UploadOutlined />} loading={uploading} onClick={() => zipInputRef.current?.click()}>
-                  上传技能 ZIP
-                </Button>
-              </Space>
-            </div>
-
-            </Card>
-          </MotionPanel>
-        </MotionGroup>
-
-        <MotionPanel className="skills-library-shell" hover={false} standalone>
-          <Card className="config-panel-card skills-library-card">
-          <div className="config-card-header">
-            <div className="page-section-title">
-              <Typography.Title level={4}>已安装技能</Typography.Title>
-              <Text type="secondary">这里展示当前实例可用的技能。</Text>
-            </div>
-            <Tag>{filteredSkills.length} 项技能</Tag>
-          </div>
-
-          <div className="toolbar-row">
-            <Input
-              allowClear
-              prefix={<SearchOutlined />}
-              placeholder="按名称、描述或标签搜索技能"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-
-          <div className="page-scroll-shell skills-scroll-shell">
-            {loading ? (
-              <div className="center-box">
-                <Spin />
-              </div>
-            ) : filteredSkills.length === 0 ? (
-              <Empty
-                description={skills.length === 0 ? '还没有安装技能' : '没有匹配结果'}
-                className="empty-block"
-              />
-            ) : (
-              <Row gutter={[16, 16]} className="skills-grid">
-                {filteredSkills.map((skill) => (
-                  <Col xs={24} md={12} xl={8} key={skill.id}>
-                    <MotionPanel className="skill-card-shell" standalone>
-                      <Card
-                        title={
-                          <Space wrap>
-                            <span>{skill.name}</span>
-                            <Tag>{skill.version || '1.0.0'}</Tag>
-                          </Space>
-                        }
-                        extra={
-                          <Space>
-                            <Tag color={skill.source === 'workspace' ? 'green' : 'blue'}>
-                              {skill.source === 'workspace' ? '工作区' : '内置'}
-                            </Tag>
-                            {skill.enabled === false ? <Tag>已禁用</Tag> : <Tag color="success">已启用</Tag>}
-                          </Space>
-                        }
-                        actions={
-                          skill.isDeletable
-                            ? [
-                                <Popconfirm
-                                  key="delete"
-                                  title="确定删除这个技能吗？"
-                                  okText="删除"
-                                  cancelText="取消"
-                                  okButtonProps={{ danger: true }}
-                                  onConfirm={() => void handleDelete(skill.id)}
-                                >
-                                  <Button
-                                    type="text"
-                                    danger
-                                    icon={<DeleteOutlined />}
-                                    loading={deletingId === skill.id}
-                                  >
-                                    删除
-                                  </Button>
-                                </Popconfirm>,
-                              ]
-                            : undefined
-                        }
-                      >
-                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                          <Text type="secondary">{skill.description || '暂无描述。'}</Text>
-                          {skill.author ? <Text type="secondary">作者：{getSkillAuthorLabel(skill.author)}</Text> : null}
-                          <DevOnly>
-                            <div>
-                              <Text type="secondary">路径</Text>
-                              <div className="mono-block">{skill.path}</div>
-                            </div>
-                          </DevOnly>
-                          {skill.tags && skill.tags.length > 0 ? (
-                            <Space wrap size={4}>
-                              {skill.tags.map((tag) => (
-                                <Tag key={tag}>{tag}</Tag>
-                              ))}
-                            </Space>
-                          ) : null}
-                        </Space>
-                      </Card>
-                    </MotionPanel>
-                  </Col>
-                ))}
-              </Row>
-            )}
-          </div>
-          </Card>
-        </MotionPanel>
+      <div className="page-content-wrapper" style={{ padding: '0 var(--nb-layout-gutter)' }}>
+        <Tabs
+          className="skills-page-tabs"
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          type="card"
+          size="large"
+          items={[
+            {
+              key: 'installed',
+              label: (
+                <span>
+                  <AppstoreOutlined />
+                  已安装技能 ({skills.length})
+                </span>
+              ),
+              children: renderInstalledView(),
+            },
+            {
+              key: 'market',
+              label: (
+                <span>
+                  <CloudDownloadOutlined />
+                  技能市场 ({marketplaceSkills.length})
+                </span>
+              ),
+              children: renderMarketView(),
+            },
+          ]}
+        />
       </div>
     </div>
   )

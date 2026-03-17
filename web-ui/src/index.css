@@ -4431,3 +4431,61 @@ textarea.config-json-editor.ant-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* Skills Page Tabs Styling */
+.skills-page-tabs .ant-tabs-nav {
+  margin-bottom: 24px;
+}
+
+.skills-page-tabs .ant-tabs-nav::before {
+  border-bottom: 1px solid var(--nb-border);
+}
+
+.skills-page-tabs .ant-tabs-tab {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-bottom: none !important;
+  color: var(--nb-muted) !important;
+  font-size: var(--nb-text-md);
+  padding: 10px 20px !important;
+  transition: all 0.2s;
+}
+
+.skills-page-tabs .ant-tabs-tab:hover {
+  color: var(--nb-ink) !important;
+  background: var(--nb-card-subtle-bg) !important;
+}
+
+.skills-page-tabs .ant-tabs-tab-active {
+  background: var(--nb-surface) !important;
+  border: 1px solid var(--nb-border) !important;
+  border-bottom-color: var(--nb-surface) !important;
+  color: var(--nb-accent) !important;
+  font-weight: 600;
+  border-radius: var(--nb-radius-lg) var(--nb-radius-lg) 0 0 !important;
+}
+
+.skills-page-tabs .ant-tabs-ink-bar {
+  display: none !important;
+}
+
+/* Skill Card Styling */
+.skill-card .ant-card-body {
+  padding: 20px;
+}
+
+.skill-card .ant-card-actions {
+  background: transparent;
+  border-top: 1px solid var(--nb-border);
+}
+
+.skill-card .ant-card-actions > li {
+  margin: 8px 0;
+  border-right-color: var(--nb-border);
+}
+
+.skill-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--nb-shadow);
+  border-color: var(--nb-accent-soft);
+}

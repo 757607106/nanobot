@@ -140,7 +140,7 @@ export default function McpPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow={devMode ? 'MCP Registry' : '外部连接'}
+        eyebrow={devMode ? 'MCP Registry' : '连接'}
         title={devMode ? 'MCP 扩展目录' : '第三方服务连接'}
         description={devMode ? '管理 MCP 与连接状态。' : '管理第三方连接。'}
         badges={[

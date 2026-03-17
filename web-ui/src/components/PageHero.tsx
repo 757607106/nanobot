@@ -11,7 +11,7 @@ export interface HeroStat {
 }
 
 interface PageHeroProps {
-  eyebrow?: string
+  eyebrow?: ReactNode
   title: string
   description?: ReactNode
   stats?: HeroStat[]

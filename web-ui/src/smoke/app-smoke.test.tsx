@@ -2701,7 +2701,7 @@ describe('web app smoke pages', () => {
     expect(screen.getByText('模型', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('渠道', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('技能', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('外部连接', { selector: '.nav-item-title' })).toBeInTheDocument()
+    expect(screen.getByText('连接', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('系统', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.queryByText('日程', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('定时任务', { selector: '.nav-item-title' })).not.toBeInTheDocument()

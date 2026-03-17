@@ -1,6 +1,43 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Collapse, Empty, List, Select, Space, Spin, Tag, Typography } from 'antd'
-import { PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import {
+  Alert,
+  App,
+  Badge,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  Empty,
+  List,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Steps,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  Tooltip,
+} from 'antd'
+import type { TableProps } from 'antd'
+import {
+  ClockCircleOutlined,
+  CodeOutlined,
+  DownloadOutlined,
+  PauseCircleOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+  TeamOutlined,
+  UserOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  SyncOutlined,
+  FileTextOutlined,
+  ApartmentOutlined,
+  MessageOutlined,
+  InfoCircleOutlined,
+} from '@ant-design/icons'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
@@ -15,7 +52,7 @@ import type {
   TeamThreadSummary,
 } from '../types'
 
-const { Paragraph, Text } = Typography
+const { Paragraph, Text, Title } = Typography
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -41,6 +78,42 @@ function statusColor(status: AgentRunSummary['status']) {
       return 'default'
     default:
       return 'default'
+  }
+}
+
+function statusBadgeStatus(status: AgentRunSummary['status']) {
+  switch (status) {
+    case 'succeeded':
+      return 'success'
+    case 'failed':
+      return 'error'
+    case 'running':
+      return 'processing'
+    case 'cancel_requested':
+      return 'warning'
+    case 'cancelled':
+      return 'default'
+    default:
+      return 'default'
+  }
+}
+
+function statusLabel(status: AgentRunSummary['status']) {
+  switch (status) {
+    case 'succeeded':
+      return '成功'
+    case 'failed':
+      return '失败'
+    case 'running':
+      return '运行中'
+    case 'queued':
+      return '排队中'
+    case 'cancel_requested':
+      return '取消中'
+    case 'cancelled':
+      return '已取消'
+    default:
+      return status
   }
 }
 
@@ -153,11 +226,11 @@ function eventPayloadSummary(eventType: string, payload?: Record<string, unknown
 function controlScopeTag(scope: string) {
   switch (scope) {
     case 'leader':
-      return <Tag color="purple">Supervisor</Tag>
+      return <Tag color="purple" bordered={false}>Supervisor</Tag>
     case 'member':
-      return <Tag color="cyan">成员</Tag>
+      return <Tag color="cyan" bordered={false}>成员</Tag>
     case 'child':
-      return <Tag color="orange">子任务</Tag>
+      return <Tag color="orange" bordered={false}>子任务</Tag>
     default:
       return null
   }
@@ -166,31 +239,42 @@ function controlScopeTag(scope: string) {
 function renderTreeNode(node: AgentRunTreeNode, selectedRunId: string | null, navigate: ReturnType<typeof useNavigate>) {
   const children = node.children || []
   const active = node.runId === selectedRunId
+  
   return (
     <div key={node.runId} className={`studio-run-tree-node ${active ? 'is-active' : ''}`}>
-      <button
-        type="button"
-        className="studio-run-tree-button"
+      <div 
+        className={`studio-run-tree-content ${active ? 'bg-primary-50 border-primary-200' : ''}`}
         onClick={() => navigate(`/studio/runs/${node.runId}`)}
+        style={{ 
+          cursor: 'pointer',
+          padding: '12px',
+          border: '1px solid var(--nb-border)',
+          borderRadius: 8,
+          marginBottom: 8,
+          background: active ? 'var(--nb-conversation-active-bg)' : 'var(--nb-card-bg)',
+          borderColor: active ? 'var(--nb-conversation-active-border)' : 'var(--nb-border)',
+          transition: 'all 0.2s'
+        }}
       >
-        <div className="studio-run-tree-head">
-          <Space wrap>
-            <strong>{node.label}</strong>
-            <Tag>{node.kind}</Tag>
-            <Tag color={statusColor(node.status)}>{node.status}</Tag>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Space>
+            {node.kind === 'team' ? <TeamOutlined /> : <RobotOutlined />}
+            <Text strong>{node.label}</Text>
             {controlScopeTag(node.controlScope)}
           </Space>
-          <Text type="secondary">{formatDateTimeZh(node.createdAt)}</Text>
+          <Badge status={statusBadgeStatus(node.status)} text={statusLabel(node.status)} />
         </div>
-        <Paragraph className="studio-run-preview" ellipsis={{ rows: 2 }}>
-          {node.resultSummary?.content || node.taskPreview}
-        </Paragraph>
-      </button>
-      {children.length > 0 ? (
-        <div className="studio-run-tree-children">
+        {node.resultSummary?.content && (
+          <Paragraph type="secondary" ellipsis={{ rows: 1 }} style={{ margin: 0, fontSize: 12 }}>
+            {node.resultSummary.content}
+          </Paragraph>
+        )}
+      </div>
+      {children.length > 0 && (
+        <div style={{ paddingLeft: 24, borderLeft: '1px solid var(--nb-border)', marginLeft: 12 }}>
           {children.map((child) => renderTreeNode(child, selectedRunId, navigate))}
         </div>
-      ) : null}
+      )}
     </div>
   )
 }
@@ -220,18 +304,63 @@ export default function RunsPage() {
   const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Table columns for run list
+  const columns: TableProps<AgentRunSummary>['columns'] = [
+    {
+      title: '任务名称/ID',
+      dataIndex: 'label',
+      key: 'label',
+      render: (text, record) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{text}</Text>
+          <Text type="secondary" style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>{record.runId}</Text>
+        </Space>
+      ),
+    },
+    {
+      title: '类型',
+      key: 'kind',
+      width: 120,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Tag bordered={false}>{record.kind === 'team' ? 'Team' : 'Agent'}</Tag>
+          {record.controlScope && controlScopeTag(record.controlScope)}
+        </Space>
+      ),
+    },
+    {
+      title: '状态',
+      key: 'status',
+      width: 120,
+      render: (_, record) => <Badge status={statusBadgeStatus(record.status)} text={statusLabel(record.status)} />,
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 180,
+      render: (text) => <Text type="secondary">{formatDateTimeZh(text)}</Text>,
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      render: (_, record) => (
+        <Button type="link" size="small" onClick={() => navigate(`/studio/runs/${record.runId}`)}>
+          详情
+        </Button>
+      ),
+    },
+  ]
+
   useEffect(() => {
     void loadRuns()
   }, [statusFilter, kindFilter, threadFilter])
 
   useEffect(() => {
-    if (loadingRuns) {
-      return
-    }
-    if (!selectedRunId && runs[0]) {
-      navigate(`/studio/runs/${runs[0].runId}`, { replace: true })
-      return
-    }
+    if (loadingRuns) return
+    
+    // Don't auto-select first run if none selected, let user see the list
     if (!selectedRunId) {
       setSelectedRun(null)
       setChildren([])
@@ -242,14 +371,14 @@ export default function RunsPage() {
       return
     }
     void loadRunDetail(selectedRunId)
-  }, [loadingRuns, navigate, runs, selectedRunId])
+  }, [loadingRuns, selectedRunId])
 
   useEffect(() => {
     if (!selectedRunId || !selectedRun || !isActiveStatus(selectedRun.status)) {
       return
     }
     const timer = window.setInterval(() => {
-      void loadRuns()
+      void loadRuns() // Refresh list status too
       void loadRunDetail(selectedRunId)
     }, 2500)
     return () => window.clearInterval(timer)
@@ -367,449 +496,306 @@ export default function RunsPage() {
     }
   }
 
-  return (
-    <div className="page-stack">
-      <PageHero
-        className="page-hero-compact studio-hero"
-        eyebrow="执行记录"
-        title="执行记录"
-        description="查看状态、过程和结果。"
-        stats={[
-          { label: '当前列表', value: runs.length },
-          { label: '运行中', value: activeCount },
-          { label: '失败', value: failedCount },
-        ]}
-        badges={[
-          <Tag key="registry" color="processing">任务追踪</Tag>,
-          <Tag key="runtime" color="geekblue">执行树</Tag>,
-        ]}
-        actions={(
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadRuns()} loading={loadingRuns}>
-              刷新
-            </Button>
+  // Detail View
+  if (selectedRunId && selectedRun) {
+    const tabItems = [
+      {
+        key: 'overview',
+        label: '概览',
+        icon: <InfoCircleOutlined />,
+        children: (
+          <Space direction="vertical" size={24} style={{ width: '100%' }}>
+            {/* Result Card */}
+            {selectedRun.resultSummary?.content ? (
+              <Card title="执行结果" className="page-card" bordered={false}>
+                <div className="markdown-body" style={{ background: 'var(--nb-surface-strong)', padding: 24, borderRadius: 8 }}>
+                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', fontSize: 14, lineHeight: 1.6 }}>
+                    {selectedRun.resultSummary.content}
+                  </pre>
+                </div>
+              </Card>
+            ) : (
+              <Card className="page-card" bordered={false}>
+                <Empty description="暂无执行结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              </Card>
+            )}
+            
+            <Row gutter={[24, 24]}>
+              <Col span={24}>
+                 <Card title="基础信息" className="page-card" bordered={false} size="small">
+                  <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="middle">
+                    <Descriptions.Item label="Run ID">
+                      <Text copyable code>{selectedRun.runId}</Text>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Agent">
+                      {selectedRun.agentId ? <Tag color="blue" bordered={false}>{selectedRun.agentId}</Tag> : '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Team">
+                      {selectedRun.teamId ? <Tag color="geekblue" bordered={false}>{selectedRun.teamId}</Tag> : '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="创建时间">
+                      {formatDateTimeZh(selectedRun.createdAt)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Thread ID">
+                      {selectedRun.threadId ? <Text code copyable>{selectedRun.threadId}</Text> : '-'}
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Card>
+              </Col>
+            </Row>
           </Space>
-        )}
-      />
-
-      {error ? <Alert type="error" showIcon message={error} /> : null}
-      {threadFilter ? (
-        <Alert
-          type="info"
-          showIcon
-          message={`按 threadId 过滤：${threadFilter}`}
-          action={(
-            <Button
-              size="small"
-              onClick={() => {
-                const next = new URLSearchParams(searchParams)
-                next.delete('threadId')
-                setSearchParams(next)
-              }}
-            >
-              清除
-            </Button>
-          )}
-        />
-      ) : null}
-
-      <div className="page-grid studio-runs-grid">
-        <Card className="config-panel-card studio-runs-list-card">
-          <div className="config-card-header">
-            <div className="page-section-title">
-              <Typography.Title level={4}>执行列表</Typography.Title>
-              <Text type="secondary">按状态和类型筛选。</Text>
-            </div>
-            <Tag color="blue">{runs.length}</Tag>
-          </div>
-
-          <div className="studio-form-grid studio-runs-filter-grid">
-            <div className="studio-form-field">
-              <Text type="secondary">状态</Text>
-              <Select
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={[
-                  { value: 'all', label: '全部' },
-                  { value: 'queued', label: 'queued' },
-                  { value: 'running', label: 'running' },
-                  { value: 'succeeded', label: 'succeeded' },
-                  { value: 'failed', label: 'failed' },
-                  { value: 'cancel_requested', label: 'cancel_requested' },
-                  { value: 'cancelled', label: 'cancelled' },
-                ]}
-              />
-            </div>
-
-            <div className="studio-form-field">
-              <Text type="secondary">类型</Text>
-              <Select
-                value={kindFilter}
-                onChange={setKindFilter}
-                options={[
-                  { value: 'all', label: '全部' },
-                  { value: 'agent', label: 'agent' },
-                  ...(devMode ? [{ value: 'subagent', label: 'subagent' }] : []),
-                  { value: 'team', label: 'team' },
-                ]}
-              />
-            </div>
-          </div>
-
-          {loadingRuns ? (
-            <div className="center-box">
-              <Spin />
-            </div>
-          ) : runs.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配记录" />
-          ) : (
-            <List
-              className="studio-run-list studio-runs-master-list"
-              dataSource={runs}
-              renderItem={(run) => (
-                <List.Item
-                  className={`studio-agent-list-item ${selectedRunId === run.runId ? 'is-active' : ''}`}
-                  onClick={() => navigate(`/studio/runs/${run.runId}`)}
-                >
-                  <div className="studio-agent-list-copy">
-                    <div className="studio-run-list-head">
-                      <Space wrap>
-                        <strong>{run.label}</strong>
-                        <Tag color={statusColor(run.status)}>{run.status}</Tag>
-                        <Tag>{run.kind}</Tag>
-                        {controlScopeTag(run.controlScope)}
+        )
+      },
+      {
+        key: 'timeline',
+        label: '时间轴',
+        icon: <ClockCircleOutlined />,
+        children: (
+          <Card className="page-card" bordered={false} title="执行过程">
+            {!selectedRun.events?.length ? (
+              <Empty description="暂无过程记录" />
+            ) : (
+              <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 0' }}>
+                <Steps
+                  direction="vertical"
+                  size="small"
+                  current={selectedRun.events.length - 1}
+                  status={selectedRun.status === 'failed' ? 'error' : 'process'}
+                  items={selectedRun.events.map(event => ({
+                    title: (
+                      <Space>
+                        <Text strong>{eventLabel(event.eventType, devMode)}</Text>
+                        <Tag bordered={false}>{event.eventType}</Tag>
+                        <Text type="secondary" style={{ fontSize: 12 }}>{formatDateTimeZh(event.createdAt)}</Text>
                       </Space>
-                      <Text type="secondary">{formatDateTimeZh(run.createdAt)}</Text>
+                    ),
+                    description: eventPayloadSummary(event.eventType, event.payload, devMode) && (
+                      <div style={{ 
+                        marginTop: 12, 
+                        padding: '12px 16px', 
+                        background: 'var(--nb-surface-strong)', 
+                        borderRadius: 8,
+                        border: '1px solid var(--nb-border)'
+                      }}>
+                        <Text type="secondary" style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}>
+                          {eventPayloadSummary(event.eventType, event.payload, devMode)}
+                        </Text>
+                      </div>
+                    ),
+                    icon: event.eventType === 'failed' ? <CloseCircleOutlined style={{ color: 'var(--nb-error)' }} /> : 
+                          event.eventType === 'completed' ? <CheckCircleOutlined style={{ color: 'var(--nb-success)' }} /> : undefined
+                  }))}
+                />
+              </div>
+            )}
+          </Card>
+        )
+      },
+      {
+        key: 'tree',
+        label: '任务树',
+        icon: <ApartmentOutlined />,
+        children: (
+          <Card className="page-card" bordered={false} title="任务层级结构">
+            {runTree ? renderTreeNode(runTree, selectedRunId, navigate) : <Empty />}
+          </Card>
+        )
+      }
+    ]
+
+    // Add conversation tab if applicable
+    if (selectedRun.teamId && selectedRun.threadId) {
+      tabItems.push({
+        key: 'conversation',
+        label: '对话',
+        icon: <MessageOutlined />,
+        children: (
+          <Card className="page-card" bordered={false} title="对话记录" extra={<Tag>{selectedRun.threadId}</Tag>}>
+            <List
+              dataSource={threadMessages}
+              renderItem={(item) => (
+                <List.Item style={{ border: 'none', padding: '16px 0' }}>
+                  <div style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <div style={{ 
+                        width: 36, height: 36, borderRadius: 18, 
+                        background: item.role === 'user' ? 'var(--nb-accent)' : 'var(--nb-surface-strong)',
+                        color: item.role === 'user' ? '#fff' : 'var(--nb-text-secondary)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        {item.role === 'user' ? <UserOutlined /> : <RobotOutlined />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <Text strong style={{ fontSize: 15 }}>{item.role === 'user' ? '用户' : item.role}</Text>
+                          <Text type="secondary" style={{ fontSize: 12 }}>{formatDateTimeZh(item.createdAt)}</Text>
+                        </div>
+                        <div style={{ 
+                          padding: 16, 
+                          background: item.role === 'user' ? 'var(--nb-surface-strong)' : 'transparent',
+                          borderRadius: 8,
+                          border: item.role === 'user' ? 'none' : '1px solid var(--nb-border)'
+                        }}>
+                          <Text style={{ lineHeight: 1.6 }}>{item.content}</Text>
+                        </div>
+                      </div>
                     </div>
-                    <Paragraph className="studio-run-preview" ellipsis={{ rows: 2 }}>
-                      {run.resultSummary?.content || run.taskPreview}
-                    </Paragraph>
-                    <div className="studio-agent-list-meta">
-                      {run.agentId ? <Tag>{run.agentId}</Tag> : null}
-                      {run.teamId ? <Tag>{run.teamId}</Tag> : null}
-                      {typeof run.childrenCount === 'number' ? <Tag>{run.childrenCount} 个子任务</Tag> : null}
-                    </div>
-                    {run.lastErrorMessage ? <Text type="danger">{run.lastErrorMessage}</Text> : null}
                   </div>
                 </List.Item>
               )}
             />
-          )}
-        </Card>
-
-        <div className="page-stack">
-          <Card className="config-panel-card" loading={loadingDetail}>
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>{selectedRun ? selectedRun.label : '执行详情'}</Typography.Title>
-                <Text type="secondary">查看状态、任务和结果。</Text>
-              </div>
-              {selectedRun ? <Tag color="purple">{selectedRun.runId}</Tag> : <Tag>未选择</Tag>}
-            </div>
-
-            {!selectedRun ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧选择一条记录。" />
-            ) : (
-              <div className="page-stack">
-                <div className="studio-run-detail-grid">
-                  <div className="studio-form-field">
-                    <Text type="secondary">状态</Text>
-                    <Tag color={statusColor(selectedRun.status)}>{selectedRun.status}</Tag>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">类型</Text>
-                    <Tag>{selectedRun.kind}</Tag>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">员工</Text>
-                    <Text>{selectedRun.agentId || '未绑定'}</Text>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">团队</Text>
-                    <Text>{selectedRun.teamId || '未绑定'}</Text>
-                  </div>
-                  <div className="studio-form-field">
-                    <Text type="secondary">角色</Text>
-                    <Space>{controlScopeTag(selectedRun.controlScope) || <Tag>top_level</Tag>}</Space>
-                  </div>
-                </div>
-
-                <div className="studio-form-field">
-                  <Text type="secondary">任务摘要</Text>
-                  <Paragraph className="studio-run-preview">{selectedRun.taskPreview}</Paragraph>
-                </div>
-
-                <DevOnly>
-                  <Collapse
-                    className="studio-inline-collapse"
-                    items={[
-                      {
-                        key: 'tech',
-                        label: '技术详情',
-                        children: (
-                          <div className="studio-run-detail-grid">
-                            <div className="studio-form-field">
-                              <Text type="secondary">Session Key</Text>
-                              <Text>{selectedRun.sessionKey || '无'}</Text>
-                            </div>
-                            <div className="studio-form-field">
-                              <Text type="secondary">Thread</Text>
-                              <Text>{selectedRun.threadId || '无'}</Text>
-                            </div>
-                            <div className="studio-form-field">
-                              <Text type="secondary">Parent Run</Text>
-                              <Text>{selectedRun.parentRunId || '无'}</Text>
-                            </div>
-                            <div className="studio-form-field">
-                              <Text type="secondary">Root Run</Text>
-                              <Text>{selectedRun.rootRunId || selectedRun.runId}</Text>
-                            </div>
-                            <div className="studio-form-field">
-                              <Text type="secondary">控制作用域</Text>
-                              <Text>{selectedRun.controlScope}</Text>
-                            </div>
-                            <div className="studio-form-field">
-                              <Text type="secondary">Spawn Depth</Text>
-                              <Text>{selectedRun.spawnDepth}</Text>
-                            </div>
-                          </div>
-                        ),
-                      },
-                    ]}
-                  />
-                </DevOnly>
-
-                {selectedRun.resultSummary?.content ? (
-                  <div className="studio-run-result">
-                    <Text type="secondary">结果摘要</Text>
-                    <Paragraph className="studio-result-copy">{selectedRun.resultSummary.content}</Paragraph>
-                  </div>
-                ) : null}
-
-                {selectedRun.lastErrorMessage ? (
-                  <Alert
-                    type="error"
-                    showIcon
-                    message={selectedRun.lastErrorMessage}
-                    description={selectedRun.lastErrorCode || undefined}
-                  />
-                ) : null}
-
-                <div className="studio-form-actions">
-                  <Space wrap>
-                    <Button onClick={() => void loadRunDetail(selectedRun.runId)} loading={loadingDetail}>
-                      刷新详情
-                    </Button>
-                    {selectedRun.teamId ? (
-                      <Button onClick={() => navigate(`/studio/teams/${selectedRun.teamId}`)}>
-                        查看团队
-                      </Button>
-                    ) : null}
-                    {selectedRun.rootRunId && selectedRun.rootRunId !== selectedRun.runId ? (
-                      <Button onClick={() => navigate(`/studio/runs/${selectedRun.rootRunId}`)}>
-                        查看根任务
-                      </Button>
-                    ) : null}
-                    {selectedRun.teamId ? (
-                      <Button onClick={() => navigate(`/studio/memory/${selectedRun.teamId}`)}>
-                        查看团队记忆
-                      </Button>
-                    ) : null}
-                    <Button
-                      icon={<PauseCircleOutlined />}
-                      danger
-                      onClick={() => void handleCancelRun()}
-                      loading={cancelling}
-                      disabled={!isCancelable(selectedRun.status)}
-                    >
-                      请求停止
-                    </Button>
-                  </Space>
-                </div>
-              </div>
-            )}
           </Card>
+        )
+      })
+    }
 
-          <div className="page-grid studio-runs-detail-grid">
-            <Card className="config-panel-card">
-              <div className="config-card-header">
-                <div className="page-section-title">
-                  <Typography.Title level={4}>子任务</Typography.Title>
-                  <Text type="secondary">查看直接派生的子任务。</Text>
-                </div>
-                <Tag>{children.length}</Tag>
-              </div>
+    // Add artifact tab if applicable
+    if (selectedRun.artifactPath) {
+      tabItems.push({
+        key: 'artifact',
+        label: '产物',
+        icon: <FileTextOutlined />,
+        children: (
+          <Card className="page-card" bordered={false} title="任务产出归档">
+            <div style={{ padding: 24, textAlign: 'center', background: 'var(--nb-surface-strong)', borderRadius: 8 }}>
+              <Space direction="vertical" size={16}>
+                <FileTextOutlined style={{ fontSize: 48, color: 'var(--nb-primary)' }} />
+                <Title level={4} style={{ margin: 0 }}>任务生成了归档文件</Title>
+                <Text type="secondary">包含执行过程中生成的所有代码、文档和数据。</Text>
+                <Space size={16} style={{ marginTop: 16 }}>
+                  <Button type="primary" icon={<DownloadOutlined />} onClick={handleDownloadArtifact} size="large">
+                    下载结果
+                  </Button>
+                  <Button icon={<CodeOutlined />} onClick={() => { /* View logic */ }} size="large">
+                    查看源码
+                  </Button>
+                </Space>
+              </Space>
+            </div>
+          </Card>
+        )
+      })
+    }
 
-              {children.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有子任务" />
-              ) : (
-                <List
-                  className="studio-run-list"
-                  dataSource={children}
-                  renderItem={(item) => (
-                    <List.Item className="studio-run-list-item" onClick={() => navigate(`/studio/runs/${item.runId}`)}>
-                      <div className="studio-run-list-copy">
-                        <div className="studio-run-list-head">
-                          <Space wrap>
-                            <strong>{item.label}</strong>
-                            <Tag color={statusColor(item.status)}>{item.status}</Tag>
-                            <Tag>{item.controlScope}</Tag>
-                          </Space>
-                          <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
-                        </div>
-                        <Paragraph className="studio-run-preview" ellipsis={{ rows: 2 }}>
-                          {item.resultSummary?.content || item.taskPreview}
-                        </Paragraph>
-                      </div>
-                    </List.Item>
-                  )}
-                />
-              )}
-            </Card>
+    return (
+      <div className="page-stack">
+        <PageHero
+          className="page-hero-compact studio-hero"
+          eyebrow={
+            <Space>
+              <a onClick={() => navigate('/studio/runs')} style={{ color: 'inherit', cursor: 'pointer' }}>执行记录</a>
+              <span>/</span>
+              <span>详情</span>
+            </Space>
+          }
+          title={selectedRun.label}
+          description={selectedRun.taskPreview || '查看任务执行详情与结果。'}
+          badges={[
+            <Badge key="status" status={statusBadgeStatus(selectedRun.status)} text={statusLabel(selectedRun.status)} />,
+            <Tag key="kind" bordered={false}>{selectedRun.kind === 'team' ? 'Team' : 'Agent'}</Tag>,
+            selectedRun.teamId ? <Tag key="team" color="geekblue" bordered={false}>Team: {selectedRun.teamId}</Tag> : null
+          ]}
+          actions={(
+            <Space>
+              <Tooltip title="刷新状态">
+                <Button onClick={() => void loadRunDetail(selectedRun.runId)} loading={loadingDetail} icon={<ReloadOutlined />} shape="circle" />
+              </Tooltip>
+              <Button
+                icon={<PauseCircleOutlined />}
+                danger
+                onClick={() => void handleCancelRun()}
+                loading={cancelling}
+                disabled={!isCancelable(selectedRun.status)}
+              >
+                停止任务
+              </Button>
+            </Space>
+          )}
+        />
 
-            <Card className="config-panel-card">
-              <div className="config-card-header">
-                <div className="page-section-title">
-                  <Typography.Title level={4}>任务树</Typography.Title>
-                  <Text type="secondary">回看任务拆分与协作。</Text>
-                </div>
-                {runTree ? <Tag>{runTree.runId}</Tag> : null}
-              </div>
+        <div className="page-content-wrapper" style={{ padding: '0 var(--nb-layout-gutter)' }}>
+          <Tabs items={tabItems} defaultActiveKey="overview" type="card" className="commercial-tabs" />
+        </div>
+      </div>
+    )
+  }
 
-              {!runTree ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务树" />
-              ) : (
-                <div className="studio-run-tree">
-                  {renderTreeNode(runTree, selectedRunId, navigate)}
-                </div>
-              )}
-            </Card>
+  // List View
+  return (
+    <div className="page-stack">
+      <PageHero
+        className="page-hero-compact studio-hero"
+        eyebrow="任务中心"
+        title="执行记录"
+        description="追踪 Agent 与团队协作任务的执行状态与历史。"
+        stats={[
+          { label: '总任务', value: runs.length },
+          { label: '运行中', value: activeCount },
+          { label: '异常终止', value: failedCount },
+        ]}
+        actions={(
+          <Button icon={<ReloadOutlined />} onClick={() => void loadRuns()} loading={loadingRuns}>
+            刷新列表
+          </Button>
+        )}
+      />
+
+      {error && <Alert type="error" showIcon message={error} style={{ margin: '0 var(--nb-layout-gutter)' }} />}
+
+      <div className="page-content-wrapper" style={{ padding: '0 var(--nb-layout-gutter)' }}>
+        <Card className="page-card" bordered={false} bodyStyle={{ padding: 0 }}>
+          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--nb-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Space>
+              <Select
+                value={statusFilter}
+                onChange={setStatusFilter}
+                style={{ width: 140 }}
+                options={[
+                  { value: 'all', label: '全部状态' },
+                  { value: 'running', label: '运行中' },
+                  { value: 'succeeded', label: '成功' },
+                  { value: 'failed', label: '失败' },
+                ]}
+              />
+              <Select
+                value={kindFilter}
+                onChange={setKindFilter}
+                style={{ width: 140 }}
+                options={[
+                  { value: 'all', label: '全部类型' },
+                  { value: 'agent', label: 'Agent' },
+                  { value: 'team', label: 'Team' },
+                ]}
+              />
+            </Space>
+            {threadFilter && (
+              <Tag closable onClose={() => {
+                const next = new URLSearchParams(searchParams)
+                next.delete('threadId')
+                setSearchParams(next)
+              }}>
+                Thread: {threadFilter}
+              </Tag>
+            )}
           </div>
 
-          <Card className="config-panel-card">
-            <div className="config-card-header">
-                <div className="page-section-title">
-                <Typography.Title level={4}>对话记录</Typography.Title>
-                <Text type="secondary">查看关联对话。</Text>
-              </div>
-              {threadSummary?.threadId ? <Tag color="cyan">{threadSummary.threadId}</Tag> : null}
-            </div>
-
-            {!selectedRun?.teamId || !selectedRun.threadId ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行没有团队对话" />
-            ) : loadingThreadAudit ? (
-              <div className="center-box">
-                <Spin />
-              </div>
-            ) : threadMessages.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前对话暂无消息" />
-            ) : (
-              <div className="page-stack">
-                <div className="studio-form-actions">
-                  <Space wrap>
-                    <Button onClick={() => void loadRunDetail(selectedRun.runId)} loading={loadingDetail}>
-                      刷新对话
-                    </Button>
-                    <Button onClick={() => navigate(`/studio/runs?threadId=${encodeURIComponent(selectedRun.threadId || '')}`)}>
-                      按对话筛选
-                    </Button>
-                  </Space>
-                </div>
-                <List
-                  className="studio-run-list"
-                  dataSource={threadMessages}
-                  renderItem={(item) => (
-                    <List.Item className="studio-run-list-item">
-                      <div className="studio-run-list-copy">
-                        <div className="studio-run-list-head">
-                          <Space wrap>
-                            <strong>{item.role === 'user' ? '用户消息' : item.role === 'assistant' ? '团队回复' : item.role}</strong>
-                            <Tag color={item.role === 'user' ? 'blue' : 'success'}>{item.role}</Tag>
-                          </Space>
-                          <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
-                        </div>
-                        <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
-                          {item.content}
-                        </Paragraph>
-                      </div>
-                    </List.Item>
-                  )}
-                />
-              </div>
-            )}
-          </Card>
-
-          <Card className="config-panel-card">
-            <div className="config-card-header">
-                <div className="page-section-title">
-                <Typography.Title level={4}>过程记录</Typography.Title>
-                <Text type="secondary">按时间查看执行过程。</Text>
-              </div>
-              {selectedRun ? <Tag>{selectedRun.events?.length || 0}</Tag> : null}
-            </div>
-
-            {!selectedRun?.events?.length ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无过程记录" />
-            ) : (
-              <List
-                className="studio-event-list"
-                dataSource={selectedRun.events}
-                renderItem={(event) => (
-                  <List.Item className="studio-run-list-item">
-                    <div className="studio-run-list-copy">
-                      <div className="studio-run-list-head">
-                        <Space wrap>
-                          <strong>{eventLabel(event.eventType, devMode)}</strong>
-                          <Tag>{event.eventType}</Tag>
-                        </Space>
-                        <Text type="secondary">{formatDateTimeZh(event.createdAt)}</Text>
-                      </div>
-                      {eventPayloadSummary(event.eventType, event.payload, devMode) ? (
-                        <Paragraph className="studio-run-preview">
-                          {eventPayloadSummary(event.eventType, event.payload, devMode)}
-                        </Paragraph>
-                      ) : null}
-                    </div>
-                  </List.Item>
-                )}
-              />
-            )}
-          </Card>
-
-          <Card className="config-panel-card">
-            <div className="config-card-header">
-                <div className="page-section-title">
-                <Typography.Title level={4}>结果文档</Typography.Title>
-                <Text type="secondary">查看本次执行的归档结果。</Text>
-              </div>
-              {selectedRun?.artifactPath ? <Tag>{selectedRun.artifactPath}</Tag> : null}
-            </div>
-
-            {!selectedRun ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先选择一条记录" />
-            ) : loadingArtifact ? (
-              <div className="center-box">
-                <Spin />
-              </div>
-            ) : !artifact ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无结果文档" />
-            ) : (
-              <div className="page-stack">
-                <div className="studio-form-actions">
-                  <Space wrap>
-                    <Button onClick={() => void loadRunDetail(selectedRun.runId)} loading={loadingDetail}>
-                      刷新结果文档
-                    </Button>
-                    <Button onClick={handleDownloadArtifact}>
-                      下载 Markdown
-                    </Button>
-                  </Space>
-                </div>
-                <pre className="studio-artifact-preview">{artifact.content}</pre>
-              </div>
-            )}
-          </Card>
-        </div>
+          <Table
+            dataSource={runs}
+            columns={columns}
+            rowKey="runId"
+            loading={loadingRuns}
+            pagination={{ 
+              pageSize: 15,
+              showTotal: (total) => `共 ${total} 条记录`,
+              showSizeChanger: false
+            }}
+            onRow={(record) => ({
+              onClick: () => navigate(`/studio/runs/${record.runId}`),
+              style: { cursor: 'pointer' }
+            })}
+          />
+        </Card>
       </div>
     </div>
   )

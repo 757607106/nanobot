@@ -858,8 +858,6 @@ export default function ChatPage() {
           <div className="chat-rail-head">
             <div>
               <span className="section-kicker">会话中心</span>
-              <Typography.Title level={4}>工作区会话</Typography.Title>
-              <Text type="secondary">只保留最近会话和当前对话主线。</Text>
             </div>
             <Button
               type="primary"

@@ -95,7 +95,7 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
         {
           key: '/mcp',
           icon: <ApiOutlined />,
-          label: devMode ? 'MCP 扩展' : '外部连接',
+          label: devMode ? 'MCP 扩展' : '连接',
           summary: devMode ? '登记、探测并测试 MCP 服务。' : '维护第三方服务连接与状态。',
           sectionLabel: '构建',
           testId: testIds.app.navMcp,
