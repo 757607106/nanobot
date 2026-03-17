@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Drawer, Grid, Layout, Menu, Typography } from 'antd'
+import { Avatar, Button, Drawer, Grid, Layout, Menu, Typography } from 'antd'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ApiOutlined,
@@ -12,6 +12,7 @@ import {
   MessageOutlined,
   ProfileOutlined,
   SettingOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
@@ -187,11 +188,20 @@ export default function AppShell() {
       transition={shellSpring}
     >
       <div className="brand-block">
-        <div className="brand-chip">{PLATFORM_BADGE_LABEL}</div>
         <div className="brand-head">
-          <div className="brand-mark">{PLATFORM_BRAND_MARK}</div>
           <div className="brand-copy">
-            <Typography.Title level={2}>{PLATFORM_BRAND_NAME}</Typography.Title>
+            <Typography.Title 
+              level={2} 
+              style={{ 
+                margin: 0, 
+                fontSize: '20px', 
+                fontWeight: 600, 
+                letterSpacing: '-0.02em',
+                lineHeight: 1
+              }}
+            >
+              {PLATFORM_BRAND_NAME}
+            </Typography.Title>
           </div>
         </div>
       </div>
@@ -213,9 +223,29 @@ export default function AppShell() {
       </div>
 
       <div className="sidebar-footer">
-        <Typography.Text type="secondary">管理员</Typography.Text>
-        <div className="mono-block mono-block-tight">
-          {authStatus?.username || '未登录'}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          padding: '8px 12px',
+          background: 'rgba(0, 0, 0, 0.02)',
+          borderRadius: '8px',
+          border: '1px solid transparent'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div className="mono-block mono-block-tight" style={{ fontSize: 13, fontWeight: 500, color: 'var(--nb-text-secondary)' }}>
+              {authStatus?.username || '未登录'}
+            </div>
+          </div>
+          <Button
+            type="text"
+            size="small"
+            icon={<LogoutOutlined />}
+            loading={submitting}
+            onClick={() => void handleLogout()}
+            data-testid={testIds.app.logout}
+            style={{ color: 'var(--nb-muted)', marginLeft: 8 }}
+          />
         </div>
       </div>
     </motion.div>
@@ -270,20 +300,13 @@ export default function AppShell() {
             </div>
 
             <div className="header-actions">
-              {isDesktop && !isChatRoute ? (
-                <div className="header-admin-chip">
-                  <div>
-                    <div className="header-admin-label">管理员</div>
-                    <strong>{authStatus?.username || '未登录'}</strong>
-                  </div>
-                </div>
-              ) : null}
               <Button
                 icon={<LogoutOutlined />}
                 loading={submitting}
                 className={`header-logout-button ${isChatRoute ? 'is-compact' : ''}`}
                 onClick={() => void handleLogout()}
                 data-testid={testIds.app.logout}
+                style={{ display: isDesktop ? 'none' : 'flex' }}
               >
                 {isChatRoute ? null : '退出'}
               </Button>
