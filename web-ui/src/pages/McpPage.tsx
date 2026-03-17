@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Empty, Input, Spin, Tag, Typography } from 'antd'
+import { Alert, App, Button, Card, Empty, Input, Space, Spin, Tag, Typography } from 'antd'
 import { EditOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
@@ -128,7 +128,6 @@ export default function McpPage() {
       },
     [data],
   )
-
   if (loading && !data) {
     return (
       <div className="center-box page-card">
@@ -140,10 +139,14 @@ export default function McpPage() {
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
+        className="page-hero-compact studio-hero"
         eyebrow={devMode ? 'MCP Registry' : '外部连接'}
         title={devMode ? 'MCP 扩展目录' : '第三方服务连接'}
-        description={devMode ? '在这里查看目录、从仓库安装、执行探测，并进入单个 MCP 做隔离测试。' : '管理已连接的第三方服务，查看连接状态。'}
+        description={devMode ? '管理 MCP 与连接状态。' : '管理第三方连接。'}
+        badges={[
+          <Tag key="scope">{devMode ? '仓库安装' : '连接总览'}</Tag>,
+          summary.enabled > 0 ? <Tag key="enabled" color="success">已启用 {summary.enabled}</Tag> : null,
+        ].filter(Boolean)}
         actions={(
           <div className="mcp-hero-actions">
             <Button icon={<ReloadOutlined />} onClick={() => void loadServers()} loading={loading}>
@@ -164,7 +167,7 @@ export default function McpPage() {
           className="mcp-inline-alert"
           type="info"
           message="先补齐配置，再执行探测"
-          description={`还有 ${summary.incomplete} 个 MCP 缺少关键配置，补齐后再探测。`}
+          description={`还有 ${summary.incomplete} 个未完成配置。`}
         />
       ) : null}
 
@@ -173,7 +176,7 @@ export default function McpPage() {
         <div className="config-card-header">
           <div className="page-section-title">
             <Typography.Title level={4}>从仓库安装</Typography.Title>
-            <Text type="secondary">输入仓库地址，预检后安装并登记。</Text>
+            <Text type="secondary">输入仓库地址后预检安装。</Text>
           </div>
         </div>
 
@@ -279,8 +282,8 @@ export default function McpPage() {
             message={`MCP ${lastInstall.serverName} 已安装并登记`}
             description={
               lastInstall.installDir
-                ? `安装目录：${lastInstall.installDir}。默认保持禁用，测试通过后再启用。`
-                : '默认保持禁用，测试通过后再启用。'
+                ? `安装目录：${lastInstall.installDir}`
+                : '已完成登记'
             }
           />
         ) : null}
@@ -291,7 +294,7 @@ export default function McpPage() {
         <div className="config-card-header">
           <div className="page-section-title">
             <Typography.Title level={4}>MCP 目录</Typography.Title>
-            <Text type="secondary">这里聚焦目录、探测和进入测试。</Text>
+            <Text type="secondary">查看状态、探测和详情。</Text>
           </div>
           <div className="tag-cloud">
             <Tag>登记 {summary.total}</Tag>
@@ -367,7 +370,7 @@ export default function McpPage() {
         ) : (
           <Empty
             className="empty-block"
-            description="还没有登记 MCP，先从上面的仓库入口安装一个。"
+            description="还没有 MCP"
           />
         )}
       </Card>

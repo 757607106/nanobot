@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { createContext, startTransition, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { App as AntdApp } from 'antd'
 import { ApiError, api } from './api'
 import type { AuthStatus } from './types'
@@ -40,17 +40,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     try {
       const next = await api.getAuthStatus()
-      startTransition(() => {
-        setStatus(next)
-        setError(null)
-      })
+      setStatus(next)
+      setError(null)
       return next
     } catch (error) {
       const nextError = getErrorMessage(error, '无法检查登录状态')
-      startTransition(() => {
-        setStatus(null)
-        setError(nextError)
-      })
+      setStatus(null)
+      setError(nextError)
       throw error
     } finally {
       setLoading(false)
@@ -63,14 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function handleAuthRequired() {
-      startTransition(() => {
-        setStatus((previous) => ({
-          initialized: previous?.initialized ?? true,
-          authenticated: false,
-          username: null,
-        }))
-        setError(null)
-      })
+      setStatus((previous) => ({
+        initialized: previous?.initialized ?? true,
+        authenticated: false,
+        username: null,
+      }))
+      setError(null)
     }
 
     window.addEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired)
@@ -83,10 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSubmitting(true)
     try {
       const next = await api.bootstrapAuth(username, password)
-      startTransition(() => {
-        setStatus(next)
-        setError(null)
-      })
+      setStatus(next)
+      setError(null)
       message.success('管理员账号已创建')
       return next
     } catch (error) {
@@ -102,10 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSubmitting(true)
     try {
       const next = await api.login(username, password)
-      startTransition(() => {
-        setStatus(next)
-        setError(null)
-      })
+      setStatus(next)
+      setError(null)
       message.success('登录成功')
       return next
     } catch (error) {
@@ -121,10 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSubmitting(true)
     try {
       const next = await api.logout()
-      startTransition(() => {
-        setStatus(next)
-        setError(null)
-      })
+      setStatus(next)
+      setError(null)
       message.success('已退出登录')
       return next
     } catch (error) {

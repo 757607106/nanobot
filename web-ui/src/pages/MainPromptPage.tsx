@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Popconfirm, Segmented, Space, Tag, Typography } from 'antd'
+import { App, Button, Card, Popconfirm, Segmented, Space, Tag, Typography } from 'antd'
 import { EditOutlined, EyeOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import TextArea from 'antd/es/input/TextArea'
 import ReactMarkdown from 'react-markdown'
@@ -103,7 +103,6 @@ export default function MainPromptPage() {
     }),
     [orderedDocuments],
   )
-
   useEffect(() => {
     void loadDocuments()
   }, [])
@@ -183,10 +182,10 @@ export default function MainPromptPage() {
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
+        className="page-hero-compact studio-hero"
         eyebrow="提示词与记忆"
         title="工作区引导与记忆"
-        description="集中维护引导文件与长期记忆，不把模型、渠道和模板配置混进来。"
+        description="管理工作区文档与长期记忆。"
         actions={(
           <Space wrap>
             <Button
@@ -201,7 +200,7 @@ export default function MainPromptPage() {
             </Button>
             <Popconfirm
               title="确定恢复默认内容吗？"
-              description={document?.hasTemplate ? '这会使用内置模板覆盖当前文档。' : '这会把当前文档重置为空白状态。'}
+              description={document?.hasTemplate ? '将恢复为模板内容。' : '将清空当前文档。'}
               okText="重置"
               cancelText="取消"
               okButtonProps={{ danger: true }}
@@ -224,13 +223,6 @@ export default function MainPromptPage() {
 
       <div className="page-grid prompt-workspace-grid">
         <div className="page-stack prompt-nav-stack">
-          <Alert
-            showIcon
-            type="info"
-            message="这里管理的内容会直接影响所有 AI 员工的行为。"
-            description="这里只管工作区引导和长期记忆。"
-          />
-
           <Card className="config-panel-card prompt-nav-card">
             <div className="config-card-header">
               <div className="page-section-title">
@@ -282,15 +274,6 @@ export default function MainPromptPage() {
                 <strong>{saving ? '正在保存' : loadingDocument ? '正在加载' : '可继续编辑'}</strong>
               </div>
             </div>
-
-            {activeMeta ? (
-              <Alert
-                showIcon
-                type={activeMeta.group === 'memory' ? 'success' : 'info'}
-                message={activeMeta.title}
-                description={activeMeta.summary}
-              />
-            ) : null}
 
             {document?.sourcePath ? (
               <div className="prompt-source-strip">

@@ -190,11 +190,14 @@ export default function ProfilePage() {
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
+        className="page-hero-compact studio-hero"
         eyebrow="账户管理"
         title="账户信息与安全"
-        description="管理您的账户信息、头像和登录密码。"
-        badges={[<Tag key="username">@{profile.username}</Tag>]}
+        description="管理资料、头像和密码。"
+        badges={[
+          <Tag key="username">@{profile.username}</Tag>,
+          <Tag key="security">安全设置</Tag>,
+        ]}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} loading={loading}>
             刷新
@@ -212,8 +215,8 @@ export default function ProfilePage() {
         <Card className="config-panel-card">
           <div className="config-card-header">
             <div className="page-section-title">
-              <Typography.Title level={4}>管理员资料</Typography.Title>
-              <Text type="secondary">用户名用于登录，展示名称和邮箱用于展示与通知。</Text>
+              <Typography.Title level={4}>账户资料</Typography.Title>
+              <Text type="secondary">用于登录、展示和通知。</Text>
             </div>
           </div>
 
@@ -267,7 +270,7 @@ export default function ProfilePage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>头像</Typography.Title>
-              <Text type="secondary">头像单独存储，不直接写进会话状态。</Text>
+              <Text type="secondary">上传或移除头像。</Text>
             </div>
           </div>
 
@@ -298,7 +301,7 @@ export default function ProfilePage() {
                 选择图片
               </Button>
               <Text type="secondary">
-                {selectedFile ? `待上传: ${selectedFile.name}` : '支持 PNG、JPEG、WEBP、GIF，大小不超过 2 MB。'}
+                {selectedFile ? `待上传：${selectedFile.name}` : '支持 PNG、JPEG、WEBP、GIF，2 MB 内。'}
               </Text>
             </div>
 
@@ -319,7 +322,7 @@ export default function ProfilePage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>密码轮换</Typography.Title>
-              <Text type="secondary">更新后，旧密码和旧会话都会失效。</Text>
+              <Text type="secondary">更新后旧会话会失效。</Text>
             </div>
           </div>
 

@@ -18,6 +18,7 @@ const McpServerDetailPage = lazy(() => import('./pages/McpServerDetailPage'))
 const ModelsPage = lazy(() => import('./pages/ModelsPage'))
 const OperationsPage = lazy(() => import('./pages/OperationsPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const PreferencesPage = lazy(() => import('./pages/PreferencesPage'))
 const AutomationPage = lazy(() => import('./pages/AutomationPage'))
 const SetupPage = lazy(() => import('./pages/SetupPage'))
 const SkillsPage = lazy(() => import('./pages/SkillsPage'))
@@ -82,7 +83,7 @@ function AuthIndexRedirect() {
   const { loading, error, status } = useAuth()
   const setup = useSetup()
 
-  if (loading) {
+  if (loading || (!status && !error)) {
     return <RouteFallback />
   }
 
@@ -110,7 +111,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const { loading, error, status } = useAuth()
   const setup = useSetup()
 
-  if (loading) {
+  if (loading || (!status && !error)) {
     return <RouteFallback />
   }
 
@@ -141,7 +142,7 @@ function GuestOnly({ children }: { children: ReactNode }) {
   const { loading, error, status } = useAuth()
   const setup = useSetup()
 
-  if (loading) {
+  if (loading || (!status && !error)) {
     return <RouteFallback />
   }
 
@@ -166,7 +167,7 @@ function SetupOnly({ children }: { children: ReactNode }) {
   const { loading, error, status } = useAuth()
   const setup = useSetup()
 
-  if (loading) {
+  if (loading || (!status && !error)) {
     return <RouteFallback />
   }
 
@@ -260,9 +261,10 @@ export function AppRoutes() {
         <Route path="skills" element={withRouteSuspense(<SkillsPage />)} />
         <Route path="system" element={withRouteSuspense(<SystemLayoutPage />)}>
           <Route index element={withRouteSuspense(<SystemPage />)} />
+          <Route path="preferences" element={withRouteSuspense(<PreferencesPage />)} />
           <Route path="validation" element={withRouteSuspense(<ValidationPage />)} />
           <Route path="automation" element={withRouteSuspense(<AutomationPage />)} />
-          <Route path="templates" element={withRouteSuspense(<TemplatesPage />)} />
+          <Route path="templates" element={<Navigate to="/studio/templates" replace />} />
           <Route path="operations" element={withRouteSuspense(<OperationsPage />)} />
           <Route path="admin" element={withRouteSuspense(<ProfilePage />)} />
         </Route>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Alert, App, Button, Card, Empty, Input, InputNumber, List, Select, Space, Spin, Switch, Tag, Typography } from 'antd'
 import { CalendarOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { api, ApiError } from '../api'
+import { MotionGroup, MotionPanel } from '../components/MotionSurface'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type { CalendarEvent, CalendarEventInput, CalendarSettings, CronJob } from '../types'
@@ -285,9 +286,9 @@ export default function CalendarPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact"
-        eyebrow="Calendar"
+        eyebrow="日程"
         title="日程与提醒"
-        description="统一管理事件、提醒默认值和派生的 Cron 任务。"
+        description="管理事件、默认提醒和派生任务。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadCalendar()} loading={loading}>
@@ -307,11 +308,12 @@ export default function CalendarPage() {
       />
 
       <div className="page-grid calendar-page-grid">
-        <Card className="config-panel-card calendar-list-card">
+        <MotionPanel hover={false} standalone>
+          <Card className="config-panel-card calendar-list-card">
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>事件列表</Typography.Title>
-              <Text type="secondary">先选已有事件继续编辑，也可以直接新建。</Text>
+              <Text type="secondary">选择事件继续编辑，或直接新建。</Text>
             </div>
             <Tag>{events.length} 项</Tag>
           </div>
@@ -347,17 +349,19 @@ export default function CalendarPage() {
                 )}
               />
             ) : (
-              <Empty description="暂无日程事件" className="empty-block" />
+              <Empty description="暂无事件" className="empty-block" />
             )}
           </div>
-        </Card>
+          </Card>
+        </MotionPanel>
 
-        <div className="page-stack calendar-side-stack">
-          <Card className="config-panel-card calendar-jobs-card">
+        <MotionGroup className="page-stack calendar-side-stack">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card calendar-jobs-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>{selectedEvent ? `编辑 ${selectedEvent.title}` : '创建新事件'}</Typography.Title>
-                <Text type="secondary">优先填写标题、时间、优先级和提醒。</Text>
+                <Text type="secondary">填写标题、时间和提醒。</Text>
               </div>
               {selectedEvent ? <Tag>{formatDateTimeZh(selectedEvent.updatedAt)}</Tag> : <Tag>未保存</Tag>}
             </div>
@@ -429,13 +433,15 @@ export default function CalendarPage() {
                 </Button>
               </Space>
             </div>
-          </Card>
+            </Card>
+          </MotionPanel>
 
-          <Card className="config-panel-card">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>提醒默认设置</Typography.Title>
-                <Text type="secondary">影响新建事件的默认值，不覆盖已有事件。</Text>
+                <Text type="secondary">只影响新建事件。</Text>
               </div>
             </div>
 
@@ -478,15 +484,17 @@ export default function CalendarPage() {
                 </Button>
               </div>
             ) : (
-              <Empty description="暂无日程设置" className="empty-block" />
+              <Empty description="暂无默认设置" className="empty-block" />
             )}
-          </Card>
+            </Card>
+          </MotionPanel>
 
-          <Card className="config-panel-card">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>派生提醒任务</Typography.Title>
-                <Text type="secondary">这些任务负责把事件提醒投递到会话或频道。</Text>
+                <Text type="secondary">这些任务负责发送提醒。</Text>
               </div>
               <Tag>{derivedJobCount} 项</Tag>
             </div>
@@ -515,11 +523,12 @@ export default function CalendarPage() {
                   )}
                 />
               ) : (
-                <Empty description="暂无派生提醒任务" className="empty-block" />
+                <Empty description="暂无提醒任务" className="empty-block" />
               )}
             </div>
-          </Card>
-        </div>
+            </Card>
+          </MotionPanel>
+        </MotionGroup>
       </div>
     </div>
   )

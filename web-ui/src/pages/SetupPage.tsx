@@ -16,6 +16,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
+import { MotionGroup, MotionPanel } from '../components/MotionSurface'
 import PageHero from '../components/PageHero'
 import { providerDescriptions } from '../configMeta'
 import {
@@ -281,8 +282,8 @@ export default function SetupPage() {
       <div className="setup-shell">
         <PageHero
           eyebrow="FIRST-RUN SETUP"
-          title="欢迎使用群策"
-          description="只需三步完成初始化，即可开始使用 AI 协作能力。"
+          title="欢迎使用 FlexiTeam"
+          description="三步完成初始化。"
           className="page-hero-compact"
           badges={setupStatus.steps.map((step) => (
             <span className="hero-badge" key={step.key}>
@@ -299,7 +300,7 @@ export default function SetupPage() {
           ]}
         />
 
-        <div className="page-card setup-step-card">
+        <MotionGroup className="page-card setup-step-card">
           <div className="setup-step-row">
             {setupStatus.steps.map((step) => (
               <Button
@@ -330,7 +331,8 @@ export default function SetupPage() {
           ) : null}
 
           {activeStep === 'provider' ? (
-            <Card className="surface-card setup-panel-card">
+            <MotionPanel hover={false}>
+              <Card className="surface-card setup-panel-card">
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
                   <Typography.Title level={4}>1. 选择 AI 服务</Typography.Title>
@@ -404,11 +406,13 @@ export default function SetupPage() {
                   </Button>
                 </div>
               </Space>
-            </Card>
+              </Card>
+            </MotionPanel>
           ) : null}
 
           {activeStep === 'channel' ? (
-            <Card className="surface-card setup-panel-card">
+            <MotionPanel hover={false}>
+              <Card className="surface-card setup-panel-card">
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
                   <Typography.Title level={4}>2. 消息频道</Typography.Title>
@@ -497,11 +501,13 @@ export default function SetupPage() {
                   </Button>
                 </div>
               </Space>
-            </Card>
+              </Card>
+            </MotionPanel>
           ) : null}
 
           {activeStep === 'agent' ? (
-            <Card className="surface-card setup-panel-card">
+            <MotionPanel hover={false}>
+              <Card className="surface-card setup-panel-card">
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
                   <Typography.Title level={4}>3. 默认工作参数</Typography.Title>
@@ -590,9 +596,10 @@ export default function SetupPage() {
                   </Button>
                 </div>
               </Space>
-            </Card>
+              </Card>
+            </MotionPanel>
           ) : null}
-        </div>
+        </MotionGroup>
       </div>
     </div>
   )

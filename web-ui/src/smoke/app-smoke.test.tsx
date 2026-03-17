@@ -190,6 +190,7 @@ vi.mock('@ant-design/icons', async () => {
     ArrowLeftOutlined: makeIcon('arrow-left'),
     BookOutlined: makeIcon('book'),
     CalendarOutlined: makeIcon('calendar'),
+    CheckCircleOutlined: makeIcon('check-circle'),
     ClockCircleOutlined: makeIcon('clock'),
     ClusterOutlined: makeIcon('cluster'),
     CodeOutlined: makeIcon('code'),
@@ -221,6 +222,7 @@ vi.mock('@ant-design/icons', async () => {
     SearchOutlined: makeIcon('search'),
     SettingOutlined: makeIcon('setting'),
     SunOutlined: makeIcon('sun'),
+    TeamOutlined: makeIcon('team'),
     ToolOutlined: makeIcon('tool'),
     UploadOutlined: makeIcon('upload'),
     UserOutlined: makeIcon('user'),
@@ -749,7 +751,12 @@ vi.mock('antd', async () => {
 
   const Grid = {
     useBreakpoint: () => ({
+      xs: window.matchMedia('(min-width: 480px)').matches,
+      sm: window.matchMedia('(min-width: 576px)').matches,
+      md: window.matchMedia('(min-width: 768px)').matches,
       lg: window.matchMedia('(min-width: 992px)').matches,
+      xl: window.matchMedia('(min-width: 1200px)').matches,
+      xxl: window.matchMedia('(min-width: 1600px)').matches,
     }),
   }
 
@@ -2688,14 +2695,14 @@ describe('web app smoke pages', () => {
   it('renders the desktop app shell navigation', async () => {
     renderShell()
 
-    expect(await screen.findByText('主路径')).toBeInTheDocument()
+    expect((await screen.findAllByText('工作区')).length).toBeGreaterThan(0)
     expect(await screen.findByText('对话', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('协作', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('模型', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('渠道', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('技能', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('MCP', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('提示词与记忆', { selector: '.nav-item-title' })).toBeInTheDocument()
+    expect(screen.getByText('外部连接', { selector: '.nav-item-title' })).toBeInTheDocument()
+    expect(screen.getByText('行为引导', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('系统', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.queryByText('日程', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('定时任务', { selector: '.nav-item-title' })).not.toBeInTheDocument()
@@ -2707,7 +2714,7 @@ describe('web app smoke pages', () => {
   })
 
   it('renders collaboration tabs inside the studio domain', async () => {
-    installMatchMedia(false)
+    installMatchMedia(true)
 
     renderWithProviders(
       <MemoryRouter
@@ -2725,13 +2732,13 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('AI员工')).toBeInTheDocument()
+    expect(await screen.findByText('AI 员工')).toBeInTheDocument()
     expect(screen.getByText('团队')).toBeInTheDocument()
     expect(screen.queryByText('渠道绑定')).not.toBeInTheDocument()
     expect(screen.queryByText('记忆')).not.toBeInTheDocument()
     expect(screen.getByText('执行记录')).toBeInTheDocument()
     expect(screen.getByText('知识库')).toBeInTheDocument()
-    expect(screen.queryByText('模板')).not.toBeInTheDocument()
+    expect(screen.getByText('模板')).toBeInTheDocument()
   })
 
   it('renders memory audit page with candidate and search panels', async () => {
@@ -2752,9 +2759,14 @@ describe('web app smoke pages', () => {
     )
 
     expect(await screen.findByText('团队记忆审计')).toBeInTheDocument()
-    expect(screen.getByText('候选记录')).toBeInTheDocument()
-    expect(screen.getByText('记忆检索')).toBeInTheDocument()
-    expect(screen.getByText('对话回放')).toBeInTheDocument()
+    expect((await screen.findAllByText('Support Team')).length).toBeGreaterThan(0)
+    expect(screen.getByText('最近对话')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('候选审核'))
+    expect(await screen.findByText('候选记录')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('检索取证'))
+    expect(await screen.findByText('记忆检索')).toBeInTheDocument()
   })
 
   it('renders knowledge page with catalog and retrieval panels', async () => {
@@ -2777,13 +2789,13 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('知识库列表')).toBeInTheDocument()
     expect(screen.getByText('基础设置')).toBeInTheDocument()
     expect(screen.getByText('内容接入')).toBeInTheDocument()
-    expect(screen.getByText('来源与文档')).toBeInTheDocument()
-    expect(screen.getByText('检索测试')).toBeInTheDocument()
+    expect(screen.getAllByText('来源治理').length).toBeGreaterThan(0)
+    expect(screen.getByText('检索验证')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByText('来源与文档'))
+    fireEvent.click(screen.getAllByText('来源治理')[0])
     expect(await screen.findByText('Support Help Center')).toBeInTheDocument()
-    expect(await screen.findByText('来源治理')).toBeInTheDocument()
+    expect(screen.getAllByText('来源治理').length).toBeGreaterThan(0)
     expect(screen.getByText('来源详情')).toBeInTheDocument()
     expect(screen.getByText('选择当前筛选结果')).toBeInTheDocument()
   })
@@ -2805,7 +2817,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('团队列表')).toBeInTheDocument()
+    expect(await screen.findByText('所有协作团队')).toBeInTheDocument()
     expect(screen.getAllByText('团队配置').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Support Team').length).toBeGreaterThan(0)
 
@@ -2835,7 +2847,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('渠道绑定')).toBeInTheDocument()
+    expect(await screen.findByText('消息路由')).toBeInTheDocument()
     expect(screen.getByText('绑定列表')).toBeInTheDocument()
     expect(screen.getAllByText('telegram').length).toBeGreaterThan(0)
   })
@@ -2865,7 +2877,8 @@ describe('web app smoke pages', () => {
   })
 
   it('renders validation inside the system domain', async () => {
-    installMatchMedia(false)
+    installMatchMedia(true)
+    window.localStorage.setItem('nanobot-dev-mode', 'on')
 
     renderWithProviders(
       <MemoryRouter
@@ -2883,9 +2896,9 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('验证')).toBeInTheDocument()
-    expect(screen.getByText('自动化')).toBeInTheDocument()
-    expect(screen.getByText('日志与运维动作')).toBeInTheDocument()
+    expect(await screen.findByText('配置验证')).toBeInTheDocument()
+    expect(screen.getByText('自动化任务')).toBeInTheDocument()
+    expect(screen.getByText('运维中心')).toBeInTheDocument()
     expect(screen.getByText('配置修复中心')).toBeInTheDocument()
   })
 
@@ -2909,7 +2922,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('登录到工作台')).toBeInTheDocument()
+    expect(await screen.findByText('登录 FlexiTeam')).toBeInTheDocument()
   })
 
   it('sends first-time users to the bootstrap page', async () => {
@@ -2932,7 +2945,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('初始化工作台管理员')).toBeInTheDocument()
+    expect(await screen.findByText('创建 FlexiTeam 管理员')).toBeInTheDocument()
   })
 
   it('renders the setup wizard page', async () => {
@@ -2960,7 +2973,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('先把实例接通，再放行工作台', undefined, { timeout: 3000 })).toBeInTheDocument()
+    expect(await screen.findByText('欢迎使用 FlexiTeam', undefined, { timeout: 3000 })).toBeInTheDocument()
   })
 
   it('sends authenticated users to the chat landing page', async () => {
@@ -2979,6 +2992,45 @@ describe('web app smoke pages', () => {
     )
 
     expect(await screen.findByText('Smoke Session', { selector: '.conversation-title' })).toBeInTheDocument()
+  })
+
+  it('preserves deep links after auth status resolves', async () => {
+    installMatchMedia(false)
+
+    let resolveAuthStatus!: (value: {
+      initialized: boolean
+      authenticated: boolean
+      username: string | null
+    }) => void
+    mockApi.getAuthStatus.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAuthStatus = resolve as typeof resolveAuthStatus
+        }),
+    )
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/prompt']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <AppRoutes />
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryByText('登录到工作台')).not.toBeInTheDocument()
+
+    resolveAuthStatus({
+      initialized: true,
+      authenticated: true,
+      username: 'admin',
+    })
+
+    expect(await screen.findByText('工作区引导与记忆')).toBeInTheDocument()
+    expect(screen.queryByText('登录到工作台')).not.toBeInTheDocument()
   })
 
   it('renders the chat page', async () => {
@@ -3000,11 +3052,11 @@ describe('web app smoke pages', () => {
 
   it('renders the skills page', async () => {
     renderPage(<SkillsPage />)
-    expect(await screen.findByText('先从技能市场拿能力')).toBeInTheDocument()
-    expect(screen.getByText('推荐路径：SkillHub 远端市场')).toBeInTheDocument()
-    expect(screen.getByText('兜底路径：手动上传')).toBeInTheDocument()
+    expect((await screen.findAllByText('技能市场')).length).toBeGreaterThan(0)
+    expect(screen.getByText('自定义上传')).toBeInTheDocument()
+    expect(screen.getByText('已安装技能')).toBeInTheDocument()
     expect(screen.getByText('原生可用')).toBeInTheDocument()
-    expect(screen.getByText('包含标准 `SKILL.md`，可以被 群策技能加载器识别。')).toBeInTheDocument()
+    expect(screen.getByText('直接搜索官方市场并安装到当前工作区。')).toBeInTheDocument()
   })
 
   it('renders the main prompt page', async () => {
@@ -3022,8 +3074,7 @@ describe('web app smoke pages', () => {
 
   it('renders the mcp page', async () => {
     renderPage(<McpPage />)
-    expect(await screen.findByText('MCP 扩展目录')).toBeInTheDocument()
-    expect(screen.getByText('从仓库安装')).toBeInTheDocument()
+    expect(await screen.findByText('第三方服务连接')).toBeInTheDocument()
     expect(screen.getByText('MCP 目录')).toBeInTheDocument()
     expect(screen.getByText('Workspace Files')).toBeInTheDocument()
   })
@@ -3050,20 +3101,20 @@ describe('web app smoke pages', () => {
 
   it('renders the models page', async () => {
     renderPage(<ModelsPage />)
-    expect(await screen.findByText('先把默认模型接通')).toBeInTheDocument()
+    expect(await screen.findByText('AI 模型配置')).toBeInTheDocument()
     expect(screen.getByText('1. 选择供应商')).toBeInTheDocument()
     expect(screen.getByText('2. 模型')).toBeInTheDocument()
   })
 
   it('renders the channels page', async () => {
     renderPage(<ChannelsPage />)
-    expect(await screen.findByText('把聊天渠道接进实例')).toBeInTheDocument()
-    expect(screen.getByText('统一投递行为')).toBeInTheDocument()
+    expect(await screen.findByText('消息渠道')).toBeInTheDocument()
+    expect(screen.getByText('消息路由')).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
   })
 
   it('renders channels tabs inside the channels domain', async () => {
-    installMatchMedia(false)
+    installMatchMedia(true)
 
     renderWithProviders(
       <MemoryRouter
@@ -3081,8 +3132,8 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('渠道列表')).toBeInTheDocument()
-    expect(screen.getByText('渠道绑定')).toBeInTheDocument()
+    expect(await screen.findByText('渠道管理')).toBeInTheDocument()
+    expect(screen.getByText('消息路由')).toBeInTheDocument()
   })
 
   it('renders the channel detail page', async () => {
@@ -3100,7 +3151,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
     expect(await screen.findByText('配置 Telegram')).toBeInTheDocument()
-    expect(screen.getByText('启用状态')).toBeInTheDocument()
+    expect(screen.getAllByText('当前状态').length).toBeGreaterThan(0)
     expect(screen.getByText('测试')).toBeInTheDocument()
     expect(screen.getByText('接入字段')).toBeInTheDocument()
   })
@@ -3126,18 +3177,18 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('配置 WhatsApp')).toBeInTheDocument()
     expect(screen.getByText('绑定流程')).toBeInTheDocument()
     expect(screen.getByText('启动绑定')).toBeInTheDocument()
-    expect(screen.getByText('扫描二维码完成设备绑定')).toBeInTheDocument()
+    expect(screen.getByText('扫码完成绑定')).toBeInTheDocument()
   })
 
   it('renders the profile page', async () => {
     renderPage(<ProfilePage />)
-    expect(await screen.findByText('管理员资料与安全')).toBeInTheDocument()
+    expect(await screen.findByText('账户信息与安全')).toBeInTheDocument()
     expect(screen.getByText('密码轮换')).toBeInTheDocument()
   })
 
   it('renders the operations page', async () => {
     renderPage(<OperationsPage />)
-    expect(await screen.findByText('只保留日志与运维动作')).toBeInTheDocument()
+    expect(await screen.findByText('日志与运维')).toBeInTheDocument()
     expect(screen.getByText('运维动作')).toBeInTheDocument()
   })
 

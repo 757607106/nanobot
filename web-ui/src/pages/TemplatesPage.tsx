@@ -133,6 +133,10 @@ export default function TemplatesPage() {
     () => templates.filter((item) => item.is_builtin).length,
     [templates],
   )
+  const workspaceCount = useMemo(
+    () => templates.filter((item) => !item.is_builtin).length,
+    [templates],
+  )
 
   async function loadTemplateWorkspace() {
     try {
@@ -321,10 +325,14 @@ export default function TemplatesPage() {
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
+        className="page-hero-compact studio-hero"
         eyebrow="Templates"
         title="Agent 模板中心"
-        description="集中管理内置模板、工作区模板，以及导入导出和冲突策略。"
+        description="管理模板与导入导出。"
+        badges={[
+          <Tag key="single">模板入口</Tag>,
+          <Tag key="conflict">冲突策略：{conflictMode}</Tag>,
+        ]}
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadTemplateWorkspace()} loading={loading}>
@@ -351,7 +359,7 @@ export default function TemplatesPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>模板索引</Typography.Title>
-              <Text type="secondary">先区分内置模板和工作区模板，再决定后续操作。</Text>
+              <Text type="secondary">查看内置和工作区模板。</Text>
             </div>
             <Tag>{templates.length} 项</Tag>
           </div>
@@ -366,7 +374,7 @@ export default function TemplatesPage() {
                       <div className="config-card-header">
                         <div className="page-section-title">
                           <Typography.Title level={5}>{item.name}</Typography.Title>
-                          <Text type="secondary">{item.description || '当前没有描述'}</Text>
+                          <Text type="secondary">{item.description || '未填写描述'}</Text>
                         </div>
                         <Tag>{item.enabled ? '已启用' : '已停用'}</Tag>
                       </div>
@@ -395,7 +403,7 @@ export default function TemplatesPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>{template ? `维护 ${template.name}` : '创建工作区模板'}</Typography.Title>
-                <Text type="secondary">这里维护启用态、工具、规则和系统提示词。</Text>
+                <Text type="secondary">维护模板内容和启用态。</Text>
               </div>
               <Space wrap>
                 {template ? <Tag>{template.is_builtin ? '内置只读' : '工作区模板'}</Tag> : <Tag>新建中</Tag>}
@@ -404,15 +412,6 @@ export default function TemplatesPage() {
             </div>
 
             <div className="page-stack">
-              {template?.is_builtin ? (
-                <Alert
-                  type="info"
-                  showIcon
-                  message="当前模板来自内置模板库，只读。"
-                  description="如需继续改造，建议先另存为副本。"
-                />
-              ) : null}
-
               <div className="page-meta-grid prompt-info-grid">
                 <label className="auth-field">
                   <span>模板名称</span>
@@ -519,7 +518,7 @@ export default function TemplatesPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>导入 / 导出 / 冲突策略</Typography.Title>
-                <Text type="secondary">在这里处理导入、导出和冲突策略。</Text>
+                <Text type="secondary">处理导入、导出和冲突策略。</Text>
               </div>
             </div>
 
@@ -569,7 +568,7 @@ export default function TemplatesPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>可用工具与技能</Typography.Title>
-                <Text type="secondary">先确认可用工具，再决定模板里的组合。</Text>
+                <Text type="secondary">查看当前可用工具和技能。</Text>
               </div>
             </div>
 

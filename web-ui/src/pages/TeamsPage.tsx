@@ -30,11 +30,13 @@ import {
   ClockCircleOutlined,
   AppstoreOutlined,
 } from '@ant-design/icons'
+import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
 import { useDevMode } from '../devMode'
 import { formatDateTimeZh } from '../locale'
+import { interactiveLift, interactiveTap, shellSpring } from '../motionTokens'
 import type {
   AgentDefinition,
   AgentRunSummary,
@@ -614,41 +616,41 @@ export default function TeamsPage() {
           <div className="stat-card-icon" style={{ background: 'var(--ant-color-primary-bg)', color: 'var(--ant-color-primary)' }}>
             <TeamOutlined />
           </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{teams.length}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>已创建团队</div>
+          <div className="stat-card-copy">
+            <div className="stat-card-metric">{teams.length}</div>
+            <div className="stat-card-label">已创建团队</div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-icon" style={{ background: 'var(--ant-color-success-bg)', color: 'var(--ant-color-success)' }}>
             <CheckCircleOutlined />
           </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{enabledCount}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>启用中</div>
+          <div className="stat-card-copy">
+            <div className="stat-card-metric">{enabledCount}</div>
+            <div className="stat-card-label">启用中</div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-icon" style={{ background: 'var(--ant-color-warning-bg)', color: 'var(--ant-color-warning)' }}>
             <ClockCircleOutlined />
           </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{agents.length}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>可选员工</div>
+          <div className="stat-card-copy">
+            <div className="stat-card-metric">{agents.length}</div>
+            <div className="stat-card-label">可选员工</div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-icon" style={{ background: 'var(--ant-color-info-bg)', color: 'var(--ant-color-info)' }}>
             <AppstoreOutlined />
           </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{sharedKbCount}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>共享知识库</div>
+          <div className="stat-card-copy">
+            <div className="stat-card-metric">{sharedKbCount}</div>
+            <div className="stat-card-label">共享知识库</div>
           </div>
         </div>
       </div>
 
-      <div className="page-header-block" style={{ marginBottom: '16px' }}>
+      <div className="page-header-block">
         <div className="page-section-title">
           <Typography.Title level={4}>所有协作团队</Typography.Title>
           <Text type="secondary">将 AI 员工组建成团队，实现多角色协作完成复杂任务。</Text>
@@ -679,11 +681,16 @@ export default function TeamsPage() {
       ) : (
         <div className="studio-grid-layout">
           {teams.map((item) => (
-            <div
+            <motion.div
               key={item.teamId}
               className="id-badge-card"
               onClick={() => navigate(`/studio/teams/${item.teamId}`)}
               style={{ cursor: 'pointer' }}
+              whileHover={interactiveLift}
+              whileTap={interactiveTap}
+              transition={shellSpring}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
             >
               <div className="id-badge-body">
                 <div 
@@ -697,23 +704,23 @@ export default function TeamsPage() {
                 </div>
                 <div className="id-badge-info">
                   <h4>{item.name}</h4>
-                  <p className="ant-typography-ellipsis ant-typography-ellipsis-single-line" style={{ maxWidth: '180px' }}>
+                  <p className="ant-typography-ellipsis ant-typography-ellipsis-single-line">
                     {item.description || '暂未补充团队说明。'}
                   </p>
                   <div className="id-badge-id">{item.teamId.split('-')[0].toUpperCase()}</div>
                 </div>
               </div>
-              <div className="id-badge-stats">
+              <div className="id-badge-stats is-two-up">
                 <div className="id-badge-stat-item">
                   <span className="id-badge-stat-label">成员</span>
                   <span className="id-badge-stat-value">{item.memberCount}</span>
                 </div>
-                <div className="id-badge-stat-item" style={{ borderLeft: '1px solid var(--ant-color-border-secondary)' }}>
+                <div className="id-badge-stat-item">
                   <span className="id-badge-stat-label">知识库</span>
                   <span className="id-badge-stat-value">{item.sharedKnowledgeBindingIds.length}</span>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
@@ -737,7 +744,7 @@ export default function TeamsPage() {
           </Space>
         }
       >
-        <div className="page-stack" style={{ padding: '24px' }}>
+        <div className="page-stack studio-drawer-stack">
           <Tabs
             activeKey={activePanel}
             onChange={(value) => setActivePanel(value as 'config' | 'runs' | 'memory')}

@@ -373,15 +373,15 @@ export default function RunsPage() {
         className="page-hero-compact studio-hero"
         eyebrow="执行记录"
         title="执行记录"
-        description="查看所有 AI 任务的执行状态、过程与结果。运行中的任务会自动刷新。"
+        description="查看状态、过程和结果。"
         stats={[
           { label: '当前列表', value: runs.length },
           { label: '运行中', value: activeCount },
           { label: '失败', value: failedCount },
         ]}
         badges={[
-          <Tag key="registry" color="processing">支持任务追踪</Tag>,
-          <Tag key="runtime" color="geekblue">支持团队执行树</Tag>,
+          <Tag key="registry" color="processing">任务追踪</Tag>,
+          <Tag key="runtime" color="geekblue">执行树</Tag>,
         ]}
         actions={(
           <Space wrap>
@@ -397,7 +397,7 @@ export default function RunsPage() {
         <Alert
           type="info"
           showIcon
-          message={`当前按 threadId 过滤：${threadFilter}`}
+          message={`按 threadId 过滤：${threadFilter}`}
           action={(
             <Button
               size="small"
@@ -418,7 +418,7 @@ export default function RunsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>执行列表</Typography.Title>
-              <Text type="secondary">按状态和类型筛选，优先查看最近的执行记录。</Text>
+              <Text type="secondary">按状态和类型筛选。</Text>
             </div>
             <Tag color="blue">{runs.length}</Tag>
           </div>
@@ -461,7 +461,7 @@ export default function RunsPage() {
               <Spin />
             </div>
           ) : runs.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有符合条件的运行记录。" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配记录" />
           ) : (
             <List
               className="studio-run-list studio-runs-master-list"
@@ -502,13 +502,13 @@ export default function RunsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>{selectedRun ? selectedRun.label : '执行详情'}</Typography.Title>
-                <Text type="secondary">查看当前执行的状态、任务摘要、结果摘要和失败原因。</Text>
+                <Text type="secondary">查看状态、任务和结果。</Text>
               </div>
               {selectedRun ? <Tag color="purple">{selectedRun.runId}</Tag> : <Tag>未选择</Tag>}
             </div>
 
             {!selectedRun ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧选择一个运行记录查看详情。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧选择一条记录。" />
             ) : (
               <div className="page-stack">
                 <div className="studio-run-detail-grid">
@@ -635,13 +635,13 @@ export default function RunsPage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>子任务</Typography.Title>
-                  <Text type="secondary">查看当前执行直接派生出来的子任务。</Text>
+                  <Text type="secondary">查看直接派生的子任务。</Text>
                 </div>
                 <Tag>{children.length}</Tag>
               </div>
 
               {children.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行没有直接子任务。" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有子任务" />
               ) : (
                 <List
                   className="studio-run-list"
@@ -671,13 +671,13 @@ export default function RunsPage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>任务树</Typography.Title>
-                  <Text type="secondary">从整棵任务树回看负责人和成员是如何协作完成的。</Text>
+                  <Text type="secondary">回看任务拆分与协作。</Text>
                 </div>
                 {runTree ? <Tag>{runTree.runId}</Tag> : null}
               </div>
 
               {!runTree ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有可展示的运行树。" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务树" />
               ) : (
                 <div className="studio-run-tree">
                   {renderTreeNode(runTree, selectedRunId, navigate)}
@@ -690,19 +690,19 @@ export default function RunsPage() {
             <div className="config-card-header">
                 <div className="page-section-title">
                 <Typography.Title level={4}>对话记录</Typography.Title>
-                <Text type="secondary">把当前团队任务所属的最近对话拉到这里，方便直接核对上下文。</Text>
+                <Text type="secondary">查看关联对话。</Text>
               </div>
               {threadSummary?.threadId ? <Tag color="cyan">{threadSummary.threadId}</Tag> : null}
             </div>
 
             {!selectedRun?.teamId || !selectedRun.threadId ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行没有可查看的团队对话。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行没有团队对话" />
             ) : loadingThreadAudit ? (
               <div className="center-box">
                 <Spin />
               </div>
             ) : threadMessages.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前对话还没有可回看的消息。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前对话暂无消息" />
             ) : (
               <div className="page-stack">
                 <div className="studio-form-actions">
@@ -743,13 +743,13 @@ export default function RunsPage() {
             <div className="config-card-header">
                 <div className="page-section-title">
                 <Typography.Title level={4}>过程记录</Typography.Title>
-                <Text type="secondary">这里按时间记录执行过程中发生了什么，适合排查失败和回看协作过程。</Text>
+                <Text type="secondary">按时间查看执行过程。</Text>
               </div>
               {selectedRun ? <Tag>{selectedRun.events?.length || 0}</Tag> : null}
             </div>
 
             {!selectedRun?.events?.length ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行还没有过程记录。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无过程记录" />
             ) : (
               <List
                 className="studio-event-list"
@@ -780,19 +780,19 @@ export default function RunsPage() {
             <div className="config-card-header">
                 <div className="page-section-title">
                 <Typography.Title level={4}>结果文档</Typography.Title>
-                <Text type="secondary">把这次执行的关键结果归档成 Markdown，方便回看和导出。</Text>
+                <Text type="secondary">查看本次执行的归档结果。</Text>
               </div>
               {selectedRun?.artifactPath ? <Tag>{selectedRun.artifactPath}</Tag> : null}
             </div>
 
             {!selectedRun ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先选择一个运行记录。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先选择一条记录" />
             ) : loadingArtifact ? (
               <div className="center-box">
                 <Spin />
               </div>
             ) : !artifact ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前执行还没有可读取的结果文档。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无结果文档" />
             ) : (
               <div className="page-stack">
                 <div className="studio-form-actions">

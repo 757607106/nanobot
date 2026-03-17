@@ -22,6 +22,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
+  SearchOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
@@ -109,6 +110,8 @@ export default function ChannelBindingsPage() {
 
   // Form
   const [form, setForm] = useState<BindingFormState>(createEmptyForm())
+  const [searchQuery, setSearchQuery] = useState('')
+  const [listFilter, setListFilter] = useState<'all' | 'enabled' | 'agent' | 'team'>('all')
 
   // Loading
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
@@ -133,6 +136,31 @@ export default function ChannelBindingsPage() {
       { label: '团队绑定', value: teamCount },
     ]
   }, [bindings])
+
+  const filteredBindings = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    return bindings.filter((binding) => {
+      if (listFilter === 'enabled' && !binding.enabled) {
+        return false
+      }
+      if (listFilter === 'agent' && binding.targetType !== 'agent') {
+        return false
+      }
+      if (listFilter === 'team' && binding.targetType !== 'team') {
+        return false
+      }
+      if (!query) {
+        return true
+      }
+      return [
+        binding.channelName,
+        binding.channelChatId,
+        binding.targetType,
+        binding.targetId,
+        resolveTargetName(binding),
+      ].some((value) => String(value || '').toLowerCase().includes(query))
+    })
+  }, [bindings, listFilter, searchQuery, agents, teams])
 
   // Target options (dynamic based on targetType)
   const targetOptions = useMemo(() => {
@@ -291,10 +319,15 @@ export default function ChannelBindingsPage() {
   return (
     <div className="page-stack">
       <PageHero
+        className="page-hero-compact studio-hero"
         eyebrow="渠道"
         title="消息路由"
-        description="设置消息渠道与 AI 员工或团队的对应关系。"
+        description="管理渠道分发规则。"
         stats={stats}
+        badges={[
+          <Tag key="route" color="processing">聊天 ID 匹配</Tag>,
+          <Tag key="scope">{filteredBindings.length} 条规则可见</Tag>,
+        ]}
         actions={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={loadWorkspace}>
@@ -314,19 +347,42 @@ export default function ChannelBindingsPage() {
       <div className="page-grid studio-agents-grid">
         {/* Left: Binding list */}
         <Card
-          className="studio-agent-list-card"
-          title={
-            <Space>
-              <span>绑定列表</span>
-              <Tag>{bindings.length}</Tag>
-            </Space>
-          }
+          className="studio-agent-list-card config-panel-card"
         >
+          <div className="config-card-header">
+            <div className="page-section-title">
+              <Typography.Title level={4}>绑定列表</Typography.Title>
+              <Text type="secondary">筛选后进入编辑。</Text>
+            </div>
+            <Tag>{filteredBindings.length}/{bindings.length}</Tag>
+          </div>
+
+          <div className="channel-binding-toolbar">
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              prefix={<SearchOutlined />}
+              placeholder="按渠道、聊天 ID 或目标搜索"
+            />
+            <Segmented
+              value={listFilter}
+              onChange={(value) => setListFilter(value as 'all' | 'enabled' | 'agent' | 'team')}
+              options={[
+                { label: '全部', value: 'all' },
+                { label: '启用', value: 'enabled' },
+                { label: '员工', value: 'agent' },
+                { label: '团队', value: 'team' },
+              ]}
+            />
+          </div>
+
           {bindings.length === 0 ? (
-            <Empty description="暂无渠道绑定" />
+            <Empty description="暂无绑定" />
+          ) : filteredBindings.length === 0 ? (
+            <Empty description="没有匹配结果" />
           ) : (
             <List
-              dataSource={bindings}
+              dataSource={filteredBindings}
               renderItem={(item) => {
                 const isActive = item.bindingId === bindingId
                 return (
@@ -354,11 +410,11 @@ export default function ChannelBindingsPage() {
                         → {item.targetType === 'agent' ? 'AI员工' : '团队'}:{' '}
                         {resolveTargetName(item)}
                       </Text>
-                      {item.priority > 0 && (
-                        <Tag style={{ marginTop: 4 }} color="blue">
-                          优先级: {item.priority}
-                        </Tag>
-                      )}
+                      <div className="channel-card-meta">
+                        <Tag>{item.channelChatId || '*'}</Tag>
+                        <Tag>{item.targetType === 'agent' ? 'AI 员工' : '团队'}</Tag>
+                        {item.priority > 0 ? <Tag color="blue">优先级: {item.priority}</Tag> : null}
+                      </div>
                     </div>
                   </List.Item>
                 )
@@ -368,10 +424,22 @@ export default function ChannelBindingsPage() {
         </Card>
 
         {/* Right: Edit form */}
-        <Card
-          title={currentBinding ? `编辑绑定` : '新建绑定'}
-          className="studio-agent-detail-card"
-        >
+        <Card className="studio-agent-detail-card config-panel-card">
+          <div className="config-card-header">
+            <div className="page-section-title">
+              <Typography.Title level={4}>{currentBinding ? '编辑绑定' : '新建绑定'}</Typography.Title>
+              <Text type="secondary">设置渠道、目标和启用状态。</Text>
+            </div>
+            {currentBinding ? <Tag color="purple">{currentBinding.bindingId}</Tag> : <Tag>草稿</Tag>}
+          </div>
+
+          <div className="channel-card-meta">
+            <Tag>{form.channelName || '未选渠道'}</Tag>
+            <Tag>{form.channelChatId || '*'}</Tag>
+            <Tag color={form.enabled ? 'success' : 'default'}>{form.enabled ? '启用' : '禁用'}</Tag>
+            {form.targetId ? <Tag color="blue">{targetOptions.find((item) => item.value === form.targetId)?.label || form.targetId}</Tag> : null}
+          </div>
+
           <div className="studio-form-grid">
             {/* Channel Name */}
             <div className="studio-form-field">
@@ -392,7 +460,7 @@ export default function ChannelBindingsPage() {
               <Text type="secondary">聊天 ID</Text>
               <Input
                 value={form.channelChatId}
-                placeholder="默认匹配该渠道所有对话"
+                placeholder="默认匹配该渠道全部对话"
                 onChange={(e) => updateForm('channelChatId', e.target.value)}
               />
             </div>
@@ -441,7 +509,7 @@ export default function ChannelBindingsPage() {
                   style={{ width: '100%' }}
                 />
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  数值越大优先级越高，相同渠道和聊天 ID 时优先匹配高优先级绑定。
+                  数值越大优先级越高。
                 </Text>
               </div>
             </DevOnly>
@@ -459,27 +527,29 @@ export default function ChannelBindingsPage() {
           </div>
 
           {/* Actions */}
-          <div style={{ marginTop: 24, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            {currentBinding && (
+          <div className="studio-form-actions">
+            <Space wrap>
+              {currentBinding && (
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={deleting}
+                  onClick={handleDelete}
+                  data-testid={testIds.channelBindings.delete}
+                >
+                  删除
+                </Button>
+              )}
               <Button
-                danger
-                icon={<DeleteOutlined />}
-                loading={deleting}
-                onClick={handleDelete}
-                data-testid={testIds.channelBindings.delete}
+                type="primary"
+                icon={<SaveOutlined />}
+                loading={saving}
+                onClick={handleSave}
+                data-testid={testIds.channelBindings.save}
               >
-                删除
+                {isNewMode ? '创建' : '保存'}
               </Button>
-            )}
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={saving}
-              onClick={handleSave}
-              data-testid={testIds.channelBindings.save}
-            >
-              {isNewMode ? '创建' : '保存'}
-            </Button>
+            </Space>
           </div>
         </Card>
       </div>

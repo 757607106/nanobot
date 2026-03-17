@@ -1,15 +1,15 @@
 export const readinessSummaryMeta = {
   ready: {
     label: '已就绪',
-    description: '当前关键配置已经就绪，可以把注意力放回实际工作流。',
+    description: '关键配置已就绪。',
   },
   attention: {
     label: '需关注',
-    description: '当前仍有警告项，建议在扩大使用范围前先完成修复。',
+    description: '仍有提醒项，建议继续处理。',
   },
   blocked: {
     label: '存在阻塞',
-    description: '当前至少有一项关键配置未通过，先处理阻塞项再继续使用更稳妥。',
+    description: '存在阻塞项，先处理后再继续。',
   },
 } as const
 

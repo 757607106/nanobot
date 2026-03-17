@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { createContext, startTransition, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { ApiError, api } from './api'
 import { useAuth } from './auth'
 import type { SetupStatus } from './types'
@@ -44,10 +44,8 @@ export function SetupProvider({ children }: { children: ReactNode }) {
 
   async function refresh() {
     if (!authStatus?.authenticated) {
-      startTransition(() => {
-        setStatus(null)
-        setError(null)
-      })
+      setStatus(null)
+      setError(null)
       setLoading(false)
       return null
     }
@@ -55,17 +53,13 @@ export function SetupProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     try {
       const next = await fetchSetupStatusWithRetry()
-      startTransition(() => {
-        setStatus(next)
-        setError(null)
-      })
+      setStatus(next)
+      setError(null)
       return next
     } catch (error) {
       const nextError = getErrorMessage(error, '无法检查初始化向导状态')
-      startTransition(() => {
-        setStatus(null)
-        setError(nextError)
-      })
+      setStatus(null)
+      setError(nextError)
       throw error
     } finally {
       setLoading(false)
@@ -73,10 +67,8 @@ export function SetupProvider({ children }: { children: ReactNode }) {
   }
 
   function applyStatus(next: SetupStatus) {
-    startTransition(() => {
-      setStatus(next)
-      setError(null)
-    })
+    setStatus(next)
+    setError(null)
   }
 
   useEffect(() => {
@@ -84,10 +76,8 @@ export function SetupProvider({ children }: { children: ReactNode }) {
       void refresh()
       return
     }
-    startTransition(() => {
-      setStatus(null)
-      setError(null)
-    })
+    setStatus(null)
+    setError(null)
     setLoading(false)
   }, [authStatus?.authenticated])
 

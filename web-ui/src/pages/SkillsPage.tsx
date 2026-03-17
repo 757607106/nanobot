@@ -26,6 +26,7 @@ import {
 import { api } from '../api'
 import { PLATFORM_BRAND_NAME, replaceBrandText } from '../branding'
 import DevOnly from '../components/DevOnly'
+import { MotionGroup, MotionPanel } from '../components/MotionSurface'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type { InstalledSkill, MarketplaceSkill } from '../types'
@@ -65,6 +66,14 @@ export default function SkillsPage() {
   }, [])
 
   const installedSkillIds = useMemo(() => new Set(skills.map((skill) => skill.id)), [skills])
+  const workspaceSkillCount = useMemo(
+    () => skills.filter((item) => item.source === 'workspace').length,
+    [skills],
+  )
+  const builtInSkillCount = useMemo(
+    () => skills.filter((item) => item.source !== 'workspace').length,
+    [skills],
+  )
 
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
@@ -184,10 +193,14 @@ export default function SkillsPage() {
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
+        className="page-hero-compact studio-hero"
         eyebrow="技能管理"
         title="技能市场"
-        description="从技能市场为 AI 员工安装能力扩展，也支持手动上传自定义技能。"
+        description="管理技能安装与工作区扩展。"
+        badges={[
+          <Tag key="preferred" color="processing">优先工作区安装</Tag>,
+          <Tag key="market">SkillHub</Tag>,
+        ]}
         actions={(
           <Space wrap>
             <Button
@@ -208,8 +221,9 @@ export default function SkillsPage() {
         )}
         stats={[
           { label: '技能总数', value: skills.length },
-          { label: '工作区技能', value: skills.filter((item) => item.source === 'workspace').length },
-          { label: '内置技能', value: skills.filter((item) => item.source !== 'workspace').length },
+          { label: '工作区技能', value: workspaceSkillCount },
+          { label: '内置技能', value: builtInSkillCount },
+          { label: '市场结果', value: marketplaceSkills.length },
         ]}
       />
 
@@ -230,8 +244,9 @@ export default function SkillsPage() {
       />
 
       <div className="page-grid skills-page-grid">
-        <div className="page-stack skills-market-stack">
-          <Card className="config-panel-card">
+        <MotionGroup className="page-stack skills-market-stack">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>技能市场</Typography.Title>
@@ -275,77 +290,79 @@ export default function SkillsPage() {
                       const alreadyInstalled = installedSkillIds.has(skill.slug)
                       return (
                         <Col xs={24} md={12} key={skill.slug}>
-                          <Card
-                            title={
-                              <Space wrap>
-                                <span>{skill.name}</span>
-                                {skill.version ? <Tag>{skill.version}</Tag> : null}
-                              </Space>
-                            }
-                            extra={
-                              <Space>
-                                <Tag color="blue">{skill.source}</Tag>
-                                {alreadyInstalled ? <Tag color="success">已安装</Tag> : null}
-                              </Space>
-                            }
-                            actions={
-                              alreadyInstalled
-                                ? [
-                                    <Button
-                                      key="reinstall"
-                                      type="text"
-                                      icon={<ReloadOutlined />}
-                                      loading={installingId === skill.slug}
-                                      onClick={() => void handleInstallMarketplaceSkill(skill, true)}
-                                    >
-                                      覆盖安装
-                                    </Button>,
-                                  ]
-                                : [
-                                    <Button
-                                      key="install"
-                                      type="text"
-                                      icon={<DownloadOutlined />}
-                                      loading={installingId === skill.slug}
-                                      onClick={() => void handleInstallMarketplaceSkill(skill)}
-                                    >
-                                      安装到工作区
-                                    </Button>,
-                                  ]
-                            }
-                          >
-                            <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                              <Text type="secondary">{skill.description || '暂无描述。'}</Text>
-                              <Space wrap size={8}>
-                                <Tag color={MARKET_COMPATIBILITY_META[skill.compatibility]?.color || 'default'}>
-                                  {skill.compatibilityLabel}
-                                </Tag>
-                                {typeof skill.downloads === 'number' ? <Tag>下载 {skill.downloads}</Tag> : null}
-                                {skill.updatedAt ? <Tag>更新于 {formatDateTimeZh(skill.updatedAt)}</Tag> : null}
-                              </Space>
-                              {skill.compatibilityReasons && skill.compatibilityReasons.length > 0 ? (
-                                <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                                  {skill.compatibilityReasons.map((reason) => (
-                                    <Text key={reason} type={skill.compatibility === 'unsupported' ? undefined : 'secondary'}>
-                                      {replaceBrandText(reason)}
-                                    </Text>
-                                  ))}
+                          <MotionPanel className="skill-card-shell" standalone>
+                            <Card
+                              title={
+                                <Space wrap>
+                                  <span>{skill.name}</span>
+                                  {skill.version ? <Tag>{skill.version}</Tag> : null}
                                 </Space>
-                              ) : null}
-                              {skill.tags && skill.tags.length > 0 ? (
-                                <Space wrap size={4}>
-                                  {skill.tags.map((tag) => (
-                                    <Tag key={tag}>{tag}</Tag>
-                                  ))}
+                              }
+                              extra={
+                                <Space>
+                                  <Tag color="blue">{skill.source}</Tag>
+                                  {alreadyInstalled ? <Tag color="success">已安装</Tag> : null}
                                 </Space>
-                              ) : null}
-                              {skill.homepage ? (
-                                <Button type="link" href={skill.homepage} target="_blank" rel="noreferrer" style={{ paddingInline: 0 }}>
-                                  查看市场详情
-                                </Button>
-                              ) : null}
-                            </Space>
-                          </Card>
+                              }
+                              actions={
+                                alreadyInstalled
+                                  ? [
+                                      <Button
+                                        key="reinstall"
+                                        type="text"
+                                        icon={<ReloadOutlined />}
+                                        loading={installingId === skill.slug}
+                                        onClick={() => void handleInstallMarketplaceSkill(skill, true)}
+                                      >
+                                        覆盖安装
+                                      </Button>,
+                                    ]
+                                  : [
+                                      <Button
+                                        key="install"
+                                        type="text"
+                                        icon={<DownloadOutlined />}
+                                        loading={installingId === skill.slug}
+                                        onClick={() => void handleInstallMarketplaceSkill(skill)}
+                                      >
+                                        安装到工作区
+                                      </Button>,
+                                    ]
+                              }
+                            >
+                              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                                <Text type="secondary">{skill.description || '暂无描述。'}</Text>
+                                <Space wrap size={8}>
+                                  <Tag color={MARKET_COMPATIBILITY_META[skill.compatibility]?.color || 'default'}>
+                                    {skill.compatibilityLabel}
+                                  </Tag>
+                                  {typeof skill.downloads === 'number' ? <Tag>下载 {skill.downloads}</Tag> : null}
+                                  {skill.updatedAt ? <Tag>更新于 {formatDateTimeZh(skill.updatedAt)}</Tag> : null}
+                                </Space>
+                                {skill.compatibilityReasons && skill.compatibilityReasons.length > 0 ? (
+                                  <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                                    {skill.compatibilityReasons.map((reason) => (
+                                      <Text key={reason} type={skill.compatibility === 'unsupported' ? undefined : 'secondary'}>
+                                        {replaceBrandText(reason)}
+                                      </Text>
+                                    ))}
+                                  </Space>
+                                ) : null}
+                                {skill.tags && skill.tags.length > 0 ? (
+                                  <Space wrap size={4}>
+                                    {skill.tags.map((tag) => (
+                                      <Tag key={tag}>{tag}</Tag>
+                                    ))}
+                                  </Space>
+                                ) : null}
+                                {skill.homepage ? (
+                                  <Button type="link" href={skill.homepage} target="_blank" rel="noreferrer" style={{ paddingInline: 0 }}>
+                                    查看市场详情
+                                  </Button>
+                                ) : null}
+                              </Space>
+                            </Card>
+                          </MotionPanel>
                         </Col>
                       )
                     })}
@@ -353,9 +370,11 @@ export default function SkillsPage() {
                 )}
               </div>
             </Space>
-          </Card>
+            </Card>
+          </MotionPanel>
 
-          <Card className="config-panel-card">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>自定义上传</Typography.Title>
@@ -376,16 +395,12 @@ export default function SkillsPage() {
               </Space>
             </div>
 
-            <Alert
-              showIcon
-              type="info"
-              message="上传前请确认目录或 ZIP 里包含 SKILL.md。"
-              description="上传后会写入当前工作区的 `skills/` 目录；ZIP 仅支持单个技能包。"
-            />
-          </Card>
-        </div>
+            </Card>
+          </MotionPanel>
+        </MotionGroup>
 
-        <Card className="config-panel-card skills-library-card">
+        <MotionPanel className="skills-library-shell" hover={false} standalone>
+          <Card className="config-panel-card skills-library-card">
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>已安装技能</Typography.Title>
@@ -418,69 +433,72 @@ export default function SkillsPage() {
               <Row gutter={[16, 16]} className="skills-grid">
                 {filteredSkills.map((skill) => (
                   <Col xs={24} md={12} xl={8} key={skill.id}>
-                    <Card
-                      title={
-                        <Space wrap>
-                          <span>{skill.name}</span>
-                          <Tag>{skill.version || '1.0.0'}</Tag>
-                        </Space>
-                      }
-                      extra={
-                        <Space>
-                          <Tag color={skill.source === 'workspace' ? 'green' : 'blue'}>
-                            {skill.source === 'workspace' ? '工作区' : '内置'}
-                          </Tag>
-                          {skill.enabled === false ? <Tag>已禁用</Tag> : <Tag color="success">已启用</Tag>}
-                        </Space>
-                      }
-                      actions={
-                        skill.isDeletable
-                          ? [
-                              <Popconfirm
-                                key="delete"
-                                title="确定删除这个技能吗？"
-                                okText="删除"
-                                cancelText="取消"
-                                okButtonProps={{ danger: true }}
-                                onConfirm={() => void handleDelete(skill.id)}
-                              >
-                                <Button
-                                  type="text"
-                                  danger
-                                  icon={<DeleteOutlined />}
-                                  loading={deletingId === skill.id}
-                                >
-                                  删除
-                                </Button>
-                              </Popconfirm>,
-                            ]
-                          : undefined
-                      }
-                    >
-                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                        <Text type="secondary">{skill.description || '暂无描述。'}</Text>
-                        {skill.author ? <Text type="secondary">作者：{getSkillAuthorLabel(skill.author)}</Text> : null}
-                        <DevOnly>
-                          <div>
-                            <Text type="secondary">路径</Text>
-                            <div className="mono-block">{skill.path}</div>
-                          </div>
-                        </DevOnly>
-                        {skill.tags && skill.tags.length > 0 ? (
-                          <Space wrap size={4}>
-                            {skill.tags.map((tag) => (
-                              <Tag key={tag}>{tag}</Tag>
-                            ))}
+                    <MotionPanel className="skill-card-shell" standalone>
+                      <Card
+                        title={
+                          <Space wrap>
+                            <span>{skill.name}</span>
+                            <Tag>{skill.version || '1.0.0'}</Tag>
                           </Space>
-                        ) : null}
-                      </Space>
-                    </Card>
+                        }
+                        extra={
+                          <Space>
+                            <Tag color={skill.source === 'workspace' ? 'green' : 'blue'}>
+                              {skill.source === 'workspace' ? '工作区' : '内置'}
+                            </Tag>
+                            {skill.enabled === false ? <Tag>已禁用</Tag> : <Tag color="success">已启用</Tag>}
+                          </Space>
+                        }
+                        actions={
+                          skill.isDeletable
+                            ? [
+                                <Popconfirm
+                                  key="delete"
+                                  title="确定删除这个技能吗？"
+                                  okText="删除"
+                                  cancelText="取消"
+                                  okButtonProps={{ danger: true }}
+                                  onConfirm={() => void handleDelete(skill.id)}
+                                >
+                                  <Button
+                                    type="text"
+                                    danger
+                                    icon={<DeleteOutlined />}
+                                    loading={deletingId === skill.id}
+                                  >
+                                    删除
+                                  </Button>
+                                </Popconfirm>,
+                              ]
+                            : undefined
+                        }
+                      >
+                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                          <Text type="secondary">{skill.description || '暂无描述。'}</Text>
+                          {skill.author ? <Text type="secondary">作者：{getSkillAuthorLabel(skill.author)}</Text> : null}
+                          <DevOnly>
+                            <div>
+                              <Text type="secondary">路径</Text>
+                              <div className="mono-block">{skill.path}</div>
+                            </div>
+                          </DevOnly>
+                          {skill.tags && skill.tags.length > 0 ? (
+                            <Space wrap size={4}>
+                              {skill.tags.map((tag) => (
+                                <Tag key={tag}>{tag}</Tag>
+                              ))}
+                            </Space>
+                          ) : null}
+                        </Space>
+                      </Card>
+                    </MotionPanel>
                   </Col>
                 ))}
               </Row>
             )}
           </div>
-        </Card>
+          </Card>
+        </MotionPanel>
       </div>
     </div>
   )

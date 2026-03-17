@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Empty, List, Spin, Tag, Typography } from 'antd'
+import { App, Button, Card, Empty, List, Spin, Tag, Typography } from 'antd'
 import { CodeOutlined, ReloadOutlined } from '@ant-design/icons'
 import { api } from '../api'
 import PageHero from '../components/PageHero'
@@ -59,6 +59,10 @@ export default function OperationsPage() {
     () => actions.filter((item) => item.configured).length,
     [actions],
   )
+  const runningActions = useMemo(
+    () => actions.filter((item) => item.running).length,
+    [actions],
+  )
 
   if (loading && !logs && actions.length === 0) {
     return (
@@ -71,10 +75,14 @@ export default function OperationsPage() {
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
+        className="page-hero-compact studio-hero"
         eyebrow="Operations Center"
         title="日志与运维"
         description="查看日志尾部和可用运维动作。"
+        badges={[
+          <Tag key="scope">实例日志 + Hook 动作</Tag>,
+          runningActions > 0 ? <Tag key="running" color="processing">执行中 {runningActions}</Tag> : null,
+        ].filter(Boolean)}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadOps()} loading={loading}>
             刷新
@@ -92,7 +100,7 @@ export default function OperationsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>日志尾部</Typography.Title>
-              <Text type="secondary">读取最新日志尾部，快速定位实例级错误。</Text>
+              <Text type="secondary">查看最新日志尾部。</Text>
             </div>
           </div>
 
@@ -125,7 +133,7 @@ export default function OperationsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>运维动作</Typography.Title>
-              <Text type="secondary">只有显式声明的 hook 动作才会开放执行。</Text>
+              <Text type="secondary">只展示当前实例已开放的动作。</Text>
             </div>
           </div>
 
@@ -143,7 +151,9 @@ export default function OperationsPage() {
                         </div>
                         <Tag>{item.lastStatus}</Tag>
                       </div>
-                      <Alert type={item.configured ? 'info' : 'warning'} message={item.caution} />
+                      <Paragraph className={`ops-action-note ${item.configured ? 'is-configured' : 'is-pending'}`}>
+                        {item.caution}
+                      </Paragraph>
                       <Text type="secondary">工作区：{item.workspace}</Text>
                       <Text type="secondary">命令：{item.commandPreview || '未配置'}</Text>
                       {item.lastRequestedAt ? (

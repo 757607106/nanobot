@@ -176,6 +176,7 @@ export default function KnowledgePage() {
   const navigate = useNavigate()
   const { kbId } = useParams()
   const selectedKbId = kbId && kbId !== 'new' ? kbId : null
+  const isCreatingKb = kbId === 'new'
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
@@ -241,10 +242,17 @@ export default function KnowledgePage() {
     void loadKnowledgeDetail(selectedKbId)
   }, [kbId, knowledgeBases, loadingWorkspace, navigate, selectedKbId])
 
+  useEffect(() => {
+    if (isCreatingKb) {
+      setActiveSection('overview')
+    }
+  }, [isCreatingKb])
+
   const enabledCount = useMemo(
     () => knowledgeBases.filter((item) => item.enabled).length,
     [knowledgeBases],
   )
+  const hasWorkbenchSelection = Boolean(currentKb) || isCreatingKb
   const syncableSources = useMemo(
     () => sources.filter((item) => item.syncSupported),
     [sources],
@@ -301,6 +309,21 @@ export default function KnowledgePage() {
       jobs.some((item) => isActiveJobStatus(item.status)),
     [documents, jobs],
   )
+  const indexedDocumentCount = useMemo(
+    () => documents.filter((item) => item.docStatus === 'indexed').length,
+    [documents],
+  )
+  const activeDocumentCount = useMemo(
+    () => documents.filter((item) => isActiveDocumentStatus(item.docStatus)).length,
+    [documents],
+  )
+  const selectedModeLabel =
+    form.mode === 'keyword'
+      ? '标准检索'
+      : form.mode === 'hybrid'
+        ? '平衡检索'
+        : '深度检索'
+  const latestJob = jobs[0] ?? null
 
   useEffect(() => {
     if (!currentKb || !hasActiveIngest) {
@@ -715,7 +738,7 @@ export default function KnowledgePage() {
         className="page-hero-compact studio-hero"
         eyebrow="企业知识库"
         title="知识库"
-        description="集中管理企业知识资料，支持文件、网页和问答内容接入，并验证检索效果。"
+        description="管理知识资料、内容接入与检索验证。"
         stats={[
           { label: '知识库总数', value: knowledgeBases.length },
           { label: '启用中', value: enabledCount },
@@ -740,26 +763,18 @@ export default function KnowledgePage() {
       />
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
-      {currentKb && hasActiveIngest ? (
-        <Alert
-          type="info"
-          showIcon
-          message="当前有知识库任务正在后台处理中，页面会自动刷新状态。"
-        />
-      ) : null}
 
       <div className="page-grid studio-knowledge-grid">
         <Card className="config-panel-card studio-knowledge-list-card">
-          <div className="config-card-header">
-            <div className="page-section-title">
-              <Typography.Title level={4}>知识库列表</Typography.Title>
-              <Text type="secondary">先选定一个知识库，再对它做内容接入、来源治理和检索测试。</Text>
+            <div className="config-card-header">
+              <div className="page-section-title">
+                <Typography.Title level={4}>知识库列表</Typography.Title>
+                <Text type="secondary">选择后在右侧继续维护。</Text>
+              </div>
+              <Tag color="blue">{knowledgeBases.length}</Tag>
             </div>
-            <Tag color="blue">{knowledgeBases.length}</Tag>
-          </div>
-
           {knowledgeBases.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有知识库。">
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有知识库">
               <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/knowledge/new')}>
                 创建第一个知识库
               </Button>
@@ -781,7 +796,7 @@ export default function KnowledgePage() {
                       </Space>
                       <Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '启用' : '停用'}</Tag>
                     </div>
-                    <Text type="secondary">{item.description || '暂未补充说明。'}</Text>
+                    <Text type="secondary">{item.description || '未填写说明。'}</Text>
                     <div className="studio-agent-list-meta">
                       <Tag>
                         {item.retrievalProfile.mode === 'keyword'
@@ -800,14 +815,46 @@ export default function KnowledgePage() {
         </Card>
 
         <div className="page-stack">
+          <Card className="config-panel-card" loading={loadingDetail && Boolean(selectedKbId)}>
+            <div className="config-card-header">
+              <div className="page-section-title">
+                <Typography.Title level={4}>
+                  {currentKb ? currentKb.name : isCreatingKb ? '新建知识库' : '知识库工作台'}
+                </Typography.Title>
+                <Text type="secondary">
+                  {currentKb
+                    ? currentKb.description || '继续维护设置、内容和检索。'
+                    : isCreatingKb
+                      ? '先完成基本信息，再接入内容。'
+                      : '从左侧选择一个知识库。'}
+                </Text>
+              </div>
+              {currentKb ? <Tag color="purple">{currentKb.kbId}</Tag> : <Tag>未保存</Tag>}
+            </div>
+
+            {!hasWorkbenchSelection ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="选择一个知识库或新建。"
+              />
+            ) : (
+              <div className="studio-chip-wrap">
+                <Tag>{form.enabled ? '启用' : '停用'}</Tag>
+                <Tag>{selectedModeLabel}</Tag>
+                <Tag>{indexedDocumentCount} 文档</Tag>
+                {latestJob ? <Tag color={statusColor(latestJob.status)}>{latestJob.status}</Tag> : null}
+              </div>
+            )}
+          </Card>
+
           <Tabs
             activeKey={activeSection}
             onChange={(value) => setActiveSection(value as 'overview' | 'ingest' | 'sources' | 'testing')}
             items={[
               { key: 'overview', label: '基础设置' },
               { key: 'ingest', label: '内容接入' },
-              { key: 'sources', label: '来源与文档' },
-              { key: 'testing', label: '检索测试' },
+              { key: 'sources', label: '来源治理' },
+              { key: 'testing', label: '检索验证' },
             ]}
           />
 
@@ -816,7 +863,7 @@ export default function KnowledgePage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>{currentKb ? '知识库设置' : '新建知识库'}</Typography.Title>
-                <Text type="secondary">管理知识库名称、用途说明、检索方式和启用状态。</Text>
+                <Text type="secondary">管理名称、检索方式和启用状态。</Text>
               </div>
               {currentKb ? <Tag color="purple">{currentKb.kbId}</Tag> : <Tag>未保存</Tag>}
             </div>
@@ -837,7 +884,7 @@ export default function KnowledgePage() {
                   value={form.description}
                   onChange={(event) => updateForm('description', event.target.value)}
                   rows={3}
-                  placeholder="说明该知识库服务什么业务、主要包含哪些文档。"
+                  placeholder="说明用途和内容范围。"
                 />
               </div>
 
@@ -914,7 +961,7 @@ export default function KnowledgePage() {
               className="studio-inline-alert"
               type="info"
               showIcon
-              message="大多数场景使用默认设置即可满足需求。"
+              message="默认设置通常已够用。"
             />
 
             <div className="studio-form-actions">
@@ -943,7 +990,7 @@ export default function KnowledgePage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>接入与入库</Typography.Title>
-                <Text type="secondary">先支持文件、单 URL 和 FAQ，后面再补企业连接器。</Text>
+                <Text type="secondary">支持文件、单 URL 和 FAQ。</Text>
               </div>
               {currentKb ? <Tag color="blue">{currentKb.name}</Tag> : <Tag>请先保存知识库</Tag>}
             </div>
@@ -984,7 +1031,7 @@ export default function KnowledgePage() {
                     ))}
                   </div>
                 ) : (
-                  <Text type="secondary">支持多文件批量上传，后端会逐个解析并建立入库状态。</Text>
+                  <Text type="secondary">支持多文件上传。</Text>
                 )}
               </div>
             ) : null}
@@ -1024,7 +1071,7 @@ export default function KnowledgePage() {
                     value={faqAnswer}
                     onChange={(event) => setFaqAnswer(event.target.value)}
                     rows={3}
-                    placeholder="写入稳定、可复用的标准答案。"
+                    placeholder="写入标准答案。"
                   />
                 </div>
                 <div className="studio-form-actions">
@@ -1060,7 +1107,7 @@ export default function KnowledgePage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>来源治理</Typography.Title>
-                <Text type="secondary">把文档背后的长期来源单独看清楚。当前先支持来源列表、最近状态回看和手动重新同步。</Text>
+                <Text type="secondary">管理来源状态与同步。</Text>
               </div>
               <Tag color="gold">{sources.length} sources</Tag>
             </div>
@@ -1068,12 +1115,12 @@ export default function KnowledgePage() {
             <div className="studio-form-actions">
               <Space wrap>
                 <Tag color="processing">可同步 {syncableSources.length}</Tag>
-                <Text type="secondary">URL / FAQ 会保留为可重复同步的来源对象；上传文件也会记录成一次性来源。</Text>
+                <Text type="secondary">URL / FAQ 可重复同步；文件记为单次来源。</Text>
               </Space>
             </div>
 
             {sources.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前知识库还没有来源对象。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有来源" />
             ) : (
               <div className="page-grid studio-knowledge-detail-grid">
                 <List
@@ -1129,7 +1176,7 @@ export default function KnowledgePage() {
                     <div className="config-card-header">
                       <div className="page-section-title">
                         <Typography.Title level={5}>来源详情</Typography.Title>
-                        <Text type="secondary">在同步前先管理来源标题、启停状态，以及网页地址或问答内容。</Text>
+                        <Text type="secondary">管理标题、启停和内容。</Text>
                       </div>
                       <Tag color="blue">{selectedSource.sourceType}</Tag>
                     </div>
@@ -1182,7 +1229,7 @@ export default function KnowledgePage() {
                           className="studio-inline-alert studio-form-field-span-2"
                           type="info"
                           showIcon
-                          message="上传文件来源当前只支持标题 / 启停治理；如需替换原始文件，请重新上传。"
+                          message="文件来源只支持标题和启停；替换文件请重新上传。"
                         />
                       ) : null}
                     </div>
@@ -1217,7 +1264,7 @@ export default function KnowledgePage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>文档与状态</Typography.Title>
-                  <Text type="secondary">查看当前文档的入库结果、片段数量和错误摘要。</Text>
+                  <Text type="secondary">查看入库状态、片段数和错误。</Text>
                 </div>
                 <Tag>{filteredDocuments.length}/{documents.length}</Tag>
               </div>
@@ -1228,7 +1275,7 @@ export default function KnowledgePage() {
                   <Input
                     value={documentQuery}
                     onChange={(event) => setDocumentQuery(event.target.value)}
-                    placeholder="按标题、文件名、URL 或错误信息搜索"
+                    placeholder="按标题、文件名、URL 或错误搜索"
                   />
                 </div>
                 <div className="studio-form-field">
@@ -1306,7 +1353,7 @@ export default function KnowledgePage() {
               {filteredDocuments.length === 0 ? (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={documents.length === 0 ? '当前知识库还没有文档。' : '没有符合当前筛选条件的文档。'}
+                  description={documents.length === 0 ? '还没有文档' : '没有匹配文档'}
                 />
               ) : (
                 <List
@@ -1351,7 +1398,7 @@ export default function KnowledgePage() {
                             <Text type="secondary">{formatDateTimeZh(item.updatedAt)}</Text>
                           </div>
                           <Text type="secondary">
-                            {item.chunkCount} chunks
+                            {item.chunkCount} 片段
                             {item.fileName ? ` · ${item.fileName}` : ''}
                             {item.sourceUri ? ` · ${item.sourceUri}` : ''}
                           </Text>
@@ -1368,7 +1415,7 @@ export default function KnowledgePage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>入库任务</Typography.Title>
-                  <Text type="secondary">后台入库会留下处理轨迹，便于回看失败阶段和处理进度。</Text>
+                  <Text type="secondary">查看入库过程和失败信息。</Text>
                 </div>
                 <Tag>{filteredJobs.length}/{jobs.length}</Tag>
               </div>
@@ -1391,7 +1438,7 @@ export default function KnowledgePage() {
               {filteredJobs.length === 0 ? (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={jobs.length === 0 ? '还没有 ingest job。' : '没有符合当前筛选条件的任务。'}
+                  description={jobs.length === 0 ? '还没有入库任务' : '没有匹配任务'}
                 />
               ) : (
                 <List
@@ -1407,7 +1454,7 @@ export default function KnowledgePage() {
                           </Space>
                           <Text type="secondary">{formatDateTimeZh(item.updatedAt)}</Text>
                         </div>
-                        <Text type="secondary">track: {item.trackId}</Text>
+                        <Text type="secondary">轨迹：{item.trackId}</Text>
                         {item.errorSummary ? <Text type="danger">{item.errorSummary}</Text> : null}
                       </div>
                     </List.Item>
@@ -1424,7 +1471,7 @@ export default function KnowledgePage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>检索测试</Typography.Title>
-                <Text type="secondary">先看召回片段和 citation，再决定要不要绑定给 agent。</Text>
+                <Text type="secondary">查看命中片段与引用。</Text>
               </div>
               {currentKb ? (
                 <Tag color="cyan">
@@ -1475,8 +1522,8 @@ export default function KnowledgePage() {
                 </Button>
                 <Text type="secondary">
                   {retrieveEffectiveMode
-                    ? `当前使用：${retrieveEffectiveMode}`
-                    : '标准适合快速匹配，平衡适合通用问答，深度适合更宽松的语义召回。'}
+                    ? `当前模式：${retrieveEffectiveMode}`
+                    : '可直接比较三种召回模式。'}
                 </Text>
               </Space>
             </div>
@@ -1484,7 +1531,7 @@ export default function KnowledgePage() {
             {retrieveError ? <Alert type="error" showIcon message={retrieveError} /> : null}
 
             {retrieveHits.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="执行一次检索测试后，会在这里看到命中的证据块。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="执行检索后在这里查看结果。" />
             ) : (
               <List
                 className="studio-hit-list"

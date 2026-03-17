@@ -33,6 +33,7 @@ import {
 } from '@ant-design/icons'
 import { api } from '../api'
 import DevOnly from '../components/DevOnly'
+import { MotionPanel } from '../components/MotionSurface'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type { CronJob, CronJobInput, CronStatus } from '../types'
@@ -275,7 +276,7 @@ export default function CronPage() {
         className="page-hero-compact"
         eyebrow="定时任务"
         title="自动化任务"
-        description="定时触发 AI 任务，自动完成日报总结、数据同步、定期检查等工作。"
+        description="管理自动执行的任务。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>
@@ -294,12 +295,13 @@ export default function CronPage() {
         ]}
       />
 
-      <div className="page-card">
+      <MotionPanel hover={false} standalone>
+        <div className="page-card">
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div className="section-heading-row">
             <div className="page-section-title">
               <Title level={4}>任务工作区</Title>
-              <Text type="secondary">筛选、查看和管理当前 Web 后端可执行的定时任务。</Text>
+              <Text type="secondary">筛选和管理当前任务。</Text>
             </div>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
               新建任务
@@ -310,8 +312,7 @@ export default function CronPage() {
           <Alert
             showIcon
             type="info"
-            message="当前 Web UI 仅通过 Agent 执行定时任务。"
-            description="投递目标字段仅保留兼容，不会顺带启动 gateway 频道。"
+            message="当前仅支持 Agent 执行。"
           />
           )}
 
@@ -338,7 +339,7 @@ export default function CronPage() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="按任务名称或指令搜索"
+              placeholder="按名称或指令搜索"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -360,7 +361,7 @@ export default function CronPage() {
               </div>
             ) : filteredJobs.length === 0 ? (
               <Empty
-                description="暂无定时任务"
+                description="暂无任务"
                 className="empty-block cron-empty-state"
               />
             ) : (
@@ -369,88 +370,91 @@ export default function CronPage() {
                 dataSource={filteredJobs}
                 renderItem={(job) => (
                   <List.Item>
-                    <Card className="cron-job-card">
-                      <Flex vertical gap={14}>
-                        <Flex justify="space-between" align="flex-start" gap={16}>
-                          <div className="page-section-title">
-                            <Space wrap size={[8, 8]}>
-                              <Title level={4} style={{ margin: 0 }}>
-                                {job.name}
-                              </Title>
-                              {getStatusTag(job, runningJobId === job.id)}
-                            </Space>
-                            <Text type="secondary">{getTriggerLabel(job)}</Text>
-                          </div>
-                          <Tag>{job.id}</Tag>
-                        </Flex>
+                    <MotionPanel className="cron-card-shell" standalone>
+                      <Card className="cron-job-card">
+                        <Flex vertical gap={14}>
+                          <Flex justify="space-between" align="flex-start" gap={16}>
+                            <div className="page-section-title">
+                              <Space wrap size={[8, 8]}>
+                                <Title level={4} style={{ margin: 0 }}>
+                                  {job.name}
+                                </Title>
+                                {getStatusTag(job, runningJobId === job.id)}
+                              </Space>
+                              <Text type="secondary">{getTriggerLabel(job)}</Text>
+                            </div>
+                            <Tag>{job.id}</Tag>
+                          </Flex>
 
-                        <div className="page-meta-grid cron-summary-grid">
-                          <div className="page-meta-card">
-                            <span>下一次运行</span>
-                            <strong>{formatDateTime(job.nextRunAtMs)}</strong>
+                          <div className="page-meta-grid cron-summary-grid">
+                            <div className="page-meta-card">
+                              <span>下一次运行</span>
+                              <strong>{formatDateTime(job.nextRunAtMs)}</strong>
+                            </div>
+                            <div className="page-meta-card">
+                              <span>上一次运行</span>
+                              <strong>{formatDateTime(job.lastRunAtMs)}</strong>
+                            </div>
+                            <div className="page-meta-card">
+                              <span>运行后删除</span>
+                              <strong>{job.deleteAfterRun ? '是' : '否'}</strong>
+                            </div>
+                            <DevOnly>
+                              <div className="page-meta-card">
+                                <span>投递目标</span>
+                                <strong>
+                                  {job.payload.channel && job.payload.to
+                                    ? `${job.payload.channel}:${job.payload.to}`
+                                    : '仅 Agent 执行'}
+                                </strong>
+                              </div>
+                            </DevOnly>
                           </div>
-                          <div className="page-meta-card">
-                            <span>上一次运行</span>
-                            <strong>{formatDateTime(job.lastRunAtMs)}</strong>
-                          </div>
-                          <div className="page-meta-card">
-                            <span>运行后删除</span>
-                            <strong>{job.deleteAfterRun ? '是' : '否'}</strong>
-                          </div>
-                          <DevOnly>
-                          <div className="page-meta-card">
-                            <span>投递目标</span>
-                            <strong>
-                              {job.payload.channel && job.payload.to
-                                ? `${job.payload.channel}:${job.payload.to}`
-                                : '仅 Agent 执行'}
-                            </strong>
-                          </div>
-                          </DevOnly>
-                        </div>
 
-                        <div>
-                          <Text type="secondary">调度指令</Text>
-                          <div className="cron-message-block">{job.payload.message}</div>
-                        </div>
+                          <div>
+                            <Text type="secondary">执行内容</Text>
+                            <div className="cron-message-block">{job.payload.message}</div>
+                          </div>
 
-                        {job.lastError && <Alert showIcon type="error" message={job.lastError} />}
+                          {job.lastError && <Alert showIcon type="error" message={job.lastError} />}
 
-                        <div className="cron-action-row">
-                          <Button
-                            icon={<PlayCircleOutlined />}
-                            loading={runningJobId === job.id}
-                            onClick={() => void handleRun(job.id)}
-                          >
-                            立即执行
-                          </Button>
-                          <Button
-                            icon={job.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
-                            onClick={() => void handleToggle(job)}
-                          >
-                            {job.enabled ? '暂停' : '启用'}
-                          </Button>
-                          <Button icon={<EditOutlined />} onClick={() => openEditModal(job)}>
-                            编辑
-                          </Button>
-                          <Popconfirm
-                            title="确定删除这个定时任务吗？"
-                            onConfirm={() => void handleDelete(job.id)}
-                          >
-                            <Button danger icon={<DeleteOutlined />}>
-                              删除
+                          <div className="cron-action-row">
+                            <Button
+                              icon={<PlayCircleOutlined />}
+                              loading={runningJobId === job.id}
+                              onClick={() => void handleRun(job.id)}
+                            >
+                              立即执行
                             </Button>
-                          </Popconfirm>
-                        </div>
-                      </Flex>
-                    </Card>
+                            <Button
+                              icon={job.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+                              onClick={() => void handleToggle(job)}
+                            >
+                              {job.enabled ? '暂停' : '启用'}
+                            </Button>
+                            <Button icon={<EditOutlined />} onClick={() => openEditModal(job)}>
+                              编辑
+                            </Button>
+                            <Popconfirm
+                              title="确定删除这个定时任务吗？"
+                              onConfirm={() => void handleDelete(job.id)}
+                            >
+                              <Button danger icon={<DeleteOutlined />}>
+                                删除
+                              </Button>
+                            </Popconfirm>
+                          </div>
+                        </Flex>
+                      </Card>
+                    </MotionPanel>
                   </List.Item>
                 )}
               />
             )}
           </div>
         </Space>
-      </div>
+        </div>
+      </MotionPanel>
 
       <Modal
         destroyOnClose
@@ -470,7 +474,7 @@ export default function CronPage() {
                 name="name"
                 rules={[{ required: true, message: '请输入任务名称' }]}
               >
-                <Input maxLength={80} placeholder="例如：早晨工作区总结" />
+                <Input maxLength={80} placeholder="例如：早间工作总结" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
@@ -487,7 +491,7 @@ export default function CronPage() {
           >
             <Input.TextArea
               rows={5}
-              placeholder="例如：总结最近的工作区变化，并给出下一步建议。"
+              placeholder="例如：总结最近工作并给出下一步建议。"
             />
           </Form.Item>
 
@@ -555,7 +559,7 @@ export default function CronPage() {
             label="记录投递目标"
             name="payloadDeliver"
             valuePropName="checked"
-            extra="这是为兼容参考项目保留的可选字段，Web UI 模式不会自动启动 gateway 频道。"
+            extra="兼容字段，Web UI 不会自动启动 gateway。"
           >
             <Switch />
           </Form.Item>
@@ -574,7 +578,7 @@ export default function CronPage() {
                   </Col>
                   <Col xs={24} md={12}>
                     <Form.Item label="目标" name="payloadTo">
-                      <Input placeholder="session id 或 chat id" />
+                      <Input placeholder="session 或 chat id" />
                     </Form.Item>
                   </Col>
                 </Row>

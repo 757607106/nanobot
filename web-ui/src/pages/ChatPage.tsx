@@ -1030,7 +1030,7 @@ export default function ChatPage() {
                     setPendingAttachments((prev) => [...prev, createPendingAttachment(firstFile)])
                   }}
                   autoSize={{ minRows: 1, maxRows: 5 }}
-                  placeholder="输入你的问题，或让群策协调多Agent检查、规划、评审当前工作区..."
+                  placeholder={`输入你的问题，或让${PLATFORM_ASSISTANT_NAME}协调多Agent检查、规划、评审当前工作区...`}
                   className="chat-sender"
                   prefix={
                     <span data-testid={testIds.chat.fileInput}>

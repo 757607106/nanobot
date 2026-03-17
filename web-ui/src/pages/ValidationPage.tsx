@@ -153,11 +153,14 @@ export default function ValidationPage() {
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
+        className="page-hero-compact studio-hero"
         eyebrow="配置验证"
         title="配置修复中心"
-        description="检查系统配置完整性，快速定位和修复问题。"
-        badges={[<Tag key="summary">{summary.label}</Tag>]}
+        description="查看配置状态与风险项。"
+        badges={[
+          <Tag key="summary">{summary.label}</Tag>,
+          <Tag key="danger">危险配置 {result.dangerousOptions.length}</Tag>,
+        ]}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadValidation()} loading={loading}>
             重新检查
@@ -180,17 +183,17 @@ export default function ValidationPage() {
       <div className="page-grid validation-page-grid">
         <ValidationList
           title="核心检查"
-          description="这些项目直接决定实例能否稳定启动、联网、访问工作区、以及加载 MCP。"
+          description="直接影响实例可用性。"
           items={result.checks}
-          emptyText="当前没有核心检查结果。"
+          emptyText="暂无核心检查结果"
           onRefresh={loadValidation}
         />
 
         <ValidationList
           title="危险配置隔离区"
-          description="这些项不一定阻塞运行，但在生产或共享环境里风险更高，所以单独隔离展示。"
+          description="高风险项单独列出。"
           items={result.dangerousOptions}
-          emptyText="当前没有额外危险配置。"
+          emptyText="暂无额外风险项"
           onRefresh={loadValidation}
         />
       </div>

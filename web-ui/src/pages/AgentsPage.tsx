@@ -30,12 +30,14 @@ import {
   ClockCircleOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons'
+import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
 import { useDevMode } from '../devMode'
 import { getModelSuggestions } from '../modelCatalog'
 import { getPreferredProvider } from '../modelConfig'
+import { interactiveLift, interactiveTap, shellSpring } from '../motionTokens'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type {
@@ -482,41 +484,41 @@ export default function AgentsPage() {
           <div className="stat-card-icon" style={{ background: 'var(--ant-color-primary-bg)', color: 'var(--ant-color-primary)' }}>
             <TeamOutlined />
           </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{agents.length}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>员工总数</div>
+          <div className="stat-card-copy">
+            <div className="stat-card-metric">{agents.length}</div>
+            <div className="stat-card-label">员工总数</div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-icon" style={{ background: 'var(--ant-color-success-bg)', color: 'var(--ant-color-success)' }}>
             <CheckCircleOutlined />
           </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{enabledCount}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>启用中</div>
+          <div className="stat-card-copy">
+            <div className="stat-card-metric">{enabledCount}</div>
+            <div className="stat-card-label">启用中</div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-icon" style={{ background: 'var(--ant-color-warning-bg)', color: 'var(--ant-color-warning)' }}>
             <ClockCircleOutlined />
           </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{recentRuns.length}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>最近执行</div>
+          <div className="stat-card-copy">
+            <div className="stat-card-metric">{recentRuns.length}</div>
+            <div className="stat-card-label">最近执行</div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-icon" style={{ background: 'var(--ant-color-info-bg)', color: 'var(--ant-color-info)' }}>
             <AppstoreOutlined />
           </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{knowledgeBases.length}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: '12px' }}>可用知识库</div>
+          <div className="stat-card-copy">
+            <div className="stat-card-metric">{knowledgeBases.length}</div>
+            <div className="stat-card-label">可用知识库</div>
           </div>
         </div>
       </div>
 
-      <div className="page-header-block" style={{ marginBottom: '16px' }}>
+      <div className="page-header-block">
         <div className="page-section-title">
           <Typography.Title level={4}>所有数字员工</Typography.Title>
           <Text type="secondary">查看和管理您的数字员工，点击卡片进行详细配置。</Text>
@@ -546,11 +548,16 @@ export default function AgentsPage() {
       ) : (
         <div className="studio-grid-layout">
           {agents.map((item) => (
-            <div
+            <motion.div
               key={item.agentId}
               className="id-badge-card"
               onClick={() => navigate(`/studio/agents/${item.agentId}`)}
               style={{ cursor: 'pointer' }}
+              whileHover={interactiveLift}
+              whileTap={interactiveTap}
+              transition={shellSpring}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
             >
               <div className="id-badge-body">
                 <div 
@@ -564,7 +571,7 @@ export default function AgentsPage() {
                 </div>
                 <div className="id-badge-info">
                   <h4>{item.name}</h4>
-                  <p className="ant-typography-ellipsis ant-typography-ellipsis-single-line" style={{ maxWidth: '180px' }}>
+                  <p className="ant-typography-ellipsis ant-typography-ellipsis-single-line">
                     {item.description || '暂无职责说明'}
                   </p>
                   <div className="id-badge-id">{item.agentId.split('-')[0].toUpperCase()}</div>
@@ -589,7 +596,7 @@ export default function AgentsPage() {
                   <span className="id-badge-stat-value">{item.skillIds.length}</span>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
@@ -613,7 +620,7 @@ export default function AgentsPage() {
           </Space>
         }
       >
-        <div className="page-stack" style={{ padding: '24px' }}>
+        <div className="page-stack studio-drawer-stack">
           <Card bordered={false} className="config-panel-card" loading={loadingDetail}>
             {currentAgent?.sourceTemplateName ? <Tag color="purple" style={{ marginBottom: '16px' }}>来自模板：{currentAgent.sourceTemplateName}</Tag> : null}
 

@@ -242,7 +242,7 @@ export default function McpServerDetailPage() {
     }
     modal.confirm({
       title: `移除 MCP ${serverName}`,
-      content: '会同时从当前配置中移除该 MCP；如果它是受管安装，也会尝试删除本地 checkout。',
+      content: '会从当前配置移除；若为受管安装，会尝试删除本地 checkout。',
       okText: '确认移除',
       cancelText: '取消',
       okButtonProps: { danger: true },
@@ -274,13 +274,20 @@ export default function McpServerDetailPage() {
     )
   }
 
+  const connectionModeLabel =
+    draft.type === 'stdio' ? '命令行连接' : draft.type === 'sse' ? 'SSE 连接' : 'Streamable HTTP'
+  const missingEnvCount = repairPlan?.missingEnv.length ?? entry.requiredEnv?.length ?? 0
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
-        eyebrow="MCP Detail"
+        className="page-hero-compact studio-hero"
+        eyebrow="MCP 维护台"
         title={`维护 ${entry.displayName}`}
-        description="在不回退到原始 JSON 的前提下，直接测试、启停、调整连接参数，并查看最近一次工具探测结果。"
+        description="测试连接、调整参数并查看探测结果。"
+        badges={[
+          <Tag key="transport">{connectionModeLabel}</Tag>,
+          <Tag key="status" color={entry.enabled ? 'success' : 'default'}>{entry.enabled ? '启用中' : '已停用'}</Tag>,
+        ]}
         actions={(
           <div className="mcp-hero-actions">
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mcp')}>
@@ -322,7 +329,7 @@ export default function McpServerDetailPage() {
           description={
             probe.ok
               ? `发现 ${probe.toolCount} 个工具：${probe.toolNames.join(', ') || '无'}`
-              : probe.error || '最近一次探测没有返回更多信息。'
+              : probe.error || '没有更多探测信息。'
           }
         />
       ) : null}
@@ -336,7 +343,7 @@ export default function McpServerDetailPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>连接详情</Typography.Title>
-              <Text type="secondary">编辑 transport、命令、URL、环境变量和请求头；保存后会立即写回配置。</Text>
+              <Text type="secondary">管理连接参数并写回配置。</Text>
             </div>
           </div>
 
@@ -355,7 +362,7 @@ export default function McpServerDetailPage() {
             <div className="channel-flag-card">
               <div>
                 <Text strong>聊天中启用</Text>
-                <Text type="secondary">关闭后不会参与 Agent 运行时加载。</Text>
+                <Text type="secondary">关闭后不参与聊天加载。</Text>
               </div>
               <Switch checked={draft.enabled} onChange={(checked) => setDraft({ ...draft, enabled: checked })} />
             </div>
@@ -458,7 +465,7 @@ export default function McpServerDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>修复计划</Typography.Title>
-                <Text type="secondary">把常见失败原因翻译成可执行的下一步，并把外部 repair worker 严格限制在显式命令下运行。</Text>
+                <Text type="secondary">汇总问题并给出下一步。</Text>
               </div>
               {repairPlan ? <Tag>{repairPlan.diagnosisLabel}</Tag> : null}
             </div>
@@ -516,7 +523,7 @@ export default function McpServerDetailPage() {
                 {repairPlan.run.commandPreview ? (
                   <div className="mono-block mono-block-large">{repairPlan.run.commandPreview}</div>
                 ) : (
-                  <Text type="secondary">尚未声明 `NANOBOT_WEB_MCP_REPAIR_COMMAND`，当前只能生成修复计划，不能直接触发外部 worker。</Text>
+                  <Text type="secondary">未配置 `NANOBOT_WEB_MCP_REPAIR_COMMAND`，暂不能直接运行修复。</Text>
                 )}
 
                 <Space wrap>
@@ -532,7 +539,7 @@ export default function McpServerDetailPage() {
                 </Space>
               </div>
             ) : (
-              <Empty description="当前无法生成修复计划" className="empty-block" />
+              <Empty description="暂未生成修复计划" className="empty-block" />
             )}
           </Card>
 
@@ -540,7 +547,7 @@ export default function McpServerDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>隔离测试聊天</Typography.Title>
-                <Text type="secondary">这里会单独为当前 MCP 维护一条测试会话，只加载这个 MCP，不复用主聊天历史。</Text>
+                <Text type="secondary">仅针对当前 MCP 的独立测试会话。</Text>
               </div>
               {testChat ? <Tag>{testChat.session.messageCount} 条</Tag> : null}
             </div>
@@ -581,7 +588,7 @@ export default function McpServerDetailPage() {
                 <Input.TextArea
                   value={testInput}
                   onChange={(event) => setTestInput(event.target.value)}
-                  placeholder="输入一条只针对当前 MCP 的测试消息，例如：请只调用这个 MCP 列出可用工具。"
+                  placeholder="输入一条只针对当前 MCP 的测试消息"
                   style={{ minHeight: 120 }}
                   data-testid={testIds.mcp.detailTestInput}
                 />
@@ -601,7 +608,7 @@ export default function McpServerDetailPage() {
                 </Space>
               </div>
             ) : (
-              <Empty description="当前无法读取隔离测试聊天" className="empty-block" />
+              <Empty description="暂时无法读取测试会话" className="empty-block" />
             )}
           </Card>
 
@@ -609,7 +616,7 @@ export default function McpServerDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>探测摘要</Typography.Title>
-                <Text type="secondary">显示最近一次握手和工具发现结果。</Text>
+                <Text type="secondary">查看最近探测结果。</Text>
               </div>
             </div>
             <div className="page-meta-grid system-side-grid">
@@ -640,7 +647,7 @@ export default function McpServerDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>安装元数据</Typography.Title>
-                <Text type="secondary">保留仓库来源和受管安装信息，便于后续修复或卸载。</Text>
+                <Text type="secondary">查看来源与安装信息。</Text>
               </div>
             </div>
             <div className="detail-grid">
@@ -672,7 +679,7 @@ export default function McpServerDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>移除 MCP</Typography.Title>
-                <Text type="secondary">从当前配置中移除该 MCP；如果它是受管安装，也会尝试清理 checkout。</Text>
+                <Text type="secondary">从当前配置移除该 MCP。</Text>
               </div>
             </div>
             <Button danger icon={<DeleteOutlined />} onClick={handleRemove}>

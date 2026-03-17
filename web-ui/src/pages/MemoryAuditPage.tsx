@@ -11,6 +11,7 @@ import {
   Space,
   Spin,
   Tag,
+  Tabs,
   Typography,
 } from 'antd'
 import {
@@ -80,6 +81,7 @@ export default function MemoryAuditPage() {
   const [memorySearchResults, setMemorySearchResults] = useState<MemorySearchHit[]>([])
   const [selectedMemorySource, setSelectedMemorySource] = useState<MemorySourceDetail | null>(null)
   const [candidateStatusFilter, setCandidateStatusFilter] = useState('all')
+  const [activePanel, setActivePanel] = useState<'overview' | 'candidates' | 'search'>('overview')
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -112,6 +114,10 @@ export default function MemoryAuditPage() {
     void loadAudit(selectedTeamId)
   }, [loadingWorkspace, navigate, selectedTeamId, teams])
 
+  useEffect(() => {
+    setActivePanel('overview')
+  }, [selectedTeamId])
+
   const pendingCount = useMemo(
     () => memoryCandidates.filter((item) => item.status === 'proposed').length,
     [memoryCandidates],
@@ -123,6 +129,11 @@ export default function MemoryAuditPage() {
     }
     return memoryCandidates.filter((item) => item.status === candidateStatusFilter)
   }, [candidateStatusFilter, memoryCandidates])
+  const appliedCount = useMemo(
+    () => memoryCandidates.filter((item) => item.status === 'applied').length,
+    [memoryCandidates],
+  )
+  const latestRun = recentRuns[0] ?? null
 
   async function loadWorkspace() {
     try {
@@ -247,9 +258,9 @@ export default function MemoryAuditPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="团队记忆"
+        eyebrow="审计工作台"
         title="团队记忆审计"
-        description="回看团队共享记忆、候选内容、对话记录和检索结果，帮助你核对团队记忆是否准确。"
+        description="把团队共享记忆、候选内容、对话上下文和检索证据放到同一个审计台里，帮助你判断哪些信息该沉淀、哪些只属于一次性上下文。"
         stats={[
           { label: '团队数', value: teams.length },
           { label: '待审候选', value: pendingCount },
@@ -281,7 +292,7 @@ export default function MemoryAuditPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>团队列表</Typography.Title>
-              <Text type="secondary">先选定一个团队，再查看它的共享记忆和团队对话。</Text>
+              <Text type="secondary">先选定一个团队，再在右侧统一查看共享记忆、候选审核和检索证据。</Text>
             </div>
             <Tag color="blue">{teams.length}</Tag>
           </div>
@@ -311,7 +322,8 @@ export default function MemoryAuditPage() {
                     </div>
                     <Text type="secondary">{item.description || '暂未补充团队说明。'}</Text>
                     <div className="studio-agent-list-meta">
-                      <Tag>{item.memberCount} agents</Tag>
+                      <Tag>{item.memberCount} 位成员</Tag>
+                      <Tag>{item.enabled ? '可审计' : '已停用'}</Tag>
                     </div>
                   </div>
                 </List.Item>
@@ -324,8 +336,12 @@ export default function MemoryAuditPage() {
           <Card className="config-panel-card" loading={loadingDetail}>
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>审计概览</Typography.Title>
-                <Text type="secondary">先看当前团队的共享记忆、最近执行和对话规模，再决定从哪一块继续排查。</Text>
+                <Typography.Title level={4}>{currentTeam ? currentTeam.name : '审计概览'}</Typography.Title>
+                <Text type="secondary">
+                  {currentTeam
+                    ? currentTeam.description || '先看共享记忆、候选状态和最近执行，再决定从哪一块继续排查。'
+                    : '从左侧选择一个团队，在这里查看它的完整记忆审计工作台。'}
+                </Text>
               </div>
               {currentTeam ? <Tag color="purple">{currentTeam.teamId}</Tag> : <Tag>未选择</Tag>}
             </div>
@@ -333,267 +349,343 @@ export default function MemoryAuditPage() {
             {!currentTeam ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择一个 Team。" />
             ) : (
-              <div className="page-grid studio-knowledge-detail-grid">
-                <Card className="config-panel-card">
-                  <div className="page-section-title">
-                    <Typography.Title level={5}>Team Shared Memory</Typography.Title>
-                    <Text type="secondary">
-                      {teamMemory?.updatedAt ? `最近更新：${formatDateTimeZh(teamMemory.updatedAt)}` : '当前还没有团队共享长期记忆。'}
-                    </Text>
-                  </div>
-                  <Paragraph className="studio-result-copy">
-                    {teamMemory?.content?.trim() || '当前 Team Shared Memory 为空。'}
-                  </Paragraph>
-                </Card>
-
-                <Card className="config-panel-card">
-                  <div className="page-section-title">
-                    <Typography.Title level={5}>Recent Runs</Typography.Title>
-                    <Text type="secondary">从这里跳转最近的 team run 和 artifact，方便核对记忆是怎么被产出的。</Text>
-                  </div>
-                  {recentRuns.length === 0 ? (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有运行记录。" />
-                  ) : (
-                    <List
-                      className="studio-run-list"
-                      dataSource={recentRuns.slice(0, 5)}
-                      renderItem={(run) => (
-                        <List.Item className="studio-run-list-item">
-                          <div className="studio-run-list-copy">
-                            <div className="studio-run-list-head">
-                              <Space wrap>
-                                <strong>{run.label}</strong>
-                                <Tag color={statusColor(run.status)}>{run.status}</Tag>
-                                <Tag>{run.kind}</Tag>
-                              </Space>
-                              <Text type="secondary">{run.createdAt ? formatDateTimeZh(run.createdAt) : '未记录时间'}</Text>
-                            </div>
-                            <Paragraph className="studio-run-preview" ellipsis={{ rows: 2 }}>
-                              {run.taskPreview}
-                            </Paragraph>
-                            <Space wrap>
-                              <Button size="small" onClick={() => navigate(`/studio/runs/${run.runId}`)}>
-                                查看 Run
-                              </Button>
-                              {run.threadId ? (
-                                <Button size="small" onClick={() => navigate(`/studio/runs?threadId=${encodeURIComponent(String(run.threadId))}`)}>
-                                  查看 Thread Runs
-                                </Button>
-                              ) : null}
-                            </Space>
-                          </div>
-                        </List.Item>
-                      )}
-                    />
-                  )}
-                </Card>
-              </div>
+              <Space wrap className="studio-chip-wrap">
+                <Tag>{currentTeam.memberCount} 位成员</Tag>
+                <Tag>{pendingCount} 待审</Tag>
+                <Tag>{appliedCount} 已应用</Tag>
+                {latestRun ? <Tag color={statusColor(latestRun.status)}>{latestRun.status}</Tag> : null}
+              </Space>
             )}
           </Card>
 
-          <div className="page-grid studio-knowledge-detail-grid">
-            <Card className="config-panel-card" loading={loadingDetail}>
-                <div className="config-card-header">
-                  <div className="page-section-title">
-                    <Typography.Title level={4}>候选记录</Typography.Title>
-                    <Text type="secondary">把候选记忆和状态变化独立拉出来，方便集中审核和处理。</Text>
-                  </div>
-                <Tag color={pendingCount > 0 ? 'processing' : 'default'}>{filteredCandidates.length}/{memoryCandidates.length}</Tag>
-              </div>
-
-              <Segmented
-                block
-                value={candidateStatusFilter}
-                onChange={(value) => setCandidateStatusFilter(String(value))}
-                options={[
-                  { label: '全部', value: 'all' },
-                  { label: '待审', value: 'proposed' },
-                  { label: '已应用', value: 'applied' },
-                  { label: '已忽略', value: 'rejected' },
+          {currentTeam ? (
+            <>
+              <Tabs
+                activeKey={activePanel}
+                onChange={(value) => setActivePanel(value as 'overview' | 'candidates' | 'search')}
+                items={[
+                  { key: 'overview', label: '概览' },
+                  { key: 'candidates', label: '候选审核' },
+                  { key: 'search', label: '检索取证' },
                 ]}
               />
 
-              {filteredCandidates.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下没有候选记忆。" />
-              ) : (
-                <List
-                  className="studio-run-list"
-                  dataSource={filteredCandidates}
-                  renderItem={(candidate) => (
-                    <List.Item className="studio-run-list-item">
-                      <div className="studio-run-list-copy">
-                        <div className="studio-run-list-head">
-                          <Space wrap>
-                            <strong>{candidate.title}</strong>
-                            <Tag color={statusColor(candidate.status)}>{candidate.status}</Tag>
-                          </Space>
-                          <Text type="secondary">{candidate.updatedAt ? formatDateTimeZh(candidate.updatedAt) : '未记录时间'}</Text>
+              {activePanel === 'overview' ? (
+                <>
+                  <div className="page-grid studio-knowledge-detail-grid">
+                    <Card className="config-panel-card" loading={loadingDetail}>
+                      <div className="config-card-header">
+                        <div className="page-section-title">
+                          <Typography.Title level={4}>共享记忆概览</Typography.Title>
+                          <Text type="secondary">先判断当前长期记忆里写了什么，再决定哪些候选值得继续沉淀。</Text>
                         </div>
-                        <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
-                          {candidate.content}
-                        </Paragraph>
-                        <Text type="secondary">{candidate.agentId || 'unknown-agent'} · {candidate.runId || 'no-run-id'}</Text>
-                        <Space wrap>
-                          <Button size="small" onClick={() => void handlePreviewSource('memory_candidate', candidate.candidateId)}>
-                            查看全文
-                          </Button>
-                          {candidate.status === 'proposed' ? (
-                            <Button size="small" onClick={() => void handleApplyCandidate(candidate.candidateId)}>
-                              应用
-                            </Button>
-                          ) : null}
-                          {candidate.status === 'proposed' ? (
-                            <Button size="small" danger onClick={() => void handleRejectCandidate(candidate.candidateId)}>
-                              忽略
-                            </Button>
-                          ) : null}
-                        </Space>
+                        <Tag color="purple">{teamMemory?.candidateCount ?? pendingCount} 候选</Tag>
                       </div>
-                    </List.Item>
-                  )}
-                />
-              )}
-            </Card>
 
-            <Card className="config-panel-card" loading={loadingDetail}>
-                <div className="config-card-header">
-                  <div className="page-section-title">
-                    <Typography.Title level={4}>对话回放</Typography.Title>
-                    <Text type="secondary">这里回看团队级多轮对话，方便核对某条候选记忆究竟来自哪次上下文。</Text>
+                      <Paragraph className="studio-result-copy">
+                        {teamMemory?.content?.trim() || '当前 Team Shared Memory 为空。'}
+                      </Paragraph>
+                    </Card>
+
+                    <Card className="config-panel-card" loading={loadingDetail}>
+                      <div className="config-card-header">
+                        <div className="page-section-title">
+                          <Typography.Title level={4}>最近执行</Typography.Title>
+                          <Text type="secondary">从这里跳转最近的 team run 和 thread，核对记忆是怎么被产出的。</Text>
+                        </div>
+                        <Tag>{recentRuns.length}</Tag>
+                      </div>
+
+                      {recentRuns.length === 0 ? (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有运行记录。" />
+                      ) : (
+                        <List
+                          className="studio-run-list"
+                          dataSource={recentRuns.slice(0, 5)}
+                          renderItem={(run) => (
+                            <List.Item className="studio-run-list-item">
+                              <div className="studio-run-list-copy">
+                                <div className="studio-run-list-head">
+                                  <Space wrap>
+                                    <strong>{run.label}</strong>
+                                    <Tag color={statusColor(run.status)}>{run.status}</Tag>
+                                    <Tag>{run.kind}</Tag>
+                                  </Space>
+                                  <Text type="secondary">{run.createdAt ? formatDateTimeZh(run.createdAt) : '未记录时间'}</Text>
+                                </div>
+                                <Paragraph className="studio-run-preview" ellipsis={{ rows: 2 }}>
+                                  {run.taskPreview}
+                                </Paragraph>
+                                <Space wrap>
+                                  <Button size="small" onClick={() => navigate(`/studio/runs/${run.runId}`)}>
+                                    查看 Run
+                                  </Button>
+                                  {run.threadId ? (
+                                    <Button size="small" onClick={() => navigate(`/studio/runs?threadId=${encodeURIComponent(String(run.threadId))}`)}>
+                                      查看 Thread Runs
+                                    </Button>
+                                  ) : null}
+                                </Space>
+                              </div>
+                            </List.Item>
+                          )}
+                        />
+                      )}
+                    </Card>
                   </div>
-                {teamThread ? <Tag color="cyan">{teamThread.session.messageCount} 条消息</Tag> : null}
-              </div>
 
-              {!currentTeam ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择一个 Team。" />
-              ) : teamThreadMessages.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个团队还没有对话记录。" />
-              ) : (
-                <List
-                  className="studio-run-list"
-                  dataSource={teamThreadMessages}
-                  renderItem={(item) => (
-                    <List.Item className="studio-run-list-item">
-                      <div className="studio-run-list-copy">
-                        <div className="studio-run-list-head">
-                          <Space wrap>
-                            <strong>{item.role === 'user' ? '用户消息' : '团队回复'}</strong>
-                            <Tag color={item.role === 'user' ? 'blue' : 'success'}>{item.role}</Tag>
-                          </Space>
-                          <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
-                        </div>
-                        <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
-                          {item.content}
-                        </Paragraph>
+                  <Card className="config-panel-card" loading={loadingDetail}>
+                    <div className="config-card-header">
+                      <div className="page-section-title">
+                        <Typography.Title level={4}>最近对话</Typography.Title>
+                        <Text type="secondary">回看团队级多轮对话，帮助你判断某条候选记忆究竟来自稳定事实还是一次性上下文。</Text>
                       </div>
-                    </List.Item>
-                  )}
-                />
-              )}
-            </Card>
-          </div>
+                      {teamThread ? <Tag color="cyan">{teamThread.session.messageCount} 条消息</Tag> : null}
+                    </div>
 
-          <Card className="config-panel-card" loading={loadingDetail}>
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>记忆检索</Typography.Title>
-                <Text type="secondary">在一处检索团队记忆、候选内容、团队对话和结果文档，先把证据链串起来。</Text>
-              </div>
-              {currentTeam ? <Tag color="blue">{currentTeam.name}</Tag> : null}
-            </div>
-
-            <div className="studio-form-field">
-              <Text type="secondary">检索关键词</Text>
-              <Space wrap>
-                <Input
-                  value={memorySearchQuery}
-                  onChange={(event) => setMemorySearchQuery(event.target.value)}
-                  placeholder="例如：impact clearly、follow-up context、escalation artifact"
-                  disabled={!currentTeam}
-                />
-                <Button icon={<SearchOutlined />} onClick={() => void handleSearch()} loading={searching} disabled={!currentTeam}>
-                  检索
-                </Button>
-              </Space>
-            </div>
-
-            <div className="studio-form-field">
-              <Text type="secondary">检索模式</Text>
-              <Segmented
-                block
-                value={memorySearchMode}
-                onChange={(value) => setMemorySearchMode(String(value))}
-                options={[
-                  { label: '标准', value: 'keyword' },
-                  { label: '平衡', value: 'hybrid' },
-                  { label: '深度', value: 'semantic' },
-                ]}
-              />
-              <Text type="secondary">
-                {memorySearchEffectiveMode
-                  ? `当前使用：${memorySearchEffectiveMode}`
-                  : '标准适合快速查找，平衡适合通用检索，深度适合更宽松的语义召回。'}
-              </Text>
-            </div>
-
-            {searchError ? <Alert type="error" showIcon message={searchError} /> : null}
-
-            <div className="page-grid studio-knowledge-detail-grid">
-              <Card className="config-panel-card">
-                <div className="page-section-title">
-                  <Typography.Title level={5}>Search Hits</Typography.Title>
-                  <Text type="secondary">优先从命中的摘要和来源类型判断，这条信息到底属于长期记忆、短期线程还是运行产物。</Text>
-                </div>
-
-                {memorySearchResults.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="执行一次检索后，会在这里看到命中的记忆源。" />
-                ) : (
-                  <List
-                    className="studio-run-list"
-                    dataSource={memorySearchResults}
-                    renderItem={(item) => (
-                      <List.Item className="studio-run-list-item">
-                        <div className="studio-run-list-copy">
-                          <div className="studio-run-list-head">
-                            <Space wrap>
-                              <strong>{item.title}</strong>
-                              <Tag color="blue">score {item.score}</Tag>
-                              <Tag>{item.sourceType}</Tag>
-                            </Space>
-                          </div>
-                          <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
-                            {item.preview}
-                          </Paragraph>
-                          <Button size="small" onClick={() => void handlePreviewSource(item.sourceType, item.sourceId)}>
-                            查看全文
-                          </Button>
-                        </div>
-                      </List.Item>
+                    {teamThreadMessages.length === 0 ? (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个团队还没有对话记录。" />
+                    ) : (
+                      <List
+                        className="studio-run-list"
+                        dataSource={teamThreadMessages}
+                        renderItem={(item) => (
+                          <List.Item className="studio-run-list-item">
+                            <div className="studio-run-list-copy">
+                              <div className="studio-run-list-head">
+                                <Space wrap>
+                                  <strong>{item.role === 'user' ? '用户消息' : '团队回复'}</strong>
+                                  <Tag color={item.role === 'user' ? 'blue' : 'success'}>{item.role}</Tag>
+                                </Space>
+                                <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
+                              </div>
+                              <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
+                                {item.content}
+                              </Paragraph>
+                            </div>
+                          </List.Item>
+                        )}
+                      />
                     )}
-                  />
-                )}
-              </Card>
+                  </Card>
+                </>
+              ) : null}
 
-              <Card className="config-panel-card">
-                <div className="page-section-title">
-                  <Typography.Title level={5}>Source Preview</Typography.Title>
-                  <Text type="secondary">这里展示原始记忆源全文，便于核对命中片段是不是该写入长期记忆，或者只是一次性上下文。</Text>
+              {activePanel === 'candidates' ? (
+                <div className="page-grid studio-knowledge-detail-grid">
+                  <Card className="config-panel-card" loading={loadingDetail}>
+                    <div className="config-card-header">
+                      <div className="page-section-title">
+                        <Typography.Title level={4}>候选记录</Typography.Title>
+                        <Text type="secondary">把候选记忆和状态变化独立拉出来，方便集中审核和处理。</Text>
+                      </div>
+                      <Tag color={pendingCount > 0 ? 'processing' : 'default'}>{filteredCandidates.length}/{memoryCandidates.length}</Tag>
+                    </div>
+
+                    <Segmented
+                      block
+                      value={candidateStatusFilter}
+                      onChange={(value) => setCandidateStatusFilter(String(value))}
+                      options={[
+                        { label: '全部', value: 'all' },
+                        { label: '待审', value: 'proposed' },
+                        { label: '已应用', value: 'applied' },
+                        { label: '已忽略', value: 'rejected' },
+                      ]}
+                    />
+
+                    {filteredCandidates.length === 0 ? (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下没有候选记忆。" />
+                    ) : (
+                      <List
+                        className="studio-run-list"
+                        dataSource={filteredCandidates}
+                        renderItem={(candidate) => (
+                          <List.Item className="studio-run-list-item">
+                            <div className="studio-run-list-copy">
+                              <div className="studio-run-list-head">
+                                <Space wrap>
+                                  <strong>{candidate.title}</strong>
+                                  <Tag color={statusColor(candidate.status)}>{candidate.status}</Tag>
+                                </Space>
+                                <Text type="secondary">{candidate.updatedAt ? formatDateTimeZh(candidate.updatedAt) : '未记录时间'}</Text>
+                              </div>
+                              <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
+                                {candidate.content}
+                              </Paragraph>
+                              <Text type="secondary">{candidate.agentId || 'unknown-agent'} · {candidate.runId || 'no-run-id'}</Text>
+                              <Space wrap>
+                                <Button size="small" onClick={() => void handlePreviewSource('memory_candidate', candidate.candidateId)}>
+                                  查看全文
+                                </Button>
+                                {candidate.status === 'proposed' ? (
+                                  <Button size="small" onClick={() => void handleApplyCandidate(candidate.candidateId)}>
+                                    应用
+                                  </Button>
+                                ) : null}
+                                {candidate.status === 'proposed' ? (
+                                  <Button size="small" danger onClick={() => void handleRejectCandidate(candidate.candidateId)}>
+                                    忽略
+                                  </Button>
+                                ) : null}
+                              </Space>
+                            </div>
+                          </List.Item>
+                        )}
+                      />
+                    )}
+                  </Card>
+
+                  <Card className="config-panel-card" loading={loadingDetail}>
+                    <div className="config-card-header">
+                      <div className="page-section-title">
+                        <Typography.Title level={4}>上下文参考</Typography.Title>
+                        <Text type="secondary">优先查看候选全文；如果还不能判断，再回看最近的团队对话上下文。</Text>
+                      </div>
+                      {selectedMemorySource ? <Tag color="purple">{selectedMemorySource.sourceType}</Tag> : <Tag>最近对话</Tag>}
+                    </div>
+
+                    {selectedMemorySource ? (
+                      <div className="studio-run-result">
+                        <Space wrap>
+                          <Tag color="purple">{selectedMemorySource.sourceType}</Tag>
+                          <Text type="secondary">{selectedMemorySource.title}</Text>
+                        </Space>
+                        <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
+                      </div>
+                    ) : teamThreadMessages.length === 0 ? (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧候选点“查看全文”后，会在这里展示原文。" />
+                    ) : (
+                      <List
+                        className="studio-run-list"
+                        dataSource={teamThreadMessages.slice(0, 6)}
+                        renderItem={(item) => (
+                          <List.Item className="studio-run-list-item">
+                            <div className="studio-run-list-copy">
+                              <div className="studio-run-list-head">
+                                <Space wrap>
+                                  <strong>{item.role === 'user' ? '用户消息' : '团队回复'}</strong>
+                                  <Tag color={item.role === 'user' ? 'blue' : 'success'}>{item.role}</Tag>
+                                </Space>
+                                <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
+                              </div>
+                              <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
+                                {item.content}
+                              </Paragraph>
+                            </div>
+                          </List.Item>
+                        )}
+                      />
+                    )}
+                  </Card>
                 </div>
+              ) : null}
 
-                {selectedMemorySource ? (
-                  <div className="studio-run-result">
-                    <Space wrap>
-                      <Tag color="purple">{selectedMemorySource.sourceType}</Tag>
-                      <Text type="secondary">{selectedMemorySource.title}</Text>
-                    </Space>
-                    <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
+              {activePanel === 'search' ? (
+                <Card className="config-panel-card" loading={loadingDetail}>
+                  <div className="config-card-header">
+                    <div className="page-section-title">
+                      <Typography.Title level={4}>记忆检索</Typography.Title>
+                      <Text type="secondary">在一处检索团队记忆、候选内容、团队对话和结果文档，先把证据链串起来。</Text>
+                    </div>
+                    <Tag color="blue">{currentTeam.name}</Tag>
                   </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧选中一条命中的记忆源后，会在这里显示全文。" />
-                )}
-              </Card>
-            </div>
-          </Card>
+
+                  <div className="studio-form-field">
+                    <Text type="secondary">检索关键词</Text>
+                    <Space wrap>
+                      <Input
+                        value={memorySearchQuery}
+                        onChange={(event) => setMemorySearchQuery(event.target.value)}
+                        placeholder="例如：impact clearly、follow-up context、escalation artifact"
+                        disabled={!currentTeam}
+                      />
+                      <Button icon={<SearchOutlined />} onClick={() => void handleSearch()} loading={searching} disabled={!currentTeam}>
+                        检索
+                      </Button>
+                    </Space>
+                  </div>
+
+                  <div className="studio-form-field">
+                    <Text type="secondary">检索模式</Text>
+                    <Segmented
+                      block
+                      value={memorySearchMode}
+                      onChange={(value) => setMemorySearchMode(String(value))}
+                      options={[
+                        { label: '标准', value: 'keyword' },
+                        { label: '平衡', value: 'hybrid' },
+                        { label: '深度', value: 'semantic' },
+                      ]}
+                    />
+                    <Text type="secondary">
+                      {memorySearchEffectiveMode
+                        ? `当前使用：${memorySearchEffectiveMode}`
+                        : '标准适合快速查找，平衡适合通用检索，深度适合更宽松的语义召回。'}
+                    </Text>
+                  </div>
+
+                  {searchError ? <Alert type="error" showIcon message={searchError} /> : null}
+
+                  <div className="page-grid studio-knowledge-detail-grid">
+                    <Card className="config-panel-card">
+                      <div className="page-section-title">
+                        <Typography.Title level={5}>Search Hits</Typography.Title>
+                        <Text type="secondary">优先从命中的摘要和来源类型判断，这条信息到底属于长期记忆、短期线程还是运行产物。</Text>
+                      </div>
+
+                      {memorySearchResults.length === 0 ? (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="执行一次检索后，会在这里看到命中的记忆源。" />
+                      ) : (
+                        <List
+                          className="studio-run-list"
+                          dataSource={memorySearchResults}
+                          renderItem={(item) => (
+                            <List.Item className="studio-run-list-item">
+                              <div className="studio-run-list-copy">
+                                <div className="studio-run-list-head">
+                                  <Space wrap>
+                                    <strong>{item.title}</strong>
+                                    <Tag color="blue">score {item.score}</Tag>
+                                    <Tag>{item.sourceType}</Tag>
+                                  </Space>
+                                </div>
+                                <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
+                                  {item.preview}
+                                </Paragraph>
+                                <Button size="small" onClick={() => void handlePreviewSource(item.sourceType, item.sourceId)}>
+                                  查看全文
+                                </Button>
+                              </div>
+                            </List.Item>
+                          )}
+                        />
+                      )}
+                    </Card>
+
+                    <Card className="config-panel-card">
+                      <div className="page-section-title">
+                        <Typography.Title level={5}>Source Preview</Typography.Title>
+                        <Text type="secondary">这里展示原始记忆源全文，便于核对命中片段是不是该写入长期记忆，或者只是一次性上下文。</Text>
+                      </div>
+
+                      {selectedMemorySource ? (
+                        <div className="studio-run-result">
+                          <Space wrap>
+                            <Tag color="purple">{selectedMemorySource.sourceType}</Tag>
+                            <Text type="secondary">{selectedMemorySource.title}</Text>
+                          </Space>
+                          <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
+                        </div>
+                      ) : (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧选中一条命中的记忆源后，会在这里显示全文。" />
+                      )}
+                    </Card>
+                  </div>
+                </Card>
+              ) : null}
+            </>
+          ) : null}
         </div>
       </div>
     </div>

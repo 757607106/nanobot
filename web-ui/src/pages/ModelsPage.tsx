@@ -16,8 +16,9 @@ import {
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { api } from '../api'
 import DevOnly from '../components/DevOnly'
+import { MotionGroup, MotionPanel } from '../components/MotionSurface'
 import PageHero from '../components/PageHero'
-import { providerCategoryLabels, providerDescriptions } from '../configMeta'
+import { providerCategoryLabels } from '../configMeta'
 import { getModelSuggestions } from '../modelCatalog'
 import {
   buildProviderConfig,
@@ -130,10 +131,14 @@ export default function ModelsPage() {
   return (
     <div className="page-stack">
       <PageHero
-        className="page-hero-compact"
+        className="page-hero-compact studio-hero"
         eyebrow="AI 模型"
         title="AI 模型配置"
-        description="选择 AI 模型服务商并配置连接方式。"
+        description="统一模型、供应商与推理参数。"
+        badges={[
+          <Tag key="category">{providerCategoryLabels[selectedProviderMeta.category]}</Tag>,
+          selectedProviderMeta.supportsPromptCaching ? <Tag key="cache" color="cyan">支持提示词缓存</Tag> : null,
+        ].filter(Boolean)}
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadModels()}>
@@ -148,12 +153,14 @@ export default function ModelsPage() {
           { label: '当前供应商', value: selectedProviderMeta.label },
           { label: '当前模型', value: config.agents.defaults.model || '待选择' },
           { label: '认证方式', value: selectedProviderMeta.isOauth ? 'OAuth' : 'API Key' },
+          { label: '建议模型', value: suggestedModels.length || '自定义' },
         ]}
       />
 
       <div className="page-grid models-page-grid">
-        <div className="page-stack">
-          <Card className="config-panel-card">
+        <MotionGroup className="page-stack">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>1. 选择供应商</Typography.Title>
@@ -177,13 +184,6 @@ export default function ModelsPage() {
               />
             </div>
 
-            <Alert
-              showIcon
-              type={selectedProviderMeta.isLocal ? 'success' : 'info'}
-              message={selectedProviderMeta.label}
-              description={providerDescriptions[selectedProviderMeta.name] || '会直接映射到后端运行时。'}
-            />
-
             <DevOnly>
               <div className="config-meta-row">
                 <div className="config-meta-chip">
@@ -196,9 +196,11 @@ export default function ModelsPage() {
                 </div>
               </div>
             </DevOnly>
-          </Card>
+            </Card>
+          </MotionPanel>
 
-          <Card className="config-panel-card">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>2. 模型</Typography.Title>
@@ -229,11 +231,13 @@ export default function ModelsPage() {
             <Paragraph className="models-helper-copy">
               这些建议来自供应商注册信息和 README 示例；如果你有自定义模型名，直接输入即可。
             </Paragraph>
-          </Card>
-        </div>
+            </Card>
+          </MotionPanel>
+        </MotionGroup>
 
-        <div className="page-stack">
-          <Card className="config-panel-card">
+        <MotionGroup className="page-stack">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>3. 服务连接</Typography.Title>
@@ -284,9 +288,11 @@ export default function ModelsPage() {
                 </DevOnly>
               </>
             )}
-          </Card>
+            </Card>
+          </MotionPanel>
 
-          <Card className="config-panel-card">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>4. 推理参数</Typography.Title>
@@ -364,8 +370,9 @@ export default function ModelsPage() {
                 </div>
               </DevOnly>
             </div>
-          </Card>
-        </div>
+            </Card>
+          </MotionPanel>
+        </MotionGroup>
       </div>
     </div>
   )
