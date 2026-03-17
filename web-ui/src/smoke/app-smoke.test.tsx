@@ -2702,10 +2702,10 @@ describe('web app smoke pages', () => {
     expect(screen.getByText('渠道', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('技能', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('外部连接', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('行为引导', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('系统', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.queryByText('日程', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('定时任务', { selector: '.nav-item-title' })).not.toBeInTheDocument()
+    expect(screen.queryByText('行为引导', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('模板', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('验证中心', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('运维', { selector: '.nav-item-title' })).not.toBeInTheDocument()
@@ -2738,7 +2738,7 @@ describe('web app smoke pages', () => {
     expect(screen.queryByText('记忆')).not.toBeInTheDocument()
     expect(screen.getByText('执行记录')).toBeInTheDocument()
     expect(screen.getByText('知识库')).toBeInTheDocument()
-    expect(screen.getByText('模板')).toBeInTheDocument()
+    expect(screen.queryByText('模板')).not.toBeInTheDocument()
   })
 
   it('renders memory audit page with candidate and search panels', async () => {
@@ -2994,7 +2994,7 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('Smoke Session', { selector: '.conversation-title' })).toBeInTheDocument()
   })
 
-  it('preserves deep links after auth status resolves', async () => {
+  it('falls back to the chat landing page when a hidden route is requested', async () => {
     installMatchMedia(false)
 
     let resolveAuthStatus!: (value: {
@@ -3029,7 +3029,7 @@ describe('web app smoke pages', () => {
       username: 'admin',
     })
 
-    expect(await screen.findByText('工作区引导与记忆')).toBeInTheDocument()
+    expect(await screen.findByText('Smoke Session', { selector: '.conversation-title' })).toBeInTheDocument()
     expect(screen.queryByText('登录到工作台')).not.toBeInTheDocument()
   })
 

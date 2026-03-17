@@ -7,7 +7,8 @@ const studioRoutes = [
   { key: '/studio/teams', label: '团队', shortLabel: '团队', summary: '组织多员工协作、团队运行与记忆。' },
   { key: '/studio/runs', label: '执行记录', shortLabel: '记录', summary: '统一回看运行树、过程与产物。' },
   { key: '/studio/knowledge', label: '知识库', shortLabel: '知识', summary: '接入内容、治理来源并验证检索效果。' },
-  { key: '/studio/templates', label: '模板', shortLabel: '模板', summary: '沉淀可复用的员工模板与导入导出。' },
+  // 暂时隐藏“模板”页签，保留实现便于后续恢复。
+  // { key: '/studio/templates', label: '模板', shortLabel: '模板', summary: '沉淀可复用的员工模板与导入导出。' },
 ]
 
 function resolveActiveKey(pathname: string) {

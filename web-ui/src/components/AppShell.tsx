@@ -100,13 +100,14 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           sectionLabel: '构建',
           testId: testIds.app.navMcp,
         },
-        {
-          key: '/prompt',
-          icon: <ProfileOutlined />,
-          label: '行为引导',
-          summary: '维护工作区引导文件与长期记忆文档。',
-          sectionLabel: '构建',
-        },
+        // 暂时隐藏“行为引导”页面入口，保留实现便于后续恢复。
+        // {
+        //   key: '/prompt',
+        //   icon: <ProfileOutlined />,
+        //   label: '行为引导',
+        //   summary: '维护工作区引导文件与长期记忆文档。',
+        //   sectionLabel: '构建',
+        // },
       ],
     },
     {
