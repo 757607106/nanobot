@@ -564,7 +564,7 @@ export default function KnowledgePage() {
           <Card 
             className="page-card" 
             bordered={false} 
-            bodyStyle={{ padding: 0 }}
+            styles={{ body: { padding: 0 } }}
             title="文档管理"
             extra={
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setUploadDrawerOpen(true)}>
@@ -736,7 +736,7 @@ export default function KnowledgePage() {
       <div className="page-content-wrapper" style={{ padding: '0 var(--nb-layout-gutter)' }}>
         <Row gutter={[24, 24]}>
           <Col xs={24} md={6}>
-            <Card title="知识库列表" className="page-card" bordered={false} bodyStyle={{ padding: 0 }}>
+            <Card title="知识库列表" className="page-card" bordered={false} styles={{ body: { padding: 0 } }}>
               {knowledgeBases.length === 0 ? (
                 <Empty description="暂无知识库" style={{ padding: 24 }} />
               ) : (

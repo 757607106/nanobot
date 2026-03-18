@@ -259,8 +259,8 @@ class WebAppState:
     def get_installed_skills(self) -> list[dict[str, Any]]:
         return self.workspace_runtime.get_installed_skills()
 
-    def list_marketplace_skills(self, query: str = "", limit: int = 24) -> list[dict[str, Any]]:
-        return self.workspace_runtime.list_marketplace_skills(query, limit)
+    def list_marketplace_skills(self, query: str = "", limit: int = 24, offset: int = 0) -> dict[str, Any]:
+        return self.workspace_runtime.list_marketplace_skills(query, limit, offset)
 
     def install_marketplace_skill(self, slug: str, force: bool = False) -> dict[str, Any]:
         return self.workspace_runtime.install_marketplace_skill(slug, force)

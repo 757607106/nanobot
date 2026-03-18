@@ -93,8 +93,9 @@ description: Native enough for nanobot
     )
     monkeypatch.setattr(client, "_download_skill_archive", lambda slug: archive)
 
-    listed = client.list_skills(limit=1)
+    result = client.list_skills(limit=1)
 
-    assert listed[0]["slug"] == "demo-skill"
-    assert listed[0]["compatibility"] == "native"
-    assert listed[0]["compatibilityReasons"]
+    assert result["skills"][0]["slug"] == "demo-skill"
+    assert result["skills"][0]["compatibility"] == "native"
+    assert result["skills"][0]["compatibilityReasons"]
+    assert result["total"] == 1

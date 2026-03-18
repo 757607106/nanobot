@@ -2941,30 +2941,33 @@ def test_web_api_skillhub_marketplace_list_install_and_delete(
 ) -> None:
     runtime = web_client.app.state.web.workspace_runtime
 
-    def fake_list_skills(query: str = "", limit: int = 24) -> list[dict[str, object]]:
+    def fake_list_skills(query: str = "", limit: int = 24, offset: int = 0) -> dict[str, object]:
         assert query == "protocol"
         assert limit == 5
-        return [
-            {
-                "id": "0.protocol",
-                "slug": "0.protocol",
-                "name": "0.protocol",
-                "description": "Remote SkillHub entry",
-                "version": "1.0.0",
-                "tags": ["security"],
-                "source": "skillhub",
-                "homepage": "https://skillhub.tencent.com/",
-                "updatedAt": 1_770_000_000_000,
-                "downloads": 42,
-                "compatibility": "native",
-                "compatibilityLabel": "原生可用",
-                "compatibilitySummary": "包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。",
-                "compatibilityReasons": [
-                    "包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。",
-                    "未发现 OpenClaw、Claude 或 Codex 专属 hooks、目录约定或 `sessions_*` 依赖。",
-                ],
-            }
-        ]
+        return {
+            "skills": [
+                {
+                    "id": "0.protocol",
+                    "slug": "0.protocol",
+                    "name": "0.protocol",
+                    "description": "Remote SkillHub entry",
+                    "version": "1.0.0",
+                    "tags": ["security"],
+                    "source": "skillhub",
+                    "homepage": "https://skillhub.tencent.com/",
+                    "updatedAt": 1_770_000_000_000,
+                    "downloads": 42,
+                    "compatibility": "native",
+                    "compatibilityLabel": "原生可用",
+                    "compatibilitySummary": "包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。",
+                    "compatibilityReasons": [
+                        "包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。",
+                        "未发现 OpenClaw、Claude 或 Codex 专属 hooks、目录约定或 `sessions_*` 依赖。",
+                    ],
+                }
+            ],
+            "total": 1,
+        }
 
     def fake_install_skill(workspace_root: Path, slug: str, *, force: bool = False) -> dict[str, str]:
         assert slug == "0.protocol"
@@ -2992,10 +2995,11 @@ tags: security, protocol
     market = web_client.get("/api/v1/skills/marketplace", params={"q": "protocol", "limit": 5})
     assert market.status_code == 200
     market_payload = market.json()["data"]
-    assert market_payload[0]["slug"] == "0.protocol"
-    assert market_payload[0]["source"] == "skillhub"
-    assert market_payload[0]["compatibility"] == "native"
-    assert market_payload[0]["compatibilityReasons"]
+    assert market_payload["skills"][0]["slug"] == "0.protocol"
+    assert market_payload["skills"][0]["source"] == "skillhub"
+    assert market_payload["skills"][0]["compatibility"] == "native"
+    assert market_payload["skills"][0]["compatibilityReasons"]
+    assert market_payload["total"] == 1
 
     installed = web_client.post("/api/v1/skills/install", json={"slug": "0.protocol"})
     assert installed.status_code == 201

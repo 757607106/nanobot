@@ -103,14 +103,17 @@ class SkillHubMarketplaceClient:
         self.timeout = timeout
         self._compatibility_cache: dict[str, dict[str, Any]] = {}
 
-    def list_skills(self, query: str = "", limit: int = 24) -> list[dict[str, Any]]:
+    def list_skills(self, query: str = "", limit: int = 24, offset: int = 0) -> dict[str, Any]:
         normalized_query = str(query or "").strip()
         safe_limit = max(1, min(int(limit or 24), 100))
+        safe_offset = max(0, int(offset or 0))
 
         if normalized_query:
-            remote_matches = self._search_remote(normalized_query, safe_limit)
+            remote_matches = self._search_remote(normalized_query, safe_limit + safe_offset)
             if remote_matches:
-                return [self._with_compatibility(skill) for skill in remote_matches[:safe_limit]]
+                matched = [self._with_compatibility(skill) for skill in remote_matches]
+                total = len(matched)
+                return {"skills": matched[safe_offset:safe_offset + safe_limit], "total": total}
 
         skills = self._load_index_skills()
         if normalized_query:
@@ -128,7 +131,9 @@ class SkillHubMarketplaceClient:
                     item[1]["name"].lower(),
                 )
             )
-            return [self._with_compatibility(skill) for _, skill in scored[:safe_limit]]
+            matched = [self._with_compatibility(skill) for _, skill in scored]
+            total = len(matched)
+            return {"skills": matched[safe_offset:safe_offset + safe_limit], "total": total}
 
         skills.sort(
             key=lambda item: (
@@ -137,7 +142,9 @@ class SkillHubMarketplaceClient:
                 item["name"].lower(),
             )
         )
-        return [self._with_compatibility(skill) for skill in skills[:safe_limit]]
+        matched = [self._with_compatibility(skill) for skill in skills]
+        total = len(matched)
+        return {"skills": matched[safe_offset:safe_offset + safe_limit], "total": total}
 
     def install_skill(self, workspace_root: Path, slug: str, *, force: bool = False) -> dict[str, Any]:
         safe_slug = self.normalize_skill_id(slug)

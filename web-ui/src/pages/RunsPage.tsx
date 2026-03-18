@@ -744,7 +744,7 @@ export default function RunsPage() {
       {error && <Alert type="error" showIcon message={error} style={{ margin: '0 var(--nb-layout-gutter)' }} />}
 
       <div className="page-content-wrapper" style={{ padding: '0 var(--nb-layout-gutter)' }}>
-        <Card className="page-card" bordered={false} bodyStyle={{ padding: 0 }}>
+        <Card className="page-card" bordered={false} styles={{ body: { padding: 0 } }}>
           <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--nb-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Space>
               <Select

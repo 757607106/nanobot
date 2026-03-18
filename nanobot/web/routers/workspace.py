@@ -142,9 +142,9 @@ def get_installed_skills(request: Request) -> JSONResponse:
 
 
 @router.get("/api/v1/skills/marketplace")
-def get_marketplace_skills(request: Request, q: str = "", limit: int = 24) -> JSONResponse:
+def get_marketplace_skills(request: Request, q: str = "", limit: int = 24, offset: int = 0) -> JSONResponse:
     try:
-        data = request.app.state.web.list_marketplace_skills(q, limit)
+        data = request.app.state.web.list_marketplace_skills(q, limit, offset)
     except SkillHubMarketplaceError as exc:
         raise APIError(400, "SKILL_MARKETPLACE_FETCH_FAILED", str(exc)) from exc
     return _json_response(200, _ok(data))

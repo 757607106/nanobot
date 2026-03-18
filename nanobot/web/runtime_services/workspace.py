@@ -120,8 +120,8 @@ class WebWorkspaceRuntimeService:
             return []
         return self.state.agent_templates.list_installed_skills()
 
-    def list_marketplace_skills(self, query: str = "", limit: int = 24) -> list[dict[str, Any]]:
-        return self.skillhub.list_skills(query=query, limit=limit)
+    def list_marketplace_skills(self, query: str = "", limit: int = 24, offset: int = 0) -> dict[str, Any]:
+        return self.skillhub.list_skills(query=query, limit=limit, offset=offset)
 
     def install_marketplace_skill(self, slug: str, force: bool = False) -> dict[str, Any]:
         safe_slug = self.skillhub.normalize_skill_id(slug)

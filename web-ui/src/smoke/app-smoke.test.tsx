@@ -2647,25 +2647,28 @@ describe('web app smoke pages', () => {
         isDeletable: false,
       },
     ])
-    mockApi.searchMarketplaceSkills.mockResolvedValue([
-      {
-        id: 'frontend-design',
-        slug: 'frontend-design',
-        name: 'frontend-design',
-        description: 'Create distinctive production-grade frontend interfaces.',
-        source: 'skillhub',
-        version: '1.0.0',
-        tags: ['design'],
-        homepage: 'https://skillhub.tencent.com/',
-        compatibility: 'native',
-        compatibilityLabel: '原生可用',
-        compatibilitySummary: '包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。',
-        compatibilityReasons: [
-          '包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。',
-          '未发现 OpenClaw、Claude 或 Codex 专属 hooks、目录约定或 `sessions_*` 依赖。',
-        ],
-      },
-    ])
+    mockApi.searchMarketplaceSkills.mockResolvedValue({
+      skills: [
+        {
+          id: 'frontend-design',
+          slug: 'frontend-design',
+          name: 'frontend-design',
+          description: 'Create distinctive production-grade frontend interfaces.',
+          source: 'skillhub',
+          version: '1.0.0',
+          tags: ['design'],
+          homepage: 'https://skillhub.tencent.com/',
+          compatibility: 'native',
+          compatibilityLabel: '原生可用',
+          compatibilitySummary: '包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。',
+          compatibilityReasons: [
+            '包含标准 `SKILL.md`，可以被 nanobot 技能加载器识别。',
+            '未发现 OpenClaw、Claude 或 Codex 专属 hooks、目录约定或 `sessions_*` 依赖。',
+          ],
+        },
+      ],
+      total: 1,
+    })
     mockApi.installMarketplaceSkill.mockResolvedValue({
       id: 'frontend-design',
       name: 'frontend-design',

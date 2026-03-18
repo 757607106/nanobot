@@ -392,6 +392,11 @@ export interface MarketplaceSkill {
   compatibilityReasons: string[]
 }
 
+export interface MarketplaceSearchResponse {
+  skills: MarketplaceSkill[]
+  total: number
+}
+
 export interface AgentTemplateTool {
   name: string
   description: string

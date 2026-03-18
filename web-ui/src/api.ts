@@ -39,7 +39,7 @@ import type {
   KnowledgeIngestJob,
   KnowledgeSource,
   KnowledgeRetrieveResult,
-  MarketplaceSkill,
+  MarketplaceSearchResponse,
   McpRepositoryAnalysis,
   McpRepositoryInstallResult,
   McpProbeResult,
@@ -836,14 +836,15 @@ export const api = {
       method: 'POST',
     }),
   getInstalledSkills: () => request<InstalledSkill[]>('/skills/installed'),
-  searchMarketplaceSkills: (query = '', limit = 24) => {
+  searchMarketplaceSkills: (query = '', limit = 24, offset = 0) => {
     const params = new URLSearchParams()
     if (query.trim()) {
       params.set('q', query.trim())
     }
     params.set('limit', String(limit))
+    params.set('offset', String(offset))
     const search = params.toString()
-    return request<MarketplaceSkill[]>(`/skills/marketplace${search ? `?${search}` : ''}`)
+    return request<MarketplaceSearchResponse>(`/skills/marketplace${search ? `?${search}` : ''}`)
   },
   installMarketplaceSkill: (slug: string, force = false) =>
     request<InstalledSkill>('/skills/install', {
