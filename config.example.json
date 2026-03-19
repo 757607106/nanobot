@@ -1,0 +1,91 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.nanobot/workspace",
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "maxTokens": 8192,
+      "contextWindowTokens": 65536,
+      "temperature": 0.1,
+      "maxToolIterations": 40,
+      "reasoningEffort": null
+    }
+  },
+  "channels": {
+    "sendProgress": true,
+    "sendToolHints": false,
+    "telegram": {
+      "enabled": false,
+      "token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "allowFrom": [],
+      "proxy": null,
+      "replyToMessage": false,
+      "groupPolicy": "mention"
+    },
+    "feishu": {
+      "enabled": false,
+      "appId": "YOUR_FEISHU_APP_ID",
+      "appSecret": "YOUR_FEISHU_APP_SECRET",
+      "encryptKey": "",
+      "verificationToken": "",
+      "allowFrom": [],
+      "reactEmoji": "THUMBSUP"
+    },
+    "qq": {
+      "enabled": false,
+      "appId": "YOUR_QQ_APP_ID",
+      "secret": "YOUR_QQ_APP_SECRET",
+      "allowFrom": []
+    }
+  },
+  "providers": {
+    "custom": {
+      "apiKey": "",
+      "apiBase": "https://your-openai-compatible-endpoint/v1",
+      "extraHeaders": null
+    },
+    "deepseek": {
+      "apiKey": "YOUR_DEEPSEEK_API_KEY",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "dashscope": {
+      "apiKey": "YOUR_DASHSCOPE_API_KEY",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "openaiCodex": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "githubCopilot": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    }
+  },
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18790,
+    "heartbeat": {
+      "enabled": true,
+      "intervalS": 1800
+    }
+  },
+  "tools": {
+    "web": {
+      "proxy": null,
+      "search": {
+        "apiKey": "",
+        "maxResults": 5
+      }
+    },
+    "exec": {
+      "timeout": 60,
+      "pathAppend": ""
+    },
+    "restrictToWorkspace": false,
+    "mcpServers": {}
+  }
+}

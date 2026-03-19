@@ -68,7 +68,7 @@ function isStepAvailable(status: SetupStatus, key: WizardStepKey) {
 export default function SetupPage() {
   const navigate = useNavigate()
   const { message } = App.useApp()
-  const { applyStatus, refresh, status: setupStatus } = useSetup()
+  const { applyStatus, status: setupStatus } = useSetup()
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [configMeta, setConfigMeta] = useState<ConfigMeta | null>(null)
   const [loading, setLoading] = useState(true)
@@ -96,19 +96,15 @@ export default function SetupPage() {
     async function load() {
       setLoading(true)
       try {
-        const [configResult, metaResult, setupResult] = await Promise.all([
+        const [configResult, metaResult] = await Promise.all([
           api.getConfig(),
           api.getConfigMeta(),
-          refresh(),
         ])
         if (!active) {
           return
         }
         setConfig(normalizeModelConfig(configResult, metaResult))
         setConfigMeta(metaResult)
-        if (setupResult) {
-          applyStatus(setupResult)
-        }
         setError(null)
       } catch (error) {
         if (!active) {

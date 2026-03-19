@@ -83,7 +83,7 @@ function AuthIndexRedirect() {
   const { loading, error, status } = useAuth()
   const setup = useSetup()
 
-  if (loading || (!status && !error)) {
+  if (!status && (loading || !error)) {
     return <RouteFallback />
   }
 
@@ -95,7 +95,7 @@ function AuthIndexRedirect() {
     return <Navigate to="/login" replace />
   }
 
-  if (setup.loading || (!setup.status && !setup.error)) {
+  if (!setup.status && (setup.loading || !setup.error)) {
     return <RouteFallback />
   }
 
@@ -111,7 +111,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const { loading, error, status } = useAuth()
   const setup = useSetup()
 
-  if (loading || (!status && !error)) {
+  if (!status && (loading || !error)) {
     return <RouteFallback />
   }
 
@@ -123,7 +123,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (setup.loading || (!setup.status && !setup.error)) {
+  if (!setup.status && (setup.loading || !setup.error)) {
     return <RouteFallback />
   }
 
@@ -142,7 +142,7 @@ function GuestOnly({ children }: { children: ReactNode }) {
   const { loading, error, status } = useAuth()
   const setup = useSetup()
 
-  if (loading || (!status && !error)) {
+  if (!status && (loading || !error)) {
     return <RouteFallback />
   }
 
@@ -151,7 +151,7 @@ function GuestOnly({ children }: { children: ReactNode }) {
   }
 
   if (status?.initialized && status.authenticated) {
-    if (setup.loading || (!setup.status && !setup.error)) {
+    if (!setup.status && (setup.loading || !setup.error)) {
       return <RouteFallback />
     }
     if (setup.error && !setup.status) {
@@ -167,7 +167,7 @@ function SetupOnly({ children }: { children: ReactNode }) {
   const { loading, error, status } = useAuth()
   const setup = useSetup()
 
-  if (loading || (!status && !error)) {
+  if (!status && (loading || !error)) {
     return <RouteFallback />
   }
 
@@ -179,7 +179,7 @@ function SetupOnly({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace />
   }
 
-  if (setup.loading || (!setup.status && !setup.error)) {
+  if (!setup.status && (setup.loading || !setup.error)) {
     return <RouteFallback />
   }
 
