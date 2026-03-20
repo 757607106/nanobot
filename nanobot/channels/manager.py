@@ -101,7 +101,12 @@ class ChannelManager:
             if not enabled:
                 continue
             try:
-                channel = cls(section, self.bus)
+                channel_config = (
+                    section.model_dump(mode="python")
+                    if hasattr(section, "model_dump") and not isinstance(section, dict)
+                    else section
+                )
+                channel = cls(channel_config, self.bus)
                 channel.transcription_api_key = groq_key
                 self.channels[name] = channel
                 logger.info("{} channel enabled", cls.display_name)

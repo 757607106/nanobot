@@ -5,6 +5,7 @@ import { defineConfig } from '@playwright/test'
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const uiPort = Number(process.env.NANOBOT_E2E_UI_PORT || '4173')
 const runtimeDir = path.resolve(dirname, '../tmp/web-e2e-runtime')
+const reuseExistingServer = process.env.NANOBOT_E2E_REUSE_SERVER === '1'
 
 export default defineConfig({
   testDir: './e2e',
@@ -20,7 +21,7 @@ export default defineConfig({
   webServer: {
     command: 'python3 ../tests/web_e2e_server.py',
     url: `http://127.0.0.1:${uiPort}/api/v1/health`,
-    reuseExistingServer: false,
+    reuseExistingServer,
     timeout: 120_000,
     env: {
       ...process.env,

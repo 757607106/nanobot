@@ -14,7 +14,7 @@ test.describe.serial('accessibility smoke @a11y', () => {
     await expectNoSeriousViolations(page)
   })
 
-  test('dashboard, chat, and mcp detail have no serious violations', async ({ page }) => {
+  test('chat landing and mcp detail have no serious violations', async ({ page }) => {
     await bootstrapAndSetup(page)
     await expectNoSeriousViolations(page)
 

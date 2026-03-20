@@ -11,33 +11,27 @@ import {
 test.describe.serial('critical gui flows @critical', () => {
   test.setTimeout(60_000)
 
-  test('reaches dashboard after isolated bootstrap and setup completion', async ({ page }) => {
+  test('reaches chat workspace after isolated bootstrap and setup completion', async ({ page }) => {
     await bootstrapAndSetup(page)
-    await expect(page.getByTestId(testIds.app.navDashboard)).toBeVisible()
-    await expect(page.getByText('nanobot', { exact: true })).toBeVisible()
+    await expect(page).toHaveURL(/\/chat$/)
+    await expect(page.getByTestId(testIds.app.navChat)).toBeVisible()
+    await expect(page.getByTestId(testIds.chat.newSession)).toBeVisible()
   })
 
   test('persists profile changes across logout and login', async ({ page }) => {
-    await login(page)
-    await page.getByTestId(testIds.app.navProfile).click()
-    await expect(page).toHaveURL(/\/profile$/)
+    await login(page, '/system/admin')
+    await expect(page).toHaveURL(/\/system\/admin$/)
 
     await page.getByTestId(testIds.profile.displayName).fill('Console Owner')
     await page.getByTestId(testIds.profile.email).fill('owner@example.com')
     await page.getByTestId(testIds.profile.saveProfile).click()
     await expect(page.getByTestId(testIds.profile.displayName)).toHaveValue('Console Owner')
 
-    await page.getByTestId(testIds.app.logout).click()
+    await page.locator(`[data-testid="${testIds.app.logout}"]:visible`).first().click()
     await expect(page).toHaveURL(/\/login$/)
 
-    await page.goto('/profile')
-    await expect(page).toHaveURL(/\/login$/)
-    await page.getByTestId(testIds.auth.username).fill('owner')
-    await page.getByTestId(testIds.auth.password).fill('bootstrap-pass-123')
-    await page.getByTestId(testIds.auth.submit).click()
-
-    await page.getByTestId(testIds.app.navProfile).click()
-    await expect(page).toHaveURL(/\/profile$/)
+    await login(page, '/system/admin')
+    await expect(page).toHaveURL(/\/system\/admin$/)
     await expect(page.getByTestId(testIds.profile.displayName)).toHaveValue('Console Owner')
     await expect(page.getByTestId(testIds.profile.email)).toHaveValue('owner@example.com')
   })

@@ -122,11 +122,20 @@ export const channelMetas: ChannelMeta[] = [
     name: 'qq',
     label: 'QQ',
     category: 'Social',
-    description: 'QQ 机器人接入，支持 AppID、密钥和发送者白名单。',
+    description: 'QQ 机器人接入，支持 AppID、密钥、发送者白名单和消息格式。',
     primaryFields: [
       { path: ['appId'], label: 'App ID', kind: 'text' },
       { path: ['secret'], label: '密钥', kind: 'password' },
       { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
+      {
+        path: ['msgFormat'],
+        label: '消息格式',
+        kind: 'select',
+        options: [
+          { label: '纯文本', value: 'plain' },
+          { label: 'Markdown（推荐）', value: 'markdown' },
+        ],
+      },
     ],
   },
   {

@@ -183,7 +183,7 @@ vi.mock('@ant-design/icons', async () => {
     }
   }
 
-  return {
+  const icons: Record<string, ReturnType<typeof makeIcon>> = {
     ApiOutlined: makeIcon('api'),
     ApartmentOutlined: makeIcon('apartment'),
     AppstoreOutlined: makeIcon('appstore'),
@@ -197,6 +197,7 @@ vi.mock('@ant-design/icons', async () => {
     DeleteOutlined: makeIcon('delete'),
     DesktopOutlined: makeIcon('desktop'),
     DatabaseOutlined: makeIcon('database'),
+    CloudDownloadOutlined: makeIcon('cloud-download'),
     DownloadOutlined: makeIcon('download'),
     EditOutlined: makeIcon('edit'),
     ExperimentOutlined: makeIcon('experiment'),
@@ -228,6 +229,21 @@ vi.mock('@ant-design/icons', async () => {
     UserOutlined: makeIcon('user'),
     CloudUploadOutlined: makeIcon('cloud-upload'),
   }
+
+  return new Proxy(icons, {
+    get(target, prop) {
+      if (typeof prop !== 'string') {
+        return undefined
+      }
+      if (prop === 'then') {
+        return undefined
+      }
+      if (!(prop in target)) {
+        target[prop] = makeIcon(prop)
+      }
+      return target[prop]
+    },
+  })
 })
 
 vi.mock('@ant-design/x', async () => {
@@ -659,6 +675,23 @@ vi.mock('antd', async () => {
   )
 
   const Divider = () => <hr />
+  const Badge = ({ children, text }: Props & { text?: React.ReactNode }) => (
+    <span>
+      {text as React.ReactNode}
+      {children}
+    </span>
+  )
+  const Descriptions = Object.assign(
+    ({ children }: Props) => <dl>{children}</dl>,
+    {
+      Item: ({ children, label }: Props) => (
+        <div>
+          <dt>{label}</dt>
+          <dd>{children}</dd>
+        </div>
+      ),
+    },
+  )
   const Tag = ({ children, icon, onClose }: Props) => (
     <span>
       {icon}
@@ -686,7 +719,9 @@ vi.mock('antd', async () => {
     Text: ({ children }: Props) => <span>{children}</span>,
   }
 
-  const Space = Box
+  const Space = Object.assign(Box, {
+    Compact: Box,
+  })
   const Row = Box
   const Col = Box
   const Flex = Box
@@ -696,7 +731,22 @@ vi.mock('antd', async () => {
       <div>{dataSource.map((item, index) => <div key={index}>{renderItem?.(item)}</div>)}</div>
     ),
     {
-      Item: ({ children }: Props) => <div>{children}</div>,
+      Item: Object.assign(
+        ({ children }: Props) => <div>{children}</div>,
+        {
+          Meta: ({
+            avatar,
+            description,
+            title,
+          }: Props & { avatar?: React.ReactNode; description?: React.ReactNode; title?: React.ReactNode }) => (
+            <div>
+              {avatar as React.ReactNode}
+              {title as React.ReactNode}
+              {description as React.ReactNode}
+            </div>
+          ),
+        },
+      ),
     },
   )
 
@@ -730,6 +780,64 @@ vi.mock('antd', async () => {
   }
 
   const Drawer = ({ children, open }: Props) => (open ? <div>{children}</div> : null)
+
+  const UploadBase = ({ children, className }: Props) => <div className={className}>{children}</div>
+  const Upload = Object.assign(UploadBase, {
+    Dragger: UploadBase,
+  })
+
+  const Table = ({
+    columns = [],
+    dataSource = [],
+  }: Props & {
+    columns?: Array<{
+      dataIndex?: string
+      key?: string
+      render?: (value: unknown, record: unknown, index: number) => React.ReactNode
+      title?: React.ReactNode
+    }>
+    dataSource?: unknown[]
+  }) => (
+    <table>
+      <thead>
+        <tr>
+          {columns.map((column, index) => (
+            <th key={String((column as { key?: string }).key ?? index)}>
+              {(column as { title?: React.ReactNode }).title}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {dataSource.map((record, rowIndex) => (
+          <tr key={String((record as { key?: string }).key ?? rowIndex)}>
+            {columns.map((column, columnIndex) => {
+              const key = (column as { dataIndex?: string; key?: string }).dataIndex
+              const render = (column as { render?: (value: unknown, record: unknown, index: number) => React.ReactNode }).render
+              const value = key && typeof record === 'object' && record !== null ? (record as Record<string, unknown>)[key] : undefined
+              return (
+                <td key={`${rowIndex}-${String((column as { key?: string }).key ?? columnIndex)}`}>
+                  {render ? render(value, record, rowIndex) : (value as React.ReactNode)}
+                </td>
+              )
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+
+  const Steps = ({ items = [] }: Props) => (
+    <ol>
+      {items.map((item, index) => (
+        <li key={(item as { key?: string }).key ?? index}>
+          {(item as { icon?: React.ReactNode }).icon}
+          {(item as { title?: React.ReactNode }).title}
+          {(item as { description?: React.ReactNode }).description}
+        </li>
+      ))}
+    </ol>
+  )
 
   const LayoutBase = ({ children, className }: Props) => <div className={className}>{children}</div>
   const Layout = Object.assign(LayoutBase, {
@@ -765,12 +873,14 @@ vi.mock('antd', async () => {
   return {
     Alert,
     App: AppProvider,
+    Badge,
     Button,
     Card,
     Checkbox,
     Col,
     Collapse,
     ConfigProvider,
+    Descriptions,
     Divider,
     Drawer,
     Empty,
@@ -791,11 +901,14 @@ vi.mock('antd', async () => {
     Select,
     Space,
     Spin,
+    Steps,
     Switch,
+    Table,
     Tabs,
     Tag,
     Tooltip,
     Typography,
+    Upload,
   }
 })
 
@@ -1019,6 +1132,13 @@ function makeChannelDetail(channelName = 'telegram') {
       bridgeUrl: 'ws://127.0.0.1:3001',
       bridgeToken: 'bind-secret',
       authDir: '',
+    },
+    qq: {
+      enabled: true,
+      appId: '1900000001',
+      secret: 'qq-secret',
+      allowFrom: ['*'],
+      msgFormat: 'markdown',
     },
   }
 
@@ -2790,17 +2910,16 @@ describe('web app smoke pages', () => {
     )
 
     expect(await screen.findByText('知识库列表')).toBeInTheDocument()
-    expect(screen.getByText('基础设置')).toBeInTheDocument()
-    expect(screen.getByText('内容接入')).toBeInTheDocument()
-    expect(screen.getAllByText('来源治理').length).toBeGreaterThan(0)
+    expect(screen.getByText('概览')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '文档' })).toBeInTheDocument()
+    expect(screen.getByText('验证')).toBeInTheDocument()
     expect(screen.getByText('检索验证')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getAllByText('来源治理')[0])
-    expect(await screen.findByText('Support Help Center')).toBeInTheDocument()
-    expect(screen.getAllByText('来源治理').length).toBeGreaterThan(0)
-    expect(screen.getByText('来源详情')).toBeInTheDocument()
-    expect(screen.getByText('选择当前筛选结果')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '文档' }))
+    expect(await screen.findByText('文档管理')).toBeInTheDocument()
+    expect(screen.getByText('添加文档')).toBeInTheDocument()
+    expect(screen.getByText('文档名称')).toBeInTheDocument()
   })
 
   it('renders teams page with catalog and team run panels', async () => {
@@ -2872,10 +2991,11 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('执行列表')).toBeInTheDocument()
-    expect(screen.getByText('对话记录')).toBeInTheDocument()
-    expect(screen.getByText('过程记录')).toBeInTheDocument()
-    expect(screen.getByText('结果文档')).toBeInTheDocument()
+    expect(await screen.findByText('执行记录')).toBeInTheDocument()
+    expect(screen.getByText('执行结果')).toBeInTheDocument()
+    expect(screen.getByText('执行过程')).toBeInTheDocument()
+    expect(screen.getByText('任务层级结构')).toBeInTheDocument()
+    expect(screen.getByText('任务产出归档')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB validation').length).toBeGreaterThan(0)
   })
 
@@ -3055,11 +3175,12 @@ describe('web app smoke pages', () => {
 
   it('renders the skills page', async () => {
     renderPage(<SkillsPage />)
-    expect((await screen.findAllByText('技能市场')).length).toBeGreaterThan(0)
-    expect(screen.getByText('自定义上传')).toBeInTheDocument()
-    expect(screen.getByText('已安装技能')).toBeInTheDocument()
+    expect(await screen.findByText('技能中心')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('搜索 SkillHub 市场...')).toBeInTheDocument()
+    expect(screen.getByText('上传 ZIP')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /已安装技能/ })).toBeInTheDocument()
     expect(screen.getByText('原生可用')).toBeInTheDocument()
-    expect(screen.getByText('直接搜索官方市场并安装到当前工作区。')).toBeInTheDocument()
+    expect(screen.getByText('SkillHub 官网')).toBeInTheDocument()
   })
 
   it('renders the main prompt page', async () => {
@@ -3181,6 +3302,28 @@ describe('web app smoke pages', () => {
     expect(screen.getByText('绑定流程')).toBeInTheDocument()
     expect(screen.getByText('启动绑定')).toBeInTheDocument()
     expect(screen.getByText('扫码完成绑定')).toBeInTheDocument()
+  })
+
+  it('renders the QQ markdown option on the channel detail page', async () => {
+    mockApi.getChannel.mockResolvedValueOnce(makeChannelDetail('qq'))
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/channels/qq']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/channels/:channelName" element={<ChannelDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('配置 QQ')).toBeInTheDocument()
+    expect(screen.getByText('消息格式')).toBeInTheDocument()
+    expect(screen.getByText('Markdown（推荐）')).toBeInTheDocument()
   })
 
   it('renders the profile page', async () => {

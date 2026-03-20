@@ -47,6 +47,26 @@ class _FakeTelegram(BaseChannel):
         pass
 
 
+class _FakeQQDictOnlyPlugin(BaseChannel):
+    """Built-in-like plugin used to verify manager converts channel sections to dicts."""
+
+    name = "qq"
+    display_name = "Fake QQ"
+
+    def __init__(self, config, bus):
+        assert isinstance(config, dict)
+        super().__init__(config, bus)
+
+    async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
+        pass
+
+    async def send(self, msg: OutboundMessage) -> None:
+        pass
+
+
 def _make_entry_point(name: str, cls: type):
     """Create a mock entry point that returns *cls* on load()."""
     ep = SimpleNamespace(name=name, load=lambda _cls=cls: _cls)
@@ -205,6 +225,33 @@ async def test_manager_skips_disabled_plugin():
         mgr._init_channels()
 
     assert "fakeplugin" not in mgr.channels
+
+
+@pytest.mark.asyncio
+async def test_manager_converts_builtin_channel_section_to_dict():
+    fake_config = SimpleNamespace(
+        channels=ChannelsConfig(),
+        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
+    )
+    fake_config.channels.qq.enabled = True
+    fake_config.channels.qq.app_id = "app-123"
+    fake_config.channels.qq.secret = "qq-secret"
+    fake_config.channels.qq.allow_from = ["*"]
+
+    with patch(
+        "nanobot.channels.registry.discover_all",
+        return_value={"qq": _FakeQQDictOnlyPlugin},
+    ):
+        mgr = ChannelManager.__new__(ChannelManager)
+        mgr.config = fake_config
+        mgr.bus = MessageBus()
+        mgr.channels = {}
+        mgr._dispatch_task = None
+        mgr._init_channels()
+
+    assert "qq" in mgr.channels
+    assert isinstance(mgr.channels["qq"].config, dict)
+    assert mgr.channels["qq"].config["app_id"] == "app-123"
 
 
 # ---------------------------------------------------------------------------

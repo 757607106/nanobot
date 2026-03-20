@@ -35,7 +35,8 @@
       "enabled": false,
       "appId": "YOUR_QQ_APP_ID",
       "secret": "YOUR_QQ_APP_SECRET",
-      "allowFrom": []
+      "allowFrom": [],
+      "msgFormat": "plain"
     }
   },
   "providers": {
