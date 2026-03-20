@@ -4,12 +4,13 @@ import asyncio
 import json
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
-from nanobot.config.schema import Config, MCPServerConfig
+from nanobot.config.schema import Config, MCPServerConfig, ModelBindingConfig
 from nanobot.web.api import WebAppState
 from nanobot.web.auth import WebAuthManager
 from nanobot.web.channel_testing import WebChannelTestService
@@ -17,6 +18,7 @@ from nanobot.web.mcp_registry import WebMCPRegistryManager
 from nanobot.web.mcp_repository import MCPRepositoryService
 from nanobot.web.mcp_servers import MCPServerService
 from nanobot.web.operations import WebOperationsService
+from nanobot.web.runtime_services.agents import WebAgentRuntimeService
 from nanobot.web.setup import WebSetupManager
 
 
@@ -295,6 +297,34 @@ def test_web_channel_test_service_reports_wecom_preflight_without_http_route(tmp
   assert result["checks"][0]["status"] == "pass"
   assert result["checks"][1]["status"] == "pass"
   assert "最小启动条件" in result["summary"]
+
+
+def test_web_agent_runtime_service_applies_agent_provider_and_model_inference(tmp_path, monkeypatch) -> None:
+  config, _config_path = _make_service_config(tmp_path, monkeypatch)
+  config.agents.defaults.provider = "deepseek"
+  config.agents.defaults.model = "deepseek-chat"
+  config.model_bindings["kimi-cn"] = ModelBindingConfig(
+    provider="moonshot",
+    label="Kimi 国内",
+    model="kimi-k2.5",
+    api_key="sk-kimi-cn",
+    api_base="https://api.moonshot.cn/v1",
+  )
+
+  runtime = WebAgentRuntimeService(SimpleNamespace(config=config))
+
+  explicit_provider = runtime._build_agent_config({"provider": "moonshot", "model": "kimi-k2.5"})
+  assert explicit_provider.agents.defaults.provider == "moonshot"
+  assert explicit_provider.agents.defaults.model == "kimi-k2.5"
+
+  bound_provider = runtime._build_agent_config({"binding": "kimi-cn"})
+  assert bound_provider.agents.defaults.binding == "kimi-cn"
+  assert bound_provider.agents.defaults.provider == "moonshot"
+  assert bound_provider.agents.defaults.model == "kimi-k2.5"
+
+  inferred_provider = runtime._build_agent_config({"model": "glm-4.5"})
+  assert inferred_provider.agents.defaults.provider == "zhipu"
+  assert inferred_provider.agents.defaults.model == "glm-4.5"
 
 
 def test_web_app_state_document_center_updates_and_resets_without_http(tmp_path, monkeypatch) -> None:

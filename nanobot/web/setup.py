@@ -170,13 +170,13 @@ class WebSetupManager:
         temp_path.replace(self._state_path)
 
     def _provider_ready(self, config: Config) -> bool:
-        provider_name = str(config.agents.defaults.provider or "").strip()
+        provider_name = str(config.get_provider_name(config.agents.defaults.model) or "").strip()
         model = str(config.agents.defaults.model or "").strip()
         if not provider_name or provider_name == "auto" or not model:
             return False
 
         spec = next((item for item in PROVIDERS if item.name == provider_name), None)
-        provider = getattr(config.providers, provider_name, None)
+        provider = config.get_binding(config.agents.defaults.model) or getattr(config.providers, provider_name, None)
         if spec is None:
             return False
         if spec.is_oauth:

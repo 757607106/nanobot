@@ -181,6 +181,14 @@ class AgentDefinitionService:
             self._get_value(payload, "model") if "model" in payload else template_snapshot.get("model", default_model),
             field_name="model",
         ) or default_model
+        binding = self._normalize_text(
+            self._get_value(payload, "binding") if "binding" in payload else template_snapshot.get("binding"),
+            field_name="binding",
+        ) or None
+        provider = self._normalize_text(
+            self._get_value(payload, "provider") if "provider" in payload else template_snapshot.get("provider"),
+            field_name="provider",
+        ) or None
         backend = self._normalize_text(
             self._get_value(payload, "backend") if "backend" in payload else template_snapshot.get("backend"),
             field_name="backend",
@@ -224,6 +232,8 @@ class AgentDefinitionService:
             system_prompt=system_prompt,
             rules=rules,
             model=model,
+            binding=binding,
+            provider=provider,
             backend=backend,
             enabled=enabled,
             tool_allowlist=tool_allowlist,
@@ -247,6 +257,8 @@ class AgentDefinitionService:
             "system_prompt": self._get_value(payload, "systemPrompt", "system_prompt"),
             "rules": self._get_value(payload, "rules"),
             "model": self._get_value(payload, "model"),
+            "binding": self._get_value(payload, "binding"),
+            "provider": self._get_value(payload, "provider"),
             "backend": self._get_value(payload, "backend"),
             "enabled": self._get_value(payload, "enabled"),
             "tool_allowlist": self._get_value(payload, "toolAllowlist", "tool_allowlist"),
@@ -283,6 +295,12 @@ class AgentDefinitionService:
             model=existing.model
             if updates["model"] is None
             else (self._normalize_text(updates["model"], field_name="model") or None),
+            binding=existing.binding
+            if updates["binding"] is None
+            else (self._normalize_text(updates["binding"], field_name="binding") or None),
+            provider=existing.provider
+            if updates["provider"] is None
+            else (self._normalize_text(updates["provider"], field_name="provider") or None),
             backend=existing.backend
             if updates["backend"] is None
             else (self._normalize_text(updates["backend"], field_name="backend") or None),

@@ -12,7 +12,7 @@ from litellm import acompletion
 from loguru import logger
 
 from nanobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
-from nanobot.providers.registry import find_by_model, find_gateway
+from nanobot.providers.registry import find_by_model, find_by_name, find_gateway
 
 # Standard chat-completion message keys.
 _ALLOWED_MSG_KEYS = frozenset({"role", "content", "tool_calls", "tool_call_id", "name", "reasoning_content"})
@@ -49,6 +49,12 @@ class LiteLLMProvider(LLMProvider):
         # provider_name (from config key) is the primary signal;
         # api_key / api_base are fallback for auto-detection.
         self._gateway = find_gateway(provider_name, api_key, api_base)
+        explicit_spec = find_by_name(provider_name) if provider_name else None
+        self._provider_spec = (
+            explicit_spec
+            if explicit_spec and not (explicit_spec.is_gateway or explicit_spec.is_local or explicit_spec.is_oauth or explicit_spec.is_direct)
+            else None
+        )
 
         # Configure environment variables
         if api_key:
@@ -64,9 +70,17 @@ class LiteLLMProvider(LLMProvider):
 
         self._langsmith_enabled = bool(os.getenv("LANGSMITH_API_KEY"))
 
+    def _active_spec(self, model: str):
+        """Return the spec selected by explicit provider binding or model inference."""
+        if self._gateway is not None:
+            return self._gateway
+        if self._provider_spec is not None:
+            return self._provider_spec
+        return find_by_model(model)
+
     def _setup_env(self, api_key: str, api_base: str | None, model: str) -> None:
         """Set environment variables based on detected provider."""
-        spec = self._gateway or find_by_model(model)
+        spec = self._active_spec(model)
         if not spec:
             return
         if not spec.env_key:
@@ -98,8 +112,8 @@ class LiteLLMProvider(LLMProvider):
                 model = f"{prefix}/{model}"
             return model
 
-        # Standard mode: auto-prefix for known providers
-        spec = find_by_model(model)
+        # Standard mode: explicit provider binding wins; otherwise infer from model id.
+        spec = self._provider_spec or find_by_model(model)
         if spec and spec.litellm_prefix:
             model = self._canonicalize_explicit_prefix(model, spec.name, spec.litellm_prefix)
             if not any(model.startswith(s) for s in spec.skip_prefixes):
@@ -119,9 +133,7 @@ class LiteLLMProvider(LLMProvider):
 
     def _supports_cache_control(self, model: str) -> bool:
         """Return True when the provider supports cache_control on content blocks."""
-        if self._gateway is not None:
-            return self._gateway.supports_prompt_caching
-        spec = find_by_model(model)
+        spec = self._active_spec(model)
         return spec is not None and spec.supports_prompt_caching
 
     def _apply_cache_control(
@@ -153,17 +165,16 @@ class LiteLLMProvider(LLMProvider):
     def _apply_model_overrides(self, model: str, kwargs: dict[str, Any]) -> None:
         """Apply model-specific parameter overrides from the registry."""
         model_lower = model.lower()
-        spec = find_by_model(model)
+        spec = self._provider_spec or find_by_model(model)
         if spec:
             for pattern, overrides in spec.model_overrides:
                 if pattern in model_lower:
                     kwargs.update(overrides)
                     return
 
-    @staticmethod
-    def _extra_msg_keys(original_model: str, resolved_model: str) -> frozenset[str]:
+    def _extra_msg_keys(self, original_model: str, resolved_model: str) -> frozenset[str]:
         """Return provider-specific extra keys to preserve in request messages."""
-        spec = find_by_model(original_model) or find_by_model(resolved_model)
+        spec = self._provider_spec or find_by_model(original_model) or find_by_model(resolved_model)
         if (spec and spec.name == "anthropic") or "claude" in original_model.lower() or resolved_model.startswith("anthropic/"):
             return _ANTHROPIC_EXTRA_KEYS
         return frozenset()

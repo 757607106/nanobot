@@ -177,6 +177,12 @@ class WebAppState:
     def update_config(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.config_runtime.update_config(payload)
 
+    async def fetch_model_binding_models(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.config_runtime.fetch_model_binding_models(payload)
+
+    async def test_model_binding(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.config_runtime.test_model_binding(payload)
+
     def get_system_status(self) -> dict[str, Any]:
         return self.config_runtime.get_system_status()
 

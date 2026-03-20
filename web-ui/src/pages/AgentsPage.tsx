@@ -36,7 +36,14 @@ import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
 import { useDevMode } from '../devMode'
 import { getModelSuggestions } from '../modelCatalog'
-import { getPreferredProvider } from '../modelConfig'
+import {
+  getAllModelBindings,
+  getBindingOptions,
+  getPreferredProvider,
+  getProviderOptions,
+  inferProviderFromModel,
+  modelMatchesProvider,
+} from '../modelConfig'
 import { interactiveLift, interactiveTap, shellSpring } from '../motionTokens'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
@@ -61,6 +68,8 @@ interface AgentFormState {
   systemPrompt: string
   rulesText: string
   model: string
+  binding: string
+  provider: string
   backend: string
   enabled: boolean
   toolAllowlist: string[]
@@ -84,6 +93,8 @@ function createEmptyForm(): AgentFormState {
     ].join('\n'),
     rulesText: ['先确认任务边界', '优先使用已绑定能力', '输出结论时保持结构清晰'].join('\n'),
     model: '',
+    binding: '',
+    provider: '',
     backend: '',
     enabled: true,
     toolAllowlist: [],
@@ -102,6 +113,8 @@ function agentToForm(agent: AgentDefinition): AgentFormState {
     systemPrompt: agent.systemPrompt,
     rulesText: agent.rules.join('\n'),
     model: agent.model || '',
+    binding: agent.binding || '',
+    provider: agent.provider || '',
     backend: agent.backend || '',
     enabled: agent.enabled,
     toolAllowlist: [...agent.toolAllowlist],
@@ -131,6 +144,8 @@ function toPayload(form: AgentFormState): AgentDefinitionMutationInput {
     systemPrompt: form.systemPrompt.trim(),
     rules: parseRules(form.rulesText),
     model: form.model.trim() || null,
+    binding: form.binding.trim() || null,
+    provider: form.provider.trim() || null,
     backend: form.backend.trim() || null,
     enabled: form.enabled,
     toolAllowlist: [...form.toolAllowlist],
@@ -228,11 +243,27 @@ export default function AgentsPage() {
 
   const enabledCount = useMemo(() => agents.filter((item) => item.enabled).length, [agents])
 
+  const agentProviderOptions = useMemo(
+    () => getProviderOptions(globalConfigMeta),
+    [globalConfigMeta],
+  )
+  const agentBindingOptions = useMemo(
+    () => (globalConfig && globalConfigMeta ? getBindingOptions(globalConfig, globalConfigMeta) : []),
+    [globalConfig, globalConfigMeta],
+  )
+  const availableBindings = useMemo(
+    () => (globalConfig ? getAllModelBindings(globalConfig, globalConfigMeta) : {}),
+    [globalConfig, globalConfigMeta],
+  )
+
   const modelSuggestions = useMemo(() => {
     if (!globalConfig || !globalConfigMeta) return []
-    const provider = getPreferredProvider(globalConfig, globalConfigMeta)
+    const provider = (form.binding ? availableBindings[form.binding]?.provider : null)
+      || form.provider
+      || inferProviderFromModel(globalConfigMeta, form.model || null)
+      || getPreferredProvider(globalConfig, globalConfigMeta)
     return getModelSuggestions(provider, form.model || null).map((m) => ({ value: m, label: m }))
-  }, [globalConfig, globalConfigMeta, form.model])
+  }, [availableBindings, form.binding, form.model, form.provider, globalConfig, globalConfigMeta])
 
   const toolCardItems = useMemo(() => {
     const map = new Map(validTools.map((item) => [item.name, { name: item.name, description: item.description, isOrphan: false }]))
@@ -334,6 +365,46 @@ export default function AgentsPage() {
 
   function updateForm<K extends keyof AgentFormState>(key: K, value: AgentFormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function updateProvider(value: string) {
+    setForm((current) => {
+      const nextProvider = value
+      const currentModel = current.model.trim()
+      const nextModel = nextProvider && !modelMatchesProvider(globalConfigMeta, nextProvider, currentModel)
+        ? getModelSuggestions(nextProvider)[0] || current.model
+        : current.model
+
+      return {
+        ...current,
+        binding: current.binding && availableBindings[current.binding]?.provider === nextProvider ? current.binding : '',
+        provider: nextProvider,
+        model: nextModel,
+      }
+    })
+  }
+
+  function updateBinding(value: string) {
+    setForm((current) => {
+      const nextBinding = value
+      const bindingConfig = availableBindings[nextBinding]
+      const nextProvider = bindingConfig?.provider || ''
+      const currentModel = current.model.trim()
+      let nextModel = current.model
+
+      if (bindingConfig?.model && !currentModel) {
+        nextModel = bindingConfig.model
+      } else if (nextProvider && currentModel && !modelMatchesProvider(globalConfigMeta, nextProvider, currentModel)) {
+        nextModel = bindingConfig?.model || getModelSuggestions(nextProvider)[0] || current.model
+      }
+
+      return {
+        ...current,
+        binding: nextBinding,
+        provider: nextProvider || current.provider,
+        model: nextModel,
+      }
+    })
   }
 
   function toggleArrayItem(key: 'toolAllowlist' | 'skillIds' | 'mcpServerIds' | 'knowledgeBindingIds', item: string) {
@@ -635,6 +706,38 @@ export default function AgentsPage() {
               </div>
 
               <div className="studio-form-field">
+                <Text type="secondary">标签</Text>
+                <Select
+                  mode="tags"
+                  value={form.tags}
+                  onChange={(value) => updateForm('tags', value)}
+                  placeholder="例如：法务、研究、评审"
+                />
+              </div>
+
+              <div className="studio-form-field">
+                <Text type="secondary">模型绑定</Text>
+                <Select
+                  allowClear
+                  value={form.binding || undefined}
+                  onChange={(value) => updateBinding(value ?? '')}
+                  options={agentBindingOptions}
+                  placeholder="优先使用指定绑定"
+                />
+              </div>
+
+              <div className="studio-form-field">
+                <Text type="secondary">供应商绑定</Text>
+                <Select
+                  allowClear
+                  value={form.provider || undefined}
+                  onChange={(value) => updateProvider(value ?? '')}
+                  options={agentProviderOptions}
+                  placeholder="留空则按模型自动判断"
+                />
+              </div>
+
+              <div className="studio-form-field">
                 <Text type="secondary">模型</Text>
                 <AutoComplete
                   value={form.model}
@@ -645,16 +748,6 @@ export default function AgentsPage() {
                   filterOption={(input, option) =>
                     (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
                   }
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">标签</Text>
-                <Select
-                  mode="tags"
-                  value={form.tags}
-                  onChange={(value) => updateForm('tags', value)}
-                  placeholder="例如：法务、研究、评审"
                 />
               </div>
 

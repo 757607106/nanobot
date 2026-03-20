@@ -24,6 +24,8 @@ class AgentDefinition:
     system_prompt: str = ""
     rules: list[str] = field(default_factory=list)
     model: str | None = None
+    binding: str | None = None
+    provider: str | None = None
     backend: str | None = None
     enabled: bool = True
     tool_allowlist: list[str] = field(default_factory=list)
@@ -46,6 +48,8 @@ class AgentDefinition:
             "system_prompt": self.system_prompt,
             "rules": self.rules,
             "model": self.model,
+            "binding": self.binding,
+            "provider": self.provider,
             "backend": self.backend,
             "tool_allowlist": self.tool_allowlist,
             "mcp_server_ids": self.mcp_server_ids,
@@ -72,6 +76,8 @@ class AgentDefinition:
             system_prompt=stored.get("system_prompt", ""),
             rules=list(stored.get("rules") or []),
             model=stored.get("model"),
+            binding=stored.get("binding"),
+            provider=stored.get("provider"),
             backend=stored.get("backend"),
             enabled=bool(record.get("enabled", True)),
             tool_allowlist=list(stored.get("tool_allowlist") or []),

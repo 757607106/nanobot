@@ -7,10 +7,29 @@ from typing import Any
 from fastapi import APIRouter, Body, Query, Request
 from fastapi.responses import JSONResponse
 from loguru import logger
+from pydantic import BaseModel
 
 from nanobot.web.http import APIError, _json_response, _ok
 
 router = APIRouter()
+
+
+class ModelBindingTestRequest(BaseModel):
+    bindingName: str | None = None
+    label: str | None = None
+    provider: str
+    model: str
+    apiKey: str | None = None
+    apiBase: str | None = None
+    extraHeaders: dict[str, str] | None = None
+
+
+class ModelBindingModelsRequest(BaseModel):
+    bindingName: str | None = None
+    label: str | None = None
+    provider: str
+    apiKey: str | None = None
+    apiBase: str | None = None
 
 
 @router.get("/api/v1/config")
@@ -33,6 +52,36 @@ def update_config(
     except Exception as exc:  # noqa: BLE001
         logger.exception("Config update failed")
         raise APIError(400, "CONFIG_UPDATE_FAILED", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/config/model-bindings/test")
+async def test_model_binding(
+    request: Request,
+    payload: ModelBindingTestRequest,
+) -> JSONResponse:
+    try:
+        data = await request.app.state.web.test_model_binding(payload.model_dump(mode="json", by_alias=True))
+    except ValueError as exc:
+        raise APIError(400, "MODEL_BINDING_TEST_INVALID", str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Model binding detection failed")
+        raise APIError(400, "MODEL_BINDING_TEST_FAILED", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/config/model-bindings/models")
+async def fetch_model_binding_models(
+    request: Request,
+    payload: ModelBindingModelsRequest,
+) -> JSONResponse:
+    try:
+        data = await request.app.state.web.fetch_model_binding_models(payload.model_dump(mode="json", by_alias=True))
+    except ValueError as exc:
+        raise APIError(400, "MODEL_BINDING_MODELS_INVALID", str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Model binding model fetch failed")
+        raise APIError(400, "MODEL_BINDING_MODELS_FAILED", str(exc)) from exc
     return _json_response(200, _ok(data))
 
 

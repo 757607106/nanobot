@@ -43,6 +43,9 @@ export const providerDescriptions: Record<string, string> = {
   ollama: '本地 Ollama 运行时，通常只需要配置 API Base。',
   siliconflow: '硅基流动网关，提供 OpenAI 兼容接口。',
   volcengine: '火山引擎 Ark 网关，用于托管模型访问。',
+  volcengine_coding_plan: '火山引擎 Coding Plan，适合代码模型与专用配额场景。',
+  byteplus: 'BytePlus 国际版 Ark 网关，适合海外区域部署。',
+  byteplus_coding_plan: 'BytePlus Coding Plan，适合国际区代码模型与专用配额场景。',
   openai_codex: '基于 OAuth 的 Codex 集成，认证不在本页配置。',
   github_copilot: '基于 OAuth 的 GitHub Copilot 集成，认证不在本页配置。',
 }

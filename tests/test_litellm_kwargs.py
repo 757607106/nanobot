@@ -159,3 +159,25 @@ async def test_openrouter_native_model_id_gets_double_prefixed() -> None:
         "openrouter/free must become openrouter/openrouter/free — "
         "LiteLLM strips one layer so the API receives openrouter/free"
     )
+
+
+@pytest.mark.asyncio
+async def test_explicit_standard_provider_binding_wins_over_model_keyword() -> None:
+    """When provider_name is explicitly bound, LiteLLM routing should follow it."""
+    mock_acompletion = AsyncMock(return_value=_fake_response())
+
+    with patch("nanobot.providers.litellm_provider.acompletion", mock_acompletion):
+        provider = LiteLLMProvider(
+            api_key="dashscope-key",
+            api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            default_model="deepseek-chat",
+            provider_name="dashscope",
+        )
+        await provider.chat(
+            messages=[{"role": "user", "content": "hello"}],
+            model="deepseek-chat",
+        )
+
+    call_kwargs = mock_acompletion.call_args.kwargs
+    assert call_kwargs["model"] == "dashscope/deepseek-chat"
+    assert call_kwargs["api_key"] == "dashscope-key"

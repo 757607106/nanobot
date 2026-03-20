@@ -52,6 +52,8 @@ import type {
   McpServerEntry,
   McpServerMutationResult,
   McpServerListResponse,
+  ModelBindingModelsResult,
+  ModelBindingTestResult,
   OpsActionResponse,
   OpsActionTriggerResult,
   OpsLogResponse,
@@ -252,6 +254,8 @@ export const api = {
   updateSetupProvider: (payload: {
     provider: string
     model: string
+    bindingId?: string | null
+    bindingLabel?: string | null
     apiKey?: string
     apiBase?: string | null
   }) =>
@@ -387,6 +391,30 @@ export const api = {
   },
   getConfig: () => request<ConfigData>('/config'),
   getConfigMeta: () => request<ConfigMeta>('/config/meta'),
+  testModelBinding: (payload: {
+    bindingName?: string | null
+    label?: string | null
+    provider: string
+    model: string
+    apiKey?: string
+    apiBase?: string | null
+    extraHeaders?: Record<string, string> | null
+  }) =>
+    request<ModelBindingTestResult>('/config/model-bindings/test', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  fetchModelBindingModels: (payload: {
+    bindingName?: string | null
+    label?: string | null
+    provider: string
+    apiKey?: string
+    apiBase?: string | null
+  }) =>
+    request<ModelBindingModelsResult>('/config/model-bindings/models', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   getChannels: () => request<ChannelListResponse>('/channels'),
   getChannel: (channelName: string) =>
     request<ChannelDetailResponse>(`/channels/${encodeURIComponent(channelName)}`),

@@ -223,6 +223,57 @@ def test_config_falls_back_to_vllm_when_ollama_not_configured():
     assert config.get_api_base() == "http://localhost:8000"
 
 
+def test_config_normalizes_openai_compatible_api_base_endpoint_urls():
+    config = Config.model_validate(
+        {
+            "agents": {"defaults": {"provider": "deepseek", "model": "deepseek-chat", "binding": "deepseek-main"}},
+            "providers": {
+                "deepseek": {"apiBase": "https://api.deepseek.com/chat/completions"},
+            },
+            "modelBindings": {
+                "deepseek-main": {
+                    "provider": "deepseek",
+                    "label": "DeepSeek 主账号",
+                    "model": "deepseek-chat",
+                    "apiBase": "https://api.deepseek.com/chat/completions",
+                }
+            },
+        }
+    )
+
+    assert config.providers.deepseek.api_base == "https://api.deepseek.com"
+    assert config.model_bindings["deepseek-main"].api_base == "https://api.deepseek.com"
+    assert config.get_api_base() == "https://api.deepseek.com"
+
+
+def test_config_uses_named_model_binding_for_provider_resolution():
+    config = Config.model_validate(
+        {
+            "agents": {
+                "defaults": {
+                    "binding": "kimi-cn",
+                    "provider": "auto",
+                    "model": "kimi-k2.5",
+                }
+            },
+            "modelBindings": {
+                "kimi-cn": {
+                    "provider": "moonshot",
+                    "label": "Kimi 国内",
+                    "model": "kimi-k2.5",
+                    "apiKey": "sk-kimi-cn",
+                    "apiBase": "https://api.moonshot.cn/v1",
+                }
+            },
+        }
+    )
+
+    assert config.get_binding_name() == "kimi-cn"
+    assert config.get_provider_name() == "moonshot"
+    assert config.get_api_base() == "https://api.moonshot.cn/v1"
+    assert config.providers.moonshot.api_base == "https://api.moonshot.cn/v1"
+
+
 def test_find_by_model_prefers_explicit_prefix_over_generic_codex_keyword():
     spec = find_by_model("github-copilot/gpt-5.3-codex")
 

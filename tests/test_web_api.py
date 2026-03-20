@@ -8,6 +8,7 @@ import zipfile
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -2530,6 +2531,140 @@ def test_web_api_config_meta_uses_provider_registry(web_client: TestClient) -> N
     assert any(item["name"] == "ollama" and item["category"] == "local" for item in providers)
     assert any(item["name"] == "openai_codex" and item["category"] == "oauth" for item in providers)
     assert payload["resolvedProvider"] == "auto"
+
+
+def test_web_api_model_binding_test_endpoint_uses_current_payload(web_client: TestClient) -> None:
+    captured: dict[str, str | None] = {}
+    fake_provider = SimpleNamespace(
+        chat_with_retry=AsyncMock(
+            return_value=LLMResponse(content="OK", finish_reason="stop", usage={"total_tokens": 12})
+        )
+    )
+
+    def _make_provider(config):
+        captured["api_base"] = config.get_api_base(config.agents.defaults.model)
+        return fake_provider
+
+    web_client.app.state.web.config_runtime.make_provider = _make_provider
+
+    response = web_client.post(
+        "/api/v1/config/model-bindings/test",
+        json={
+            "bindingName": "kimi-cn",
+            "label": "Kimi 国内",
+            "provider": "moonshot",
+            "model": "kimi-k2.5",
+            "apiKey": "sk-kimi-cn",
+            "apiBase": "https://api.moonshot.cn/v1",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["ok"] is True
+    assert payload["bindingName"] == "kimi-cn"
+    assert payload["provider"] == "moonshot"
+    assert payload["model"] == "kimi-k2.5"
+    assert payload["responsePreview"] == "OK"
+    assert captured["api_base"] == "https://api.moonshot.cn/v1"
+    kwargs = fake_provider.chat_with_retry.await_args.kwargs
+    assert kwargs["model"] == "kimi-k2.5"
+    assert kwargs["max_tokens"] == 16
+
+
+def test_web_api_model_binding_test_endpoint_normalizes_full_chat_endpoint(
+    web_client: TestClient,
+) -> None:
+    captured: dict[str, str | None] = {}
+    fake_provider = SimpleNamespace(
+        chat_with_retry=AsyncMock(
+            return_value=LLMResponse(content="OK", finish_reason="stop", usage={"total_tokens": 9})
+        )
+    )
+
+    def _make_provider(config):
+        captured["api_base"] = config.get_api_base(config.agents.defaults.model)
+        return fake_provider
+
+    web_client.app.state.web.config_runtime.make_provider = _make_provider
+
+    response = web_client.post(
+        "/api/v1/config/model-bindings/test",
+        json={
+            "bindingName": "deepseek",
+            "label": "DeepSeek",
+            "provider": "deepseek",
+            "model": "deepseek-chat",
+            "apiKey": "sk-deepseek",
+            "apiBase": "https://api.deepseek.com/chat/completions",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["ok"] is True
+    assert captured["api_base"] == "https://api.deepseek.com"
+
+
+def test_web_api_model_binding_models_endpoint_uses_current_payload(
+    web_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    remote_models = AsyncMock(return_value=["kimi-k2.5", "kimi-k2-0905-preview"])
+    monkeypatch.setattr(web_client.app.state.web.config_runtime, "_request_remote_models", remote_models)
+
+    response = web_client.post(
+        "/api/v1/config/model-bindings/models",
+        json={
+            "bindingName": "kimi-cn",
+            "label": "Kimi 国内",
+            "provider": "moonshot",
+            "apiKey": "sk-kimi-cn",
+            "apiBase": "https://api.moonshot.cn/v1",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["bindingName"] == "kimi-cn"
+    assert payload["provider"] == "moonshot"
+    assert payload["models"] == ["kimi-k2.5", "kimi-k2-0905-preview"]
+    assert payload["count"] == 2
+    assert payload["source"] == "remote"
+    assert payload["message"] == "已获取 2 个模型"
+    assert remote_models.await_count == 1
+    assert remote_models.await_args.kwargs == {
+        "provider_name": "moonshot",
+        "api_key": "sk-kimi-cn",
+        "api_base": "https://api.moonshot.cn/v1",
+    }
+
+
+def test_web_api_model_binding_models_endpoint_normalizes_full_chat_endpoint(
+    web_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    remote_models = AsyncMock(return_value=["deepseek-chat", "deepseek-reasoner"])
+    monkeypatch.setattr(web_client.app.state.web.config_runtime, "_request_remote_models", remote_models)
+
+    response = web_client.post(
+        "/api/v1/config/model-bindings/models",
+        json={
+            "bindingName": "deepseek",
+            "label": "DeepSeek",
+            "provider": "deepseek",
+            "apiKey": "sk-deepseek",
+            "apiBase": "https://api.deepseek.com/chat/completions",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["models"] == ["deepseek-chat", "deepseek-reasoner"]
+    assert remote_models.await_args.kwargs == {
+        "provider_name": "deepseek",
+        "api_key": "sk-deepseek",
+        "api_base": "https://api.deepseek.com",
+    }
 
 
 def test_web_api_unknown_route_uses_envelope(web_client: TestClient) -> None:

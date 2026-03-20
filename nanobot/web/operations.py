@@ -134,7 +134,7 @@ class WebOperationsService:
             }
 
     def _provider_check(self, config: Config, setup_status: dict[str, Any]) -> dict[str, Any]:
-        provider_name = str(config.agents.defaults.provider or "").strip()
+        provider_name = str(config.get_provider_name(config.agents.defaults.model) or "").strip()
         model = str(config.agents.defaults.model or "").strip()
         step = next(item for item in setup_status["steps"] if item["key"] == "provider")
         if not step["complete"]:
@@ -150,7 +150,7 @@ class WebOperationsService:
             )
 
         spec = next((item for item in PROVIDERS if item.name == provider_name), None)
-        provider_cfg = getattr(config.providers, provider_name, None)
+        provider_cfg = config.get_binding(config.agents.defaults.model) or getattr(config.providers, provider_name, None)
         detail = f"当前使用 {provider_name or 'unknown'} · 模型 {model or '--'}"
         if spec is None:
             return _check(

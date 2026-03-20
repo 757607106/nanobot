@@ -112,6 +112,7 @@ const mockApi = vi.hoisted(() => ({
   updateKnowledgeBase: vi.fn(),
   updateKnowledgeSource: vi.fn(),
   updateTeamMemory: vi.fn(),
+  updateConfig: vi.fn(),
   updateDocument: vi.fn(),
   updateAgentTemplate: vi.fn(),
   updateCalendarEvent: vi.fn(),
@@ -3225,9 +3226,10 @@ describe('web app smoke pages', () => {
 
   it('renders the models page', async () => {
     renderPage(<ModelsPage />)
-    expect(await screen.findByText('AI 模型配置')).toBeInTheDocument()
-    expect(screen.getByText('1. 选择供应商')).toBeInTheDocument()
-    expect(screen.getByText('2. 模型')).toBeInTheDocument()
+    expect(await screen.findByText('模型配置工作台')).toBeInTheDocument()
+    expect(screen.getByText('工作台切换')).toBeInTheDocument()
+    expect(screen.getByText('默认运行')).toBeInTheDocument()
+    expect(screen.getByText('binding 目录')).toBeInTheDocument()
   })
 
   it('renders the channels page', async () => {

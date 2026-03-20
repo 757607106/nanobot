@@ -2,10 +2,69 @@
 
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 from pydantic_settings import BaseSettings
+
+
+_COMMON_API_ENDPOINT_SUFFIXES = (
+    "/chat/completions",
+    "/completions",
+    "/responses",
+    "/embeddings",
+    "/models",
+    "/audio/transcriptions",
+    "/audio/speech",
+    "/images/generations",
+)
+
+_PROVIDER_API_ENDPOINT_SUFFIXES: dict[str, tuple[str, ...]] = {
+    "ollama": ("/api/chat", "/api/generate", "/api/tags"),
+}
+
+
+def normalize_api_base_url(provider_name: str | None, api_base: str | None) -> str | None:
+    """Normalize pasted endpoint URLs into provider base URLs.
+
+    Users often paste a full REST endpoint such as `/chat/completions`.
+    Most providers in nanobot expect the API base instead, so we strip the
+    terminal endpoint path while preserving provider-specific prefixes like
+    `/v1`, `/compatible-mode/v1`, or `/api/paas/v4`.
+    """
+
+    raw_value = str(api_base or "").strip()
+    if not raw_value:
+        return None
+
+    provider = str(provider_name or "").strip().lower()
+    try:
+        parts = urlsplit(raw_value)
+    except Exception:
+        return raw_value.rstrip("/")
+
+    if not parts.scheme or not parts.netloc:
+        return raw_value.rstrip("/")
+
+    path = parts.path or ""
+    path_lower = path.lower().rstrip("/")
+
+    if provider == "azure_openai":
+        marker = "/openai/deployments/"
+        idx = path_lower.find(marker)
+        if idx >= 0:
+            path = path[:idx]
+            path_lower = path.lower().rstrip("/")
+
+    for suffix in (*_PROVIDER_API_ENDPOINT_SUFFIXES.get(provider, ()), *_COMMON_API_ENDPOINT_SUFFIXES):
+        if path_lower.endswith(suffix):
+            path = path[: len(path) - len(suffix)]
+            break
+
+    normalized_path = path.rstrip("/")
+    normalized = urlunsplit((parts.scheme, parts.netloc, normalized_path, "", ""))
+    return normalized.rstrip("/") or f"{parts.scheme}://{parts.netloc}"
 
 
 class Base(BaseModel):
@@ -78,6 +137,7 @@ class AgentDefaults(Base):
 
     workspace: str = "~/.nanobot/workspace"
     model: str = "anthropic/claude-opus-4-5"
+    binding: str | None = None  # Model binding id selected for the default runtime
     provider: str = (
         "auto"  # Provider name (e.g. "anthropic", "openrouter") or "auto" for auto-detection
     )
@@ -107,6 +167,14 @@ class ProviderConfig(Base):
     api_key: str = ""
     api_base: str | None = None
     extra_headers: dict[str, str] | None = None  # Custom headers (e.g. APP-Code for AiHubMix)
+
+
+class ModelBindingConfig(ProviderConfig):
+    """Named binding that points to a concrete provider account or endpoint."""
+
+    provider: str = ""
+    label: str = ""
+    model: str | None = None
 
 
 class ProvidersConfig(Base):
@@ -204,6 +272,7 @@ class Config(BaseSettings):
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
+    model_bindings: dict[str, ModelBindingConfig] = Field(default_factory=dict)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
 
@@ -212,16 +281,155 @@ class Config(BaseSettings):
         """Get expanded workspace path."""
         return Path(self.agents.defaults.workspace).expanduser()
 
-    def _match_provider(
-        self, model: str | None = None
-    ) -> tuple["ProviderConfig | None", str | None]:
-        """Match provider config and its registry name. Returns (config, spec_name)."""
+    @staticmethod
+    def _has_auth_material(provider: ProviderConfig | ModelBindingConfig | None) -> bool:
+        return bool(
+            provider
+            and (
+                provider.api_key
+                or provider.api_base
+                or (provider.extra_headers and len(provider.extra_headers) > 0)
+            )
+        )
+
+    @staticmethod
+    def _copy_headers(extra_headers: dict[str, str] | None) -> dict[str, str] | None:
+        if not extra_headers:
+            return None
+        return dict(extra_headers)
+
+    def _legacy_binding_for_provider(
+        self,
+        provider_name: str,
+        *,
+        model: str | None = None,
+    ) -> ModelBindingConfig | None:
+        provider = getattr(self.providers, provider_name, None)
+        if provider is None:
+            return None
+        from nanobot.providers.registry import find_by_name
+
+        spec = find_by_name(provider_name)
+        if not self._has_auth_material(provider) and not (spec and spec.is_oauth):
+            return None
+        return ModelBindingConfig(
+            provider=provider_name,
+            label=spec.label if spec else provider_name,
+            model=model or None,
+            api_key=provider.api_key,
+            api_base=provider.api_base,
+            extra_headers=self._copy_headers(provider.extra_headers),
+        )
+
+    def _iter_binding_items(self) -> list[tuple[str, ModelBindingConfig]]:
+        items = list(self.model_bindings.items())
+        if items:
+            return items
+
         from nanobot.providers.registry import PROVIDERS
 
-        forced = self.agents.defaults.provider
-        if forced != "auto":
-            p = getattr(self.providers, forced, None)
-            return (p, forced) if p else (None, None)
+        active_provider = str(self.agents.defaults.provider or "").strip()
+        active_model = str(self.agents.defaults.model or "").strip() or None
+        synthesized: list[tuple[str, ModelBindingConfig]] = []
+        for spec in PROVIDERS:
+            provider = getattr(self.providers, spec.name, None)
+            if provider is None:
+                continue
+            if not self._has_auth_material(provider) and active_provider != spec.name:
+                continue
+            synthesized_binding = ModelBindingConfig(
+                provider=spec.name,
+                label=spec.label,
+                model=active_model if active_provider == spec.name else None,
+                api_key=provider.api_key,
+                api_base=provider.api_base,
+                extra_headers=self._copy_headers(provider.extra_headers),
+            )
+            synthesized.append((spec.name, synthesized_binding))
+        return synthesized
+
+    def _binding_candidates(self, provider_name: str) -> list[tuple[str, ModelBindingConfig]]:
+        provider_name = str(provider_name or "").strip()
+        if not provider_name:
+            return []
+        candidates = [
+            (binding_name, binding)
+            for binding_name, binding in self._iter_binding_items()
+            if binding.provider == provider_name
+        ]
+        if candidates:
+            return candidates
+        legacy = self._legacy_binding_for_provider(provider_name)
+        return [(provider_name, legacy)] if legacy else []
+
+    def _preferred_binding_candidate(
+        self,
+        provider_name: str,
+        *,
+        model: str | None = None,
+    ) -> tuple[str, ModelBindingConfig] | None:
+        candidates = self._binding_candidates(provider_name)
+        if not candidates:
+            return None
+
+        requested_binding = str(self.agents.defaults.binding or "").strip()
+        if requested_binding:
+            for candidate in candidates:
+                if candidate[0] == requested_binding:
+                    return candidate
+
+        for candidate in candidates:
+            if candidate[0] == provider_name:
+                return candidate
+
+        expected_model = str(model or self.agents.defaults.model or "").strip().lower()
+        if expected_model:
+            for candidate in candidates:
+                if str(candidate[1].model or "").strip().lower() == expected_model:
+                    return candidate
+
+        return candidates[0]
+
+    def _binding_is_routable(
+        self,
+        binding: ModelBindingConfig | ProviderConfig | None,
+        *,
+        provider_name: str,
+    ) -> bool:
+        from nanobot.providers.registry import find_by_name
+
+        if binding is None:
+            return False
+        spec = find_by_name(provider_name)
+        if spec is None:
+            return self._has_auth_material(binding)
+        if spec.is_oauth:
+            return True
+        if spec.is_local:
+            return bool(binding.api_base)
+        return bool(binding.api_key)
+
+    def _match_binding(
+        self,
+        model: str | None = None,
+    ) -> tuple["ModelBindingConfig | ProviderConfig | None", str | None, str | None]:
+        """Match (binding config, binding name, provider name)."""
+        from nanobot.providers.registry import PROVIDERS
+
+        forced_binding = str(self.agents.defaults.binding or "").strip()
+        if forced_binding:
+            binding = self.model_bindings.get(forced_binding)
+            if binding is not None:
+                return binding, forced_binding, binding.provider
+
+        forced_provider = str(self.agents.defaults.provider or "").strip()
+        if forced_provider and forced_provider != "auto":
+            preferred = self._preferred_binding_candidate(forced_provider, model=model)
+            if preferred:
+                binding_name, binding = preferred
+                return binding, binding_name, forced_provider
+            provider = getattr(self.providers, forced_provider, None)
+            return (provider, None, forced_provider) if provider else (None, None, None)
 
         model_lower = (model or self.agents.defaults.model).lower()
         model_normalized = model_lower.replace("-", "_")
@@ -234,33 +442,51 @@ class Config(BaseSettings):
 
         # Explicit provider prefix wins — prevents `github-copilot/...codex` matching openai_codex.
         for spec in PROVIDERS:
-            p = getattr(self.providers, spec.name, None)
-            if p and model_prefix and normalized_prefix == spec.name:
-                if spec.is_oauth or spec.is_local or p.api_key:
-                    return p, spec.name
+            if not model_prefix or normalized_prefix != spec.name:
+                continue
+            preferred = self._preferred_binding_candidate(spec.name, model=model)
+            if preferred and self._binding_is_routable(preferred[1], provider_name=spec.name):
+                binding_name, binding = preferred
+                return binding, binding_name, spec.name
+            provider = getattr(self.providers, spec.name, None)
+            if provider and (
+                spec.is_oauth
+                or spec.is_local
+                or self._binding_is_routable(provider, provider_name=spec.name)
+            ):
+                return provider, None, spec.name
 
         # Match by keyword (order follows PROVIDERS registry)
         for spec in PROVIDERS:
-            p = getattr(self.providers, spec.name, None)
-            if p and any(_kw_matches(kw) for kw in spec.keywords):
-                if spec.is_oauth or spec.is_local or p.api_key:
-                    return p, spec.name
+            if not any(_kw_matches(kw) for kw in spec.keywords):
+                continue
+            preferred = self._preferred_binding_candidate(spec.name, model=model)
+            if preferred and self._binding_is_routable(preferred[1], provider_name=spec.name):
+                binding_name, binding = preferred
+                return binding, binding_name, spec.name
+            provider = getattr(self.providers, spec.name, None)
+            if provider and self._binding_is_routable(provider, provider_name=spec.name):
+                return provider, None, spec.name
 
-        # Fallback: configured local providers can route models without
-        # provider-specific keywords (for example plain "llama3.2" on Ollama).
-        # Prefer providers whose detect_by_base_keyword matches the configured api_base
-        # (e.g. Ollama's "11434" in "http://localhost:11434") over plain registry order.
-        local_fallback: tuple[ProviderConfig, str] | None = None
+        # Fallback: configured local providers can route models without provider-specific keywords.
+        local_fallback: tuple[ModelBindingConfig | ProviderConfig, str | None, str] | None = None
         for spec in PROVIDERS:
             if not spec.is_local:
                 continue
-            p = getattr(self.providers, spec.name, None)
-            if not (p and p.api_base):
+            preferred = self._preferred_binding_candidate(spec.name, model=model)
+            if preferred and preferred[1].api_base:
+                binding_name, binding = preferred
+                if spec.detect_by_base_keyword and spec.detect_by_base_keyword in preferred[1].api_base:
+                    return binding, binding_name, spec.name
+                if local_fallback is None:
+                    local_fallback = (binding, binding_name, spec.name)
+            provider = getattr(self.providers, spec.name, None)
+            if not (provider and provider.api_base):
                 continue
-            if spec.detect_by_base_keyword and spec.detect_by_base_keyword in p.api_base:
-                return p, spec.name
+            if spec.detect_by_base_keyword and spec.detect_by_base_keyword in provider.api_base:
+                return provider, None, spec.name
             if local_fallback is None:
-                local_fallback = (p, spec.name)
+                local_fallback = (provider, None, spec.name)
         if local_fallback:
             return local_fallback
 
@@ -269,10 +495,117 @@ class Config(BaseSettings):
         for spec in PROVIDERS:
             if spec.is_oauth:
                 continue
-            p = getattr(self.providers, spec.name, None)
-            if p and p.api_key:
-                return p, spec.name
-        return None, None
+            preferred = self._preferred_binding_candidate(spec.name, model=model)
+            if preferred and self._binding_is_routable(preferred[1], provider_name=spec.name):
+                binding_name, binding = preferred
+                return binding, binding_name, spec.name
+            provider = getattr(self.providers, spec.name, None)
+            if provider and self._binding_is_routable(provider, provider_name=spec.name):
+                return provider, None, spec.name
+        return None, None, None
+
+    @model_validator(mode="after")
+    def _hydrate_model_bindings(self) -> "Config":
+        from nanobot.providers.registry import PROVIDERS, find_by_name
+
+        for spec in PROVIDERS:
+            provider = getattr(self.providers, spec.name, None)
+            if provider is None:
+                continue
+            provider.api_base = normalize_api_base_url(spec.name, provider.api_base)
+
+        if self.model_bindings:
+            normalized: dict[str, ModelBindingConfig] = {}
+            for binding_name, binding in self.model_bindings.items():
+                key = str(binding_name or "").strip()
+                if not key:
+                    continue
+                provider_name = str(binding.provider or "").strip()
+                if not provider_name:
+                    continue
+                spec = find_by_name(provider_name)
+                normalized[key] = ModelBindingConfig(
+                    provider=provider_name,
+                    label=str(binding.label or "").strip() or (spec.label if spec else provider_name),
+                    model=str(binding.model or "").strip() or None,
+                    api_key=binding.api_key,
+                    api_base=normalize_api_base_url(provider_name, binding.api_base),
+                    extra_headers=self._copy_headers(binding.extra_headers),
+                )
+            self.model_bindings = normalized
+        else:
+            synthesized: dict[str, ModelBindingConfig] = {}
+            for spec in PROVIDERS:
+                provider = getattr(self.providers, spec.name, None)
+                if provider is None:
+                    continue
+                if not self._has_auth_material(provider) and str(self.agents.defaults.provider or "").strip() != spec.name:
+                    continue
+                synthesized[spec.name] = ModelBindingConfig(
+                    provider=spec.name,
+                    label=spec.label,
+                    model=str(self.agents.defaults.model or "").strip() or None
+                    if str(self.agents.defaults.provider or "").strip() == spec.name
+                    else None,
+                    api_key=provider.api_key,
+                    api_base=normalize_api_base_url(spec.name, provider.api_base),
+                    extra_headers=self._copy_headers(provider.extra_headers),
+                )
+            self.model_bindings = synthesized
+
+        if self.agents.defaults.binding and self.agents.defaults.binding not in self.model_bindings:
+            self.agents.defaults.binding = None
+
+        if not self.agents.defaults.binding:
+            preferred_provider = str(self.agents.defaults.provider or "").strip()
+            if preferred_provider and preferred_provider != "auto":
+                preferred = self._preferred_binding_candidate(preferred_provider)
+                if preferred:
+                    self.agents.defaults.binding = preferred[0]
+            elif len(self.model_bindings) == 1:
+                self.agents.defaults.binding = next(iter(self.model_bindings))
+
+        active_binding = self.model_bindings.get(str(self.agents.defaults.binding or "").strip())
+        if active_binding is not None:
+            self.agents.defaults.provider = active_binding.provider
+            if not str(self.agents.defaults.model or "").strip() and active_binding.model:
+                self.agents.defaults.model = active_binding.model
+            elif str(self.agents.defaults.model or "").strip() and not active_binding.model:
+                active_binding.model = str(self.agents.defaults.model).strip()
+
+        for spec in PROVIDERS:
+            projection = self._preferred_binding_candidate(spec.name)
+            if not projection:
+                continue
+            provider = getattr(self.providers, spec.name, None)
+            if provider is None:
+                continue
+            binding = projection[1]
+            provider.api_key = binding.api_key
+            provider.api_base = normalize_api_base_url(spec.name, binding.api_base)
+            provider.extra_headers = self._copy_headers(binding.extra_headers)
+
+        return self
+
+    def _match_provider(
+        self, model: str | None = None
+    ) -> tuple["ProviderConfig | None", str | None]:
+        """Match provider config and its registry name. Returns (config, spec_name)."""
+        provider, _, provider_name = self._match_binding(model)
+        return provider, provider_name
+
+    def get_binding(
+        self,
+        model: str | None = None,
+    ) -> "ModelBindingConfig | ProviderConfig | None":
+        """Get the matched binding config if available, else fall back to legacy provider config."""
+        binding, _, _ = self._match_binding(model)
+        return binding
+
+    def get_binding_name(self, model: str | None = None) -> str | None:
+        """Get the matched binding id when one is available."""
+        _, binding_name, _ = self._match_binding(model)
+        return binding_name
 
     def get_provider(self, model: str | None = None) -> ProviderConfig | None:
         """Get matched provider config (api_key, api_base, extra_headers). Falls back to first available."""
@@ -305,4 +638,9 @@ class Config(BaseSettings):
                 return spec.default_api_base
         return None
 
-    model_config = ConfigDict(env_prefix="NANOBOT_", env_nested_delimiter="__")
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        env_prefix="NANOBOT_",
+        env_nested_delimiter="__",
+    )

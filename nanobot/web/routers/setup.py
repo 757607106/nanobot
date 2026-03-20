@@ -17,6 +17,8 @@ router = APIRouter()
 class SetupProviderRequest(BaseModel):
     provider: str
     model: str
+    bindingId: str | None = None
+    bindingLabel: str | None = None
     apiKey: str | None = None
     apiBase: str | None = None
 
@@ -58,6 +60,32 @@ def update_setup_provider(request: Request, payload: SetupProviderRequest) -> JS
         raise APIError(400, "SETUP_PROVIDER_INVALID", "Unknown provider.")
 
     config_payload = request.app.state.web.get_config()
+    defaults_payload = config_payload.setdefault("agents", {}).setdefault("defaults", {})
+    bindings_payload = config_payload.setdefault("modelBindings", {})
+    current_binding_id = str(defaults_payload.get("binding") or "").strip()
+    requested_binding_id = str(payload.bindingId or "").strip()
+    current_binding_payload = bindings_payload.get(current_binding_id) if current_binding_id else None
+    binding_id = (
+        requested_binding_id
+        or (
+            current_binding_id
+            if isinstance(current_binding_payload, dict)
+            and str(current_binding_payload.get("provider") or "").strip() == provider_name
+            else ""
+        )
+        or provider_name
+    )
+    binding_payload = bindings_payload.setdefault(
+        binding_id,
+        {
+            "provider": provider_name,
+            "label": spec.label,
+            "model": model,
+            "apiKey": "",
+            "apiBase": None,
+            "extraHeaders": {},
+        },
+    )
     provider_payload = config_payload.setdefault("providers", {}).setdefault(
         provider_name,
         {"apiKey": "", "apiBase": None, "extraHeaders": {}},
@@ -85,8 +113,14 @@ def update_setup_provider(request: Request, payload: SetupProviderRequest) -> JS
                 "This provider requires an API Key or API Base.",
             )
 
-    config_payload["agents"]["defaults"]["provider"] = provider_name
-    config_payload["agents"]["defaults"]["model"] = model
+    defaults_payload["binding"] = binding_id
+    defaults_payload["provider"] = provider_name
+    defaults_payload["model"] = model
+    binding_payload["provider"] = provider_name
+    binding_payload["label"] = str(payload.bindingLabel or binding_payload.get("label") or spec.label).strip() or spec.label
+    binding_payload["model"] = model
+    binding_payload["apiKey"] = api_key
+    binding_payload["apiBase"] = api_base or None
     provider_payload["apiKey"] = api_key
     provider_payload["apiBase"] = api_base or None
 

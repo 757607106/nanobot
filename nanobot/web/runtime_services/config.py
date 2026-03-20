@@ -6,15 +6,16 @@ import asyncio
 import platform
 import time
 from typing import TYPE_CHECKING, Any
+import httpx
 
 from nanobot.agent.loop import AgentLoop
+from nanobot.config.schema import Config, ModelBindingConfig, normalize_api_base_url
 from nanobot.bus.queue import MessageBus
-from nanobot.config.schema import Config
 from nanobot.providers.base import GenerationSettings
 from nanobot.providers.custom_provider import CustomProvider
 from nanobot.providers.litellm_provider import LiteLLMProvider
 from nanobot.providers.openai_codex_provider import OpenAICodexProvider
-from nanobot.providers.registry import PROVIDERS
+from nanobot.providers.registry import PROVIDERS, find_by_name
 from nanobot.services.agent_templates import AgentTemplateManager
 from nanobot.session.manager import SessionManager
 from nanobot.storage.calendar_repository import get_calendar_repository
@@ -142,6 +143,7 @@ class WebConfigRuntimeService:
         return {
             "providers": providers,
             "resolvedProvider": self.state.config.get_provider_name(self.state.config.agents.defaults.model) or "auto",
+            "resolvedBinding": self.state.config.get_binding_name(self.state.config.agents.defaults.model),
         }
 
     def update_config(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -153,6 +155,198 @@ class WebConfigRuntimeService:
         self.rebuild_runtime(config)
         self.state.channel_runtime.restart()
         return self.get_config()
+
+    @staticmethod
+    def _provider_default_catalog_base(provider_name: str) -> str | None:
+        defaults = {
+            "deepseek": "https://api.deepseek.com",
+            "dashscope": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+        }
+        if provider_name in defaults:
+            return defaults[provider_name]
+        spec = find_by_name(provider_name)
+        return spec.default_api_base if spec and spec.default_api_base else None
+
+    @classmethod
+    def _resolve_catalog_base(cls, provider_name: str, api_base: str | None) -> str | None:
+        value = normalize_api_base_url(provider_name, api_base)
+        if value:
+            return value.rstrip("/")
+        fallback = cls._provider_default_catalog_base(provider_name)
+        return fallback.rstrip("/") if fallback else None
+
+    @staticmethod
+    def _build_model_headers(provider_name: str, api_key: str | None) -> dict[str, str]:
+        key = str(api_key or "").strip()
+        if not key:
+            return {}
+        if provider_name == "azure_openai":
+            return {"api-key": key}
+        return {"Authorization": f"Bearer {key}"}
+
+    @classmethod
+    async def _request_remote_models(
+        cls,
+        *,
+        provider_name: str,
+        api_key: str | None,
+        api_base: str | None,
+    ) -> list[str]:
+        if provider_name in {"openai_codex", "github_copilot", "anthropic", "gemini", "azure_openai"}:
+            raise ValueError(f"{provider_name} 暂不支持自动获取模型列表，请手动填写模型。")
+
+        base = cls._resolve_catalog_base(provider_name, api_base)
+        if not base:
+            raise ValueError("请先填写 API 地址，或选择带默认地址的供应商。")
+
+        headers = cls._build_model_headers(provider_name, api_key)
+
+        if provider_name == "ollama":
+            urls = [f"{base}/api/tags"]
+        else:
+            urls = [f"{base}/models"]
+            if base.endswith("/v1"):
+                urls.append(f"{base[:-3]}/models")
+
+        last_error = "无法获取模型列表。"
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            for url in urls:
+                try:
+                    response = await client.get(url, headers=headers)
+                except Exception as exc:  # noqa: BLE001
+                    last_error = str(exc)
+                    continue
+
+                if response.status_code >= 400:
+                    last_error = f"{response.status_code}: {response.text}"
+                    continue
+
+                payload = response.json()
+                if provider_name == "ollama":
+                    items = payload.get("models") if isinstance(payload, dict) else []
+                    model_ids = [
+                        str(item.get("name") or "").strip()
+                        for item in items or []
+                        if isinstance(item, dict) and str(item.get("name") or "").strip()
+                    ]
+                else:
+                    if isinstance(payload, dict):
+                        items = payload.get("data") or payload.get("models") or []
+                    else:
+                        items = payload
+                    model_ids = []
+                    for item in items or []:
+                        if isinstance(item, dict):
+                            candidate = str(item.get("id") or item.get("name") or "").strip()
+                        else:
+                            candidate = str(item or "").strip()
+                        if candidate:
+                            model_ids.append(candidate)
+
+                deduped = sorted(set(model_ids))
+                if deduped:
+                    return deduped
+
+        raise ValueError(f"获取模型列表失败: {last_error}")
+
+    async def fetch_model_binding_models(self, payload: dict[str, Any]) -> dict[str, Any]:
+        provider_name = str(payload.get("provider") or "").strip()
+        binding_name = str(payload.get("bindingName") or "").strip() or "__probe__"
+        label = str(payload.get("label") or "").strip() or binding_name
+        api_key = str(payload.get("apiKey") or "").strip()
+        api_base_raw = payload.get("apiBase")
+        api_base = normalize_api_base_url(provider_name, api_base_raw) or ""
+
+        if not provider_name:
+            raise ValueError("provider is required.")
+        if find_by_name(provider_name) is None:
+            raise ValueError("Unknown provider.")
+
+        models = await self._request_remote_models(
+            provider_name=provider_name,
+            api_key=api_key,
+            api_base=api_base or None,
+        )
+
+        return {
+            "provider": provider_name,
+            "bindingName": binding_name,
+            "label": label,
+            "models": models,
+            "count": len(models),
+            "message": f"已获取 {len(models)} 个模型",
+            "source": "remote",
+        }
+
+    async def test_model_binding(self, payload: dict[str, Any]) -> dict[str, Any]:
+        provider_name = str(payload.get("provider") or "").strip()
+        model = str(payload.get("model") or "").strip()
+        binding_name = str(payload.get("bindingName") or "").strip() or "__probe__"
+        label = str(payload.get("label") or "").strip() or binding_name
+        api_key = str(payload.get("apiKey") or "").strip()
+        api_base_raw = payload.get("apiBase")
+        api_base = normalize_api_base_url(provider_name, api_base_raw) or ""
+
+        if not provider_name:
+            raise ValueError("provider is required.")
+        if not model:
+            raise ValueError("model is required.")
+
+        spec = find_by_name(provider_name)
+        if spec is None:
+            raise ValueError("Unknown provider.")
+        if spec.is_oauth:
+            raise ValueError("OAuth provider detection is not supported on this page.")
+        if provider_name == "custom" and not api_base:
+            raise ValueError("Custom provider requires an API Base.")
+        if provider_name == "azure_openai" and (not api_key or not api_base):
+            raise ValueError("Azure OpenAI requires both API Key and API Base.")
+        if not spec.is_local and provider_name not in {"custom", "azure_openai"} and not (api_key or api_base):
+            raise ValueError("This provider requires an API Key or API Base.")
+
+        probe_config = self.state.config.model_copy(deep=True)
+        probe_config.model_bindings[binding_name] = ModelBindingConfig(
+            provider=provider_name,
+            label=label,
+            model=model,
+            api_key=api_key,
+            api_base=api_base or None,
+            extra_headers=dict(payload.get("extraHeaders") or {}),
+        )
+        probe_config.agents.defaults.binding = binding_name
+        probe_config.agents.defaults.provider = provider_name
+        probe_config.agents.defaults.model = model
+
+        provider = self.make_provider(probe_config)
+        started = time.perf_counter()
+        response = await provider.chat_with_retry(
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Reply with exactly OK if this model binding is available.",
+                }
+            ],
+            model=model,
+            max_tokens=16,
+            temperature=0.1,
+        )
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+        ok = response.finish_reason != "error"
+        preview = (response.content or "").strip()
+
+        return {
+            "ok": ok,
+            "provider": provider_name,
+            "model": model,
+            "bindingName": binding_name,
+            "label": label,
+            "latencyMs": elapsed_ms,
+            "finishReason": response.finish_reason,
+            "message": "检测通过" if ok else "检测失败",
+            "responsePreview": preview[:240] if preview else None,
+            "usage": response.usage,
+        }
 
     def get_system_status(self) -> dict[str, Any]:
         sessions = self.state.sessions.list_sessions() if self.state.sessions else []

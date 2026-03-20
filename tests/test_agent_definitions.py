@@ -21,6 +21,8 @@ def test_agent_definition_service_crud_and_copy(tmp_path) -> None:
             "name": "Research Agent",
             "description": "Collect source-backed findings",
             "systemPrompt": "Research the assigned topic carefully.",
+            "binding": "deepseek-main",
+            "provider": "deepseek",
             "toolAllowlist": ["read_file", "web_search"],
             "skillIds": ["skill-creator"],
             "tags": ["research"],
@@ -32,6 +34,8 @@ def test_agent_definition_service_crud_and_copy(tmp_path) -> None:
     )
     assert created["agentId"] == "research-agent"
     assert created["model"] == "deepseek/deepseek-chat"
+    assert created["binding"] == "deepseek-main"
+    assert created["provider"] == "deepseek"
     assert created["toolAllowlist"] == ["read_file", "web_search"]
 
     fetched = service.get_agent(created["agentId"])
@@ -41,11 +45,15 @@ def test_agent_definition_service_crud_and_copy(tmp_path) -> None:
         created["agentId"],
         {
             "description": "Updated description",
+            "binding": "kimi-cn",
+            "provider": "moonshot",
             "enabled": False,
             "mcpServerIds": ["filesystem"],
         },
     )
     assert updated["enabled"] is False
+    assert updated["binding"] == "kimi-cn"
+    assert updated["provider"] == "moonshot"
     assert updated["mcpServerIds"] == ["filesystem"]
 
     copied = service.copy_agent(created["agentId"])

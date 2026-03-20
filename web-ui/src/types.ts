@@ -115,6 +115,38 @@ export interface ProviderConfig {
   extraHeaders?: Record<string, string> | null
 }
 
+export interface ModelBinding {
+  provider: string
+  label?: string | null
+  model?: string | null
+  apiKey: string
+  apiBase?: string | null
+  extraHeaders?: Record<string, string> | null
+}
+
+export interface ModelBindingTestResult {
+  ok: boolean
+  provider: string
+  model: string
+  bindingName: string
+  label?: string | null
+  latencyMs: number
+  finishReason: string
+  message: string
+  responsePreview?: string | null
+  usage?: Record<string, number>
+}
+
+export interface ModelBindingModelsResult {
+  provider: string
+  bindingName: string
+  label?: string | null
+  models: string[]
+  count: number
+  message: string
+  source: 'remote'
+}
+
 export interface ProviderMeta {
   name: string
   label: string
@@ -131,6 +163,7 @@ export interface ProviderMeta {
 export interface ConfigMeta {
   providers: ProviderMeta[]
   resolvedProvider: string
+  resolvedBinding?: string | null
 }
 
 export interface ConfigData {
@@ -138,6 +171,7 @@ export interface ConfigData {
     defaults: {
       workspace: string
       model: string
+      binding?: string | null
       provider: string
       maxTokens: number
       contextWindowTokens: number
@@ -147,6 +181,7 @@ export interface ConfigData {
     }
   }
   providers: Record<string, ProviderConfig>
+  modelBindings?: Record<string, ModelBinding>
   channels: {
     sendProgress: boolean
     sendToolHints: boolean
@@ -446,6 +481,8 @@ export interface AgentDefinition {
   systemPrompt: string
   rules: string[]
   model?: string | null
+  binding?: string | null
+  provider?: string | null
   backend?: string | null
   enabled: boolean
   toolAllowlist: string[]
@@ -465,6 +502,8 @@ export interface AgentDefinitionMutationInput {
   systemPrompt: string
   rules?: string[]
   model?: string | null
+  binding?: string | null
+  provider?: string | null
   backend?: string | null
   enabled?: boolean
   toolAllowlist?: string[]

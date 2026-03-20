@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from nanobot.agent.loop import AgentLoop
 from nanobot.agent.skills import SkillsLoader
+from nanobot.providers.registry import find_by_model
 from nanobot.platform.agents import AgentDefinitionNotFoundError
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
 
@@ -84,6 +85,10 @@ class WebAgentRuntimeService:
         agent: dict[str, Any],
         config: Config,
     ) -> tuple[list[str], list[str], list[str]]:
+        binding_name = str(agent.get("binding") or "").strip()
+        if binding_name and binding_name not in config.model_bindings:
+            raise ValueError(f"Agent references unknown model binding: {binding_name}")
+
         valid_tool_names = {
             item["name"]
             for item in self.state.workspace_runtime.get_valid_template_tools()
@@ -144,9 +149,25 @@ class WebAgentRuntimeService:
 
     def _build_agent_config(self, agent: dict[str, Any]) -> Config:
         config = self.state.config.model_copy(deep=True)
+        binding = str(agent.get("binding") or "").strip()
+        provider = str(agent.get("provider") or "").strip()
         model = (agent.get("model") or "").strip()
+        if binding:
+            config.agents.defaults.binding = binding
+            binding_cfg = config.model_bindings.get(binding)
+            if binding_cfg is not None:
+                config.agents.defaults.provider = binding_cfg.provider
+                if not model and binding_cfg.model:
+                    config.agents.defaults.model = binding_cfg.model
+        elif provider:
+            config.agents.defaults.binding = None
+            config.agents.defaults.provider = provider
         if model:
             config.agents.defaults.model = model
+            if not provider and not binding:
+                inferred = find_by_model(model)
+                config.agents.defaults.provider = inferred.name if inferred else "auto"
+                config.agents.defaults.binding = config.get_binding_name(model)
         selected_mcp = {
             name: entry
             for name, entry in config.tools.mcp_servers.items()

@@ -21,6 +21,7 @@ import PageHero from '../components/PageHero'
 import { providerDescriptions } from '../configMeta'
 import {
   ensureProviderSelection,
+  getAllModelBindings,
   getProviderMeta,
   getProviderOptions,
   normalizeModelConfig,
@@ -135,15 +136,37 @@ export default function SetupPage() {
   }, [config, setupStatus])
 
   const providerName = useMemo(() => {
+    const bindings = config && configMeta ? getAllModelBindings(config, configMeta) : {}
+    const configuredBinding = String(config?.agents.defaults.binding || '').trim()
+    if (configuredBinding && bindings[configuredBinding]?.provider) {
+      return bindings[configuredBinding].provider
+    }
     const candidate = String(config?.agents.defaults.provider || '').trim()
     if (candidate && candidate !== 'auto') {
       return candidate
     }
     return configMeta?.providers.find((item) => item.category !== 'oauth')?.name ?? configMeta?.providers[0]?.name ?? 'deepseek'
-  }, [config?.agents.defaults.provider, configMeta])
+  }, [config, configMeta])
+
+  const currentBindingName = useMemo(() => {
+    if (!config) {
+      return providerName
+    }
+    const bindings = getAllModelBindings(config, configMeta)
+    const configuredBinding = String(config.agents.defaults.binding || '').trim()
+    if (configuredBinding && bindings[configuredBinding]?.provider === providerName) {
+      return configuredBinding
+    }
+    return Object.entries(bindings).find(([bindingName, binding]) => (
+      binding.provider === providerName && bindingName === providerName
+    ))?.[0]
+      ?? Object.entries(bindings).find(([, binding]) => binding.provider === providerName)?.[0]
+      ?? providerName
+  }, [config, configMeta, providerName])
 
   const providerMeta = getProviderMeta(configMeta, providerName)
   const providerOptions = useMemo(() => getProviderOptions(configMeta), [configMeta])
+  const currentBinding = config ? getAllModelBindings(config, configMeta)[currentBindingName] : null
 
   function updateConfig(mutator: (draft: ConfigData) => ConfigData) {
     setConfig((current) => (current ? mutator(current) : current))
@@ -215,8 +238,10 @@ export default function SetupPage() {
       api.updateSetupProvider({
         provider: selectedProvider,
         model: String(config.agents.defaults.model || '').trim(),
-        apiKey: config.providers[selectedProvider]?.apiKey || '',
-        apiBase: config.providers[selectedProvider]?.apiBase || null,
+        bindingId: currentBindingName,
+        bindingLabel: currentBinding?.label || null,
+        apiKey: currentBinding?.apiKey || '',
+        apiBase: currentBinding?.apiBase || null,
       }),
       '模型供应商已保存',
     )
@@ -365,7 +390,7 @@ export default function SetupPage() {
                   <label className="setup-field">
                     <span>访问密钥</span>
                     <Input.Password
-                      value={config.providers[providerName]?.apiKey || ''}
+                      value={currentBinding?.apiKey || ''}
                       placeholder={providerMeta?.isLocal ? '本地供应商通常可留空' : '填写服务商提供的密钥'}
                       onChange={(event) => updateProviderField('apiKey', event.target.value)}
                       data-testid={testIds.setup.apiKeyInput}
@@ -378,17 +403,15 @@ export default function SetupPage() {
                 )}
 
                 {!providerMeta?.isOauth ? (
-                <DevOnly>
                   <label className="setup-field">
                     <span>服务地址</span>
                     <Input
-                      value={String(config.providers[providerName]?.apiBase || '')}
+                      value={String(currentBinding?.apiBase || '')}
                       placeholder={providerMeta?.defaultApiBase || '通常无需修改'}
                       onChange={(event) => updateProviderField('apiBase', event.target.value)}
                       data-testid={testIds.setup.apiBaseInput}
                     />
                   </label>
-                </DevOnly>
                 ) : null}
 
                 <div className="setup-actions-row">
