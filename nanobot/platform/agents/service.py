@@ -7,6 +7,7 @@ from dataclasses import replace
 from typing import Any
 
 from nanobot.platform.agents.models import AgentDefinition, now_iso
+from nanobot.platform.model_resources import ModelSelection
 from nanobot.platform.agents.store import AgentDefinitionStore
 
 
@@ -90,6 +91,23 @@ class AgentDefinitionService:
             )
         return result
 
+    @staticmethod
+    def _normalize_model_selection(
+        value: Any,
+        *,
+        capability: str,
+    ) -> ModelSelection | None:
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise AgentDefinitionValidationError(f"{capability} model selection must be an object.")
+        selection = ModelSelection.from_dict(value, default_capability=capability)
+        if selection is None:
+            raise AgentDefinitionValidationError(f"{capability} model selection is invalid.")
+        if selection.capability != capability:
+            selection = replace(selection, capability=capability)
+        return selection
+
     def _ensure_unique_name(
         self, name: str, *, tenant_id: str, exclude_agent_id: str | None = None,
     ) -> None:
@@ -123,6 +141,7 @@ class AgentDefinitionService:
         *,
         tenant_id: str,
         default_model: str | None,
+        default_chat_selection: ModelSelection | None,
         default_tools: list[str],
         template_snapshot: dict[str, Any] | None,
     ) -> AgentDefinition:
@@ -176,11 +195,26 @@ class AgentDefinitionService:
             self._get_value(payload, "tags"),
             field_name="tags",
         )
+        chat_model_selection = (
+            self._normalize_model_selection(
+                self._get_value(payload, "chatModelSelection", "chat_model_selection"),
+                capability="chat",
+            )
+            if "chatModelSelection" in payload or "chat_model_selection" in payload
+            else (
+                self._normalize_model_selection(
+                    template_snapshot.get("chatModelSelection") or template_snapshot.get("chat_model_selection"),
+                    capability="chat",
+                )
+                if template_snapshot.get("chatModelSelection") or template_snapshot.get("chat_model_selection")
+                else default_chat_selection
+            )
+        )
 
         model = self._normalize_text(
             self._get_value(payload, "model") if "model" in payload else template_snapshot.get("model", default_model),
             field_name="model",
-        ) or default_model
+        ) or (chat_model_selection.model_name if chat_model_selection else default_model)
         backend = self._normalize_text(
             self._get_value(payload, "backend") if "backend" in payload else template_snapshot.get("backend"),
             field_name="backend",
@@ -224,6 +258,7 @@ class AgentDefinitionService:
             system_prompt=system_prompt,
             rules=rules,
             model=model,
+            chat_model_selection=chat_model_selection,
             backend=backend,
             enabled=enabled,
             tool_allowlist=tool_allowlist,
@@ -247,6 +282,7 @@ class AgentDefinitionService:
             "system_prompt": self._get_value(payload, "systemPrompt", "system_prompt"),
             "rules": self._get_value(payload, "rules"),
             "model": self._get_value(payload, "model"),
+            "chat_model_selection": self._get_value(payload, "chatModelSelection", "chat_model_selection"),
             "backend": self._get_value(payload, "backend"),
             "enabled": self._get_value(payload, "enabled"),
             "tool_allowlist": self._get_value(payload, "toolAllowlist", "tool_allowlist"),
@@ -267,6 +303,17 @@ class AgentDefinitionService:
         if updates["name"] is not None:
             name = self._normalize_text(updates["name"], required=True, field_name="name")
             self._ensure_unique_name(name, tenant_id=existing.tenant_id, exclude_agent_id=existing.agent_id)
+        chat_model_selection = existing.chat_model_selection
+        if updates["chat_model_selection"] is not None:
+            chat_model_selection = self._normalize_model_selection(
+                updates["chat_model_selection"],
+                capability="chat",
+            )
+        model = existing.model
+        if updates["model"] is not None:
+            model = self._normalize_text(updates["model"], field_name="model") or None
+        elif updates["chat_model_selection"] is not None and chat_model_selection is not None:
+            model = chat_model_selection.model_name
 
         return replace(
             existing,
@@ -280,9 +327,8 @@ class AgentDefinitionService:
             rules=existing.rules
             if updates["rules"] is None
             else self._normalize_string_list(updates["rules"], field_name="rules"),
-            model=existing.model
-            if updates["model"] is None
-            else (self._normalize_text(updates["model"], field_name="model") or None),
+            model=model,
+            chat_model_selection=chat_model_selection,
             backend=existing.backend
             if updates["backend"] is None
             else (self._normalize_text(updates["backend"], field_name="backend") or None),
@@ -351,6 +397,7 @@ class AgentDefinitionService:
         *,
         tenant_id: str,
         default_model: str | None,
+        default_chat_selection: ModelSelection | None = None,
         default_tools: list[str],
         template_snapshot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -358,6 +405,7 @@ class AgentDefinitionService:
             payload,
             tenant_id=tenant_id,
             default_model=default_model,
+            default_chat_selection=default_chat_selection,
             default_tools=default_tools,
             template_snapshot=template_snapshot,
         )

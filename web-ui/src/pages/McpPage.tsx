@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Empty, Input, Space, Spin, Tag, Typography } from 'antd'
-import { EditOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Drawer, Empty, Form, Input, InputNumber, Select, Space, Spin, Switch, Tag, Typography } from 'antd'
+import { EditOutlined, PlusOutlined, PlayCircleOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
 import { useDevMode } from '../devMode'
 import { formatDateTimeZh } from '../locale'
@@ -11,6 +10,7 @@ import { testIds } from '../testIds'
 import type {
   McpRepositoryAnalysis,
   McpRepositoryInstallResult,
+  McpServerCreateInput,
   McpServerEntry,
   McpServerListResponse,
   McpServerStatus,
@@ -32,6 +32,56 @@ const statusMeta: Record<McpServerStatus, { label: string; color: string }> = {
   disabled: { label: '已停用', color: 'default' },
 }
 
+interface ServerCreateDraft {
+  serverName?: string
+  displayName: string
+  sourceKind: 'manual' | 'config' | 'repository'
+  sourceLabel: string
+  enabled: boolean
+  transport: 'stdio' | 'sse' | 'streamableHttp'
+  command: string
+  argsText: string
+  envText: string
+  url: string
+  headersText: string
+  toolTimeout: number
+}
+
+function parseJsonMap(raw: string, label: string) {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return {}
+  }
+  const payload = JSON.parse(trimmed) as Record<string, unknown>
+  if (!payload || Array.isArray(payload) || typeof payload !== 'object') {
+    throw new Error(`${label} 必须是 JSON 对象`)
+  }
+  return Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, String(value ?? '')]))
+}
+
+function parseLines(raw: string) {
+  return raw
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function buildCreateDraft(): ServerCreateDraft {
+  return {
+    displayName: '',
+    sourceKind: 'manual',
+    sourceLabel: '手动登记',
+    enabled: true,
+    transport: 'stdio',
+    command: '',
+    argsText: '',
+    envText: '{}',
+    url: '',
+    headersText: '{}',
+    toolTimeout: 30,
+  }
+}
+
 export default function McpPage() {
   const { message } = App.useApp()
   const navigate = useNavigate()
@@ -44,6 +94,10 @@ export default function McpPage() {
   const [installing, setInstalling] = useState(false)
   const [actingName, setActingName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false)
+  const [creatingServer, setCreatingServer] = useState(false)
+  const [createForm] = Form.useForm<ServerCreateDraft>()
+  const createTransport = Form.useWatch('transport', createForm)
 
   useEffect(() => {
     void loadServers()
@@ -58,6 +112,57 @@ export default function McpPage() {
       message.error(error instanceof Error ? error.message : '加载 MCP 索引失败')
     } finally {
       setLoading(false)
+    }
+  }
+
+  function openCreateDrawer() {
+    setCreateDrawerOpen(true)
+    createForm.resetFields()
+    createForm.setFieldsValue(buildCreateDraft())
+  }
+
+  function closeCreateDrawer() {
+    setCreateDrawerOpen(false)
+    createForm.resetFields()
+  }
+
+  async function handleCreateServer() {
+    try {
+      const values = await createForm.validateFields()
+      const payload: McpServerCreateInput = {
+        serverName: values.serverName?.trim() || undefined,
+        displayName: values.displayName.trim() || null,
+        sourceKind: values.sourceKind,
+        sourceLabel: values.sourceLabel.trim() || '手动登记',
+        enabled: values.enabled,
+        transport: values.transport,
+        command: values.transport === 'stdio' ? values.command.trim() || null : null,
+        args: values.transport === 'stdio' ? parseLines(values.argsText) : [],
+        env: values.transport === 'stdio' ? parseJsonMap(values.envText, '环境变量') : {},
+        url: values.transport === 'stdio' ? null : values.url.trim() || null,
+        headers: values.transport === 'stdio' ? {} : parseJsonMap(values.headersText, '请求头'),
+        toolTimeout: Number(values.toolTimeout || 30),
+      }
+
+      setCreatingServer(true)
+      const next = await api.createMcpServer(payload)
+      closeCreateDrawer()
+      await loadServers()
+      message.success(`MCP ${next.serverName} 已创建`)
+      navigate(`/mcp/${encodeURIComponent(next.serverName)}`)
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        message.error('环境变量或请求头必须是合法 JSON')
+        return
+      }
+      if (typeof error === 'object' && error && 'errorFields' in error) {
+        return
+      }
+      if (error instanceof Error && error.message) {
+        message.error(error.message)
+      }
+    } finally {
+      setCreatingServer(false)
     }
   }
 
@@ -141,7 +246,7 @@ export default function McpPage() {
       <PageHero
         className="page-hero-compact studio-hero"
         eyebrow={devMode ? 'MCP Registry' : '连接'}
-        title={devMode ? 'MCP 扩展目录' : '第三方服务连接'}
+        title={devMode ? '连接目录' : '第三方服务连接'}
         description={devMode ? '管理 MCP 与连接状态。' : '管理第三方连接。'}
         badges={[
           <Tag key="scope">{devMode ? '仓库安装' : '连接总览'}</Tag>,
@@ -149,6 +254,9 @@ export default function McpPage() {
         ].filter(Boolean)}
         actions={(
           <div className="mcp-hero-actions">
+            <Button icon={<PlusOutlined />} onClick={openCreateDrawer} type="primary">
+              手动添加 Server
+            </Button>
             <Button icon={<ReloadOutlined />} onClick={() => void loadServers()} loading={loading}>
               刷新
             </Button>
@@ -171,7 +279,37 @@ export default function McpPage() {
         />
       ) : null}
 
-      <DevOnly>
+      <Card className="config-panel-card">
+        <div className="config-card-header">
+          <div className="page-section-title">
+            <Typography.Title level={4}>手动添加 MCP Server</Typography.Title>
+            <Text type="secondary">适合直接填写 stdio / SSE / streamable HTTP 连接信息。</Text>
+          </div>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDrawer}>
+            新建
+          </Button>
+        </div>
+
+        <div className="page-meta-grid mcp-meta-grid">
+          <div className="page-meta-card">
+            <span>支持传输</span>
+            <strong>stdio / sse / streamableHttp</strong>
+          </div>
+          <div className="page-meta-card">
+            <span>默认来源</span>
+            <strong>manual</strong>
+          </div>
+          <div className="page-meta-card">
+            <span>安装流程</span>
+            <strong>无需仓库预检</strong>
+          </div>
+          <div className="page-meta-card">
+            <span>后续动作</span>
+            <strong>保存后可进入详情继续探测</strong>
+          </div>
+        </div>
+      </Card>
+
       <Card className="config-panel-card">
         <div className="config-card-header">
           <div className="page-section-title">
@@ -288,7 +426,6 @@ export default function McpPage() {
           />
         ) : null}
       </Card>
-      </DevOnly>
 
       <Card className="config-panel-card">
         <div className="config-card-header">
@@ -315,7 +452,7 @@ export default function McpPage() {
                   <div className="tag-cloud">
                     <Tag color={statusMeta[entry.status].color}>{statusMeta[entry.status].label}</Tag>
                     <Tag>{entry.enabled ? '启用' : '停用'}</Tag>
-                    <DevOnly><Tag>{transportLabels[entry.transport]}</Tag></DevOnly>
+                    <Tag>{transportLabels[entry.transport]}</Tag>
                   </div>
                 </div>
 
@@ -328,15 +465,13 @@ export default function McpPage() {
                     <span>最近探测</span>
                     <strong>{entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '未探测'}</strong>
                   </div>
-                  <DevOnly>
                   <div className="page-meta-card">
                     <span>来源</span>
                     <strong>{entry.sourceLabel}</strong>
                   </div>
-                  </DevOnly>
                 </div>
 
-                <DevOnly><Text type="secondary">{entry.statusDetail}</Text></DevOnly>
+                <Text type="secondary">{entry.statusDetail}</Text>
 
                 {entry.lastError ? (
                   <Alert
@@ -374,6 +509,80 @@ export default function McpPage() {
           />
         )}
       </Card>
+
+      <Drawer
+        title="手动添加 MCP Server"
+        open={createDrawerOpen}
+        width={720}
+        onClose={closeCreateDrawer}
+        destroyOnClose
+        extra={(
+          <Space>
+            <Button onClick={closeCreateDrawer}>取消</Button>
+            <Button type="primary" icon={<SaveOutlined />} loading={creatingServer} onClick={() => void handleCreateServer()}>
+              保存
+            </Button>
+          </Space>
+        )}
+      >
+        <Form layout="vertical" form={createForm} initialValues={buildCreateDraft()} preserve={false}>
+          <Form.Item label="服务器名" name="serverName">
+            <Input placeholder="可留空，由系统自动生成" />
+          </Form.Item>
+          <Form.Item label="展示名称" name="displayName" rules={[{ required: true, message: '请输入展示名称' }]}>
+            <Input placeholder="例如 Filesystem" />
+          </Form.Item>
+          <Form.Item label="来源类型" name="sourceKind">
+            <Select
+              options={[
+                { label: '手动登记', value: 'manual' },
+                { label: '现有配置', value: 'config' },
+                { label: '仓库安装', value: 'repository' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="来源标签" name="sourceLabel">
+            <Input placeholder="例如 手动登记" />
+          </Form.Item>
+          <Form.Item label="传输类型" name="transport" rules={[{ required: true, message: '请选择传输类型' }]}>
+            <Select
+              options={[
+                { label: 'stdio', value: 'stdio' },
+                { label: 'sse', value: 'sse' },
+                { label: 'streamableHttp', value: 'streamableHttp' },
+              ]}
+            />
+          </Form.Item>
+          {createTransport === 'stdio' ? (
+            <>
+              <Form.Item label="Command" name="command" rules={[{ required: true, message: 'stdio 需要 command' }]}>
+                <Input placeholder="例如 node" />
+              </Form.Item>
+              <Form.Item label="Args" name="argsText">
+                <Input.TextArea rows={4} placeholder="每行一个参数" />
+              </Form.Item>
+              <Form.Item label="环境变量 JSON" name="envText">
+                <Input.TextArea rows={4} placeholder='{"NODE_ENV":"production"}' />
+              </Form.Item>
+            </>
+          ) : (
+            <>
+              <Form.Item label="URL" name="url" rules={[{ required: true, message: 'HTTP 连接需要 URL' }]}>
+                <Input placeholder="https://example.com/mcp" />
+              </Form.Item>
+              <Form.Item label="请求头 JSON" name="headersText">
+                <Input.TextArea rows={4} placeholder='{"Authorization":"Bearer xxx"}' />
+              </Form.Item>
+            </>
+          )}
+          <Form.Item label="Tool Timeout" name="toolTimeout">
+            <InputNumber min={1} max={300} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="启用" name="enabled" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Drawer>
     </div>
   )
 }

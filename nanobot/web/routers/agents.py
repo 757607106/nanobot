@@ -13,6 +13,7 @@ from nanobot.platform.agents import (
     AgentDefinitionNotFoundError,
     AgentDefinitionValidationError,
 )
+from nanobot.platform.model_resources import ModelSelection
 from nanobot.web.http import APIError, _json_response, _ok
 from nanobot.web.tenant_context import get_tenant_id
 
@@ -28,6 +29,14 @@ def _default_tools(request: Request) -> list[str]:
         item["name"]
         for item in request.app.state.web.workspace_runtime.get_template_tool_catalog()
     ]
+
+
+def _default_chat_selection(request: Request, tenant_id: str) -> ModelSelection | None:
+    try:
+        defaults = request.app.state.model_providers.get_defaults(tenant_id=tenant_id)
+    except Exception:
+        return None
+    return ModelSelection.from_dict(defaults.get("defaultChat"), default_capability="chat")
 
 
 def _resolve_template_snapshot(request: Request, payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -59,7 +68,11 @@ def create_agent(
         data = request.app.state.agents.create_agent(
             payload,
             tenant_id=tenant_id,
-            default_model=request.app.state.web.config.agents.defaults.model,
+            default_model=(
+                request.app.state.web.config_runtime.resolve_chat_model_config(request.app.state.web.config).get("model")
+                or request.app.state.web.config.agents.defaults.model
+            ),
+            default_chat_selection=_default_chat_selection(request, tenant_id),
             default_tools=_default_tools(request),
             template_snapshot=_resolve_template_snapshot(request, payload),
         )

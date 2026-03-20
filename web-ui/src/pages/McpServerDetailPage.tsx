@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react'
-import { Alert, App, Button, Card, Empty, Input, InputNumber, List, Select, Space, Spin, Switch, Tag, Typography } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { Alert, App, Button, Card, Empty, Input, InputNumber, List, Select, Space, Spin, Switch, Table, Tag, Typography } from 'antd'
 import { ArrowLeftOutlined, DeleteOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
-import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import { testIds } from '../testIds'
-import type { McpProbeResult, McpRepairPlan, McpServerEntry, McpTestChatData } from '../types'
+import type { McpProbeResult, McpRepairPlan, McpServerEntry, McpTestChatData, McpToolEntry } from '../types'
 
 const { Text } = Typography
 
@@ -66,6 +65,7 @@ export default function McpServerDetailPage() {
   const [sendingTestChat, setSendingTestChat] = useState(false)
   const [clearingTestChat, setClearingTestChat] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [toolActingName, setToolActingName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -138,6 +138,26 @@ export default function McpServerDetailPage() {
       message.error(nextError instanceof Error ? nextError.message : '切换 MCP 启用状态失败')
     } finally {
       setToggling(false)
+    }
+  }
+
+  async function handleToggleTool(tool: McpToolEntry, enabled: boolean) {
+    if (!serverName) {
+      return
+    }
+    try {
+      setToolActingName(tool.toolName)
+      await api.setMcpToolEnabled(serverName, tool.toolName, { enabled })
+      const next = await api.getMcpServer(serverName)
+      setEntry(next)
+      setDraft(toDraft(next))
+      const nextPlan = await api.getMcpRepairPlan(serverName)
+      setRepairPlan(nextPlan)
+      message.success(enabled ? `工具 ${tool.toolName} 已启用` : `工具 ${tool.toolName} 已停用`)
+    } catch (nextError) {
+      message.error(nextError instanceof Error ? nextError.message : '更新工具状态失败')
+    } finally {
+      setToolActingName(null)
     }
   }
 
@@ -256,6 +276,9 @@ export default function McpServerDetailPage() {
     })
   }
 
+  const tools = useMemo(() => entry?.tools || [], [entry])
+  const enabledToolCount = tools.filter((tool) => tool.enabled).length
+
   if (loading) {
     return (
       <div className="center-box page-card">
@@ -287,6 +310,7 @@ export default function McpServerDetailPage() {
         badges={[
           <Tag key="transport">{connectionModeLabel}</Tag>,
           <Tag key="status" color={entry.enabled ? 'success' : 'default'}>{entry.enabled ? '启用中' : '已停用'}</Tag>,
+          <Tag key="tool-count">{tools.length} 个工具</Tag>,
         ]}
         actions={(
           <div className="mcp-hero-actions">
@@ -315,7 +339,9 @@ export default function McpServerDetailPage() {
         )}
         stats={[
           { label: '启用状态', value: entry.enabled ? '启用' : '停用' },
-          { label: '工具缓存', value: entry.toolCountKnown ? entry.toolCount : '待探测' },
+          { label: '工具总数', value: tools.length || (entry.toolCountKnown ? entry.toolCount : '待探测') },
+          { label: '已启用工具', value: enabledToolCount },
+          { label: '缺失环境变量', value: missingEnvCount },
           { label: '最近探测', value: entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '--' },
           { label: '探测状态', value: entry.lastProbeStatus || '--' },
         ]}
@@ -367,7 +393,6 @@ export default function McpServerDetailPage() {
               <Switch checked={draft.enabled} onChange={(checked) => setDraft({ ...draft, enabled: checked })} />
             </div>
 
-            <DevOnly>
             <div className="config-field-block">
               <div className="config-field-label-row">
                 <Text>传输方式</Text>
@@ -382,7 +407,6 @@ export default function McpServerDetailPage() {
                 onChange={(value) => setDraft({ ...draft, type: value as DetailDraft['type'] })}
               />
             </div>
-            </DevOnly>
 
             <div className="config-field-block">
               <div className="config-field-label-row">
@@ -396,7 +420,6 @@ export default function McpServerDetailPage() {
               />
             </div>
 
-            <DevOnly>
             {draft.type === 'stdio' ? (
               <>
                 <div className="config-field-block">
@@ -427,9 +450,7 @@ export default function McpServerDetailPage() {
                 <Input value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} />
               </div>
             )}
-            </DevOnly>
 
-            <DevOnly>
             <div className="config-field-block">
               <div className="config-field-label-row">
                 <Text>环境变量 JSON</Text>
@@ -443,7 +464,6 @@ export default function McpServerDetailPage() {
                 data-testid={testIds.mcp.detailEnv}
               />
             </div>
-            </DevOnly>
 
             <div className="config-field-block">
               <div className="config-field-label-row">
@@ -458,6 +478,74 @@ export default function McpServerDetailPage() {
               />
             </div>
           </div>
+        </Card>
+
+        <Card className="config-panel-card">
+          <div className="config-card-header">
+            <div className="page-section-title">
+              <Typography.Title level={4}>工具明细</Typography.Title>
+              <Text type="secondary">每个工具都可以单独启停，Agent 只会注册启用中的工具。</Text>
+            </div>
+            <Tag>{tools.length} 个工具</Tag>
+          </div>
+
+          {tools.length > 0 ? (
+            <Table
+              rowKey="toolName"
+              pagination={false}
+              dataSource={tools}
+              columns={[
+                {
+                  title: '工具名',
+                  dataIndex: 'toolName',
+                  key: 'toolName',
+                  render: (_value: unknown, record: McpToolEntry) => (
+                    <div className="page-stack" style={{ gap: 4 }}>
+                      <Text strong>{record.toolName}</Text>
+                      <Text type="secondary">{record.createdAt ? formatDateTimeZh(record.createdAt) : '未记录创建时间'}</Text>
+                    </div>
+                  ),
+                },
+                {
+                  title: '描述',
+                  dataIndex: 'description',
+                  key: 'description',
+                  render: (_value: unknown, record: McpToolEntry) => (
+                    <Text type="secondary">{record.description || '暂无描述'}</Text>
+                  ),
+                },
+                {
+                  title: '输入结构',
+                  dataIndex: 'inputSchema',
+                  key: 'inputSchema',
+                  render: (_value: unknown, record: McpToolEntry) => {
+                    const schema = record.inputSchema || {}
+                    const schemaKeys = Object.keys(schema)
+                    return (
+                      <div className="page-stack" style={{ gap: 4 }}>
+                        <Text>{schemaKeys.length > 0 ? `${schemaKeys.length} 个字段` : '未提供 schema'}</Text>
+                        {schemaKeys.length > 0 ? <Text type="secondary">{schemaKeys.slice(0, 4).join(', ')}</Text> : null}
+                      </div>
+                    )
+                  },
+                },
+                  {
+                    title: '启用',
+                    dataIndex: 'enabled',
+                    key: 'enabled',
+                    render: (_value: unknown, record: McpToolEntry) => (
+                      <Switch
+                        checked={record.enabled}
+                        disabled={toolActingName === record.toolName}
+                        onChange={(checked) => void handleToggleTool(record, checked)}
+                      />
+                    ),
+                  },
+                ]}
+            />
+          ) : (
+            <Empty description="当前没有工具明细，先执行一次探测" className="empty-block" />
+          )}
         </Card>
 
         <div className="page-stack system-side-stack">
@@ -642,7 +730,6 @@ export default function McpServerDetailPage() {
             </div>
           </Card>
 
-          <DevOnly>
           <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
@@ -673,7 +760,6 @@ export default function McpServerDetailPage() {
               </div>
             </div>
           </Card>
-          </DevOnly>
 
           <Card className="config-panel-card">
             <div className="config-card-header">

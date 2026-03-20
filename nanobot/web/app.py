@@ -19,7 +19,9 @@ from nanobot.platform.agents import AgentDefinitionService, AgentDefinitionStore
 from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBindingStore
 from nanobot.platform.instances import PlatformInstanceService
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
+from nanobot.platform.mcp_resources import McpResourceService, McpResourceStore
 from nanobot.platform.memory import TeamMemoryService, TeamMemoryStore
+from nanobot.platform.model_resources import ModelProviderService, ModelProviderStore
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.platform.teams import TeamDefinitionService, TeamDefinitionStore
 from nanobot.platform.tenants import TenantService, TenantStore
@@ -53,6 +55,7 @@ from nanobot.web.routers import (
     knowledge_router,
     mcp_router,
     memory_router,
+    model_providers_router,
     operations_router,
     runs_router,
     schedule_router,
@@ -73,13 +76,21 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     instance = PlatformInstanceService().get_default_instance(get_config_path())
     auth = WebAuthManager(instance)
     mcp_registry = WebMCPRegistryManager(instance)
-    mcp_repository = MCPRepositoryService(instance, mcp_registry)
-    mcp_servers = MCPServerService(instance, mcp_registry)
     channels = WebChannelService()
     channel_tests = WebChannelTestService(instance)
     whatsapp_binding = WebWhatsAppBindingService(instance)
     setup = WebSetupManager(instance)
     operations = WebOperationsService(setup, mcp_registry, instance)
+    model_providers = ModelProviderService(
+        ModelProviderStore(instance.model_resources_db_path()),
+        instance_id=instance.id,
+    )
+    mcp_resources = McpResourceService(
+        McpResourceStore(instance.mcp_resources_db_path()),
+        instance_id=instance.id,
+    )
+    mcp_repository = MCPRepositoryService(instance, mcp_registry, resources=mcp_resources)
+    mcp_servers = MCPServerService(instance, mcp_registry, resources=mcp_resources)
     agents = AgentDefinitionService(
         AgentDefinitionStore(instance.agent_definitions_db_path()),
         instance_id=instance.id,
@@ -88,6 +99,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         KnowledgeBaseStore(instance.knowledge_db_path()),
         instance=instance,
         instance_id=instance.id,
+        model_providers=model_providers,
     )
     teams = TeamDefinitionService(
         TeamDefinitionStore(instance.team_definitions_db_path()),
@@ -112,6 +124,12 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         agent_lookup=agents.require_agent,
         team_lookup=teams.require_team,
     )
+    model_providers.seed_from_legacy_config(config)
+    mcp_resources.seed_from_legacy(
+        config.tools.mcp_servers,
+        mcp_registry.list_servers(config).get("items", []),
+    )
+    knowledge.sync_legacy_knowledge_bases()
 
     def build_team_artifact_sources(team_id: str) -> list[dict[str, Any]]:
         sources: list[dict[str, Any]] = []
@@ -158,6 +176,8 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         app.state.channel_tests = channel_tests
         app.state.whatsapp_binding = whatsapp_binding
         app.state.operations = operations
+        app.state.model_providers = model_providers
+        app.state.mcp_resources = mcp_resources
         app.state.agents = agents
         app.state.knowledge = knowledge
         app.state.memory = memory
@@ -175,6 +195,10 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
             app.state.web.app_teams = teams
             app.state.web.app_knowledge = knowledge
             app.state.web.app_memory = memory
+            app.state.web.app_model_providers = model_providers
+            app.state.web.app_mcp_servers = mcp_servers
+            app.state.web.app_mcp_resources = mcp_resources
+            app.state.web.config_runtime.rebuild_runtime(app.state.web.config)
             app.state.web.channel_bindings_service = channel_bindings_service
             app.state.web.channel_runtime.start()
             yield
@@ -193,6 +217,8 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.state.channel_tests = channel_tests
     app.state.whatsapp_binding = whatsapp_binding
     app.state.operations = operations
+    app.state.model_providers = model_providers
+    app.state.mcp_resources = mcp_resources
     app.state.agents = agents
     app.state.knowledge = knowledge
     app.state.memory = memory
@@ -248,6 +274,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.include_router(agents_router)
     app.include_router(auth_router)
     app.include_router(setup_router)
+    app.include_router(model_providers_router)
     app.include_router(mcp_router)
     app.include_router(channels_router)
     app.include_router(channel_bindings_router)

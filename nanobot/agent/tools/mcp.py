@@ -85,6 +85,12 @@ async def connect_mcp_servers(
             if not getattr(cfg, "enabled", True):
                 logger.info("MCP server '{}': disabled in config, skipping", name)
                 continue
+            enabled_tools = getattr(cfg, "enabled_tools", None)
+            enabled_tool_set = {
+                str(tool_name).strip()
+                for tool_name in (enabled_tools or [])
+                if str(tool_name).strip()
+            } or None
 
             transport_type = cfg.type
             if not transport_type:
@@ -143,6 +149,13 @@ async def connect_mcp_servers(
 
             tools = await session.list_tools()
             for tool_def in tools.tools:
+                if enabled_tool_set is not None and tool_def.name not in enabled_tool_set:
+                    logger.debug(
+                        "MCP: skipping disabled tool '{}' from server '{}'",
+                        tool_def.name,
+                        name,
+                    )
+                    continue
                 wrapper = MCPToolWrapper(session, name, tool_def, tool_timeout=cfg.tool_timeout)
                 registry.register(wrapper)
                 logger.debug("MCP: registered tool '{}' from server '{}'", wrapper.name, name)

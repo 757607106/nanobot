@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 import shutil
 import time
 import zipfile
@@ -17,6 +18,8 @@ from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
 from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.platform.agents import AgentDefinitionStore
+from nanobot.platform.instances import PlatformInstanceService
+from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
 from nanobot.platform.runs import RunControlScope, RunKind
 from nanobot.providers.base import LLMResponse, ToolCallRequest
 from nanobot.web.api import create_app, run_server
@@ -839,7 +842,25 @@ def test_web_api_mcp_server_probe_update_toggle_and_delete(tmp_path, monkeypatch
         assert update_response.json()["data"]["entry"]["env"]["MCP_API_KEY"] == "secret-key"
 
         async def fake_list_tools(_cfg):
-            return ["read_file", "list_dir"]
+            return [
+                {
+                    "name": "read_file",
+                    "description": "Read a file from disk",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string"}},
+                        "required": ["path"],
+                    },
+                },
+                {
+                    "name": "list_dir",
+                    "description": "List a directory",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"directory": {"type": "string"}},
+                    },
+                },
+            ]
 
         monkeypatch.setattr(client.app.state.mcp_servers, "_list_server_tools", fake_list_tools)
 
@@ -852,6 +873,17 @@ def test_web_api_mcp_server_probe_update_toggle_and_delete(tmp_path, monkeypatch
         assert probe_data["entry"]["toolCount"] == 2
         assert probe_data["entry"]["lastProbeStatus"] == "passed"
 
+        partial_update = client.put(
+            "/api/v1/mcp/servers/filesystem-mcp",
+            json={"displayName": "Workspace Files V2"},
+        )
+        assert partial_update.status_code == 200
+        partial_entry = partial_update.json()["data"]["entry"]
+        assert partial_entry["displayName"] == "Workspace Files V2"
+        assert partial_entry["command"] == "node"
+        assert partial_entry["env"]["MCP_API_KEY"] == "secret-key"
+        assert partial_entry["toolTimeout"] == 45
+
         toggle_response = client.post(
             "/api/v1/mcp/servers/filesystem-mcp/enabled",
             json={"enabled": True},
@@ -863,9 +895,13 @@ def test_web_api_mcp_server_probe_update_toggle_and_delete(tmp_path, monkeypatch
         detail_response = client.get("/api/v1/mcp/servers/filesystem-mcp")
         assert detail_response.status_code == 200
         detail_data = detail_response.json()["data"]
-        assert detail_data["displayName"] == "Workspace Files"
+        assert detail_data["displayName"] == "Workspace Files V2"
         assert detail_data["toolNames"] == ["read_file", "list_dir"]
         assert detail_data["env"]["OPTIONAL_TOKEN"] == "optional-secret"
+        tools = {tool["toolName"]: tool for tool in detail_data["tools"]}
+        assert tools["read_file"]["description"] == "Read a file from disk"
+        assert tools["read_file"]["inputSchema"]["required"] == ["path"]
+        assert tools["list_dir"]["description"] == "List a directory"
 
         delete_response = client.delete("/api/v1/mcp/servers/filesystem-mcp")
         assert delete_response.status_code == 200
@@ -875,6 +911,55 @@ def test_web_api_mcp_server_probe_update_toggle_and_delete(tmp_path, monkeypatch
         list_response = client.get("/api/v1/mcp/servers")
         assert list_response.status_code == 200
         assert list_response.json()["data"]["items"] == []
+
+
+def test_web_api_mcp_manual_server_create_and_toggle_tool(tmp_path, monkeypatch) -> None:
+    config = _make_test_config(tmp_path, monkeypatch)
+
+    with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
+        _bootstrap_admin(client)
+
+        created = client.post(
+            "/api/v1/mcp/servers",
+            json={
+                "displayName": "Docs Browser",
+                "sourceKind": "manual",
+                "sourceLabel": "手动登记",
+                "enabled": True,
+                "transport": "sse",
+                "url": "https://mcp.example.com/sse",
+                "headers": {"Authorization": "Bearer token"},
+                "toolTimeout": 60,
+            },
+        )
+        assert created.status_code == 201
+        payload = created.json()["data"]
+        server_name = payload["serverName"]
+        assert payload["entry"]["transport"] == "sse"
+        assert payload["entry"]["headers"]["Authorization"] == "Bearer token"
+
+        client.app.state.mcp_resources.replace_tools(
+            server_name,
+            [
+                {"toolName": "search_docs", "description": "Search documentation", "enabled": True},
+                {"toolName": "open_doc", "description": "Open a document", "enabled": True},
+            ],
+            tenant_id="default",
+        )
+
+        toggled = client.put(
+            f"/api/v1/mcp/servers/{server_name}/tools/open_doc",
+            json={"enabled": False},
+        )
+        assert toggled.status_code == 200
+        assert toggled.json()["data"]["tool"]["enabled"] is False
+
+        detail = client.get(f"/api/v1/mcp/servers/{server_name}")
+        assert detail.status_code == 200
+        detail_payload = detail.json()["data"]
+        tools = {tool["toolName"]: tool for tool in detail_payload["tools"]}
+        assert tools["search_docs"]["enabled"] is True
+        assert tools["open_doc"]["enabled"] is False
 
 
 def test_web_api_mcp_repair_plan_explains_missing_env_and_blocks_dangerous_mode(
@@ -1227,6 +1312,120 @@ def test_web_api_chat_upload_and_dispatch(web_client: TestClient, monkeypatch) -
     assert dispatched.json()["data"]["content"] == "Saw the uploaded file."
 
 
+def test_web_api_chat_session_uses_bound_agent_runtime(web_client: TestClient, monkeypatch) -> None:
+    agent_created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Chat Bound Agent",
+            "systemPrompt": "Always answer using your configured bindings.",
+        },
+    )
+    assert agent_created.status_code == 201
+    agent = agent_created.json()["data"]
+
+    created = web_client.post(
+        "/api/v1/chat/sessions",
+        json={"title": "Agent Inbox", "agentId": agent["agentId"]},
+    )
+    assert created.status_code == 201
+    session = created.json()["data"]
+    assert session["agentId"] == agent["agentId"]
+
+    async def fake_run_agent_definition(agent_payload, **kwargs):  # noqa: ANN001
+        assert agent_payload["agentId"] == agent["agentId"]
+        assert kwargs["task"] == "use your bindings"
+        assert kwargs["origin_chat_id"] == session["id"]
+        return {
+            "run": {"runId": "run-chat-agent"},
+            "session": session,
+            "assistantMessage": {
+                "role": "assistant",
+                "content": "Agent handled it.",
+            },
+            "messages": [],
+            "knowledgeHits": [],
+            "pendingKnowledgeBindings": [],
+            "resolvedModel": "deepseek/deepseek-chat",
+            "appliedBindings": {
+                "toolAllowlist": [],
+                "mcpServerIds": [],
+                "skillIds": [],
+                "knowledgeBindingIds": [],
+                "chatModelSelection": None,
+            },
+        }
+
+    monkeypatch.setattr(web_client.app.state.web.agent_runtime, "run_agent_definition", fake_run_agent_definition)
+
+    dispatched = web_client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "use your bindings"},
+    )
+    assert dispatched.status_code == 200
+    assert dispatched.json()["data"]["assistantMessage"]["content"] == "Agent handled it."
+
+
+def test_web_api_chat_message_history_preserves_citations(web_client: TestClient) -> None:
+    created = web_client.post("/api/v1/chat/sessions", json={"title": "Citation Session"})
+    assert created.status_code == 201
+    session_id = created.json()["data"]["id"]
+    session_key = f"web:{session_id}"
+    session = web_client.app.state.web.sessions.get_or_create(session_key)
+    session.add_message("user", "what is the source?")
+    session.add_message("assistant", "Here is the answer.")
+    web_client.app.state.web.sessions.save(session)
+
+    web_client.app.state.web.chat_runtime.annotate_last_assistant_message(
+        session_key,
+        citations=[
+            {
+                "kbId": "support-kb",
+                "kbName": "Support KB",
+                "docId": "doc_alpha",
+                "title": "runbook.md",
+                "sourceType": "upload_file",
+                "sourceUri": None,
+                "fileName": "runbook.md",
+                "mimeType": "text/markdown",
+                "chunkOrdinal": 0,
+            }
+        ],
+        knowledge_hits=[
+            {
+                "chunkId": "chunk_alpha",
+                "kbId": "support-kb",
+                "kbName": "Support KB",
+                "docId": "doc_alpha",
+                "title": "runbook.md",
+                "content": "Reset the token cache before restarting the worker.",
+                "preview": "Reset the token cache...",
+                "score": 0.91,
+                "metadata": {},
+                "citation": {
+                    "kbId": "support-kb",
+                    "kbName": "Support KB",
+                    "docId": "doc_alpha",
+                    "title": "runbook.md",
+                    "sourceType": "upload_file",
+                    "sourceUri": None,
+                    "fileName": "runbook.md",
+                    "mimeType": "text/markdown",
+                    "chunkOrdinal": 0,
+                },
+            }
+        ],
+        applied_bindings={"knowledgeBindingIds": ["support-kb"]},
+        resolved_model="deepseek/deepseek-chat",
+    )
+
+    messages = web_client.get(f"/api/v1/chat/sessions/{session_id}/messages")
+    assert messages.status_code == 200
+    assistant_message = next(item for item in messages.json()["data"] if item["role"] == "assistant")
+    assert assistant_message["citations"][0]["title"] == "runbook.md"
+    assert assistant_message["knowledgeHits"][0]["chunkId"] == "chunk_alpha"
+    assert assistant_message["resolvedModel"] == "deepseek/deepseek-chat"
+
+
 def test_web_api_chat_workspace_snapshot(web_client: TestClient) -> None:
     web_client.app.state.web.config.tools.mcp_servers["filesystem"] = MCPServerConfig(
         enabled=True,
@@ -1272,6 +1471,7 @@ def test_web_api_chat_workspace_snapshot(web_client: TestClient) -> None:
     assert data["recentUploads"][0]["relativePath"].startswith("uploads/")
     assert data["recentToolActivity"][0]["toolName"] == "read_file"
     assert data["activeMcp"][0]["name"] == "filesystem"
+    assert "availableAgents" in data
     assert len(data["quickPrompts"]) >= 1
 
 
@@ -2298,7 +2498,7 @@ def test_web_api_knowledge_base_crud_upload_and_retrieve(web_client: TestClient)
     )
     assert retrieved.status_code == 200
     data = retrieved.json()["data"]
-    assert data["effectiveMode"] == "hybrid"
+    assert data["effectiveMode"] == "keyword"
     assert len(data["hits"]) >= 1
     assert "runbook.md" == data["hits"][0]["citation"]["title"]
 
@@ -2308,7 +2508,7 @@ def test_web_api_knowledge_base_crud_upload_and_retrieve(web_client: TestClient)
     )
     assert semantic.status_code == 200
     semantic_payload = semantic.json()["data"]
-    assert semantic_payload["effectiveMode"] == "semantic"
+    assert semantic_payload["effectiveMode"] == "keyword"
     assert len(semantic_payload["hits"]) >= 1
 
     reindexed = web_client.post(
@@ -2334,6 +2534,260 @@ def test_web_api_knowledge_base_crud_upload_and_retrieve(web_client: TestClient)
     )
     assert deleted_doc.status_code == 200
     assert deleted_doc.json()["data"] == {"deleted": True}
+
+
+def test_web_api_knowledge_base_parse_and_index_endpoints(web_client: TestClient) -> None:
+    created = web_client.post(
+        "/api/v1/knowledge-bases",
+        json={
+            "name": "Stage KB",
+            "description": "Manual parse/index flow",
+            "autoIndexAfterParse": False,
+            "retrievalProfile": {"mode": "hybrid", "chunkSize": 320, "chunkOverlap": 24},
+        },
+    )
+    assert created.status_code == 201
+    kb = created.json()["data"]
+
+    queued = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents",
+        json={
+            "sourceType": "faq_table",
+            "title": "Stage FAQ",
+            "items": [
+                {
+                    "question": "How do we complete indexing?",
+                    "answer": "Run parse first and then trigger index.",
+                }
+            ],
+        },
+    )
+    assert queued.status_code == 202
+    doc_id = queued.json()["data"]["documents"][0]["docId"]
+    assert queued.json()["data"]["documents"][0]["docStatus"] == "uploaded"
+
+    parsed = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents/parse",
+        json={"docIds": [doc_id]},
+    )
+    assert parsed.status_code == 200
+    assert parsed.json()["data"]["documents"][0]["docStatus"] == "parsed"
+
+    indexed = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents/index",
+        json={"docIds": [doc_id]},
+    )
+    assert indexed.status_code == 200
+    assert indexed.json()["data"]["documents"][0]["docStatus"] == "indexed"
+    assert indexed.json()["data"]["documents"][0]["chunkCount"] >= 1
+
+    retrieved = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/retrieve-test",
+        json={"query": "trigger index", "mode": "hybrid"},
+    )
+    assert retrieved.status_code == 200
+    assert retrieved.json()["data"]["effectiveMode"] == "keyword"
+    assert len(retrieved.json()["data"]["hits"]) >= 1
+
+
+def test_web_api_marks_legacy_knowledge_base_migration_state(tmp_path, monkeypatch) -> None:
+    config = _make_test_config(tmp_path, monkeypatch)
+    instance = PlatformInstanceService().get_default_instance(config_loader.get_config_path())
+    knowledge = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+    )
+
+    created = knowledge.create_knowledge_base({"name": "Legacy Startup KB"})
+    knowledge.ingest_faq_table(
+        created["kbId"],
+        {
+            "title": "Legacy Startup FAQ",
+            "items": [
+                {
+                    "question": "Why does this KB need migration?",
+                    "answer": "Because it predates Milvus and embedding-bound indexing.",
+                }
+            ],
+        },
+    )
+
+    conn = sqlite3.connect(instance.knowledge_db_path())
+    conn.execute(
+        "UPDATE knowledge_bases SET config_json = ? WHERE kb_id = ?",
+        (
+            '{"description":"legacy startup","tags":["legacy"],"retrieval_profile":{"mode":"hybrid","topK":8}}',
+            created["kbId"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
+        _bootstrap_admin(client)
+        listed = client.get("/api/v1/knowledge-bases")
+        assert listed.status_code == 200
+        payload = listed.json()["data"][0]
+        assert payload["kbId"] == created["kbId"]
+        assert payload["legacyConfig"] is True
+        assert payload["reindexRequired"] is True
+        assert payload["reindexReason"] == "legacy_config_migration_required"
+
+
+def test_web_api_knowledge_source_delete(web_client: TestClient) -> None:
+    created = web_client.post(
+        "/api/v1/knowledge-bases",
+        json={
+            "name": "Source Delete KB",
+            "description": "Delete source flow",
+        },
+    )
+    assert created.status_code == 201
+    kb = created.json()["data"]
+
+    queued = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/documents",
+        json={
+            "sourceType": "faq_table",
+            "title": "Delete Me FAQ",
+            "items": [
+                {
+                    "question": "How do we remove a source?",
+                    "answer": "Delete the source and its documents together.",
+                }
+            ],
+        },
+    )
+    assert queued.status_code == 202
+    doc_id = queued.json()["data"]["documents"][0]["docId"]
+    job_id = queued.json()["data"]["jobs"][0]["jobId"]
+    _wait_for_knowledge_ingest(web_client, kb_id=kb["kbId"], doc_id=doc_id, job_id=job_id)
+
+    sources = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/sources")
+    assert sources.status_code == 200
+    source = sources.json()["data"][0]
+
+    deleted = web_client.delete(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/sources/{source['sourceId']}"
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["data"]["deleted"] is True
+    assert deleted.json()["data"]["sourceId"] == source["sourceId"]
+    assert doc_id in deleted.json()["data"]["docIds"]
+
+    remaining_sources = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/sources")
+    remaining_documents = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/documents")
+    assert remaining_sources.status_code == 200
+    assert remaining_documents.status_code == 200
+    assert remaining_sources.json()["data"] == []
+    assert remaining_documents.json()["data"] == []
+
+
+def test_web_api_model_providers_defaults_and_test(web_client: TestClient, monkeypatch) -> None:
+    created = web_client.post(
+        "/api/v1/model-providers",
+        json={
+            "displayName": "Ops Embeddings",
+            "providerType": "custom-openai",
+            "capabilities": ["embedding"],
+            "baseUrl": "https://models.example.com/v1",
+            "apiKeyEnv": "EMBEDDING_API_KEY",
+            "models": ["text-embedding-3-large"],
+            "defaultModel": "text-embedding-3-large",
+        },
+    )
+    assert created.status_code == 201
+    provider = created.json()["data"]
+
+    defaults = web_client.put(
+        "/api/v1/model-defaults",
+        json={
+            "defaultEmbedding": {
+                "providerId": provider["providerId"],
+                "modelName": "text-embedding-3-large",
+                "capability": "embedding",
+            }
+        },
+    )
+    assert defaults.status_code == 200
+    assert defaults.json()["data"]["defaultEmbedding"]["providerId"] == provider["providerId"]
+
+    class _DummyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _DummyHttpxClient:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.args = args
+            self.kwargs = kwargs
+
+        def __enter__(self) -> "_DummyHttpxClient":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001, ANN201
+            return None
+
+        def post(self, url, json):  # noqa: ANN001
+            assert url.endswith("/embeddings")
+            assert json["model"] == "text-embedding-3-large"
+            return _DummyResponse()
+
+    monkeypatch.setattr("nanobot.platform.model_resources.service.httpx.Client", _DummyHttpxClient)
+
+    tested = web_client.post(f"/api/v1/model-providers/{provider['providerId']}/test")
+    assert tested.status_code == 200
+    assert tested.json()["data"]["ok"] is True
+    assert tested.json()["data"]["provider"]["lastTestStatus"] == "passed"
+
+    deleted = web_client.delete(f"/api/v1/model-providers/{provider['providerId']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["data"]["deleted"] is True
+
+
+def test_web_api_model_provider_test_supports_reranker_only(web_client: TestClient, monkeypatch) -> None:
+    created = web_client.post(
+        "/api/v1/model-providers",
+        json={
+            "displayName": "Ops Reranker",
+            "providerType": "custom-reranker",
+            "capabilities": ["reranker"],
+            "baseUrl": "https://models.example.com/v1",
+            "models": ["bge-reranker-v2-m3"],
+            "defaultModel": "bge-reranker-v2-m3",
+        },
+    )
+    assert created.status_code == 201
+    provider = created.json()["data"]
+
+    class _DummyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _DummyHttpxClient:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.args = args
+            self.kwargs = kwargs
+
+        def __enter__(self) -> "_DummyHttpxClient":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001, ANN201
+            return None
+
+        def post(self, url, json):  # noqa: ANN001
+            assert url.endswith("/rerank")
+            assert json["model"] == "bge-reranker-v2-m3"
+            assert json["query"] == "ping"
+            assert json["documents"] == ["ping", "pong"]
+            return _DummyResponse()
+
+    monkeypatch.setattr("nanobot.platform.model_resources.service.httpx.Client", _DummyHttpxClient)
+
+    tested = web_client.post(f"/api/v1/model-providers/{provider['providerId']}/test")
+    assert tested.status_code == 200
+    assert tested.json()["data"]["ok"] is True
+    assert tested.json()["data"]["provider"]["lastTestStatus"] == "passed"
 
 
 def test_web_api_knowledge_base_batch_delete_documents(web_client: TestClient) -> None:

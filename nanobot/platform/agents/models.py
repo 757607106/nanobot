@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from nanobot.platform.model_resources.models import ModelSelection
+
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
@@ -24,6 +26,7 @@ class AgentDefinition:
     system_prompt: str = ""
     rules: list[str] = field(default_factory=list)
     model: str | None = None
+    chat_model_selection: ModelSelection | None = None
     backend: str | None = None
     enabled: bool = True
     tool_allowlist: list[str] = field(default_factory=list)
@@ -46,6 +49,7 @@ class AgentDefinition:
             "system_prompt": self.system_prompt,
             "rules": self.rules,
             "model": self.model,
+            "chat_model_selection": self.chat_model_selection.to_storage_dict() if self.chat_model_selection else None,
             "backend": self.backend,
             "tool_allowlist": self.tool_allowlist,
             "mcp_server_ids": self.mcp_server_ids,
@@ -72,6 +76,10 @@ class AgentDefinition:
             system_prompt=stored.get("system_prompt", ""),
             rules=list(stored.get("rules") or []),
             model=stored.get("model"),
+            chat_model_selection=ModelSelection.from_dict(
+                stored.get("chat_model_selection") or stored.get("chatModelSelection"),
+                default_capability="chat",
+            ),
             backend=stored.get("backend"),
             enabled=bool(record.get("enabled", True)),
             tool_allowlist=list(stored.get("tool_allowlist") or []),
@@ -94,6 +102,10 @@ class AgentDefinition:
         payload["tenantId"] = payload.pop("tenant_id")
         payload["instanceId"] = payload.pop("instance_id")
         payload["systemPrompt"] = payload.pop("system_prompt")
+        payload.pop("chat_model_selection", None)
+        payload["chatModelSelection"] = (
+            self.chat_model_selection.to_dict() if self.chat_model_selection else None
+        )
         payload["toolAllowlist"] = payload.pop("tool_allowlist")
         payload["mcpServerIds"] = payload.pop("mcp_server_ids")
         payload["skillIds"] = payload.pop("skill_ids")

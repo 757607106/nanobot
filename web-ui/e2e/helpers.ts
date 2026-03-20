@@ -6,6 +6,10 @@ export const E2E_USERNAME = 'owner'
 export const E2E_PASSWORD = 'bootstrap-pass-123'
 export const BRIEF_FIXTURE_PATH = path.resolve(process.cwd(), 'e2e/fixtures/brief.txt')
 
+function resolveExpectedPath(targetPath: string) {
+  return targetPath === '/login' ? '/chat' : targetPath
+}
+
 export async function bootstrapAndSetup(page: Page) {
   await page.goto('/login')
   await expect(page.getByTestId(testIds.auth.username)).toBeVisible()
@@ -47,17 +51,18 @@ export async function bootstrapAndSetup(page: Page) {
   })
   expect(agent.ok()).toBeTruthy()
 
-  await page.goto('/dashboard')
-  await expect(page).toHaveURL(/\/dashboard$/)
+  await page.goto('/chat')
+  await expect(page).toHaveURL(/\/chat$/)
 }
 
-export async function login(page: Page, targetPath = '/dashboard') {
+export async function login(page: Page, targetPath = '/chat') {
   await page.goto(targetPath)
   await expect(page).toHaveURL(/\/login$/)
   await page.getByTestId(testIds.auth.username).fill(E2E_USERNAME)
   await page.getByTestId(testIds.auth.password).fill(E2E_PASSWORD)
+  const expectedPath = resolveExpectedPath(targetPath)
   await Promise.all([
-    page.waitForURL(/\/dashboard$/),
+    page.waitForURL((url) => url.pathname === expectedPath),
     page.getByTestId(testIds.auth.submit).click(),
   ])
 }

@@ -10,6 +10,8 @@ const mockApi = vi.hoisted(() => ({
   createTeam: vi.fn(),
   createCalendarEvent: vi.fn(),
   createKnowledgeBase: vi.fn(),
+  createMcpServer: vi.fn(),
+  createModelProvider: vi.fn(),
   copyAgent: vi.fn(),
   copyTeam: vi.fn(),
   deleteAgent: vi.fn(),
@@ -17,6 +19,8 @@ const mockApi = vi.hoisted(() => ({
   deleteKnowledgeBase: vi.fn(),
   deleteKnowledgeDocument: vi.fn(),
   deleteKnowledgeDocuments: vi.fn(),
+  deleteKnowledgeSource: vi.fn(),
+  deleteModelProvider: vi.fn(),
   deleteSession: vi.fn(),
   health: vi.fn(),
   getAgent: vi.fn(),
@@ -51,6 +55,8 @@ const mockApi = vi.hoisted(() => ({
   getMcpServers: vi.fn(),
   getMcpRepairPlan: vi.fn(),
   getMcpTestChat: vi.fn(),
+  getModelDefaults: vi.fn(),
+  getModelProviders: vi.fn(),
   getOpsActions: vi.fn(),
   getOpsLogs: vi.fn(),
   getProfile: vi.fn(),
@@ -66,13 +72,17 @@ const mockApi = vi.hoisted(() => ({
   runValidation: vi.fn(),
   runTeam: vi.fn(),
   setMcpServerEnabled: vi.fn(),
+  setMcpToolEnabled: vi.fn(),
   rotateProfilePassword: vi.fn(),
+  testModelProvider: vi.fn(),
   triggerOpsAction: vi.fn(),
   uploadChatFile: vi.fn(),
   uploadProfileAvatar: vi.fn(),
   deleteProfileAvatar: vi.fn(),
   updateProfile: vi.fn(),
   updateMcpServer: vi.fn(),
+  updateModelDefaults: vi.fn(),
+  updateModelProvider: vi.fn(),
   deleteMcpServer: vi.fn(),
   deleteAgentTemplate: vi.fn(),
   deleteCalendarEvent: vi.fn(),
@@ -176,6 +186,7 @@ vi.mock('antd/es/input/TextArea', async () => {
 
 vi.mock('@ant-design/icons', async () => {
   const React = await import('react')
+  const actual = await vi.importActual<typeof import('@ant-design/icons')>('@ant-design/icons')
 
   function makeIcon(label: string) {
     return function MockIcon() {
@@ -184,6 +195,7 @@ vi.mock('@ant-design/icons', async () => {
   }
 
   return {
+    ...actual,
     ApiOutlined: makeIcon('api'),
     ApartmentOutlined: makeIcon('apartment'),
     AppstoreOutlined: makeIcon('appstore'),
@@ -204,6 +216,8 @@ vi.mock('@ant-design/icons', async () => {
     FileTextOutlined: makeIcon('file-text'),
     FolderOpenOutlined: makeIcon('folder-open'),
     GlobalOutlined: makeIcon('global'),
+    InfoCircleOutlined: makeIcon('info-circle'),
+    InboxOutlined: makeIcon('inbox'),
     LinkOutlined: makeIcon('link'),
     LogoutOutlined: makeIcon('logout'),
     MenuOutlined: makeIcon('menu'),
@@ -216,6 +230,7 @@ vi.mock('@ant-design/icons', async () => {
     PlusOutlined: makeIcon('plus'),
     CopyOutlined: makeIcon('copy'),
     ProfileOutlined: makeIcon('profile'),
+    QuestionCircleOutlined: makeIcon('question-circle'),
     ReloadOutlined: makeIcon('reload'),
     RobotOutlined: makeIcon('robot'),
     SaveOutlined: makeIcon('save'),
@@ -223,10 +238,12 @@ vi.mock('@ant-design/icons', async () => {
     SettingOutlined: makeIcon('setting'),
     SunOutlined: makeIcon('sun'),
     TeamOutlined: makeIcon('team'),
+    ThunderboltOutlined: makeIcon('thunderbolt'),
     ToolOutlined: makeIcon('tool'),
     UploadOutlined: makeIcon('upload'),
     UserOutlined: makeIcon('user'),
     CloudUploadOutlined: makeIcon('cloud-upload'),
+    CloudDownloadOutlined: makeIcon('cloud-download'),
   }
 })
 
@@ -657,8 +674,35 @@ vi.mock('antd', async () => {
       <div>{description as React.ReactNode}</div>
     </div>
   )
+  const Badge = ({ children, text }: Props) => (
+    <span>
+      {children}
+      {text as React.ReactNode}
+    </span>
+  )
 
   const Divider = () => <hr />
+  const Descriptions = Object.assign(
+    ({ children, items = [] }: Props) => (
+      <div>
+        {children}
+        {items.map((item, index) => (
+          <div key={item.key ?? index}>
+            {(item as { label?: React.ReactNode }).label}
+            {(item as { children?: React.ReactNode }).children}
+          </div>
+        ))}
+      </div>
+    ),
+    {
+      Item: ({ children, label }: Props) => (
+        <div>
+          {label}
+          {children}
+        </div>
+      ),
+    },
+  )
   const Tag = ({ children, icon, onClose }: Props) => (
     <span>
       {icon}
@@ -686,7 +730,9 @@ vi.mock('antd', async () => {
     Text: ({ children }: Props) => <span>{children}</span>,
   }
 
-  const Space = Box
+  const Space = Object.assign(Box, {
+    Compact: Box,
+  })
   const Row = Box
   const Col = Box
   const Flex = Box
@@ -707,8 +753,9 @@ vi.mock('antd', async () => {
         resetFields: vi.fn(),
         setFieldsValue: vi.fn(),
         validateFields: vi.fn().mockResolvedValue({}),
-      },
+        },
     ],
+    useWatch: vi.fn().mockReturnValue('stdio'),
     Item: ({ children, label }: Props) => {
       if (typeof children === 'function') {
         return <>{(children as (api: { getFieldValue: (name: string) => string }) => React.ReactNode)({
@@ -730,6 +777,21 @@ vi.mock('antd', async () => {
   }
 
   const Drawer = ({ children, open }: Props) => (open ? <div>{children}</div> : null)
+  const UploadBase = ({ children }: Props) => <div>{children}</div>
+  const Upload = Object.assign(UploadBase, {
+    Dragger: UploadBase,
+  })
+  const Table = ({ dataSource = [] }: Props & { dataSource?: unknown[] }) => <div data-table-rows={dataSource.length} />
+  const Steps = ({ items = [] }: Props) => (
+    <div>
+      {items.map((item, index) => (
+        <div key={item.key ?? index}>
+          {(item as { title?: React.ReactNode }).title}
+          {(item as { description?: React.ReactNode }).description}
+        </div>
+      ))}
+    </div>
+  )
 
   const LayoutBase = ({ children, className }: Props) => <div className={className}>{children}</div>
   const Layout = Object.assign(LayoutBase, {
@@ -765,12 +827,14 @@ vi.mock('antd', async () => {
   return {
     Alert,
     App: AppProvider,
+    Badge,
     Button,
     Card,
     Checkbox,
     Col,
     Collapse,
     ConfigProvider,
+    Descriptions,
     Divider,
     Drawer,
     Empty,
@@ -792,15 +856,19 @@ vi.mock('antd', async () => {
     Space,
     Spin,
     Switch,
+    Steps,
+    Table,
     Tabs,
     Tag,
     Tooltip,
     Typography,
+    Upload,
   }
 })
 
 import { AppRoutes } from '../App'
 import AppShell from '../components/AppShell'
+import AgentsPage from '../pages/AgentsPage'
 import CalendarPage from '../pages/CalendarPage'
 import ChannelBindingsPage from '../pages/ChannelBindingsPage'
 import ChannelDetailPage from '../pages/ChannelDetailPage'
@@ -1620,6 +1688,60 @@ function renderPage(element: JSX.Element) {
 
 describe('web app smoke pages', () => {
   beforeEach(() => {
+    const modelProviders = [
+      {
+        providerId: 'provider-chat',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        displayName: 'OpenAI Chat',
+        providerType: 'openai-compatible',
+        capabilities: ['chat'] as const,
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: null,
+        apiKeyEnv: 'OPENAI_API_KEY',
+        extraHeaders: {},
+        models: ['gpt-4.1-mini'],
+        defaultModel: 'gpt-4.1-mini',
+        enabled: true,
+        lastTestStatus: 'passed' as const,
+      },
+      {
+        providerId: 'provider-embed',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        displayName: 'Embedding Local',
+        providerType: 'openai-compatible',
+        capabilities: ['embedding', 'reranker'] as const,
+        baseUrl: 'http://127.0.0.1:8001/v1',
+        apiKey: null,
+        apiKeyEnv: null,
+        extraHeaders: {},
+        models: ['bge-m3', 'bge-reranker-v2-m3'],
+        defaultModel: 'bge-m3',
+        enabled: true,
+        lastTestStatus: 'passed' as const,
+      },
+    ]
+    const modelDefaults = {
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      defaultChat: {
+        providerId: 'provider-chat',
+        modelName: 'gpt-4.1-mini',
+        capability: 'chat' as const,
+      },
+      defaultEmbedding: {
+        providerId: 'provider-embed',
+        modelName: 'bge-m3',
+        capability: 'embedding' as const,
+      },
+      defaultReranker: {
+        providerId: 'provider-embed',
+        modelName: 'bge-reranker-v2-m3',
+        capability: 'reranker' as const,
+      },
+    }
+
     window.localStorage.clear()
     mockApi.health.mockResolvedValue({ status: 'ok' })
     mockApi.getAuthStatus.mockResolvedValue({
@@ -2392,6 +2514,8 @@ describe('web app smoke pages', () => {
     mockApi.getMcpServer.mockResolvedValue(makeMcpRegistry().items[0])
     mockApi.getMcpRepairPlan.mockResolvedValue(makeMcpRepairPlan())
     mockApi.getMcpTestChat.mockResolvedValue(makeMcpTestChat())
+    mockApi.getModelProviders.mockResolvedValue(modelProviders)
+    mockApi.getModelDefaults.mockResolvedValue(modelDefaults)
     mockApi.getProfile.mockResolvedValue(makeProfile())
     mockApi.getOpsLogs.mockResolvedValue(makeOpsLogs())
     mockApi.getOpsActions.mockResolvedValue(makeOpsActions())
@@ -2416,11 +2540,22 @@ describe('web app smoke pages', () => {
       recentToolActivity: makeMcpTestChat().recentToolActivity,
     })
     mockApi.clearMcpTestChat.mockResolvedValue({ deleted: true })
+    mockApi.createMcpServer.mockResolvedValue({
+      serverName: 'filesystem',
+      entry: makeMcpRegistry().items[0],
+      config: makeConfig(),
+    })
     mockApi.setMcpServerEnabled.mockResolvedValue({
       serverName: 'filesystem',
       enabled: true,
       entry: makeMcpRegistry().items[0],
       config: makeConfig(),
+    })
+    mockApi.setMcpToolEnabled.mockResolvedValue({
+      serverName: 'filesystem',
+      toolName: 'read_file',
+      enabled: true,
+      entry: makeMcpRegistry().items[0],
     })
     mockApi.updateMcpServer.mockResolvedValue({
       serverName: 'filesystem',
@@ -2433,6 +2568,16 @@ describe('web app smoke pages', () => {
       checkoutRemoved: true,
       config: makeConfig(),
     })
+    mockApi.createModelProvider.mockResolvedValue(modelProviders[0])
+    mockApi.updateModelProvider.mockResolvedValue(modelProviders[0])
+    mockApi.deleteModelProvider.mockResolvedValue({ deleted: true })
+    mockApi.testModelProvider.mockResolvedValue({
+      providerId: modelProviders[0].providerId,
+      ok: true,
+      status: 'passed',
+      provider: modelProviders[0],
+    })
+    mockApi.updateModelDefaults.mockResolvedValue(modelDefaults)
     mockApi.updateProfile.mockResolvedValue({
       profile: makeProfile(),
       auth: {
@@ -2471,6 +2616,7 @@ describe('web app smoke pages', () => {
     mockApi.updateCalendarEvent.mockResolvedValue(makeCalendarEvents()[0])
     mockApi.deleteCalendarEvent.mockResolvedValue({ deleted: true })
     mockApi.uploadChatFile.mockResolvedValue(makeChatUpload())
+    mockApi.deleteKnowledgeSource.mockResolvedValue({ deleted: true, sourceId: 'src_support_url', docIds: [] })
     mockApi.triggerOpsAction.mockResolvedValue({
       item: {
         ...makeOpsActions().items[0],
@@ -2790,17 +2936,15 @@ describe('web app smoke pages', () => {
     )
 
     expect(await screen.findByText('知识库列表')).toBeInTheDocument()
-    expect(screen.getByText('基础设置')).toBeInTheDocument()
-    expect(screen.getByText('内容接入')).toBeInTheDocument()
-    expect(screen.getAllByText('来源治理').length).toBeGreaterThan(0)
-    expect(screen.getByText('检索验证')).toBeInTheDocument()
+    expect(screen.getByText('知识库工作台')).toBeInTheDocument()
+    expect(screen.getByText('来源管理')).toBeInTheDocument()
+    expect(screen.getByText('工作台分区')).toBeInTheDocument()
+    expect(screen.getAllByText('检索测试').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('知识图谱').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
-
-    fireEvent.click(screen.getAllByText('来源治理')[0])
     expect(await screen.findByText('Support Help Center')).toBeInTheDocument()
-    expect(screen.getAllByText('来源治理').length).toBeGreaterThan(0)
-    expect(screen.getByText('来源详情')).toBeInTheDocument()
-    expect(screen.getByText('选择当前筛选结果')).toBeInTheDocument()
+    expect(screen.getByText('当前来源详情')).toBeInTheDocument()
+    expect(screen.getByText('同步来源')).toBeInTheDocument()
   })
 
   it('renders teams page with catalog and team run panels', async () => {
@@ -2872,10 +3016,10 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('执行列表')).toBeInTheDocument()
-    expect(screen.getByText('对话记录')).toBeInTheDocument()
-    expect(screen.getByText('过程记录')).toBeInTheDocument()
-    expect(screen.getByText('结果文档')).toBeInTheDocument()
+    expect(await screen.findByText('执行记录')).toBeInTheDocument()
+    expect(screen.getByText('基础信息')).toBeInTheDocument()
+    expect(screen.getByText('执行过程')).toBeInTheDocument()
+    expect(screen.getByText('任务产出归档')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB validation').length).toBeGreaterThan(0)
   })
 
@@ -3039,6 +3183,8 @@ describe('web app smoke pages', () => {
   it('renders the chat page', async () => {
     renderPage(<ChatPage />)
     expect(await screen.findByText('Smoke Session', { selector: '.conversation-title' })).toBeInTheDocument()
+    expect(screen.getByText('当前会话')).toBeInTheDocument()
+    expect(screen.getAllByText('deepseek/deepseek-chat').length).toBeGreaterThan(0)
     expect(screen.getByText('拖拽文件到这里')).toBeInTheDocument()
   })
 
@@ -3055,11 +3201,11 @@ describe('web app smoke pages', () => {
 
   it('renders the skills page', async () => {
     renderPage(<SkillsPage />)
-    expect((await screen.findAllByText('技能市场')).length).toBeGreaterThan(0)
-    expect(screen.getByText('自定义上传')).toBeInTheDocument()
-    expect(screen.getByText('已安装技能')).toBeInTheDocument()
+    expect((await screen.findAllByText(/技能市场/)).length).toBeGreaterThan(0)
+    expect(screen.getByText('上传文件夹')).toBeInTheDocument()
+    expect(screen.getByText(/已安装技能/)).toBeInTheDocument()
     expect(screen.getByText('原生可用')).toBeInTheDocument()
-    expect(screen.getByText('直接搜索官方市场并安装到当前工作区。')).toBeInTheDocument()
+    expect(screen.getByText('管理工作区已安装的技能，或从 SkillHub 市场发现新能力。')).toBeInTheDocument()
   })
 
   it('renders the main prompt page', async () => {
@@ -3104,9 +3250,32 @@ describe('web app smoke pages', () => {
 
   it('renders the models page', async () => {
     renderPage(<ModelsPage />)
-    expect(await screen.findByText('AI 模型配置')).toBeInTheDocument()
-    expect(screen.getByText('1. 选择供应商')).toBeInTheDocument()
-    expect(screen.getByText('2. 模型')).toBeInTheDocument()
+    expect(await screen.findByText('模型工作台')).toBeInTheDocument()
+    expect(screen.getByText('能力工作台')).toBeInTheDocument()
+    expect(screen.getByText('默认值说明')).toBeInTheDocument()
+  })
+
+  it('renders the agents studio page', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/agents/support-lead']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/agents/:agentId" element={<AgentsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Agent Studio')).toBeInTheDocument()
+    expect(screen.getByText('运行时快照')).toBeInTheDocument()
+    expect(screen.getByText('员工试运行')).toBeInTheDocument()
+    expect(screen.getByText('本次绑定与证据')).toBeInTheDocument()
   })
 
   it('renders the channels page', async () => {

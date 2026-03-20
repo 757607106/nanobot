@@ -22,6 +22,8 @@ from openpyxl import load_workbook
 from readability import Document as ReadabilityDocument
 
 from nanobot.platform.instances import PlatformInstance
+from nanobot.platform.model_resources import ModelSelection
+from nanobot.platform.model_resources.service import ModelProviderService
 from nanobot.platform.knowledge.models import (
     KnowledgeBaseDefinition,
     KnowledgeDocument,
@@ -33,6 +35,11 @@ from nanobot.platform.knowledge.models import (
     now_iso,
 )
 from nanobot.platform.knowledge.store import KnowledgeBaseStore
+from nanobot.platform.knowledge.vector_store import (
+    MilvusVectorStore,
+    VectorSearchHit,
+    VectorStoreUnavailableError,
+)
 from nanobot.platform.search_scoring import (
     build_preview,
     normalize_mode,
@@ -79,11 +86,15 @@ class KnowledgeBaseService:
         instance_id: str,
         tenant_id: str = "default",
         max_background_jobs: int = 2,
+        model_providers: ModelProviderService | None = None,
+        vector_store: MilvusVectorStore | None = None,
     ):
         self.store = store
         self.instance = instance
         self.instance_id = instance_id
         self.tenant_id = tenant_id
+        self.model_providers = model_providers
+        self.vector_store = vector_store or MilvusVectorStore()
         self._executor = ThreadPoolExecutor(
             max_workers=max(1, max_background_jobs),
             thread_name_prefix=f"knowledge-{instance_id}",
@@ -107,6 +118,113 @@ class KnowledgeBaseService:
                 logger.exception("Knowledge ingest background job crashed")
 
         future.add_done_callback(_cleanup)
+
+    @staticmethod
+    def _selection_identity(selection: ModelSelection | None) -> str:
+        if selection is None:
+            return ""
+        return f"{selection.capability}:{selection.provider_id}:{selection.model_name}"
+
+    def _current_index_fingerprint(self, kb: KnowledgeBaseDefinition) -> str:
+        backend = str(kb.kb_backend or "sqlite").strip().lower() or "sqlite"
+        if backend != "milvus":
+            return backend
+        selection = kb.embedding_model_selection
+        if selection is None:
+            try:
+                selection = self._resolve_embedding_selection(kb)
+            except KnowledgeBaseValidationError:
+                selection = None
+        return "|".join(
+            [
+                backend,
+                self._resolve_vector_collection(kb),
+                self._selection_identity(selection),
+            ]
+        )
+
+    @staticmethod
+    def _document_index_fingerprint(document: KnowledgeDocument) -> str:
+        return str(document.metadata.get("indexFingerprint") or "").strip()
+
+    def _sync_kb_reindex_state(
+        self,
+        kb: KnowledgeBaseDefinition,
+        *,
+        documents: list[KnowledgeDocument] | None = None,
+        reason: str | None = None,
+    ) -> KnowledgeBaseDefinition:
+        current = kb
+        docs = documents if documents is not None else self.store.list_documents(kb.kb_id)
+        if current.legacy_config:
+            if not docs:
+                next_legacy = False
+                next_required = False
+                next_reason = None
+            elif current.kb_backend != "milvus" or current.embedding_model_selection is None:
+                next_legacy = True
+                next_required = True
+                next_reason = "legacy_config_migration_required"
+            else:
+                fingerprint = self._current_index_fingerprint(current)
+                indexed_docs = [document for document in docs if int(document.chunk_count or 0) > 0]
+                next_required = (
+                    not indexed_docs
+                    or any(self._document_index_fingerprint(document) != fingerprint for document in indexed_docs)
+                )
+                next_reason = "legacy_config_migration_required" if next_required else None
+                next_legacy = next_required
+        elif current.kb_backend != "milvus":
+            next_legacy = False
+            next_required = False
+            next_reason = None
+        else:
+            next_legacy = False
+            fingerprint = self._current_index_fingerprint(current)
+            indexed_docs = [document for document in docs if int(document.chunk_count or 0) > 0]
+            next_required = any(self._document_index_fingerprint(document) != fingerprint for document in indexed_docs)
+            next_reason = reason or current.reindex_reason or ("stale_index" if next_required else None)
+            if not next_required:
+                next_reason = None
+        if (
+            next_legacy == current.legacy_config
+            and next_required == current.reindex_required
+            and next_reason == current.reindex_reason
+        ):
+            return current
+        persisted = self.store.update_kb(
+            replace(
+                current,
+                legacy_config=next_legacy,
+                reindex_required=next_required,
+                reindex_reason=next_reason,
+                updated_at=now_iso(),
+            )
+        )
+        return persisted or current
+
+    def _mark_document_indexed(
+        self,
+        kb: KnowledgeBaseDefinition,
+        document: KnowledgeDocument,
+        *,
+        chunk_count: int,
+    ) -> KnowledgeDocument:
+        metadata = dict(document.metadata)
+        metadata["indexFingerprint"] = self._current_index_fingerprint(kb)
+        metadata["indexBackend"] = kb.kb_backend
+        metadata["indexedAt"] = now_iso()
+        updated = self.store.update_document(
+            replace(
+                document,
+                doc_status=KnowledgeDocumentStatus.INDEXED,
+                chunk_count=chunk_count,
+                metadata=metadata,
+                error_summary=None,
+                updated_at=now_iso(),
+            )
+        )
+        return updated or document
 
     def _submit_background_job(self, fn: Any, *args: Any, **kwargs: Any) -> None:
         future = self._executor.submit(fn, *args, **kwargs)
@@ -141,6 +259,19 @@ class KnowledgeBaseService:
             seen.add(text)
             result.append(text)
         return result
+
+    @staticmethod
+    def _normalize_model_selection(value: Any, *, capability: str) -> ModelSelection | None:
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise KnowledgeBaseValidationError(f"{capability} model selection must be an object.")
+        selection = ModelSelection.from_dict(value, default_capability=capability)
+        if selection is None:
+            raise KnowledgeBaseValidationError(f"{capability} model selection is invalid.")
+        if selection.capability != capability:
+            selection = replace(selection, capability=capability)
+        return selection
 
     def _next_kb_id(self, name: str) -> str:
         base = _slugify(name)
@@ -325,18 +456,42 @@ class KnowledgeBaseService:
         tags = self._normalize_string_list(payload.get("tags"), field_name="tags")
         enabled_value = payload.get("enabled")
         enabled = True if enabled_value is None else bool(enabled_value)
+        kb_id = self._next_kb_id(name)
         retrieval_profile = KnowledgeRetrievalProfile.from_dict(
             payload.get("retrievalProfile") or payload.get("retrieval_profile")
         )
         now = now_iso()
         return KnowledgeBaseDefinition(
-            kb_id=self._next_kb_id(name),
+            kb_id=kb_id,
             tenant_id=self.tenant_id,
             instance_id=self.instance_id,
             name=name,
             description=description,
             enabled=enabled,
             tags=tags,
+            kb_backend=self._normalize_text(
+                self._get_value(payload, "kbBackend", "kb_backend"),
+                field_name="kbBackend",
+            ) or "sqlite",
+            embedding_model_selection=self._normalize_model_selection(
+                self._get_value(payload, "embeddingModelSelection", "embedding_model_selection"),
+                capability="embedding",
+            )
+            if self._get_value(payload, "embeddingModelSelection", "embedding_model_selection") is not None
+            else None,
+            reranker_model_selection=self._normalize_model_selection(
+                self._get_value(payload, "rerankerModelSelection", "reranker_model_selection"),
+                capability="reranker",
+            )
+            if self._get_value(payload, "rerankerModelSelection", "reranker_model_selection") is not None
+            else None,
+            auto_index_after_parse=True
+            if self._get_value(payload, "autoIndexAfterParse", "auto_index_after_parse") is None
+            else bool(self._get_value(payload, "autoIndexAfterParse", "auto_index_after_parse")),
+            vector_collection=self._normalize_text(
+                self._get_value(payload, "vectorCollection", "vector_collection"),
+                field_name="vectorCollection",
+            ) or f"kb_{kb_id}",
             retrieval_profile=retrieval_profile,
             created_at=now,
             updated_at=now,
@@ -352,6 +507,57 @@ class KnowledgeBaseService:
             retrieval_profile = KnowledgeRetrievalProfile.from_dict(
                 payload.get("retrievalProfile") or payload.get("retrieval_profile")
             )
+        next_backend = existing.kb_backend
+        raw_backend = self._get_value(payload, "kbBackend", "kb_backend")
+        if raw_backend is not None:
+            next_backend = self._normalize_text(raw_backend, field_name="kbBackend") or "sqlite"
+        next_embedding = existing.embedding_model_selection
+        if self._get_value(payload, "embeddingModelSelection", "embedding_model_selection") is not None:
+            next_embedding = self._normalize_model_selection(
+                self._get_value(payload, "embeddingModelSelection", "embedding_model_selection"),
+                capability="embedding",
+            )
+        next_reranker = existing.reranker_model_selection
+        if self._get_value(payload, "rerankerModelSelection", "reranker_model_selection") is not None:
+            next_reranker = self._normalize_model_selection(
+                self._get_value(payload, "rerankerModelSelection", "reranker_model_selection"),
+                capability="reranker",
+            )
+        next_vector_collection = existing.vector_collection
+        if self._get_value(payload, "vectorCollection", "vector_collection") is not None:
+            next_vector_collection = (
+                self._normalize_text(
+                    self._get_value(payload, "vectorCollection", "vector_collection"),
+                    field_name="vectorCollection",
+                ) or None
+            )
+        docs = self.store.list_documents(existing.kb_id)
+        has_indexed_docs = any(int(document.chunk_count or 0) > 0 for document in docs)
+        invalidates_index = False
+        reindex_reason = existing.reindex_reason
+        if (
+            self._selection_identity(next_embedding) != self._selection_identity(existing.embedding_model_selection)
+            and (existing.kb_backend == "milvus" or next_backend == "milvus")
+        ):
+            invalidates_index = True
+            reindex_reason = "embedding_model_changed"
+        elif existing.kb_backend != next_backend and (existing.kb_backend == "milvus" or next_backend == "milvus"):
+            invalidates_index = True
+            reindex_reason = "kb_backend_changed"
+        elif (
+            existing.kb_backend == "milvus"
+            and next_backend == "milvus"
+            and (next_vector_collection or "") != (existing.vector_collection or "")
+        ):
+            invalidates_index = True
+            reindex_reason = "vector_collection_changed"
+        reindex_required = existing.reindex_required or (invalidates_index and has_indexed_docs)
+        if next_backend != "milvus":
+            reindex_required = False
+            reindex_reason = None
+        elif not has_indexed_docs:
+            reindex_required = False
+            reindex_reason = None
         return replace(
             existing,
             name=name,
@@ -362,13 +568,22 @@ class KnowledgeBaseService:
             tags=existing.tags
             if "tags" not in payload
             else self._normalize_string_list(payload.get("tags"), field_name="tags"),
+            kb_backend=next_backend,
+            embedding_model_selection=next_embedding,
+            reranker_model_selection=next_reranker,
+            auto_index_after_parse=existing.auto_index_after_parse
+            if self._get_value(payload, "autoIndexAfterParse", "auto_index_after_parse") is None
+            else bool(self._get_value(payload, "autoIndexAfterParse", "auto_index_after_parse")),
+            vector_collection=next_vector_collection,
+            reindex_required=reindex_required,
+            reindex_reason=reindex_reason,
             retrieval_profile=retrieval_profile,
             updated_at=now_iso(),
         )
 
     def list_knowledge_bases(self, *, enabled: bool | None = None) -> list[dict[str, Any]]:
         return [
-            kb.to_dict()
+            self._sync_kb_reindex_state(kb).to_dict()
             for kb in self.store.list_kbs(tenant_id=self.tenant_id, instance_id=self.instance_id, enabled=enabled)
         ]
 
@@ -376,17 +591,21 @@ class KnowledgeBaseService:
         created = self.store.create_kb(self._normalize_create_payload(payload))
         return created.to_dict()
 
+    def sync_legacy_knowledge_bases(self) -> None:
+        for kb in self.store.list_kbs(tenant_id=self.tenant_id, instance_id=self.instance_id, enabled=None):
+            self._sync_kb_reindex_state(kb)
+
     def get_knowledge_base(self, kb_id: str) -> dict[str, Any]:
         kb = self.store.get_kb(kb_id)
         if kb is None or kb.instance_id != self.instance_id or kb.tenant_id != self.tenant_id:
             raise KnowledgeBaseNotFoundError(kb_id)
-        return kb.to_dict()
+        return self._sync_kb_reindex_state(kb).to_dict()
 
     def require_kb(self, kb_id: str) -> KnowledgeBaseDefinition:
         kb = self.store.get_kb(kb_id)
         if kb is None or kb.instance_id != self.instance_id or kb.tenant_id != self.tenant_id:
             raise KnowledgeBaseNotFoundError(kb_id)
-        return kb
+        return self._sync_kb_reindex_state(kb)
 
     def update_knowledge_base(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         existing = self.require_kb(kb_id)
@@ -396,7 +615,12 @@ class KnowledgeBaseService:
         return updated.to_dict()
 
     def delete_knowledge_base(self, kb_id: str) -> bool:
-        self.require_kb(kb_id)
+        kb = self.require_kb(kb_id)
+        if kb.kb_backend == "milvus":
+            try:
+                self.vector_store.delete_collection(collection_name=self._resolve_vector_collection(kb))
+            except VectorStoreUnavailableError:
+                logger.warning("Skipping Milvus collection cleanup for knowledge base {}", kb_id)
         deleted = self.store.delete_kb(kb_id)
         if not deleted:
             raise KnowledgeBaseNotFoundError(kb_id)
@@ -503,13 +727,23 @@ class KnowledgeBaseService:
 
         return self._enrich_source(persisted)
 
-    def delete_document(self, kb_id: str, doc_id: str) -> bool:
-        self.require_kb(kb_id)
-        document = self.store.get_document(doc_id)
-        if document is None or document.kb_id != kb_id:
-            raise KnowledgeBaseNotFoundError(doc_id)
-        deleted = self.store.delete_document(doc_id)
-        if document.source_id:
+    def _delete_document_record(
+        self,
+        *,
+        kb: KnowledgeBaseDefinition,
+        document: KnowledgeDocument,
+        remove_source: bool,
+    ) -> bool:
+        if kb.kb_backend == "milvus":
+            try:
+                self.vector_store.delete_document(
+                    collection_name=self._resolve_vector_collection(kb),
+                    doc_id=document.doc_id,
+                )
+            except VectorStoreUnavailableError:
+                logger.warning("Skipping Milvus document cleanup for knowledge document {}", document.doc_id)
+        deleted = self.store.delete_document(document.doc_id)
+        if remove_source and document.source_id:
             self.store.delete_source(document.source_id)
         for raw_path in (document.file_path, document.parsed_path):
             if raw_path:
@@ -517,6 +751,34 @@ class KnowledgeBaseService:
                 if path.exists():
                     path.unlink()
         return deleted
+
+    def delete_source(self, kb_id: str, source_id: str) -> dict[str, Any]:
+        kb = self.require_kb(kb_id)
+        source = self.require_source(kb_id, source_id)
+        source_documents = [
+            item
+            for item in self.store.list_documents(kb_id)
+            if str(item.source_id or "") == source.source_id
+        ]
+        deleted_doc_ids: list[str] = []
+        for document in source_documents:
+            if self._delete_document_record(kb=kb, document=document, remove_source=False):
+                deleted_doc_ids.append(document.doc_id)
+        deleted_source = self.store.delete_source(source.source_id)
+        if not deleted_source:
+            raise KnowledgeSourceNotFoundError(source_id)
+        return {
+            "deleted": True,
+            "sourceId": source.source_id,
+            "docIds": deleted_doc_ids,
+        }
+
+    def delete_document(self, kb_id: str, doc_id: str) -> bool:
+        kb = self.require_kb(kb_id)
+        document = self.store.get_document(doc_id)
+        if document is None or document.kb_id != kb_id:
+            raise KnowledgeBaseNotFoundError(doc_id)
+        return self._delete_document_record(kb=kb, document=document, remove_source=True)
 
     def delete_documents(self, kb_id: str, doc_ids: list[str] | tuple[str, ...]) -> dict[str, Any]:
         self.require_kb(kb_id)
@@ -555,7 +817,7 @@ class KnowledgeBaseService:
             if kb is None or kb.instance_id != self.instance_id or kb.tenant_id != self.tenant_id or not kb.enabled:
                 missing.append(kb_id)
                 continue
-            result.append(kb)
+            result.append(self._sync_kb_reindex_state(kb))
         if missing:
             raise KnowledgeBaseValidationError(
                 f"Agent references unknown or disabled knowledge bases: {', '.join(missing)}"
@@ -786,6 +1048,358 @@ class KnowledgeBaseService:
         parsed_path = parsed_dir / f"{doc_id}{suffix if suffix in {'.md', '.txt'} else '.md'}"
         return raw_path, parsed_path
 
+    def _resolve_embedding_selection(self, kb: KnowledgeBaseDefinition) -> ModelSelection:
+        if kb.embedding_model_selection is not None:
+            return kb.embedding_model_selection
+        if self.model_providers is None:
+            raise KnowledgeBaseValidationError("Knowledge base requires an embedding model selection.")
+        defaults = self.model_providers.get_defaults(tenant_id=self.tenant_id)
+        selection = ModelSelection.from_dict(defaults.get("defaultEmbedding"), default_capability="embedding")
+        if selection is None:
+            raise KnowledgeBaseValidationError("No default embedding model is configured.")
+        return selection
+
+    def _resolve_reranker_selection(self, kb: KnowledgeBaseDefinition) -> ModelSelection | None:
+        if kb.reranker_model_selection is not None:
+            return kb.reranker_model_selection
+        if self.model_providers is None:
+            return None
+        defaults = self.model_providers.get_defaults(tenant_id=self.tenant_id)
+        return ModelSelection.from_dict(defaults.get("defaultReranker"), default_capability="reranker")
+
+    def _resolve_vector_collection(self, kb: KnowledgeBaseDefinition) -> str:
+        return str(kb.vector_collection or f"kb_{kb.kb_id}").strip() or f"kb_{kb.kb_id}"
+
+    def _resolve_model_request_config(self, *, selection: ModelSelection, endpoint: str) -> tuple[str, dict[str, str]]:
+        if self.model_providers is None:
+            raise KnowledgeBaseValidationError(f"{endpoint} requires model provider resources.")
+        provider = self.model_providers.selection_to_legacy_config(selection, tenant_id=self.tenant_id)
+        base_url = str(provider.get("baseUrl") or "").strip()
+        if not base_url:
+            raise KnowledgeBaseValidationError(f"{endpoint} provider requires baseUrl.")
+        headers = dict(provider.get("extraHeaders") or {})
+        api_key = str(provider.get("apiKey") or "").strip()
+        if api_key:
+            headers.setdefault("Authorization", f"Bearer {api_key}")
+        normalized = base_url.rstrip("/")
+        suffix = f"/{endpoint.lstrip('/')}"
+        url = normalized if normalized.endswith(suffix) else f"{normalized}{suffix}"
+        return url, headers
+
+    def _embed_texts(self, *, selection: ModelSelection, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        url, headers = self._resolve_model_request_config(selection=selection, endpoint="embeddings")
+        response = httpx.post(
+            url,
+            json={"model": selection.model_name, "input": texts},
+            headers=headers or None,
+            timeout=httpx.Timeout(60.0, connect=20.0),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        data = payload.get("data")
+        if not isinstance(data, list):
+            raise KnowledgeBaseValidationError("Embedding response is invalid.")
+        embeddings: list[list[float]] = []
+        for item in sorted(data, key=lambda value: int(value.get("index", 0)) if isinstance(value, dict) else 0):
+            vector = item.get("embedding") if isinstance(item, dict) else None
+            if not isinstance(vector, list):
+                raise KnowledgeBaseValidationError("Embedding response is missing vector data.")
+            embeddings.append([float(value) for value in vector])
+        if len(embeddings) != len(texts):
+            raise KnowledgeBaseValidationError("Embedding response count does not match input count.")
+        return embeddings
+
+    def _rerank_rows(
+        self,
+        *,
+        selection: ModelSelection,
+        query: str,
+        rows: list[dict[str, Any]],
+    ) -> dict[str, float]:
+        if not rows:
+            return {}
+        url, headers = self._resolve_model_request_config(selection=selection, endpoint="rerank")
+        response = httpx.post(
+            url,
+            json={
+                "model": selection.model_name,
+                "query": query,
+                "documents": [str(row.get("content") or "") for row in rows],
+            },
+            headers=headers or None,
+            timeout=httpx.Timeout(60.0, connect=20.0),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        items = payload.get("results")
+        if not isinstance(items, list):
+            items = payload.get("data")
+        if not isinstance(items, list):
+            raise KnowledgeBaseValidationError("Rerank response is invalid.")
+        scores: dict[str, float] = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                index = int(item.get("index", item.get("document_index", item.get("documentIndex", -1))))
+            except (TypeError, ValueError):
+                continue
+            if index < 0 or index >= len(rows):
+                continue
+            raw_score = item.get("relevance_score", item.get("relevanceScore", item.get("score", 0.0)))
+            try:
+                score = max(0.0, float(raw_score or 0.0))
+            except (TypeError, ValueError):
+                continue
+            scores[rows[index]["chunk_id"]] = score
+        return scores
+
+    def _apply_rerank(
+        self,
+        *,
+        bindings: list[KnowledgeBaseDefinition],
+        query: str,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        if not rows:
+            return
+        kb_lookup = {kb.kb_id: kb for kb in bindings}
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            grouped.setdefault(str(row.get("kb_id") or ""), []).append(row)
+        for kb_id, kb_rows in grouped.items():
+            kb = kb_lookup.get(kb_id)
+            if kb is None or not kb.retrieval_profile.rerank_enabled:
+                continue
+            reranker = self._resolve_reranker_selection(kb)
+            if reranker is None:
+                continue
+            try:
+                scores = self._rerank_rows(selection=reranker, query=query, rows=kb_rows)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Skipping rerank for knowledge base {}: {}", kb_id, exc)
+                continue
+            for row in kb_rows:
+                row["rerank_score"] = float(scores.get(row["chunk_id"], 0.0))
+
+    def _persist_chunks(
+        self,
+        *,
+        kb: KnowledgeBaseDefinition,
+        document: KnowledgeDocument,
+        title: str,
+        chunks: list[dict[str, Any]],
+    ) -> None:
+        self.store.replace_chunks(
+            tenant_id=self.tenant_id,
+            instance_id=self.instance_id,
+            kb_id=kb.kb_id,
+            doc_id=document.doc_id,
+            title=title,
+            chunks=chunks,
+        )
+        if kb.kb_backend != "milvus":
+            return
+        selection = self._resolve_embedding_selection(kb)
+        embeddings = self._embed_texts(
+            selection=selection,
+            texts=[str(chunk.get("content") or "") for chunk in chunks],
+        )
+        vector_rows = [
+            {
+                "chunk_id": chunk["chunk_id"],
+                "ordinal": chunk["ordinal"],
+                "embedding": embedding,
+            }
+            for chunk, embedding in zip(chunks, embeddings, strict=True)
+        ]
+        self.vector_store.replace_document_chunks(
+            collection_name=self._resolve_vector_collection(kb),
+            kb_id=kb.kb_id,
+            doc_id=document.doc_id,
+            vectors=vector_rows,
+        )
+
+    def _clear_document_index(self, kb: KnowledgeBaseDefinition, document: KnowledgeDocument) -> KnowledgeDocument:
+        self.store.clear_document_chunks(document.doc_id)
+        if kb.kb_backend != "milvus":
+            metadata = dict(document.metadata)
+            metadata.pop("indexFingerprint", None)
+            metadata.pop("indexBackend", None)
+            metadata.pop("indexedAt", None)
+            updated = self.store.update_document(
+                replace(document, chunk_count=0, metadata=metadata, updated_at=now_iso())
+            )
+            return updated or document
+        try:
+            self.vector_store.delete_document(
+                collection_name=self._resolve_vector_collection(kb),
+                doc_id=document.doc_id,
+            )
+        except VectorStoreUnavailableError:
+            logger.warning("Skipping Milvus vector cleanup for knowledge document {}", document.doc_id)
+        metadata = dict(document.metadata)
+        metadata.pop("indexFingerprint", None)
+        metadata.pop("indexBackend", None)
+        metadata.pop("indexedAt", None)
+        updated = self.store.update_document(
+            replace(document, chunk_count=0, metadata=metadata, updated_at=now_iso())
+        )
+        return updated or document
+
+    def _parse_document_only(
+        self,
+        kb: KnowledgeBaseDefinition,
+        document: KnowledgeDocument,
+    ) -> tuple[KnowledgeDocument, str, list[dict[str, Any]] | None]:
+        document = self.store.update_document(
+            replace(
+                document,
+                doc_status=KnowledgeDocumentStatus.PARSING,
+                error_summary=None,
+                updated_at=now_iso(),
+            )
+        ) or document
+        faq_items: list[dict[str, Any]] | None = None
+        if document.source_type == "upload_file":
+            raw_path = Path(document.file_path or "")
+            if not raw_path.exists():
+                raise KnowledgeBaseValidationError(f"Uploaded knowledge file missing for document {document.doc_id}.")
+            parsed_text, parser_name, metadata, faq_items = self._parse_file_content(
+                title=document.title,
+                file_name=document.file_name or document.title,
+                mime_type=document.mime_type,
+                content=raw_path.read_bytes(),
+            )
+            parsed_path = Path(document.parsed_path or self._document_paths(kb.kb_id, document.doc_id, document.file_name, "upload_file")[1])
+            parsed_path.write_text(parsed_text, encoding="utf-8")
+            updated = self.store.update_document(
+                replace(
+                    document,
+                    parser_name=parser_name,
+                    metadata=metadata,
+                    parsed_path=str(parsed_path),
+                    doc_status=KnowledgeDocumentStatus.PARSED,
+                    chunk_count=0,
+                    error_summary=None,
+                    updated_at=now_iso(),
+                )
+            ) or document
+            return updated, parsed_text, faq_items
+        if document.source_type == "web_url":
+            url = self._normalize_text(document.source_uri, required=True, field_name="url")
+            parsed_text, detected_title, parser_name = self._parse_url(url)
+            parsed_path = Path(document.parsed_path or self._document_paths(kb.kb_id, document.doc_id, "web-url.md", "web_url")[1])
+            parsed_path.write_text(parsed_text, encoding="utf-8")
+            title = document.title or detected_title or url
+            updated = self.store.update_document(
+                replace(
+                    document,
+                    title=title,
+                    parser_name=parser_name,
+                    parsed_path=str(parsed_path),
+                    doc_status=KnowledgeDocumentStatus.PARSED,
+                    chunk_count=0,
+                    error_summary=None,
+                    updated_at=now_iso(),
+                )
+            ) or document
+            return updated, parsed_text, None
+        if document.source_type == "faq_table":
+            source = self.store.get_source(str(document.source_id or "")) if document.source_id else None
+            items = self._load_faq_source_items(document, source)
+            parsed_text = "\n\n".join(self._faq_chunks(items))
+            parsed_path = Path(document.parsed_path or self._document_paths(kb.kb_id, document.doc_id, "faq.json", "faq_table")[1])
+            parsed_path.write_text(parsed_text, encoding="utf-8")
+            updated = self.store.update_document(
+                replace(
+                    document,
+                    parsed_path=str(parsed_path),
+                    parser_name="faq_table",
+                    doc_status=KnowledgeDocumentStatus.PARSED,
+                    chunk_count=0,
+                    error_summary=None,
+                    updated_at=now_iso(),
+                )
+            ) or document
+            return updated, parsed_text, items
+        raise KnowledgeBaseValidationError(f"Unsupported knowledge source type: {document.source_type}")
+
+    def _index_document_only(
+        self,
+        kb: KnowledgeBaseDefinition,
+        document: KnowledgeDocument,
+    ) -> KnowledgeDocument:
+        parsed_path = Path(document.parsed_path or "")
+        if not parsed_path.exists():
+            raise KnowledgeBaseValidationError("Knowledge document has no parsed content to index.")
+        document = self.store.update_document(
+            replace(
+                document,
+                doc_status=KnowledgeDocumentStatus.INDEXING,
+                error_summary=None,
+                updated_at=now_iso(),
+            )
+        ) or document
+        faq_items: list[dict[str, Any]] | None = None
+        if document.source_type == "faq_table":
+            source = self.store.get_source(str(document.source_id or "")) if document.source_id else None
+            try:
+                faq_items = self._load_faq_source_items(document, source)
+            except KnowledgeBaseValidationError:
+                faq_items = None
+        chunks = self._build_chunk_rows(
+            content=parsed_path.read_text(encoding="utf-8"),
+            title=document.title,
+            profile=kb.retrieval_profile,
+            faq_items=faq_items,
+        )
+        self._persist_chunks(kb=kb, document=document, title=document.title, chunks=chunks)
+        indexed = self._mark_document_indexed(kb, document, chunk_count=len(chunks))
+        self._sync_kb_reindex_state(kb)
+        return indexed
+
+    def _semantic_search_rows(
+        self,
+        *,
+        bindings: list[KnowledgeBaseDefinition],
+        query: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        rows: dict[str, dict[str, Any]] = {}
+        for kb in bindings:
+            if kb.kb_backend != "milvus":
+                continue
+            if kb.reindex_required:
+                logger.warning("Knowledge semantic retrieval skipped for kb {} because reindex is required", kb.kb_id)
+                continue
+            try:
+                selection = self._resolve_embedding_selection(kb)
+                query_vector = self._embed_texts(selection=selection, texts=[query])[0]
+                hits = self.vector_store.search(
+                    collection_name=self._resolve_vector_collection(kb),
+                    vector=query_vector,
+                    limit=limit,
+                )
+            except (KnowledgeBaseValidationError, VectorStoreUnavailableError, httpx.HTTPError) as exc:
+                logger.warning("Knowledge semantic retrieval skipped for kb {}: {}", kb.kb_id, exc)
+                continue
+            if not hits:
+                continue
+            chunk_rows = self.store.get_chunks_by_ids(
+                tenant_id=self.tenant_id,
+                instance_id=self.instance_id,
+                kb_ids=[kb.kb_id],
+                chunk_ids=[hit.chunk_id for hit in hits],
+            )
+            score_lookup = {hit.chunk_id: float(hit.score) for hit in hits}
+            for row in chunk_rows:
+                row["semantic_score"] = score_lookup.get(row["chunk_id"], 0.0)
+                rows[row["chunk_id"]] = row
+        return list(rows.values())
+
     def _create_job(self, kb_id: str, doc_id: str) -> KnowledgeIngestJob:
         now = now_iso()
         return self.store.insert_job(
@@ -982,6 +1596,11 @@ class KnowledgeBaseService:
                     updated_at=now_iso(),
                 )
             ) or document
+            if not kb.auto_index_after_parse:
+                document = self._clear_document_index(kb, document)
+                self._refresh_source_from_document(document)
+                self._finish_job(job)
+                return
             phase = "indexing"
             document = self.store.update_document(
                 replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
@@ -992,23 +1611,9 @@ class KnowledgeBaseService:
                 profile=kb.retrieval_profile,
                 faq_items=faq_items,
             )
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=document.title,
-                chunks=chunks,
-            )
-            self.store.update_document(
-                replace(
-                    document,
-                    doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
-                    error_summary=None,
-                    updated_at=now_iso(),
-                )
-            )
+            self._persist_chunks(kb=kb, document=document, title=document.title, chunks=chunks)
+            document = self._mark_document_indexed(kb, document, chunk_count=len(chunks))
+            self._sync_kb_reindex_state(kb)
             self._refresh_source_from_document(document)
             self._finish_job(job)
         except Exception as exc:
@@ -1054,28 +1659,19 @@ class KnowledgeBaseService:
                     updated_at=now_iso(),
                 )
             ) or document
+            if not kb.auto_index_after_parse:
+                document = self._clear_document_index(kb, document)
+                self._refresh_source_from_document(document)
+                self._finish_job(job)
+                return
             phase = "indexing"
             document = self.store.update_document(
                 replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
             ) or document
             chunks = self._build_chunk_rows(content=parsed_text, title=title, profile=kb.retrieval_profile)
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=title,
-                chunks=chunks,
-            )
-            self.store.update_document(
-                replace(
-                    document,
-                    doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
-                    error_summary=None,
-                    updated_at=now_iso(),
-                )
-            )
+            self._persist_chunks(kb=kb, document=document, title=title, chunks=chunks)
+            document = self._mark_document_indexed(kb, document, chunk_count=len(chunks))
+            self._sync_kb_reindex_state(kb)
             self._refresh_source_from_document(document)
             self._finish_job(job)
         except Exception as exc:
@@ -1121,6 +1717,11 @@ class KnowledgeBaseService:
                     updated_at=now_iso(),
                 )
             ) or document
+            if not kb.auto_index_after_parse:
+                document = self._clear_document_index(kb, document)
+                self._refresh_source_from_document(document)
+                self._finish_job(job)
+                return
             document = self.store.update_document(
                 replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
             ) or document
@@ -1130,23 +1731,9 @@ class KnowledgeBaseService:
                 profile=kb.retrieval_profile,
                 faq_items=items,
             )
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=document.title,
-                chunks=chunks,
-            )
-            self.store.update_document(
-                replace(
-                    document,
-                    doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
-                    error_summary=None,
-                    updated_at=now_iso(),
-                )
-            )
+            self._persist_chunks(kb=kb, document=document, title=document.title, chunks=chunks)
+            document = self._mark_document_indexed(kb, document, chunk_count=len(chunks))
+            self._sync_kb_reindex_state(kb)
             self._refresh_source_from_document(document)
             self._finish_job(job)
         except Exception as exc:
@@ -1337,6 +1924,77 @@ class KnowledgeBaseService:
             jobs.append(job.to_dict())
         return {"documents": documents, "jobs": jobs}
 
+    def parse_documents(self, kb_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        kb = self.require_kb(kb_id)
+        payload = payload or {}
+        listed = self.store.list_documents(kb_id)
+        if not listed:
+            raise KnowledgeBaseValidationError("Knowledge base has no documents to parse.")
+        requested_ids = payload.get("docIds") or payload.get("doc_ids")
+        target_ids = (
+            [str(item or "").strip() for item in requested_ids if str(item or "").strip()]
+            if isinstance(requested_ids, list)
+            else [item.doc_id for item in listed]
+        )
+        docs_by_id = {item.doc_id: item for item in listed}
+        documents: list[dict[str, Any]] = []
+        for doc_id in target_ids:
+            document = docs_by_id.get(doc_id)
+            if document is None:
+                raise KnowledgeBaseValidationError(f"Knowledge base references unknown document: {doc_id}")
+            try:
+                document = self._clear_document_index(kb, document)
+                updated, _parsed_text, _faq_items = self._parse_document_only(kb, document)
+                self._refresh_source_from_document(updated)
+                documents.append(updated.to_dict())
+            except Exception as exc:
+                errored = self.store.update_document(
+                    replace(
+                        document,
+                        doc_status=KnowledgeDocumentStatus.ERROR_PARSING,
+                        error_summary=str(exc),
+                        updated_at=now_iso(),
+                    )
+                ) or document
+                documents.append(errored.to_dict())
+        self._sync_kb_reindex_state(kb)
+        return {"documents": documents}
+
+    def index_documents(self, kb_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        kb = self.require_kb(kb_id)
+        payload = payload or {}
+        listed = self.store.list_documents(kb_id)
+        if not listed:
+            raise KnowledgeBaseValidationError("Knowledge base has no documents to index.")
+        requested_ids = payload.get("docIds") or payload.get("doc_ids")
+        target_ids = (
+            [str(item or "").strip() for item in requested_ids if str(item or "").strip()]
+            if isinstance(requested_ids, list)
+            else [item.doc_id for item in listed]
+        )
+        docs_by_id = {item.doc_id: item for item in listed}
+        documents: list[dict[str, Any]] = []
+        for doc_id in target_ids:
+            document = docs_by_id.get(doc_id)
+            if document is None:
+                raise KnowledgeBaseValidationError(f"Knowledge base references unknown document: {doc_id}")
+            try:
+                updated = self._index_document_only(kb, document)
+                self._refresh_source_from_document(updated)
+                documents.append(updated.to_dict())
+            except Exception as exc:
+                errored = self.store.update_document(
+                    replace(
+                        document,
+                        doc_status=KnowledgeDocumentStatus.ERROR_INDEXING,
+                        error_summary=str(exc),
+                        updated_at=now_iso(),
+                    )
+                ) or document
+                documents.append(errored.to_dict())
+        self._sync_kb_reindex_state(kb)
+        return {"documents": documents}
+
     def sync_source(self, kb_id: str, source_id: str) -> dict[str, Any]:
         kb = self.require_kb(kb_id)
         source = self.require_source(kb_id, source_id)
@@ -1457,6 +2115,12 @@ class KnowledgeBaseService:
                         updated_at=now_iso(),
                     )
                 ) or document
+                if not kb.auto_index_after_parse:
+                    document = self._clear_document_index(kb, document)
+                    job = self._finish_job(job)
+                    documents.append(document.to_dict())
+                    jobs.append(job.to_dict())
+                    continue
                 document = self.store.update_document(
                     replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
                 ) or document
@@ -1466,22 +2130,9 @@ class KnowledgeBaseService:
                     profile=kb.retrieval_profile,
                     faq_items=faq_items,
                 )
-                self.store.replace_chunks(
-                    tenant_id=self.tenant_id,
-                    instance_id=self.instance_id,
-                    kb_id=kb_id,
-                    doc_id=doc_id,
-                    title=document.title,
-                    chunks=chunks,
-                )
-                document = self.store.update_document(
-                    replace(
-                        document,
-                        doc_status=KnowledgeDocumentStatus.INDEXED,
-                        chunk_count=len(chunks),
-                        updated_at=now_iso(),
-                    )
-                ) or document
+                self._persist_chunks(kb=kb, document=document, title=document.title, chunks=chunks)
+                document = self._mark_document_indexed(kb, document, chunk_count=len(chunks))
+                self._sync_kb_reindex_state(kb)
                 job = self._finish_job(job)
             except Exception as exc:
                 message = str(exc)
@@ -1542,26 +2193,17 @@ class KnowledgeBaseService:
                     updated_at=now_iso(),
                 )
             ) or document
+            if not kb.auto_index_after_parse:
+                document = self._clear_document_index(kb, document)
+                job = self._finish_job(job)
+                return {"documents": [document.to_dict()], "jobs": [job.to_dict()]}
             document = self.store.update_document(
                 replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
             ) or document
             chunks = self._build_chunk_rows(content=parsed_text, title=title, profile=kb.retrieval_profile)
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=title,
-                chunks=chunks,
-            )
-            document = self.store.update_document(
-                replace(
-                    document,
-                    doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
-                    updated_at=now_iso(),
-                )
-            ) or document
+            self._persist_chunks(kb=kb, document=document, title=title, chunks=chunks)
+            document = self._mark_document_indexed(kb, document, chunk_count=len(chunks))
+            self._sync_kb_reindex_state(kb)
             job = self._finish_job(job)
         except Exception as exc:
             message = str(exc)
@@ -1613,6 +2255,10 @@ class KnowledgeBaseService:
             document = self.store.update_document(
                 replace(document, doc_status=KnowledgeDocumentStatus.PARSED, updated_at=now_iso())
             ) or document
+            if not kb.auto_index_after_parse:
+                document = self._clear_document_index(kb, document)
+                job = self._finish_job(job)
+                return {"documents": [document.to_dict()], "jobs": [job.to_dict()]}
             document = self.store.update_document(
                 replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
             ) or document
@@ -1622,22 +2268,9 @@ class KnowledgeBaseService:
                 profile=kb.retrieval_profile,
                 faq_items=items,
             )
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=title,
-                chunks=chunks,
-            )
-            document = self.store.update_document(
-                replace(
-                    document,
-                    doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
-                    updated_at=now_iso(),
-                )
-            ) or document
+            self._persist_chunks(kb=kb, document=document, title=title, chunks=chunks)
+            document = self._mark_document_indexed(kb, document, chunk_count=len(chunks))
+            self._sync_kb_reindex_state(kb)
             job = self._finish_job(job)
         except Exception as exc:
             message = str(exc)
@@ -1687,11 +2320,18 @@ class KnowledgeBaseService:
         base_score = retrieval_score(mode, query, text, query_tokens=query_tokens)
         raw_rank = float(row.get("rank") or 0.0)
         fts_score = 0.0 if raw_rank == 0.0 else round(1.0 / (1.0 + abs(raw_rank)), 6)
+        semantic_score = max(0.0, float(row.get("semantic_score") or 0.0))
+        rerank_score = max(0.0, float(row.get("rerank_score") or 0.0))
+        fallback_score = base_score
         if mode == "keyword":
-            return max(base_score, fts_score)
-        if mode == "hybrid":
-            return round((base_score * 0.8) + (fts_score * 0.2), 6)
-        return base_score
+            fallback_score = max(base_score, fts_score)
+        elif mode == "hybrid":
+            fallback_score = round((base_score * 0.55) + (max(fts_score, semantic_score) * 0.45), 6)
+        elif mode == "semantic":
+            fallback_score = round(max(base_score, semantic_score), 6)
+        if rerank_score > 0.0:
+            return round((fallback_score * 0.25) + (rerank_score * 0.75), 6)
+        return fallback_score
 
     @staticmethod
     def _apply_filters(rows: list[dict[str, Any]], filters: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1719,6 +2359,101 @@ class KnowledgeBaseService:
             result.append(row)
         return result
 
+    def _retrieve_for_binding(
+        self,
+        *,
+        kb: KnowledgeBaseDefinition,
+        query: str,
+        limit: int | None,
+        filters: dict[str, Any] | None,
+        requested_mode: str | None,
+        query_tokens: list[str],
+    ) -> dict[str, Any]:
+        profile = kb.retrieval_profile
+        requested = normalize_mode(requested_mode, default=normalize_mode(profile.mode, default="hybrid"))
+        semantic_available = kb.kb_backend == "milvus" and not kb.reindex_required
+        effective_mode = requested if semantic_available or requested == "keyword" else "keyword"
+        effective_limit = max(1, min(int(limit or profile.top_k), 20))
+        pool_limit = max(profile.chunk_top_k * 4, effective_limit * 6, 40)
+        candidate_rows: dict[str, dict[str, Any]] = {}
+
+        match_queries = [self._build_match_query(query)] if effective_mode in {"keyword", "hybrid"} else []
+        if effective_mode == "hybrid":
+            prefix_query = self._build_prefix_match_query(query)
+            if prefix_query and prefix_query not in match_queries:
+                match_queries.append(prefix_query)
+
+        for match_query in match_queries:
+            if not match_query:
+                continue
+            for row in self.store.search_chunks(
+                tenant_id=self.tenant_id,
+                instance_id=self.instance_id,
+                kb_ids=[kb.kb_id],
+                query_text=match_query,
+                limit=pool_limit,
+            ):
+                candidate_rows.setdefault(row["chunk_id"], row)
+
+        if effective_mode in {"semantic", "hybrid"}:
+            for row in self._semantic_search_rows(
+                bindings=[kb],
+                query=query,
+                limit=pool_limit,
+            ):
+                existing = candidate_rows.get(row["chunk_id"])
+                if existing is None:
+                    candidate_rows[row["chunk_id"]] = row
+                else:
+                    existing["semantic_score"] = max(
+                        float(existing.get("semantic_score") or 0.0),
+                        float(row.get("semantic_score") or 0.0),
+                    )
+
+        effective_filters = filters or profile.metadata_filters
+        rows = self._apply_filters(list(candidate_rows.values()), effective_filters)
+        if profile.rerank_enabled and rows:
+            self._apply_rerank(bindings=[kb], query=query, rows=rows)
+
+        hits: list[dict[str, Any]] = []
+        for row in rows:
+            metadata = json.loads(row.get("metadata_json") or "{}")
+            score = self._row_retrieval_score(row, mode=effective_mode, query=query, query_tokens=query_tokens)
+            if score <= score_threshold(effective_mode):
+                continue
+            preview = build_preview(row["content"], query_tokens, width=240)
+            hits.append(
+                {
+                    "chunkId": row["chunk_id"],
+                    "kbId": row["kb_id"],
+                    "kbName": kb.name,
+                    "docId": row["doc_id"],
+                    "title": row["title"],
+                    "content": row["content"],
+                    "preview": preview,
+                    "score": score,
+                    "metadata": metadata,
+                    "citation": {
+                        "kbId": row["kb_id"],
+                        "kbName": kb.name,
+                        "docId": row["doc_id"],
+                        "title": row["title"],
+                        "sourceType": row["source_type"],
+                        "sourceUri": row["source_uri"],
+                        "fileName": row["file_name"],
+                        "mimeType": row["mime_type"],
+                        "chunkOrdinal": row["ordinal"],
+                    },
+                }
+            )
+        hits.sort(key=lambda item: (item["score"], item["title"]), reverse=True)
+        return {
+            "hits": hits[:effective_limit],
+            "requestedMode": requested,
+            "effectiveMode": effective_mode,
+            "filters": effective_filters,
+        }
+
     def retrieve(
         self,
         *,
@@ -1736,78 +2471,47 @@ class KnowledgeBaseService:
             return {"hits": [], "requestedMode": requested, "effectiveMode": requested}
         primary_profile = bindings[0].retrieval_profile
         requested = normalize_mode(requested_mode, default=normalize_mode(primary_profile.mode, default="hybrid"))
-        effective_limit = max(1, min(int(limit or primary_profile.top_k), 20))
+        stale_kb_ids = [kb.kb_id for kb in bindings if kb.reindex_required]
+        effective_limit = max(1, min(int(limit or max(kb.retrieval_profile.top_k for kb in bindings)), 20))
         query_tokens = normalize_query_tokens(query)
-        kb_binding_ids = [kb.kb_id for kb in bindings]
-        pool_limit = max(primary_profile.chunk_top_k * 4, effective_limit * 6, 40)
-        candidate_rows: dict[str, dict[str, Any]] = {}
-
-        match_queries = [self._build_match_query(query)]
-        if requested in {"semantic", "hybrid"}:
-            prefix_query = self._build_prefix_match_query(query)
-            if prefix_query and prefix_query not in match_queries:
-                match_queries.append(prefix_query)
-
-        for match_query in match_queries:
-            if not match_query:
-                continue
-            for row in self.store.search_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_ids=kb_binding_ids,
-                query_text=match_query,
-                limit=pool_limit,
-            ):
-                candidate_rows.setdefault(row["chunk_id"], row)
-
-        if requested in {"semantic", "hybrid"}:
-            for row in self.store.list_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_ids=kb_binding_ids,
-                limit=max(primary_profile.chunk_top_k * 10, effective_limit * 12, 120),
-            ):
-                candidate_rows.setdefault(row["chunk_id"], row)
-
-        rows = list(candidate_rows.values())
-        filtered_rows = self._apply_filters(rows, filters or primary_profile.metadata_filters)
-        kb_lookup = {kb.kb_id: kb for kb in bindings}
+        resolved_embeddings: dict[str, dict[str, Any]] = {}
+        resolved_rerankers: dict[str, dict[str, Any]] = {}
+        filters_by_kb: dict[str, dict[str, Any]] = {}
+        modes_by_kb: dict[str, dict[str, str]] = {}
         hits: list[dict[str, Any]] = []
-        for row in filtered_rows:
-            kb = kb_lookup.get(row["kb_id"])
-            metadata = json.loads(row.get("metadata_json") or "{}")
-            score = self._row_retrieval_score(row, mode=requested, query=query, query_tokens=query_tokens)
-            if score <= score_threshold(requested):
-                continue
-            preview = build_preview(row["content"], query_tokens, width=240)
-            hits.append(
-                {
-                    "chunkId": row["chunk_id"],
-                    "kbId": row["kb_id"],
-                    "kbName": kb.name if kb else row["kb_id"],
-                    "docId": row["doc_id"],
-                    "title": row["title"],
-                    "content": row["content"],
-                    "preview": preview,
-                    "score": score,
-                    "metadata": metadata,
-                    "citation": {
-                        "kbId": row["kb_id"],
-                        "kbName": kb.name if kb else row["kb_id"],
-                        "docId": row["doc_id"],
-                        "title": row["title"],
-                        "sourceType": row["source_type"],
-                        "sourceUri": row["source_uri"],
-                        "fileName": row["file_name"],
-                        "mimeType": row["mime_type"],
-                        "chunkOrdinal": row["ordinal"],
-                    },
-                }
+        for kb in bindings:
+            try:
+                resolved_embeddings[kb.kb_id] = self._resolve_embedding_selection(kb).to_dict()
+            except KnowledgeBaseValidationError:
+                pass
+            reranker = self._resolve_reranker_selection(kb)
+            if reranker is not None:
+                resolved_rerankers[kb.kb_id] = reranker.to_dict()
+            binding_result = self._retrieve_for_binding(
+                kb=kb,
+                query=query,
+                limit=limit,
+                filters=filters,
+                requested_mode=requested_mode,
+                query_tokens=query_tokens,
             )
+            filters_by_kb[kb.kb_id] = dict(binding_result["filters"] or {})
+            modes_by_kb[kb.kb_id] = {
+                "requestedMode": binding_result["requestedMode"],
+                "effectiveMode": binding_result["effectiveMode"],
+            }
+            hits.extend(binding_result["hits"])
         hits.sort(key=lambda item: (item["score"], item["title"]), reverse=True)
+        requested_modes = {item["requestedMode"] for item in modes_by_kb.values()}
+        effective_modes = {item["effectiveMode"] for item in modes_by_kb.values()}
         return {
             "hits": hits[:effective_limit],
-            "requestedMode": requested,
-            "effectiveMode": requested,
+            "requestedMode": requested if len(requested_modes) == 1 else "mixed",
+            "effectiveMode": next(iter(effective_modes)) if len(effective_modes) == 1 else "mixed",
             "filters": filters or primary_profile.metadata_filters,
+            "filtersByKb": filters_by_kb,
+            "modesByKb": modes_by_kb,
+            "staleKnowledgeBaseIds": stale_kb_ids,
+            "resolvedEmbeddingSelections": resolved_embeddings,
+            "resolvedRerankerSelections": resolved_rerankers,
         }

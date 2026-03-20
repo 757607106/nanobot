@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from nanobot.agent.loop import AgentLoop
 from nanobot.agent.skills import SkillsLoader
 from nanobot.platform.agents import AgentDefinitionNotFoundError
+from nanobot.platform.model_resources import ModelSelection
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
 
 if TYPE_CHECKING:
@@ -144,9 +145,26 @@ class WebAgentRuntimeService:
 
     def _build_agent_config(self, agent: dict[str, Any]) -> Config:
         config = self.state.config.model_copy(deep=True)
-        model = (agent.get("model") or "").strip()
-        if model:
-            config.agents.defaults.model = model
+        selection = ModelSelection.from_dict(agent.get("chatModelSelection"), default_capability="chat")
+        if selection is not None and self.state.app_model_providers is not None:
+            resolved = self.state.app_model_providers.selection_to_legacy_config(selection, tenant_id="default")
+            config.agents.defaults.model = resolved.get("model") or config.agents.defaults.model
+            provider_name = str(resolved.get("providerName") or "").strip()
+            if provider_name:
+                config.agents.defaults.provider = provider_name
+                provider_cfg = getattr(config.providers, provider_name, None)
+                if provider_cfg is not None:
+                    provider_cfg.api_key = str(resolved.get("apiKey") or "")
+                    provider_cfg.api_base = resolved.get("baseUrl")
+                    provider_cfg.extra_headers = resolved.get("extraHeaders") or None
+                elif provider_name == "custom":
+                    config.providers.custom.api_key = str(resolved.get("apiKey") or "")
+                    config.providers.custom.api_base = resolved.get("baseUrl")
+                    config.providers.custom.extra_headers = resolved.get("extraHeaders") or None
+        else:
+            model = (agent.get("model") or "").strip()
+            if model:
+                config.agents.defaults.model = model
         selected_mcp = {
             name: entry
             for name, entry in config.tools.mcp_servers.items()
@@ -229,6 +247,8 @@ class WebAgentRuntimeService:
                 "mcpServerIds": agent.get("mcpServerIds", []),
                 "skillIds": agent.get("skillIds", []),
                 "knowledgeBindingIds": agent.get("knowledgeBindingIds", []),
+                "chatModelSelection": agent.get("chatModelSelection"),
+                "resolvedModel": config.agents.defaults.model,
             },
         )
         self.state.runs.append_event(
@@ -255,7 +275,10 @@ class WebAgentRuntimeService:
             cron_service=self.state.cron,
             restrict_to_workspace=config.tools.restrict_to_workspace,
             session_manager=self.state.sessions,
-            mcp_servers=config.tools.mcp_servers,
+            mcp_servers=self.state.config_runtime.resolve_mcp_server_configs(
+                config,
+                list(agent.get("mcpServerIds") or []),
+            ),
             channels_config=config.channels,
             run_registry=self.state.runs,
             tool_allowlist=list(agent.get("toolAllowlist", [])),
@@ -343,6 +366,20 @@ class WebAgentRuntimeService:
         finally:
             await isolated_agent.close_mcp()
 
+        applied_bindings = {
+            "toolAllowlist": list(agent.get("toolAllowlist") or []),
+            "mcpServerIds": list(agent.get("mcpServerIds") or []),
+            "skillIds": list(agent.get("skillIds") or []),
+            "knowledgeBindingIds": list(agent.get("knowledgeBindingIds") or []),
+            "chatModelSelection": agent.get("chatModelSelection"),
+        }
+        self.state.chat_runtime.annotate_last_assistant_message(
+            session_key,
+            citations=self.state.chat_runtime.extract_citations(knowledge_hits),
+            knowledge_hits=knowledge_hits,
+            applied_bindings=applied_bindings,
+            resolved_model=config.agents.defaults.model,
+        )
         messages = self._format_messages(session_key, session_id)
         return {
             "run": self.state.runs.get_run(record.run_id),
@@ -351,12 +388,8 @@ class WebAgentRuntimeService:
             "messages": messages,
             "pendingKnowledgeBindings": list(agent.get("knowledgeBindingIds") or []),
             "knowledgeHits": knowledge_hits,
-            "appliedBindings": {
-                "toolAllowlist": list(agent.get("toolAllowlist") or []),
-                "mcpServerIds": list(agent.get("mcpServerIds") or []),
-                "skillIds": list(agent.get("skillIds") or []),
-                "knowledgeBindingIds": list(agent.get("knowledgeBindingIds") or []),
-            },
+            "resolvedModel": config.agents.defaults.model,
+            "appliedBindings": applied_bindings,
         }
 
     async def test_run_agent(self, agent_id: str, content: str) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
   App,
   Button,
@@ -6,16 +6,14 @@ import {
   Empty,
   Input,
   Modal,
+  Select,
   Spin,
   Tag,
-  Tooltip,
   Typography,
 } from 'antd'
 import { Attachments, Bubble, Conversations, Prompts, Sender, ThoughtChain, Welcome } from '@ant-design/x'
 import type { Conversation, PromptProps, ThoughtChainItem } from '@ant-design/x'
 import { useXChat, type MessageInfo, type SSEOutput } from '@ant-design/x-sdk'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import {
   CloudUploadOutlined,
   DeleteOutlined,
@@ -23,7 +21,6 @@ import {
   LinkOutlined,
   MessageOutlined,
   NodeIndexOutlined,
-  PaperClipOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -33,21 +30,23 @@ import {
 import { RobotOutlined } from '@ant-design/icons'
 import { api } from '../api'
 import { PLATFORM_ASSISTANT_NAME } from '../branding'
+import ChatFileCards from '../chat/ChatFileCards'
+import ChatMarkdown from '../chat/ChatMarkdown'
 import { createNanobotChatProvider } from '../chat/NanobotChatProvider'
+import ChatToolExecutionCards, { type ToolExecutionEntry } from '../chat/ChatToolExecutionCards'
 import {
   buildChatRequestQuery,
   dedupeAttachmentRefs,
-  getToolCallName,
   normalizeChatMessage,
   toChatAttachmentRef,
 } from '../chat/chatMessageUtils'
+import { buildToolExecutionState } from '../chat/chatToolExecutionState'
 import { formatDateTimeZh, formatRelativeTimeZh } from '../locale'
 import { testIds } from '../testIds'
 import type {
   ChatAttachmentRef,
   ChatMessage,
   ChatRequestInput,
-  ChatToolCall,
   ChatWorkspaceData,
   SessionSummary,
 } from '../types'
@@ -55,6 +54,7 @@ import type {
 const { Text, Title } = Typography
 const DRAFT_SESSION_KEY = '__draft__'
 const TOOL_RESULT_PREVIEW_LIMIT = 1400
+const SESSION_PAGE_SIZE = 20
 
 type ComposerAttachment = NonNullable<React.ComponentProps<typeof Attachments>['items']>[number]
 
@@ -63,10 +63,6 @@ function getDisplaySessionTitle(title?: string) {
     return '新会话'
   }
   return title
-}
-
-function isDefaultSessionTitle(title?: string) {
-  return !title || title === 'New Chat' || title === '新会话'
 }
 
 function getSessionGroup(value?: string) {
@@ -85,21 +81,32 @@ function getSessionGroup(value?: string) {
   return '更早'
 }
 
-function formatFileSize(sizeBytes?: number) {
-  if (!sizeBytes || sizeBytes <= 0) {
-    return '未知大小'
+function getAgentName(
+  agentId: string | null | undefined,
+  agents: ChatWorkspaceData['availableAgents'],
+) {
+  if (!agentId) {
+    return '工作区默认助手'
   }
-  if (sizeBytes < 1024) {
-    return `${sizeBytes} B`
-  }
-  if (sizeBytes < 1024 * 1024) {
-    return `${(sizeBytes / 1024).toFixed(1)} KB`
-  }
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+  return agents.find((item) => item.agentId === agentId)?.name || agentId
 }
 
-function getAttachmentName(item: ChatAttachmentRef) {
-  return item.name || item.relativePath.split('/').filter(Boolean).pop() || item.relativePath
+function toStringList(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item || '').trim()).filter(Boolean)
+    : []
+}
+
+function getMessageBindingSummary(message: ChatMessage) {
+  const bindings =
+    message.appliedBindings && typeof message.appliedBindings === 'object'
+      ? message.appliedBindings as Record<string, unknown>
+      : {}
+  return {
+    knowledgeBindingIds: toStringList(bindings.knowledgeBindingIds),
+    mcpServerIds: toStringList(bindings.mcpServerIds),
+    toolAllowlist: toStringList(bindings.toolAllowlist),
+  }
 }
 
 function appendComposerValue(value: string, next: string) {
@@ -132,11 +139,7 @@ function createPendingAttachment(file: File): ComposerAttachment {
 }
 
 function MarkdownBubble({ content }: { content: string }) {
-  return (
-    <div className="markdown-bubble">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-    </div>
-  )
+  return <ChatMarkdown content={content} />
 }
 
 function AttachmentTags({
@@ -153,23 +156,7 @@ function AttachmentTags({
   }
 
   return (
-    <div className="chat-attachment-tags">
-      {attachments.map((item) => (
-        <Tooltip key={item.relativePath} title={item.relativePath}>
-          <Tag
-            closable={removable}
-            onClose={(event) => {
-              event.preventDefault()
-              onRemove?.(item.relativePath)
-            }}
-            icon={<PaperClipOutlined />}
-            className="chat-attachment-tag"
-          >
-            {getAttachmentName(item)}
-          </Tag>
-        </Tooltip>
-      ))}
-    </div>
+    <ChatFileCards items={attachments} variant={removable ? 'draft' : 'message'} removable={removable} onRemove={onRemove} />
   )
 }
 
@@ -188,7 +175,7 @@ function RecentUploadActions({
     return null
   }
 
-  const visibleUploads = uploads.slice(0, variant === 'welcome' ? 4 : 3)
+  const visibleUploads = uploads.slice(0, variant === 'welcome' ? 4 : 3).map(toChatAttachmentRef)
 
   return (
     <div className={['chat-recent-uploads', variant === 'welcome' ? 'is-welcome' : 'is-inline'].join(' ')}>
@@ -200,47 +187,20 @@ function RecentUploadActions({
             : '只保留和当前对话最相关的文件入口。'}
         </Text>
       </div>
-      <div className="chat-recent-upload-list">
-        {visibleUploads.map((item) => {
-          const attachment = toChatAttachmentRef(item)
-          return (
-            <Tooltip key={item.relativePath} title={`${item.relativePath} · ${formatFileSize(item.sizeBytes)}`}>
-              <div className="chat-recent-upload-item">
-                <Button size="small" icon={<PaperClipOutlined />} onClick={() => onReference(attachment)}>
-                  {item.name}
-                </Button>
-                <Button size="small" type="text" icon={<LinkOutlined />} onClick={() => onInsertPath(item.relativePath)}>
-                  路径
-                </Button>
-              </div>
-            </Tooltip>
-          )
-        })}
-      </div>
+      <ChatFileCards items={visibleUploads} variant="recent" onReference={onReference} onInsertPath={onInsertPath} />
     </div>
   )
 }
 
-function ToolCallSummary({ toolCalls }: { toolCalls: ChatToolCall[] }) {
-  if (!toolCalls.length) {
+function ToolExecutionSummary({ entries }: { entries: ToolExecutionEntry[] }) {
+  if (!entries.length) {
     return null
   }
 
   return (
     <div className="chat-message-meta-block">
-      <div className="chat-tool-chip-list">
-        {toolCalls.map((toolCall, index) => {
-          const name = getToolCallName(toolCall)
-          const args = toolCall.function?.arguments
-          return (
-            <Tooltip key={`${name}-${index}`} title={args || name}>
-              <Tag icon={<ToolOutlined />} className="chat-tool-chip">
-                {name}
-              </Tag>
-            </Tooltip>
-          )
-        })}
-      </div>
+      <div className="chat-message-meta-label">工具执行</div>
+      <ChatToolExecutionCards entries={entries} />
     </div>
   )
 }
@@ -280,9 +240,15 @@ function ToolResultCard({ message }: { message: ChatMessage }) {
   )
 }
 
-function MessageBody({ info }: { info: MessageInfo<ChatMessage> }) {
+function MessageBody({ info, toolExecutions }: { info: MessageInfo<ChatMessage>; toolExecutions?: ToolExecutionEntry[] }) {
   const message = normalizeChatMessage(info.message)
   const progressSteps = message.progressSteps ?? []
+  const bindingSummary = getMessageBindingSummary(message)
+  const hasBindingSummary =
+    Boolean(message.resolvedModel)
+    || bindingSummary.knowledgeBindingIds.length > 0
+    || bindingSummary.mcpServerIds.length > 0
+    || bindingSummary.toolAllowlist.length > 0
 
   if (message.role === 'tool') {
     return <ToolResultCard message={message} />
@@ -311,7 +277,38 @@ function MessageBody({ info }: { info: MessageInfo<ChatMessage> }) {
         <div className="chat-loading-copy">正在组织回复与工具执行结果...</div>
       ) : null}
 
-      {message.role === 'assistant' ? <ToolCallSummary toolCalls={message.toolCalls || []} /> : null}
+      {message.role === 'assistant' && message.citations?.length ? (
+        <div className="chat-message-meta-block">
+          <div className="chat-message-meta-label">参考来源</div>
+          <div className="chat-rail-tag-list">
+            {message.citations.map((citation, index) => (
+              <Tag key={`${citation.kbId}-${citation.docId}-${citation.chunkOrdinal ?? index}`} className="chat-stage-tag">
+                {citation.title || citation.fileName || citation.docId}
+              </Tag>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {message.role === 'assistant' && hasBindingSummary ? (
+        <div className="chat-message-meta-block">
+          <div className="chat-message-meta-label">本次绑定</div>
+          <div className="chat-rail-tag-list">
+            <Tag className="chat-stage-tag">{message.resolvedModel || '默认模型'}</Tag>
+            <Tag className="chat-stage-tag">知识库 {bindingSummary.knowledgeBindingIds.length}</Tag>
+            <Tag className="chat-stage-tag">MCP {bindingSummary.mcpServerIds.length}</Tag>
+            <Tag className="chat-stage-tag">工具 {bindingSummary.toolAllowlist.length}</Tag>
+          </div>
+          {bindingSummary.knowledgeBindingIds.length > 0 ? (
+            <Text type="secondary">知识库：{bindingSummary.knowledgeBindingIds.join('、')}</Text>
+          ) : null}
+          {bindingSummary.mcpServerIds.length > 0 ? (
+            <Text type="secondary">MCP：{bindingSummary.mcpServerIds.join('、')}</Text>
+          ) : null}
+        </div>
+      ) : null}
+
+      {message.role === 'assistant' && toolExecutions?.length ? <ToolExecutionSummary entries={toolExecutions} /> : null}
     </div>
   )
 }
@@ -347,23 +344,28 @@ export default function ChatPage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [loadingSessions, setLoadingSessions] = useState(true)
+  const [loadingMoreSessions, setLoadingMoreSessions] = useState(false)
+  const [sessionTotal, setSessionTotal] = useState(0)
+  const [sessionPage, setSessionPage] = useState(1)
   const [refreshingWorkspace, setRefreshingWorkspace] = useState(false)
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [workspaceData, setWorkspaceData] = useState<ChatWorkspaceData | null>(null)
   const [sessionQuery, setSessionQuery] = useState('')
+  const [sessionAgentFilter, setSessionAgentFilter] = useState<string>('all')
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [renameTarget, setRenameTarget] = useState<SessionSummary | null>(null)
   const [composerValue, setComposerValue] = useState('')
   const [pendingAttachments, setPendingAttachments] = useState<ComposerAttachment[]>([])
   const [draftAttachmentRefs, setDraftAttachmentRefs] = useState<ChatAttachmentRef[]>([])
-  const historyRef = useRef<HTMLDivElement | null>(null)
+  const [draftAgentId, setDraftAgentId] = useState<string | null>(null)
   const chatPanelRef = useRef<HTMLDivElement | null>(null)
   const senderRef = useRef<React.ComponentRef<typeof Sender> | null>(null)
   const currentSessionIdRef = useRef<string | null>(null)
   const pendingSyncSessionIdRef = useRef<string | null>(null)
   const shouldSyncSessionRef = useRef(false)
   const wasRequestingRef = useRef(false)
+  const deferredSessionQuery = useDeferredValue(sessionQuery)
 
   const provider = useMemo(() => createNanobotChatProvider(), [])
 
@@ -436,6 +438,7 @@ export default function ChatPage() {
       message: normalizeChatMessage(info.message),
     }))
   }, [messages])
+  const toolExecutionState = useMemo(() => buildToolExecutionState(messageInfos), [messageInfos])
 
   const selectedSession = useMemo(
     () => sessions.find((item) => item.id === currentSessionId) ?? null,
@@ -445,21 +448,46 @@ export default function ChatPage() {
   const selectedSessionTitle = selectedSession
     ? getDisplaySessionTitle(selectedSession.title)
     : '开始一个新的工作区会话'
+  const availableAgents = workspaceData?.availableAgents || []
+  const selectedSessionAgentName = getAgentName(selectedSession?.agentId, availableAgents)
+  const draftAgentName = getAgentName(draftAgentId, availableAgents)
+  const selectedRuntimeAgent = useMemo(
+    () => availableAgents.find((item) => item.agentId === (selectedSession?.agentId || draftAgentId)) ?? null,
+    [availableAgents, draftAgentId, selectedSession?.agentId],
+  )
+  const latestAssistantMessage = useMemo(
+    () => [...messageInfos].reverse().map((item) => item.message).find((item) => item.role === 'assistant') ?? null,
+    [messageInfos],
+  )
+  const latestBindingSummary = useMemo(
+    () => (latestAssistantMessage ? getMessageBindingSummary(latestAssistantMessage) : null),
+    [latestAssistantMessage],
+  )
+  const headerKnowledgeIds = latestBindingSummary?.knowledgeBindingIds.length
+    ? latestBindingSummary.knowledgeBindingIds
+    : selectedRuntimeAgent?.knowledgeBindingIds || []
+  const headerMcpIds = latestBindingSummary?.mcpServerIds.length
+    ? latestBindingSummary.mcpServerIds
+    : selectedRuntimeAgent?.mcpServerIds || []
+  const headerModelLabel =
+    latestAssistantMessage?.resolvedModel
+    || selectedRuntimeAgent?.chatModelSelection?.qualifiedModelName
+    || workspaceData?.runtime.model
+    || '默认模型'
 
   const filteredSessions = useMemo(() => {
-    const query = sessionQuery.trim().toLowerCase()
-    if (!query) {
-      return sessions
-    }
+    const query = deferredSessionQuery.trim().toLowerCase()
     return sessions.filter((item) => {
-      return `${item.title} ${getDisplaySessionTitle(item.title)} ${item.sessionId}`
-        .toLowerCase()
-        .includes(query)
+      const matchesQuery = !query
+        || `${item.title} ${getDisplaySessionTitle(item.title)} ${item.sessionId}`.toLowerCase().includes(query)
+      const matchesAgent = sessionAgentFilter === 'all'
+        || (sessionAgentFilter === DRAFT_SESSION_KEY ? !item.agentId : item.agentId === sessionAgentFilter)
+      return matchesQuery && matchesAgent
     })
-  }, [sessionQuery, sessions])
+  }, [deferredSessionQuery, sessionAgentFilter, sessions])
 
   const conversationItems = useMemo(() => {
-    return filteredSessions.map((session) => ({
+      return filteredSessions.map((session) => ({
       key: session.id,
       group: getSessionGroup(session.updatedAt || session.createdAt),
       timestamp: new Date(session.updatedAt || session.createdAt || Date.now()).getTime(),
@@ -467,13 +495,13 @@ export default function ChatPage() {
         <div className="conversation-copy">
           <span className="conversation-title">{getDisplaySessionTitle(session.title)}</span>
           <span className="conversation-summary">
-            {session.messageCount} 条消息 · {formatRelativeTimeZh(session.updatedAt || session.createdAt)}
+            {getAgentName(session.agentId, availableAgents)} · {session.messageCount} 条消息 · {formatRelativeTimeZh(session.updatedAt || session.createdAt)}
           </span>
         </div>
       ),
       icon: <MessageOutlined />,
     })) as Conversation[]
-  }, [filteredSessions])
+  }, [availableAgents, filteredSessions])
 
   const quickPromptItems = useMemo(() => {
     return (workspaceData?.quickPrompts || []).map((prompt: string, index: number) => ({
@@ -484,6 +512,7 @@ export default function ChatPage() {
     })) as PromptProps[]
   }, [workspaceData])
   const recentUploads = workspaceData?.recentUploads || []
+  const activeMcp = workspaceData?.activeMcp || []
 
   function buildReloadRequest(messageId: string | number) {
     if (!currentSessionId) {
@@ -525,13 +554,35 @@ export default function ChatPage() {
     onReload(messageId, requestParams)
   }
 
+  async function handleCopyMessage(content: string) {
+    const trimmed = content.trim()
+    if (!trimmed) {
+      return
+    }
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      message.error('当前环境暂不支持复制')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(trimmed)
+      message.success('已复制消息内容')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '复制失败')
+    }
+  }
+
   const bubbleItems = useMemo(() => {
-    return messageInfos.map((info) => {
+    return messageInfos
+      .filter((info) => !toolExecutionState.hiddenToolMessageIds.has(info.id))
+      .map((info) => {
       const item = info.message
       const isUser = item.role === 'user'
       const isAssistant = item.role === 'assistant'
       const isTool = item.role === 'tool'
       const canReload = isAssistant && !isRequesting
+      const canCopy = Boolean(String(item.content || '').trim())
+      const canAbort = isAssistant && (info.status === 'loading' || info.status === 'updating') && isRequesting
+      const toolExecutions = toolExecutionState.byAssistantId.get(info.id) || []
 
       return {
         key: info.id,
@@ -576,6 +627,21 @@ export default function ChatPage() {
         footer: isAssistant ? (
           <div className="bubble-footer-actions">
             <span className="bubble-footer-note">{getMessageStatusLabel(info.status)}</span>
+            {canCopy ? (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => void handleCopyMessage(String(item.content || ''))}
+                className="bubble-footer-button"
+              >
+                复制
+              </Button>
+            ) : null}
+            {canAbort ? (
+              <Button type="link" size="small" onClick={abort} className="bubble-footer-button">
+                停止
+              </Button>
+            ) : null}
             {canReload ? (
               <Button
                 type="link"
@@ -588,13 +654,38 @@ export default function ChatPage() {
               </Button>
             ) : null}
           </div>
+        ) : isUser ? (
+          <div className="bubble-footer-actions">
+            {canCopy ? (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => void handleCopyMessage(String(item.content || ''))}
+                className="bubble-footer-button"
+              >
+                复制
+              </Button>
+            ) : null}
+          </div>
         ) : isTool ? (
-          <span className="bubble-footer-note">工具结果</span>
+          <div className="bubble-footer-actions">
+            <span className="bubble-footer-note">工具结果</span>
+            {canCopy ? (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => void handleCopyMessage(String(item.content || ''))}
+                className="bubble-footer-button"
+              >
+                复制
+              </Button>
+            ) : null}
+          </div>
         ) : null,
-        content: <MessageBody info={info} />,
+        content: <MessageBody info={info} toolExecutions={toolExecutions} />,
       }
     }) as React.ComponentProps<typeof Bubble.List>['items']
-  }, [isRequesting, messageInfos])
+  }, [abort, isRequesting, messageInfos, toolExecutionState])
 
   useEffect(() => {
     currentSessionIdRef.current = currentSessionId
@@ -604,10 +695,6 @@ export default function ChatPage() {
     void loadSessions()
     void refreshWorkspaceData()
   }, [])
-
-  useEffect(() => {
-    historyRef.current?.scrollTo({ top: historyRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messageInfos, isRequesting, isDefaultMessagesRequesting])
 
   useEffect(() => {
     const wasRequesting = wasRequestingRef.current
@@ -622,26 +709,46 @@ export default function ChatPage() {
     wasRequestingRef.current = isRequesting
   }, [isRequesting])
 
-  async function loadSessions(preferredSessionId?: string | null) {
+  async function loadSessions(options?: { preferredSessionId?: string | null; append?: boolean; page?: number }) {
+    const append = Boolean(options?.append)
+    const page = options?.page ?? 1
     try {
-      setLoadingSessions(true)
-      const data = await api.getSessions()
-      setSessions(data.items)
-      startTransition(() => {
-        setCurrentSessionId((prev) => {
-          if (preferredSessionId && data.items.some((item) => item.id === preferredSessionId)) {
-            return preferredSessionId
-          }
-          if (prev && data.items.some((item) => item.id === prev)) {
-            return prev
-          }
-          return data.items[0]?.id ?? null
-        })
+      if (append) {
+        setLoadingMoreSessions(true)
+      } else {
+        setLoadingSessions(true)
+      }
+      const data = await api.getSessions(page, SESSION_PAGE_SIZE)
+      setSessionTotal(data.total)
+      setSessionPage(data.page)
+      setSessions((prev) => {
+        if (!append) {
+          return data.items
+        }
+        const seen = new Set(prev.map((item) => item.id))
+        return [...prev, ...data.items.filter((item) => !seen.has(item.id))]
       })
+      if (!append) {
+        startTransition(() => {
+          setCurrentSessionId((prev) => {
+            if (options?.preferredSessionId && data.items.some((item) => item.id === options.preferredSessionId)) {
+              return options.preferredSessionId
+            }
+            if (prev && data.items.some((item) => item.id === prev)) {
+              return prev
+            }
+            return data.items[0]?.id ?? null
+          })
+        })
+      }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载会话失败')
     } finally {
-      setLoadingSessions(false)
+      if (append) {
+        setLoadingMoreSessions(false)
+      } else {
+        setLoadingSessions(false)
+      }
     }
   }
 
@@ -676,16 +783,28 @@ export default function ChatPage() {
           })),
         )
       }
-      await Promise.all([loadSessions(sessionId), refreshWorkspaceData({ quiet: true })])
+      await Promise.all([loadSessions({ preferredSessionId: sessionId }), refreshWorkspaceData({ quiet: true })])
     } catch (error) {
       message.error(error instanceof Error ? error.message : '同步会话内容失败')
     }
   }
 
+  async function handleLoadMoreSessions() {
+    if (loadingMoreSessions || sessions.length >= sessionTotal) {
+      return
+    }
+    await loadSessions({
+      append: true,
+      page: sessionPage + 1,
+      preferredSessionId: currentSessionIdRef.current,
+    })
+  }
+
   async function handleCreateSession() {
     try {
-      const session = await api.createSession()
+      const session = await api.createSession(undefined, draftAgentId)
       setSessions((prev) => [session, ...prev])
+      setSessionTotal((prev) => prev + 1)
       startTransition(() => {
         setCurrentSessionId(session.id)
       })
@@ -720,6 +839,7 @@ export default function ChatPage() {
       await api.deleteSession(session.id)
       const remaining = sessions.filter((item) => item.id !== session.id)
       setSessions(remaining)
+      setSessionTotal((prev) => Math.max(0, prev - 1))
       if (currentSessionId === session.id) {
         startTransition(() => {
           setCurrentSessionId(remaining[0]?.id ?? null)
@@ -827,8 +947,9 @@ export default function ChatPage() {
           attachments,
         })
       } else {
-        const session = await api.createSession()
+        const session = await api.createSession(undefined, draftAgentId)
         setSessions((prev) => [session, ...prev])
+        setSessionTotal((prev) => prev + 1)
         shouldSyncSessionRef.current = true
         pendingSyncSessionIdRef.current = session.id
         queueRequest(session.id, {
@@ -880,6 +1001,60 @@ export default function ChatPage() {
             />
           </div>
 
+          <div className="chat-rail-search">
+            <div className="chat-inline-section-head" style={{ marginBottom: 8 }}>
+              <span>新会话绑定</span>
+              <Text type="secondary">选择后，新建会话和首次提问都会自动使用对应 Agent。</Text>
+            </div>
+            <Select
+              allowClear
+              value={draftAgentId ?? undefined}
+              placeholder="工作区默认助手"
+              style={{ width: '100%' }}
+              options={availableAgents.map((agent) => ({
+                value: agent.agentId,
+                label: `${agent.name} · KB ${agent.knowledgeBindingIds.length} · MCP ${agent.mcpServerIds.length}`,
+              }))}
+              onChange={(value) => setDraftAgentId(value || null)}
+            />
+          </div>
+
+          <div className="chat-rail-search">
+            <div className="chat-inline-section-head" style={{ marginBottom: 8 }}>
+              <span>会话筛选</span>
+              <Text type="secondary">按 Agent 查看已加载会话，可继续加载更多历史。</Text>
+            </div>
+            <Select
+              value={sessionAgentFilter}
+              style={{ width: '100%' }}
+              options={[
+                { value: 'all', label: '全部会话' },
+                { value: DRAFT_SESSION_KEY, label: '工作区默认助手' },
+                ...availableAgents.map((agent) => ({
+                  value: agent.agentId,
+                  label: agent.name,
+                })),
+              ]}
+              onChange={(value) => setSessionAgentFilter(value)}
+            />
+          </div>
+
+          {activeMcp.length > 0 ? (
+            <div className="chat-rail-meta-section">
+              <div className="chat-inline-section-head">
+                <span>当前连接能力</span>
+                <Text type="secondary">优先展示当前工作区可直接使用的连接。</Text>
+              </div>
+              <div className="chat-rail-tag-list">
+                {activeMcp.slice(0, 4).map((item) => (
+                  <Tag key={item.name} className="chat-stage-tag">
+                    {item.displayName}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {loadingSessions ? (
             <div className="center-box">
               <Spin />
@@ -923,6 +1098,15 @@ export default function ChatPage() {
               />
             </div>
           )}
+
+          {sessions.length < sessionTotal ? (
+            <div className="chat-rail-load-more">
+              <Text type="secondary">已加载 {sessions.length} / {sessionTotal} 个会话</Text>
+              <Button size="small" onClick={() => void handleLoadMoreSessions()} loading={loadingMoreSessions}>
+                加载更多
+              </Button>
+            </div>
+          ) : null}
         </Card>
 
         <Card className="chat-card surface-card chat-session-card" styles={{ body: { padding: 0, height: '100%' } }}>
@@ -933,11 +1117,28 @@ export default function ChatPage() {
                 <Title level={4}>{selectedSessionTitle}</Title>
                 <Text type="secondary">
                   {selectedSession
-                    ? `最后更新于 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}，继续追问或补充附件即可。`
-                    : '直接开始输入，系统会自动创建新会话。'}
+                    ? `当前绑定：${selectedSessionAgentName} · 最后更新于 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}。`
+                    : `下一次新会话将使用：${draftAgentName}。直接开始输入，系统会自动创建新会话。`}
                 </Text>
+                <div className="chat-stage-tags" style={{ marginTop: 12 }}>
+                  <Tag className="chat-stage-tag">{headerModelLabel}</Tag>
+                  <Tag className="chat-stage-tag">知识库 {headerKnowledgeIds.length}</Tag>
+                  <Tag className="chat-stage-tag">MCP {headerMcpIds.length}</Tag>
+                  {latestAssistantMessage?.citations?.length ? (
+                    <Tag className="chat-stage-tag">引用 {latestAssistantMessage.citations.length}</Tag>
+                  ) : null}
+                </div>
+                {headerKnowledgeIds.length > 0 || headerMcpIds.length > 0 ? (
+                  <Text type="secondary">
+                    {headerKnowledgeIds.length > 0 ? `知识库：${headerKnowledgeIds.join('、')}` : '知识库：未绑定'}
+                    {headerMcpIds.length > 0 ? ` · MCP：${headerMcpIds.join('、')}` : ''}
+                  </Text>
+                ) : null}
               </div>
               <div className="chat-stage-actions">
+                <div className="chat-stage-tags">
+                  <Tag className="chat-stage-tag">{selectedSession ? selectedSessionAgentName : draftAgentName}</Tag>
+                </div>
                 {workspaceData?.runtime.model ? (
                   <div className="chat-stage-tags">
                     <Tag className="chat-stage-tag">{workspaceData.runtime.model}</Tag>
@@ -952,7 +1153,7 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <div className="chat-history chat-history-expanded" ref={historyRef}>
+            <div className="chat-history chat-history-expanded">
               {isDefaultMessagesRequesting ? (
                 <div className="center-box">
                   <Spin />
@@ -962,8 +1163,8 @@ export default function ChatPage() {
                     <Welcome
                       variant="borderless"
                       icon={<RobotOutlined />}
-                      title={selectedSession ? '继续这个对话' : '开始一个更干净的工作区对话'}
-                      description="把问题、文件和必要上下文放进同一个输入区。"
+                      title={selectedSession ? `继续 ${selectedSessionAgentName} 的对话` : `开始一个由 ${draftAgentName} 驱动的新会话`}
+                      description="把问题、文件和必要上下文放进同一个输入区，系统会沿用当前 Agent 绑定的模型、MCP 和知识库。"
                     extra={
                       <div className="chat-empty-extra">
                         {quickPromptItems.length > 0 ? (
@@ -988,7 +1189,7 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <div className="chat-history-canvas" data-testid={testIds.chat.bubbleList}>
-                  <Bubble.List items={bubbleItems} className="bubble-list" autoScroll />
+                  <Bubble.List items={bubbleItems} className="bubble-list" />
                 </div>
               )}
             </div>

@@ -392,6 +392,14 @@ class KnowledgeBaseStore:
         conn.close()
         return deleted
 
+    def clear_document_chunks(self, doc_id: str) -> None:
+        conn = self._connect()
+        conn.execute("DELETE FROM knowledge_chunks WHERE doc_id = ?", (doc_id,))
+        if self.fts_enabled:
+            conn.execute("DELETE FROM knowledge_chunks_fts WHERE doc_id = ?", (doc_id,))
+        conn.commit()
+        conn.close()
+
     def insert_job(self, job: KnowledgeIngestJob) -> KnowledgeIngestJob:
         conn = self._connect()
         conn.execute(
@@ -723,6 +731,47 @@ class KnowledgeBaseStore:
             LIMIT ?
             """,
             [tenant_id, instance_id, *kb_ids, limit],
+        ).fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def get_chunks_by_ids(
+        self,
+        *,
+        tenant_id: str,
+        instance_id: str,
+        kb_ids: list[str],
+        chunk_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        if not kb_ids or not chunk_ids:
+            return []
+        kb_placeholders = ",".join("?" for _ in kb_ids)
+        chunk_placeholders = ",".join("?" for _ in chunk_ids)
+        conn = self._connect()
+        rows = conn.execute(
+            f"""
+            SELECT
+                chunks.chunk_id,
+                chunks.kb_id,
+                chunks.doc_id,
+                chunks.ordinal,
+                chunks.content,
+                chunks.metadata_json,
+                docs.title,
+                docs.source_type,
+                docs.source_uri,
+                docs.file_name,
+                docs.mime_type,
+                docs.metadata_json AS document_metadata_json,
+                0.0 AS rank
+            FROM knowledge_chunks AS chunks
+            JOIN knowledge_documents AS docs ON docs.doc_id = chunks.doc_id
+            WHERE chunks.tenant_id = ?
+              AND chunks.instance_id = ?
+              AND chunks.kb_id IN ({kb_placeholders})
+              AND chunks.chunk_id IN ({chunk_placeholders})
+            """,
+            [tenant_id, instance_id, *kb_ids, *chunk_ids],
         ).fetchall()
         conn.close()
         return [dict(row) for row in rows]

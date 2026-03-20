@@ -93,6 +93,9 @@ class WebAppState:
         self.app_teams = None
         self.app_knowledge = None
         self.app_memory = None
+        self.app_model_providers = None
+        self.app_mcp_servers = None
+        self.app_mcp_resources = None
         self.channel_bindings_service = None  # Set by lifespan before channel_runtime.start()
         self.calendar_repo = get_calendar_repository(config.workspace_path)
 
@@ -125,8 +128,8 @@ class WebAppState:
     def list_sessions(self, page: int = 1, page_size: int = 20) -> dict[str, Any]:
         return self.chat_runtime.list_sessions(page, page_size)
 
-    def create_session(self, title: str | None = None) -> dict[str, Any]:
-        return self.chat_runtime.create_session(title)
+    def create_session(self, title: str | None = None, agent_id: str | None = None) -> dict[str, Any]:
+        return self.chat_runtime.create_session(title, agent_id)
 
     def rename_session(self, session_id: str, title: str) -> dict[str, Any]:
         return self.chat_runtime.rename_session(session_id, title)

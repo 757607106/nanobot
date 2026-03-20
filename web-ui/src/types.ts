@@ -2,6 +2,7 @@ export interface SessionSummary {
   id: string
   sessionId: string
   title: string
+  agentId?: string | null
   createdAt?: string
   updatedAt?: string
   messageCount: number
@@ -51,6 +52,20 @@ export interface ChatMessage {
   name?: string
   attachments?: ChatAttachmentRef[]
   progressSteps?: ChatProgressStep[]
+  citations?: Array<{
+    kbId: string
+    kbName: string
+    docId: string
+    title: string
+    sourceType?: string | null
+    sourceUri?: string | null
+    fileName?: string | null
+    mimeType?: string | null
+    chunkOrdinal?: number | null
+  }>
+  knowledgeHits?: KnowledgeHit[]
+  appliedBindings?: Record<string, unknown>
+  resolvedModel?: string | null
 }
 
 export interface ChatResponse {
@@ -99,6 +114,14 @@ export interface ChatWorkspaceData {
     toolCount?: number | null
     toolNames: string[]
     status: string
+  }>
+  availableAgents: Array<{
+    agentId: string
+    name: string
+    description?: string | null
+    knowledgeBindingIds: string[]
+    mcpServerIds: string[]
+    chatModelSelection?: ModelSelection | null
   }>
   quickPrompts: string[]
 }
@@ -446,6 +469,7 @@ export interface AgentDefinition {
   systemPrompt: string
   rules: string[]
   model?: string | null
+  chatModelSelection?: ModelSelection | null
   backend?: string | null
   enabled: boolean
   toolAllowlist: string[]
@@ -465,6 +489,7 @@ export interface AgentDefinitionMutationInput {
   systemPrompt: string
   rules?: string[]
   model?: string | null
+  chatModelSelection?: ModelSelection | null
   backend?: string | null
   enabled?: boolean
   toolAllowlist?: string[]
@@ -566,6 +591,76 @@ export interface MemorySourceDetail {
   metadata: Record<string, unknown>
 }
 
+export type ModelCapability = 'chat' | 'embedding' | 'reranker'
+export type ModelProviderType = string
+
+export interface ModelSelection {
+  providerId: string
+  modelName: string
+  capability: ModelCapability
+  providerName?: string | null
+  displayName?: string | null
+  baseUrl?: string | null
+  apiKeyEnv?: string | null
+  qualifiedModelName?: string | null
+}
+
+export interface ModelProvider {
+  providerId: string
+  tenantId: string
+  instanceId: string
+  displayName: string
+  providerType: ModelProviderType
+  capabilities: ModelCapability[]
+  baseUrl?: string | null
+  apiKey?: string | null
+  apiKeyEnv?: string | null
+  extraHeaders: Record<string, string>
+  models: string[]
+  defaultModel?: string | null
+  enabled: boolean
+  lastTestStatus?: 'passed' | 'failed' | null
+  lastError?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ModelProviderMutationInput {
+  displayName: string
+  providerType: ModelProviderType
+  capabilities?: ModelCapability[]
+  baseUrl?: string | null
+  apiKey?: string | null
+  apiKeyEnv?: string | null
+  extraHeaders?: Record<string, string>
+  models?: string[]
+  defaultModel?: string | null
+  enabled?: boolean
+}
+
+export interface ModelProviderTestResult {
+  providerId: string
+  ok: boolean
+  status: 'passed' | 'failed'
+  error?: string | null
+  provider: ModelProvider
+}
+
+export interface ModelDefaults {
+  tenantId: string
+  instanceId: string
+  defaultChat?: ModelSelection | null
+  defaultEmbedding?: ModelSelection | null
+  defaultReranker?: ModelSelection | null
+  updatedAt?: string
+}
+
+export interface ModelDefaultsMutationInput {
+  defaultChat?: ModelSelection | null
+  defaultEmbedding?: ModelSelection | null
+  defaultReranker?: ModelSelection | null
+}
+
 export interface KnowledgeRetrievalProfile {
   mode: 'keyword' | 'semantic' | 'hybrid' | string
   topK: number
@@ -586,6 +681,14 @@ export interface KnowledgeBaseDefinition {
   enabled: boolean
   tags: string[]
   retrievalProfile: KnowledgeRetrievalProfile
+  kbBackend?: 'sqlite' | 'milvus' | string | null
+  embeddingModelSelection?: ModelSelection | null
+  rerankerModelSelection?: ModelSelection | null
+  autoIndexAfterParse?: boolean | null
+  vectorCollection?: string | null
+  legacyConfig?: boolean
+  reindexRequired?: boolean
+  reindexReason?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -596,6 +699,11 @@ export interface KnowledgeBaseMutationInput {
   enabled?: boolean
   tags?: string[]
   retrievalProfile?: Partial<KnowledgeRetrievalProfile>
+  kbBackend?: 'sqlite' | 'milvus' | string | null
+  embeddingModelSelection?: ModelSelection | null
+  rerankerModelSelection?: ModelSelection | null
+  autoIndexAfterParse?: boolean | null
+  vectorCollection?: string | null
 }
 
 export interface KnowledgeDocument {
@@ -683,6 +791,7 @@ export interface KnowledgeRetrieveResult {
   requestedMode: string
   effectiveMode: string
   filters: Record<string, unknown>
+  staleKnowledgeBaseIds?: string[]
 }
 
 export interface AgentRunSummary {
@@ -757,11 +866,13 @@ export interface AgentTestRunResult {
   messages: ChatMessage[]
   pendingKnowledgeBindings: string[]
   knowledgeHits: KnowledgeHit[]
+  resolvedModel?: string | null
   appliedBindings: {
     toolAllowlist: string[]
     mcpServerIds: string[]
     skillIds: string[]
     knowledgeBindingIds: string[]
+    chatModelSelection?: ModelSelection | null
   }
 }
 
@@ -849,6 +960,65 @@ export type McpServerTransport = 'stdio' | 'sse' | 'streamableHttp' | 'unknown'
 export type McpServerStatus = 'ready' | 'incomplete' | 'disabled'
 export type McpServerSourceKind = 'config' | 'manual' | 'repository'
 
+export interface McpToolEntry {
+  serverName: string
+  toolName: string
+  tenantId: string
+  instanceId: string
+  enabled: boolean
+  description?: string | null
+  inputSchema?: Record<string, unknown> | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface McpServerCreateInput {
+  serverName?: string
+  displayName?: string | null
+  sourceKind?: McpServerSourceKind | string
+  sourceLabel?: string | null
+  enabled?: boolean
+  transport: 'stdio' | 'sse' | 'streamableHttp'
+  command?: string | null
+  args?: string[]
+  env?: Record<string, string>
+  url?: string | null
+  headers?: Record<string, string>
+  toolTimeout?: number
+  repoUrl?: string | null
+  cloneUrl?: string | null
+  installDir?: string | null
+  installMode?: string | null
+  installSteps?: string[]
+  requiredEnv?: string[]
+  optionalEnv?: string[]
+}
+
+export interface McpServerUpdateInput {
+  displayName?: string | null
+  enabled?: boolean
+  type?: 'stdio' | 'sse' | 'streamableHttp'
+  command?: string | null
+  args?: string[]
+  env?: Record<string, string>
+  url?: string | null
+  headers?: Record<string, string>
+  toolTimeout?: number
+  sourceKind?: McpServerSourceKind | string
+  sourceLabel?: string | null
+  repoUrl?: string | null
+  cloneUrl?: string | null
+  installDir?: string | null
+  installMode?: string | null
+  installSteps?: string[]
+  requiredEnv?: string[]
+  optionalEnv?: string[]
+}
+
+export interface McpToolUpdateInput {
+  enabled: boolean
+}
+
 export interface McpServerEntry {
   name: string
   displayName: string
@@ -876,6 +1046,7 @@ export interface McpServerEntry {
   requiredEnv?: string[]
   optionalEnv?: string[]
   toolNames?: string[]
+  tools?: McpToolEntry[]
   lastToolSyncAt?: string | null
   lastCheckedAt?: string | null
   lastProbeStatus?: string | null
@@ -996,6 +1167,19 @@ export interface McpServerMutationResult {
   entry: McpServerEntry | null
   config: ConfigData
   enabled?: boolean
+}
+
+export interface McpServerCreateResult {
+  serverName: string
+  entry: McpServerEntry | null
+  config: ConfigData
+}
+
+export interface McpToolMutationResult {
+  serverName: string
+  toolName: string
+  tool: McpToolEntry | null
+  enabled: boolean
 }
 
 export interface McpServerDeleteResult {

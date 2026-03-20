@@ -33,6 +33,11 @@ import type {
   CronJobListResponse,
   CronStatus,
   InstalledSkill,
+  ModelDefaults,
+  ModelDefaultsMutationInput,
+  ModelProvider,
+  ModelProviderMutationInput,
+  ModelProviderTestResult,
   KnowledgeBaseDefinition,
   KnowledgeBaseMutationInput,
   KnowledgeDocument,
@@ -45,6 +50,8 @@ import type {
   McpProbeResult,
   McpRepairPlan,
   McpTestChatData,
+  McpServerCreateInput,
+  McpServerCreateResult,
   MemoryCandidate,
   MemorySearchResult,
   MemorySourceDetail,
@@ -52,6 +59,9 @@ import type {
   McpServerEntry,
   McpServerMutationResult,
   McpServerListResponse,
+  McpServerUpdateInput,
+  McpToolUpdateInput,
+  McpToolMutationResult,
   OpsActionResponse,
   OpsActionTriggerResult,
   OpsLogResponse,
@@ -166,8 +176,40 @@ export const api = {
     request<{ profile: ProfileData }>('/profile/avatar', {
       method: 'DELETE',
     }),
+  getModelProviders: () => request<ModelProvider[]>('/model-providers'),
+  getModelProvider: (providerId: string) =>
+    request<ModelProvider>(`/model-providers/${encodeURIComponent(providerId)}`),
+  createModelProvider: (payload: ModelProviderMutationInput) =>
+    request<ModelProvider>('/model-providers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateModelProvider: (providerId: string, payload: Partial<ModelProviderMutationInput>) =>
+    request<ModelProvider>(`/model-providers/${encodeURIComponent(providerId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteModelProvider: (providerId: string) =>
+    request<{ deleted: boolean }>(`/model-providers/${encodeURIComponent(providerId)}`, {
+      method: 'DELETE',
+    }),
+  testModelProvider: (providerId: string) =>
+    request<ModelProviderTestResult>(`/model-providers/${encodeURIComponent(providerId)}/test`, {
+      method: 'POST',
+    }),
+  getModelDefaults: () => request<ModelDefaults>('/model-defaults'),
+  updateModelDefaults: (payload: ModelDefaultsMutationInput) =>
+    request<ModelDefaults>('/model-defaults', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
   getMcpServers: () => request<McpServerListResponse>('/mcp/servers'),
   getMcpServer: (serverName: string) => request<McpServerEntry>(`/mcp/servers/${encodeURIComponent(serverName)}`),
+  createMcpServer: (payload: McpServerCreateInput) =>
+    request<McpServerCreateResult>('/mcp/servers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   probeMcpServer: (serverName: string) =>
     request<McpProbeResult>(`/mcp/servers/${encodeURIComponent(serverName)}/probe`, {
       method: 'POST',
@@ -202,24 +244,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
-  updateMcpServer: (
-    serverName: string,
-    payload: {
-      displayName?: string | null
-      enabled: boolean
-      type: 'stdio' | 'sse' | 'streamableHttp'
-      command?: string | null
-      args?: string[]
-      env?: Record<string, string>
-      url?: string | null
-      headers?: Record<string, string>
-      toolTimeout: number
-    },
-  ) =>
+  updateMcpServer: (serverName: string, payload: McpServerUpdateInput) =>
     request<McpServerMutationResult>(`/mcp/servers/${encodeURIComponent(serverName)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  setMcpToolEnabled: (serverName: string, toolName: string, payload: McpToolUpdateInput) =>
+    request<McpToolMutationResult>(
+      `/mcp/servers/${encodeURIComponent(serverName)}/tools/${encodeURIComponent(toolName)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+    ),
   deleteMcpServer: (serverName: string) =>
     request<McpServerDeleteResult>(`/mcp/servers/${encodeURIComponent(serverName)}`, {
       method: 'DELETE',
@@ -292,10 +329,10 @@ export const api = {
       body: formData,
       skipJsonContentType: true,
     }),
-  createSession: (title?: string) =>
+  createSession: (title?: string, agentId?: string | null) =>
     request<SessionSummary>('/chat/sessions', {
       method: 'POST',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, agentId }),
     }),
   renameSession: (sessionId: string, title: string) =>
     request<SessionSummary>(`/chat/sessions/${sessionId}`, {
@@ -552,6 +589,13 @@ export const api = {
         body: JSON.stringify(payload),
       },
     ),
+  deleteKnowledgeSource: (kbId: string, sourceId: string) =>
+    request<{ deleted: boolean; sourceId: string; docIds: string[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/sources/${encodeURIComponent(sourceId)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
   deleteKnowledgeDocument: (kbId: string, docId: string) =>
     request<{ deleted: boolean }>(
       `/knowledge-bases/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(docId)}`,
@@ -594,6 +638,22 @@ export const api = {
   reindexKnowledgeBase: (kbId: string, payload?: { docIds?: string[] }) =>
     request<{ documents: KnowledgeDocument[]; jobs: KnowledgeIngestJob[] }>(
       `/knowledge-bases/${encodeURIComponent(kbId)}/reindex`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload ?? {}),
+      },
+    ),
+  parseKnowledgeDocuments: (kbId: string, payload?: { docIds?: string[] }) =>
+    request<{ documents: KnowledgeDocument[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/documents/parse`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload ?? {}),
+      },
+    ),
+  indexKnowledgeDocuments: (kbId: string, payload?: { docIds?: string[] }) =>
+    request<{ documents: KnowledgeDocument[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/documents/index`,
       {
         method: 'POST',
         body: JSON.stringify(payload ?? {}),

@@ -104,14 +104,18 @@ class WebChannelRuntimeService:
 
         loop = self._loop
         thread = self._thread
-        if loop is not None:
+        if loop is not None and not loop.is_closed():
             try:
-                future = asyncio.run_coroutine_threadsafe(self._stop_pipeline(), loop)
-                future.result(timeout=10)
+                if loop.is_running():
+                    future = asyncio.run_coroutine_threadsafe(self._stop_pipeline(), loop)
+                    future.result(timeout=10)
             except Exception:  # noqa: BLE001
                 logger.exception("Error stopping channel pipeline")
-
-            loop.call_soon_threadsafe(loop.stop)
+            try:
+                if loop.is_running():
+                    loop.call_soon_threadsafe(loop.stop)
+            except RuntimeError:
+                logger.debug("Channel runtime loop closed before stop completed")
 
         if thread is not None and thread.is_alive():
             thread.join(timeout=5)
@@ -135,54 +139,92 @@ class WebChannelRuntimeService:
             "channelStatus": cm.get_status() if cm else {},
         }
 
+    @staticmethod
+    def _assistant_content(payload: dict[str, Any]) -> str | None:
+        assistant = payload.get("assistantMessage") or {}
+        content = str(assistant.get("content") or "").strip() if isinstance(assistant, dict) else ""
+        citations = assistant.get("citations") if isinstance(assistant, dict) else None
+        if not isinstance(citations, list) or not citations:
+            citations = [
+                item.get("citation")
+                for item in list(payload.get("knowledgeHits") or [])
+                if isinstance(item, dict) and isinstance(item.get("citation"), dict)
+            ]
+        footer_lines: list[str] = []
+        seen: set[tuple[str, str, str]] = set()
+        for citation in citations[:3] if isinstance(citations, list) else []:
+            if not isinstance(citation, dict):
+                continue
+            key = (
+                str(citation.get("kbId") or ""),
+                str(citation.get("docId") or ""),
+                str(citation.get("title") or ""),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            title = str(citation.get("title") or citation.get("fileName") or citation.get("docId") or "").strip()
+            kb_name = str(citation.get("kbName") or "").strip()
+            if title:
+                footer_lines.append(f"- {title}" + (f" ({kb_name})" if kb_name else ""))
+        if footer_lines:
+            footer = "参考来源：\n" + "\n".join(footer_lines)
+            content = f"{content}\n\n{footer}".strip()
+        return content or None
+
     # ------------------------------------------------------------------
     # Pipeline lifecycle (runs on the dedicated event-loop)
     # ------------------------------------------------------------------
 
     async def _start_pipeline(self) -> None:
         """Build all routing components and run them until cancelled."""
-        config = self.state.config
-        bindings = self.state.channel_bindings_service
-
-        routing_service = ChannelRoutingService(bindings)
-        self._bus = MessageBus()
-
-        dispatcher = ChannelMessageDispatcher(
-            self._bus,
-            agent_handler=self._agent_handler,
-            team_handler=self._team_handler,
-        )
-
-        provider = self.state.config_runtime.make_provider(config)
-        self._agent = AgentLoop(
-            bus=self._bus,
-            provider=provider,
-            workspace=config.workspace_path,
-            model=config.agents.defaults.model,
-            max_iterations=config.agents.defaults.max_tool_iterations,
-            context_window_tokens=config.agents.defaults.context_window_tokens,
-            brave_api_key=config.tools.web.search.api_key or None,
-            web_proxy=config.tools.web.proxy or None,
-            exec_config=config.tools.exec,
-            restrict_to_workspace=config.tools.restrict_to_workspace,
-            session_manager=self.state.sessions,
-            mcp_servers=config.tools.mcp_servers,
-            channels_config=config.channels,
-            channel_dispatcher=dispatcher,
-        )
-
-        self._channel_manager = ChannelManager(
-            config, self._bus, routing_service=routing_service,
-        )
-
-        logger.info("Channel routing pipeline ready — starting agent loop and channels")
         try:
+            config = self.state.config
+            bindings = self.state.channel_bindings_service
+
+            routing_service = ChannelRoutingService(bindings)
+            self._bus = MessageBus()
+
+            dispatcher = ChannelMessageDispatcher(
+                self._bus,
+                agent_handler=self._agent_handler,
+                team_handler=self._team_handler,
+            )
+
+            provider = self.state.config_runtime.make_provider(config)
+            self._agent = AgentLoop(
+                bus=self._bus,
+                provider=provider,
+                workspace=config.workspace_path,
+                model=config.agents.defaults.model,
+                max_iterations=config.agents.defaults.max_tool_iterations,
+                context_window_tokens=config.agents.defaults.context_window_tokens,
+                brave_api_key=config.tools.web.search.api_key or None,
+                web_proxy=config.tools.web.proxy or None,
+                exec_config=config.tools.exec,
+                restrict_to_workspace=config.tools.restrict_to_workspace,
+                session_manager=self.state.sessions,
+                mcp_servers=self.state.config_runtime.resolve_mcp_server_configs(config),
+                channels_config=config.channels,
+                channel_dispatcher=dispatcher,
+            )
+
+            self._channel_manager = ChannelManager(
+                config, self._bus, routing_service=routing_service,
+            )
+
+            logger.info("Channel routing pipeline ready — starting agent loop and channels")
             await asyncio.gather(
                 self._agent.run(),
                 self._channel_manager.start_all(),
             )
         except asyncio.CancelledError:
             pass
+        except BaseException:  # noqa: BLE001
+            logger.exception("Channel routing pipeline crashed during startup or execution")
+            self._running = False
+            loop = asyncio.get_running_loop()
+            loop.call_soon(loop.stop)
 
     async def _stop_pipeline(self) -> None:
         """Gracefully tear down the running pipeline."""
@@ -214,43 +256,20 @@ class WebChannelRuntimeService:
             logger.warning("Agent definition '{}' not found for channel routing", agent_id)
             return f"Agent '{agent_id}' not found."
 
-        sys_prompt = str(agent_def.get("systemPrompt") or "").strip()
-        tool_allow = list(agent_def.get("toolAllowlist") or [])
-        skills = list(agent_def.get("skillIds") or [])
-
-        config = self.state.config
-        provider = self.state.config_runtime.make_provider(config)
-
-        isolated = AgentLoop(
-            bus=self._bus,
-            provider=provider,
-            workspace=config.workspace_path,
-            model=config.agents.defaults.model,
-            max_iterations=config.agents.defaults.max_tool_iterations,
-            context_window_tokens=config.agents.defaults.context_window_tokens,
-            brave_api_key=config.tools.web.search.api_key or None,
-            web_proxy=config.tools.web.proxy or None,
-            exec_config=config.tools.exec,
-            restrict_to_workspace=config.tools.restrict_to_workspace,
-            session_manager=self.state.sessions,
-            mcp_servers=config.tools.mcp_servers,
-            channels_config=config.channels,
-            tool_allowlist=tool_allow or None,
-            skill_names=skills or None,
-            system_prompt_override=sys_prompt or None,
-        )
         try:
-            return await isolated.process_direct(
-                msg.content,
+            payload = await self.state.agent_runtime.run_agent_definition(
+                agent_def,
+                task=msg.content,
+                label=agent_def.get("name") or agent_id,
                 session_key=f"agent:{agent_id}:{msg.session_key}",
-                channel=msg.channel,
-                chat_id=msg.chat_id,
+                session_id=f"channel-agent:{agent_id}:{msg.chat_id}",
+                session_title=f"{agent_def.get('name') or agent_id} · {msg.channel}",
+                origin_chat_id=msg.chat_id,
             )
-        finally:
-            try:
-                await isolated.close_mcp()
-            except Exception:  # noqa: BLE001
-                pass
+            return self._assistant_content(payload)
+        except Exception as exc:
+            logger.exception("Channel agent execution failed for '{}'", agent_id)
+            return f"Agent execution error: {exc}"
 
     async def _team_handler(self, team_id: str, msg: InboundMessage) -> str | None:
         """Route an inbound channel message to a team via LangGraph supervisor."""
@@ -293,7 +312,7 @@ class WebChannelRuntimeService:
             except Exception:
                 logger.warning("Member agent '{}' not found, skipping", mid)
 
-        config = self.state.config
+        config = self.state.agent_runtime._build_agent_config(supervisor)
         provider = self.state.config_runtime.make_provider(config)
 
         supervisor_llm = NanobotSupervisorLLM(
@@ -318,40 +337,18 @@ class WebChannelRuntimeService:
                 _member: dict[str, Any] = _m,
                 _member_id: str = _m_id,
             ) -> str:
-                m_prompt = str(_member.get("systemPrompt") or "").strip()
-                m_tools = list(_member.get("toolAllowlist") or [])
-                m_skills = list(_member.get("skillIds") or [])
-                iso = AgentLoop(
-                    bus=self._bus,
-                    provider=provider,
-                    workspace=config.workspace_path,
-                    model=config.agents.defaults.model,
-                    max_iterations=config.agents.defaults.max_tool_iterations,
-                    context_window_tokens=config.agents.defaults.context_window_tokens,
-                    brave_api_key=config.tools.web.search.api_key or None,
-                    web_proxy=config.tools.web.proxy or None,
-                    exec_config=config.tools.exec,
-                    restrict_to_workspace=config.tools.restrict_to_workspace,
-                    session_manager=self.state.sessions,
-                    mcp_servers=config.tools.mcp_servers,
-                    channels_config=config.channels,
-                    tool_allowlist=m_tools or None,
-                    skill_names=m_skills or None,
-                    system_prompt_override=m_prompt or None,
+                payload = await self.state.agent_runtime.run_agent_definition(
+                    _member,
+                    task=task,
+                    label=_member.get("name") or _member_id,
+                    session_key=f"team:{team_id}:member:{_member_id}:{msg.session_key}",
+                    session_id=f"channel-team:{team_id}:{_member_id}:{msg.chat_id}",
+                    session_title=f"{_member.get('name') or _member_id} · {msg.channel}",
+                    origin_chat_id=msg.chat_id,
+                    team_id=team_id,
                     include_workspace_memory=False,
                 )
-                try:
-                    return await iso.process_direct(
-                        task,
-                        session_key=f"team:{team_id}:member:{_member_id}",
-                        channel=msg.channel,
-                        chat_id=msg.chat_id,
-                    )
-                finally:
-                    try:
-                        await iso.close_mcp()
-                    except Exception:  # noqa: BLE001
-                        pass
+                return self._assistant_content(payload) or ""
 
             member_tools.append(StructuredTool.from_function(
                 coroutine=_call_member,

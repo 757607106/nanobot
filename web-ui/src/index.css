@@ -905,7 +905,7 @@ a {
 }
 
 .page-section-title .ant-typography-secondary {
-  display: none;
+  display: block;
 }
 
 .page-meta-grid {
@@ -1428,6 +1428,61 @@ a {
   letter-spacing: 0.06em;
 }
 
+.chat-rail-meta-section {
+  padding: 0 16px 14px;
+}
+
+.chat-rail-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-rail-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-rail-activity-item.ant-btn.ant-btn-text {
+  height: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--nb-card-subtle-bg) 84%, transparent);
+  border: 1px solid var(--nb-card-subtle-border);
+  text-align: left;
+}
+
+.chat-rail-activity-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chat-rail-activity-title {
+  font-weight: 700;
+  color: var(--nb-ink);
+}
+
+.chat-rail-activity-meta {
+  color: var(--nb-muted);
+  font-size: var(--nb-text-xs);
+}
+
+.chat-rail-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--nb-card-subtle-border) 80%, transparent);
+}
+
 .chat-panel {
   display: flex;
   flex-direction: column;
@@ -1654,6 +1709,17 @@ a {
   color: #eff6ff;
 }
 
+.bubble-content-shell.is-user .chat-file-card {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.bubble-content-shell.is-user .chat-file-card-name,
+.bubble-content-shell.is-user .chat-file-card-path,
+.bubble-content-shell.is-user .chat-file-card .ant-typography-secondary {
+  color: #eff6ff;
+}
+
 .bubble-footer-note {
   display: inline-block;
   margin-top: 4px;
@@ -1787,6 +1853,65 @@ a {
   gap: 8px;
 }
 
+.chat-file-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-file-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--nb-card-subtle-border);
+  background: color-mix(in srgb, var(--nb-card-subtle-bg) 82%, transparent);
+}
+
+.chat-file-card-main {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-file-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-file-card-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 700;
+  color: var(--nb-ink);
+}
+
+.chat-file-card-path {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-file-card-tag {
+  margin-inline-end: 0;
+}
+
+.chat-file-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
 .chat-attachment-tag {
   max-width: 100%;
   border-radius: 999px;
@@ -1805,6 +1930,87 @@ a {
   border-color: var(--nb-card-subtle-border);
   background: color-mix(in srgb, var(--nb-card-subtle-bg) 76%, transparent);
   font-size: var(--nb-text-2xs);
+}
+
+.chat-tool-execution-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-tool-execution-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--nb-card-subtle-border);
+  background: color-mix(in srgb, var(--nb-card-subtle-bg) 82%, transparent);
+}
+
+.chat-tool-execution-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-tool-execution-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--nb-ink);
+}
+
+.chat-tool-execution-summary {
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  line-height: 1.6;
+}
+
+.chat-tool-execution-details {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.chat-tool-execution-details summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  color: var(--nb-ink);
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+}
+
+.chat-tool-execution-details pre {
+  margin: 0;
+  padding: 0 10px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-tool-execution-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.chat-tool-execution-result {
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--nb-code-bg);
+  color: var(--nb-code-text);
+}
+
+.chat-tool-execution-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: var(--nb-text-xs);
+  color: color-mix(in srgb, var(--nb-code-text) 76%, transparent);
 }
 
 .chat-tool-result-card {
@@ -1834,6 +2040,62 @@ a {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.chat-mermaid-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid var(--nb-card-subtle-border);
+  background: color-mix(in srgb, var(--nb-card-subtle-bg) 84%, transparent);
+}
+
+.chat-mermaid-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  color: var(--nb-ink);
+}
+
+.chat-mermaid-canvas {
+  overflow: auto;
+}
+
+.chat-mermaid-canvas svg {
+  width: 100%;
+  height: auto;
+  min-width: 320px;
+}
+
+.chat-mermaid-loading,
+.chat-mermaid-error {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+}
+
+.chat-mermaid-error pre,
+.chat-mermaid-source pre {
+  margin: 8px 0 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--nb-code-bg);
+  color: var(--nb-code-text);
+  overflow: auto;
+}
+
+.chat-mermaid-source summary {
+  cursor: pointer;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
 }
 
 .chat-composer-panel {

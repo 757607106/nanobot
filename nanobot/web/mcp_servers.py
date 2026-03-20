@@ -17,22 +17,150 @@ import httpx
 
 from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.platform.instances import PlatformInstance, coerce_instance
+from nanobot.platform.mcp_resources import (
+    McpResourceNotFoundError,
+    McpResourceService,
+    McpResourceValidationError,
+)
 from nanobot.web.mcp_registry import WebMCPRegistryManager
 
 
 class MCPServerService:
     """Operational actions for installed MCP servers."""
 
-    def __init__(self, config_path: Path | PlatformInstance, registry: WebMCPRegistryManager):
+    def __init__(
+        self,
+        config_path: Path | PlatformInstance,
+        registry: WebMCPRegistryManager,
+        *,
+        resources: McpResourceService | None = None,
+    ):
         self._instance = coerce_instance(config_path)
         self._config_path = self._instance.config_path
         self._registry = registry
+        self._resources = resources
         self._installs_dir = self._instance.mcp_installs_dir()
         self._repair_lock = threading.RLock()
         self._repair_records: dict[str, dict[str, Any]] = {}
 
+    def list_servers(self, config: Config) -> dict[str, Any]:
+        if self._resources is None:
+            return self._registry.list_servers(config)
+        self._sync_all_resources(config)
+        items = [
+            item
+            for name in sorted(config.tools.mcp_servers)
+            if (item := self.get_server(config, name)) is not None
+        ]
+        summary = {
+            "total": len(items),
+            "enabled": sum(1 for item in items if item["enabled"]),
+            "disabled": sum(1 for item in items if not item["enabled"]),
+            "ready": sum(1 for item in items if item["status"] == "ready"),
+            "incomplete": sum(1 for item in items if item["status"] == "incomplete"),
+            "knownToolCount": sum(int(item.get("toolCount") or 0) for item in items),
+            "verifiedServers": sum(1 for item in items if item.get("toolCountKnown")),
+        }
+        return {"items": items, "summary": summary}
+
     def get_server(self, config: Config, server_name: str) -> dict[str, Any] | None:
-        return self._registry.get_server(config, server_name)
+        legacy_entry = self._registry.get_server(config, server_name)
+        if legacy_entry is None:
+            return None
+        if self._resources is None:
+            return legacy_entry
+
+        try:
+            resource = self._resources.get_server(server_name, tenant_id="default")
+        except McpResourceNotFoundError:
+            self._sync_resource_server(config, server_name)
+            try:
+                resource = self._resources.get_server(server_name, tenant_id="default")
+            except McpResourceNotFoundError:
+                return legacy_entry
+
+        tool_entries = list(resource.get("tools") or [])
+        tool_names = [str(item.get("toolName") or "").strip() for item in tool_entries if str(item.get("toolName") or "").strip()]
+        tool_count_known = bool(
+            tool_entries
+            or resource.get("lastCheckedAt")
+            or resource.get("lastToolSyncAt")
+            or resource.get("lastProbeStatus")
+        )
+        tool_count = (
+            len(tool_entries)
+            if tool_entries
+            else (
+                resource.get("toolCount")
+                or legacy_entry.get("toolCount")
+                if tool_count_known
+                else legacy_entry.get("toolCount")
+            )
+        )
+        merged = dict(legacy_entry)
+        merged.update(
+            {
+                "displayName": resource.get("displayName") or legacy_entry.get("displayName") or server_name,
+                "enabled": bool(resource.get("enabled", legacy_entry.get("enabled", True))),
+                "transport": resource.get("transport") or legacy_entry.get("transport") or "unknown",
+                "toolTimeout": int(resource.get("toolTimeout") or legacy_entry.get("toolTimeout") or 30),
+                "command": resource.get("command") or legacy_entry.get("command"),
+                "args": list(resource.get("args") or legacy_entry.get("args") or []),
+                "env": dict(resource.get("env") or legacy_entry.get("env") or {}),
+                "url": resource.get("url") or legacy_entry.get("url"),
+                "headers": dict(resource.get("headers") or legacy_entry.get("headers") or {}),
+                "envCount": len(resource.get("env") or legacy_entry.get("env") or {}),
+                "headerCount": len(resource.get("headers") or legacy_entry.get("headers") or {}),
+                "sourceKind": resource.get("sourceKind") or legacy_entry.get("sourceKind"),
+                "sourceLabel": resource.get("sourceLabel") or legacy_entry.get("sourceLabel"),
+                "repoUrl": resource.get("repoUrl") or legacy_entry.get("repoUrl"),
+                "cloneUrl": resource.get("cloneUrl") or legacy_entry.get("cloneUrl"),
+                "installDir": resource.get("installDir") or legacy_entry.get("installDir"),
+                "installMode": resource.get("installMode") or legacy_entry.get("installMode"),
+                "installSteps": list(resource.get("installSteps") or legacy_entry.get("installSteps") or []),
+                "requiredEnv": list(resource.get("requiredEnv") or legacy_entry.get("requiredEnv") or []),
+                "optionalEnv": list(resource.get("optionalEnv") or legacy_entry.get("optionalEnv") or []),
+                "tools": tool_entries,
+                "toolNames": tool_names or list(legacy_entry.get("toolNames") or []),
+                "toolCount": tool_count,
+                "toolCountKnown": tool_count_known or bool(legacy_entry.get("toolCountKnown")),
+                "lastToolSyncAt": resource.get("lastToolSyncAt") or legacy_entry.get("lastToolSyncAt"),
+                "lastCheckedAt": resource.get("lastCheckedAt") or legacy_entry.get("lastCheckedAt"),
+                "lastProbeStatus": resource.get("lastProbeStatus") or legacy_entry.get("lastProbeStatus"),
+                "lastError": resource.get("lastError") or legacy_entry.get("lastError"),
+                "updatedAt": resource.get("updatedAt") or legacy_entry.get("updatedAt"),
+            }
+        )
+        return merged
+
+    def create_server(
+        self,
+        *,
+        payload: dict[str, Any],
+        current_config: dict[str, Any],
+        update_config,
+    ) -> dict[str, Any]:
+        if self._resources is None:
+            raise RuntimeError("MCP resources service is not available.")
+        created = self._resources.create_server(payload, tenant_id="default")
+        server_name = str(created.get("serverName") or "")
+        try:
+            servers = current_config.setdefault("tools", {}).setdefault("mcpServers", {})
+            servers[server_name] = self._config_payload_from_entry(created)
+            updated_config = update_config(current_config)
+        except Exception:
+            try:
+                self._resources.delete_server(server_name, tenant_id="default")
+            except Exception:
+                pass
+            raise
+        self._registry.update_display_name(server_name, created.get("displayName"))
+        entry = self.get_server(Config.model_validate(updated_config), server_name)
+        return {
+            "serverName": server_name,
+            "entry": entry,
+            "config": updated_config,
+        }
 
     def set_enabled(
         self,
@@ -45,11 +173,12 @@ class MCPServerService:
         server_payload = self._require_server_payload(current_config, server_name)
         server_payload["enabled"] = bool(enabled)
         updated_config = update_config(current_config)
+        self._sync_resource_server(Config.model_validate(updated_config), server_name)
         entry = self._registry.get_server(Config.model_validate(updated_config), server_name)
         return {
             "serverName": server_name,
             "enabled": bool(enabled),
-            "entry": entry,
+            "entry": self.get_server(Config.model_validate(updated_config), server_name) or entry,
             "config": updated_config,
         }
 
@@ -63,21 +192,46 @@ class MCPServerService:
     ) -> dict[str, Any]:
         server_payload = self._require_server_payload(current_config, server_name)
 
-        transport = str(payload.get("type") or "").strip()
+        transport = str(
+            payload.get("type")
+            or server_payload.get("type")
+            or ("stdio" if server_payload.get("command") else "streamableHttp" if server_payload.get("url") else "")
+        ).strip()
         if transport not in {"stdio", "sse", "streamableHttp"}:
             raise ValueError("type 必须是 stdio、sse 或 streamableHttp。")
 
-        enabled = bool(payload.get("enabled", server_payload.get("enabled", True)))
-        command = str(payload.get("command") or "").strip()
+        enabled = bool(server_payload.get("enabled", True) if payload.get("enabled") is None else payload.get("enabled"))
+        command = str(
+            payload.get("command")
+            if payload.get("command") is not None
+            else server_payload.get("command") or ""
+        ).strip()
         args = [
             str(item).strip()
-            for item in (payload.get("args") or [])
+            for item in (
+                payload.get("args")
+                if payload.get("args") is not None
+                else server_payload.get("args")
+                or []
+            )
             if str(item).strip()
         ]
-        url = str(payload.get("url") or "").strip()
-        env = _normalize_mapping(payload.get("env") or {})
-        headers = _normalize_mapping(payload.get("headers") or {})
-        tool_timeout = int(payload.get("toolTimeout") or 30)
+        url = str(
+            payload.get("url")
+            if payload.get("url") is not None
+            else server_payload.get("url") or ""
+        ).strip()
+        env = _normalize_mapping(
+            payload.get("env") if payload.get("env") is not None else server_payload.get("env") or {}
+        )
+        headers = _normalize_mapping(
+            payload.get("headers") if payload.get("headers") is not None else server_payload.get("headers") or {}
+        )
+        tool_timeout = int(
+            payload.get("toolTimeout")
+            if payload.get("toolTimeout") is not None
+            else server_payload.get("toolTimeout") or 30
+        )
 
         if tool_timeout <= 0:
             raise ValueError("toolTimeout 必须大于 0。")
@@ -100,7 +254,8 @@ class MCPServerService:
         )
         updated_config = update_config(current_config)
         self._registry.update_display_name(server_name, payload.get("displayName"))
-        entry = self._registry.get_server(Config.model_validate(updated_config), server_name)
+        self._sync_resource_server(Config.model_validate(updated_config), server_name)
+        entry = self.get_server(Config.model_validate(updated_config), server_name)
         return {
             "serverName": server_name,
             "entry": entry,
@@ -119,6 +274,11 @@ class MCPServerService:
         updated_config = update_config(current_config)
 
         record = self._registry.remove_server(server_name)
+        if self._resources is not None:
+            try:
+                self._resources.delete_server(server_name, tenant_id="default")
+            except McpResourceNotFoundError:
+                pass
         removed_checkout = False
         install_dir = Path(str(record.install_dir)).expanduser() if record and record.install_dir else None
         if install_dir is not None:
@@ -154,7 +314,8 @@ class MCPServerService:
                 tool_names=[],
                 error="缺少必填环境变量: " + ", ".join(missing_env),
             )
-            refreshed = self._registry.get_server(config, server_name)
+            self._sync_resource_server(config, server_name)
+            refreshed = self.get_server(config, server_name)
             return {
                 "serverName": server_name,
                 "ok": False,
@@ -168,7 +329,7 @@ class MCPServerService:
             }
 
         try:
-            tool_names = asyncio.run(self._list_server_tools(cfg))
+            discovered_tools = asyncio.run(self._list_server_tools(cfg))
         except Exception as exc:  # noqa: BLE001
             message = str(exc) or type(exc).__name__
             self._registry.record_probe_result(
@@ -177,7 +338,8 @@ class MCPServerService:
                 tool_names=[],
                 error=message,
             )
-            refreshed = self._registry.get_server(config, server_name)
+            self._sync_resource_server(config, server_name)
+            refreshed = self.get_server(config, server_name)
             return {
                 "serverName": server_name,
                 "ok": False,
@@ -190,13 +352,40 @@ class MCPServerService:
                 "entry": refreshed,
             }
 
+        tool_entries: list[dict[str, Any]] = []
+        for item in list(discovered_tools or []):
+            if isinstance(item, dict):
+                tool_name = str(item.get("toolName") or item.get("name") or "").strip()
+                if not tool_name:
+                    continue
+                tool_entries.append(
+                    {
+                        "toolName": tool_name,
+                        "description": str(item.get("description") or "").strip(),
+                        "inputSchema": item.get("inputSchema") or item.get("input_schema") or {},
+                        "enabled": bool(item.get("enabled", True)),
+                    }
+                )
+            else:
+                tool_name = str(item or "").strip()
+                if not tool_name:
+                    continue
+                tool_entries.append({"toolName": tool_name, "enabled": True})
+        tool_names = [str(item.get("toolName") or "").strip() for item in tool_entries if str(item.get("toolName") or "").strip()]
         self._registry.record_probe_result(
             server_name=server_name,
             status="passed",
             tool_names=tool_names,
             error=None,
         )
-        refreshed = self._registry.get_server(config, server_name)
+        self._sync_resource_server(config, server_name)
+        if self._resources is not None:
+            self._resources.replace_tools(
+                server_name,
+                tool_entries,
+                tenant_id="default",
+            )
+        refreshed = self.get_server(config, server_name)
         return {
             "serverName": server_name,
             "ok": True,
@@ -207,6 +396,22 @@ class MCPServerService:
             "missingEnv": [],
             "error": None,
             "entry": refreshed,
+        }
+
+    def set_tool_enabled(self, server_name: str, tool_name: str, *, enabled: bool) -> dict[str, Any]:
+        if self._resources is None:
+            raise ValueError("MCP resource service is not available.")
+        tool = self._resources.set_tool_enabled(
+            server_name,
+            tool_name,
+            enabled,
+            tenant_id="default",
+        )
+        return {
+            "serverName": server_name,
+            "toolName": tool_name,
+            "tool": tool,
+            "enabled": bool(enabled),
         }
 
     def get_repair_plan(self, config: Config, server_name: str) -> dict[str, Any]:
@@ -286,7 +491,7 @@ class MCPServerService:
 
         return self.get_repair_plan(config, server_name)
 
-    async def _list_server_tools(self, cfg: MCPServerConfig) -> list[str]:
+    async def _list_server_tools(self, cfg: MCPServerConfig) -> list[dict[str, Any]]:
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.sse import sse_client
         from mcp.client.stdio import stdio_client
@@ -331,7 +536,15 @@ class MCPServerService:
             session = await stack.enter_async_context(ClientSession(read, write))
             await session.initialize()
             tools = await session.list_tools()
-            return [tool.name for tool in tools.tools]
+            return [
+                {
+                    "toolName": str(getattr(tool, "name", "") or "").strip(),
+                    "description": str(getattr(tool, "description", "") or "").strip(),
+                    "inputSchema": getattr(tool, "inputSchema", None) or getattr(tool, "input_schema", None) or {},
+                }
+                for tool in tools.tools
+                if str(getattr(tool, "name", "") or "").strip()
+            ]
 
     @staticmethod
     def _resolve_transport(cfg: MCPServerConfig) -> str:
@@ -351,6 +564,70 @@ class MCPServerService:
         if not isinstance(server_payload, dict):
             raise ValueError(f"MCP '{server_name}' 不存在。")
         return server_payload
+
+    def _sync_all_resources(self, config: Config) -> None:
+        if self._resources is None:
+            return
+        for server_name in config.tools.mcp_servers:
+            self._sync_resource_server(config, server_name)
+
+    def _sync_resource_server(self, config: Config, server_name: str) -> None:
+        if self._resources is None:
+            return
+        entry = self._registry.get_server(config, server_name)
+        if entry is None:
+            return
+        payload = {
+            "serverName": server_name,
+            "displayName": entry.get("displayName"),
+            "sourceKind": entry.get("sourceKind"),
+            "sourceLabel": entry.get("sourceLabel"),
+            "enabled": entry.get("enabled"),
+            "transport": entry.get("transport"),
+            "command": entry.get("command"),
+            "args": entry.get("args"),
+            "env": entry.get("env"),
+            "url": entry.get("url"),
+            "headers": entry.get("headers"),
+            "toolTimeout": entry.get("toolTimeout"),
+            "repoUrl": entry.get("repoUrl"),
+            "cloneUrl": entry.get("cloneUrl"),
+            "installDir": entry.get("installDir"),
+            "installMode": entry.get("installMode"),
+            "installSteps": entry.get("installSteps"),
+            "requiredEnv": entry.get("requiredEnv"),
+            "optionalEnv": entry.get("optionalEnv"),
+            "lastToolSyncAt": entry.get("lastToolSyncAt"),
+            "lastCheckedAt": entry.get("lastCheckedAt"),
+            "lastProbeStatus": entry.get("lastProbeStatus"),
+            "lastError": entry.get("lastError"),
+        }
+        try:
+            self._resources.update_server(server_name, payload, tenant_id="default")
+        except McpResourceNotFoundError:
+            try:
+                self._resources.create_server(payload, tenant_id="default")
+            except McpResourceValidationError:
+                legacy_cfg = config.tools.mcp_servers.get(server_name)
+                if legacy_cfg is not None:
+                    self._resources.seed_from_legacy({server_name: legacy_cfg}, [entry], tenant_id="default")
+        except McpResourceValidationError:
+            # Keep legacy/incomplete MCP configs visible in the Web UI even if
+            # they do not yet satisfy manual-create validation rules.
+            return
+
+    @staticmethod
+    def _config_payload_from_entry(entry: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "enabled": bool(entry.get("enabled", True)),
+            "type": entry.get("transport") or "stdio",
+            "command": entry.get("command") or "",
+            "args": list(entry.get("args") or []),
+            "env": dict(entry.get("env") or {}),
+            "url": entry.get("url") or "",
+            "headers": dict(entry.get("headers") or {}),
+            "toolTimeout": int(entry.get("toolTimeout") or 30),
+        }
 
     def _build_repair_worker(self) -> dict[str, Any]:
         command = str(os.getenv("NANOBOT_WEB_MCP_REPAIR_COMMAND", "")).strip()

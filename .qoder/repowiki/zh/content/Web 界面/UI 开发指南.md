@@ -13,6 +13,10 @@
 - [motionTokens.ts](file://web-ui/src/motionTokens.ts)
 - [branding.ts](file://web-ui/src/branding.ts)
 - [ChatPage.tsx](file://web-ui/src/pages/ChatPage.tsx)
+- [AgentsPage.tsx](file://web-ui/src/pages/AgentsPage.tsx)
+- [ChannelsPage.tsx](file://web-ui/src/pages/ChannelsPage.tsx)
+- [PageHero.tsx](file://web-ui/src/components/PageHero.tsx)
+- [SectionTabs.tsx](file://web-ui/src/components/SectionTabs.tsx)
 - [setup.ts](file://web-ui/src/test/setup.ts)
 - [playwright.config.ts](file://web-ui/playwright.config.ts)
 - [NanobotChatProvider.ts](file://web-ui/src/chat/NanobotChatProvider.ts)
@@ -21,20 +25,30 @@
 - [api.ts](file://web-ui/src/api.ts)
 </cite>
 
+## 更新摘要
+**所做更改**
+- 新增 Ant Design 组件现代化迁移指南章节，涵盖从 deprecated bodyStyle 属性到 styles.body 新语法的迁移
+- 更新 Card 组件样式迁移的最佳实践和完整迁移示例
+- 增强 UI 开发的向后兼容性指导，提供兼容性说明和迁移策略
+- 补充现代化样式覆盖策略和组件级样式的最佳实践
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考量](#性能考量)
-8. [故障排查指南](#故障排查指南)
-9. [结论](#结论)
-10. [附录](#附录)
+6. [Ant Design 组件现代化迁移指南](#ant-design-组件现代化迁移指南)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能考量](#性能考量)
+9. [故障排查指南](#故障排查指南)
+10. [结论](#结论)
+11. [附录](#附录)
 
 ## 简介
 本指南面向 Nanobot Web UI 的前端开发者，系统阐述组件开发规范、样式定制方法与主题系统实现；详解 Ant Design 组件的使用模式、自定义组件开发与样式覆盖策略；记录国际化支持、主题切换与响应式设计实现；解释动画与过渡效果、用户体验优化；并提供代码规范、测试策略与构建部署流程，以及组件开发最佳实践、性能优化技巧与调试方法。
+
+**更新** 本版本新增 Ant Design 组件现代化迁移指南，重点解决从 deprecated bodyStyle 属性到 styles.body 新语法的迁移问题，提供完整的迁移示例和兼容性说明。
 
 ## 项目结构
 Web UI 基于 Vite + React + TypeScript 构建，采用按功能分层的目录组织方式：页面、组件、Hooks、样式、类型与工具模块清晰分离。Ant Design 作为基础 UI 库，结合 Framer Motion 实现流畅动画；通过 ConfigProvider 与主题令牌统一风格；通过路由懒加载与 Suspense 提升首屏体验。
@@ -48,6 +62,10 @@ end
 subgraph "页面与布局"
 AS["AppShell.tsx"]
 CP["ChatPage.tsx"]
+AP["AgentsPage.tsx"]
+CHP["ChannelsPage.tsx"]
+PH["PageHero.tsx"]
+ST["SectionTabs.tsx"]
 end
 subgraph "主题与样式"
 TM["themeMode.tsx"]
@@ -69,6 +87,10 @@ end
 M --> A
 A --> AS
 AS --> CP
+AS --> AP
+AS --> CHP
+AS --> PH
+AS --> ST
 M --> TM
 M --> IC
 M --> MT
@@ -81,11 +103,15 @@ Pkg --> PW
 PW --> TS
 ```
 
-图示来源
+**图示来源**
 - [main.tsx:1-130](file://web-ui/src/main.tsx#L1-L130)
 - [App.tsx:1-293](file://web-ui/src/App.tsx#L1-L293)
 - [AppShell.tsx:1-334](file://web-ui/src/components/AppShell.tsx#L1-L334)
 - [ChatPage.tsx:1-200](file://web-ui/src/pages/ChatPage.tsx#L1-L200)
+- [AgentsPage.tsx:1-200](file://web-ui/src/pages/AgentsPage.tsx#L1-L200)
+- [ChannelsPage.tsx:1-200](file://web-ui/src/pages/ChannelsPage.tsx#L1-L200)
+- [PageHero.tsx:1-81](file://web-ui/src/components/PageHero.tsx#L1-L81)
+- [SectionTabs.tsx:1-57](file://web-ui/src/components/SectionTabs.tsx#L1-L57)
 - [themeMode.tsx:1-96](file://web-ui/src/themeMode.tsx#L1-L96)
 - [index.css:1-4492](file://web-ui/src/index.css#L1-L4492)
 - [motionTokens.ts:1-91](file://web-ui/src/motionTokens.ts#L1-L91)
@@ -98,7 +124,7 @@ PW --> TS
 - [playwright.config.ts:1-34](file://web-ui/playwright.config.ts#L1-L34)
 - [setup.ts:1-86](file://web-ui/src/test/setup.ts#L1-L86)
 
-章节来源
+**章节来源**
 - [package.json:1-43](file://web-ui/package.json#L1-L43)
 - [vite.config.ts:1-138](file://web-ui/vite.config.ts#L1-L138)
 
@@ -112,7 +138,7 @@ PW --> TS
 - 动画令牌：motionTokens.ts 定义统一的弹簧动效与进入/退出变体，保证组件间动效一致性。
 - 品牌文案：branding.ts 提供品牌名称与替换逻辑，便于多租户或二次定制。
 
-章节来源
+**章节来源**
 - [main.tsx:1-130](file://web-ui/src/main.tsx#L1-L130)
 - [App.tsx:1-293](file://web-ui/src/App.tsx#L1-L293)
 - [AppShell.tsx:1-334](file://web-ui/src/components/AppShell.tsx#L1-L334)
@@ -146,7 +172,7 @@ P-->>C : 合成消息与进度步骤
 C-->>U : 渲染消息与工具提示
 ```
 
-图示来源
+**图示来源**
 - [App.tsx:197-278](file://web-ui/src/App.tsx#L197-L278)
 - [AppShell.tsx:130-334](file://web-ui/src/components/AppShell.tsx#L130-L334)
 - [ChatPage.tsx:1-200](file://web-ui/src/pages/ChatPage.tsx#L1-L200)
@@ -172,12 +198,12 @@ Light --> Apply
 Apply --> Render["渲染应用并应用主题"]
 ```
 
-图示来源
+**图示来源**
 - [themeMode.tsx:17-75](file://web-ui/src/themeMode.tsx#L17-L75)
 - [main.tsx:11-100](file://web-ui/src/main.tsx#L11-L100)
 - [index.css:1-306](file://web-ui/src/index.css#L1-L306)
 
-章节来源
+**章节来源**
 - [themeMode.tsx:1-96](file://web-ui/src/themeMode.tsx#L1-L96)
 - [main.tsx:1-130](file://web-ui/src/main.tsx#L1-L130)
 - [index.css:1-4492](file://web-ui/src/index.css#L1-L4492)
@@ -190,7 +216,7 @@ Apply --> Render["渲染应用并应用主题"]
   - 组件级覆盖：在 ConfigProvider.components 中设置 borderRadius、padding、颜色等，避免在业务组件中重复注入。
   - 动态主题：根据 resolvedTheme 切换算法与 token，确保明暗模式下组件外观一致。
 
-章节来源
+**章节来源**
 - [main.tsx:40-99](file://web-ui/src/main.tsx#L40-L99)
 - [index.css:367-4492](file://web-ui/src/index.css#L367-L4492)
 
@@ -215,17 +241,17 @@ R-->>AS : 更新 location
 AS->>H : 更新头部标题与上下文标签
 ```
 
-图示来源
+**图示来源**
 - [AppShell.tsx:130-334](file://web-ui/src/components/AppShell.tsx#L130-L334)
 
-章节来源
+**章节来源**
 - [AppShell.tsx:1-334](file://web-ui/src/components/AppShell.tsx#L1-L334)
 
 ### 国际化支持
 - 本地化格式：locale.ts 提供中文日期时间格式化与相对时间显示，满足中文用户的阅读习惯。
 - 语言包：入口通过 ConfigProvider.locale 引入 zhCN，确保日期选择器、表格等组件的本地化文本。
 
-章节来源
+**章节来源**
 - [locale.ts:1-43](file://web-ui/src/locale.ts#L1-L43)
 - [main.tsx:4-4](file://web-ui/src/main.tsx#L4-L4)
 
@@ -245,13 +271,13 @@ Merge --> Normalize["normalizeChatMessage<br/>标准化消息"]
 Normalize --> Render["渲染消息与工具提示"]
 ```
 
-图示来源
+**图示来源**
 - [NanobotChatProvider.ts:96-172](file://web-ui/src/chat/NanobotChatProvider.ts#L96-L172)
 - [chatMessageUtils.ts:106-170](file://web-ui/src/chat/chatMessageUtils.ts#L106-L170)
 - [api.ts:311-387](file://web-ui/src/api.ts#L311-L387)
 - [ChatPage.tsx:1-200](file://web-ui/src/pages/ChatPage.tsx#L1-L200)
 
-章节来源
+**章节来源**
 - [NanobotChatProvider.ts:1-172](file://web-ui/src/chat/NanobotChatProvider.ts#L1-L172)
 - [chatMessageUtils.ts:1-170](file://web-ui/src/chat/chatMessageUtils.ts#L1-L170)
 - [api.ts:1-881](file://web-ui/src/api.ts#L1-L881)
@@ -262,7 +288,7 @@ Normalize --> Render["渲染消息与工具提示"]
 - 页面切换：AppShell 使用 Framer Motion 的 variants 实现路由切换时的内容淡入/淡出与位移，提升流畅度。
 - 交互反馈：motionTokens.ts 提供 lift/tap 等微交互动效，增强按钮与卡片的触感。
 
-章节来源
+**章节来源**
 - [main.tsx:107-119](file://web-ui/src/main.tsx#L107-L119)
 - [AppShell.tsx:175-182](file://web-ui/src/components/AppShell.tsx#L175-L182)
 - [motionTokens.ts:1-91](file://web-ui/src/motionTokens.ts#L1-L91)
@@ -271,9 +297,234 @@ Normalize --> Render["渲染消息与工具提示"]
 - 断点判断：AppShell 使用 Grid.useBreakpoint 获取 lg 及以上断点，决定侧栏与抽屉的呈现方式。
 - 视觉适配：index.css 中通过 CSS 变量与媒体查询控制字体、间距与布局，确保在不同设备上保持一致的阅读体验。
 
-章节来源
+**章节来源**
 - [AppShell.tsx:133-134](file://web-ui/src/components/AppShell.tsx#L133-L134)
 - [index.css:1-4492](file://web-ui/src/index.css#L1-L4492)
+
+## Ant Design 组件现代化迁移指南
+
+### 迁移背景与重要性
+Ant Design 在最新版本中弃用了 `bodyStyle` 属性，推荐使用新的 `styles.body` 语法。这一变更影响了所有使用 Card 组件的页面和组件，需要进行全面的迁移以确保应用的兼容性和稳定性。
+
+### 迁移前的现状分析
+在现有代码中，我们发现多个页面组件仍在使用过时的 `bodyStyle` 属性：
+
+- **ChatPage.tsx**：聊天界面中的卡片组件使用 `bodyStyle` 进行样式覆盖
+- **AgentsPage.tsx**：智能体管理页面中的卡片组件使用 `bodyStyle` 
+- **ChannelsPage.tsx**：渠道管理页面中的卡片组件使用 `bodyStyle`
+- **PageHero.tsx**：页面英雄区块组件使用 `bodyStyle`
+- **SectionTabs.tsx**：分段标签组件使用 `bodyStyle`
+
+### 迁移策略与最佳实践
+
+#### 1. Card 组件样式迁移
+**过时写法（已废弃）：**
+```typescript
+<Card
+  title="标题"
+  bodyStyle={{
+    padding: 24,
+    backgroundColor: 'var(--nb-bg-container)',
+  }}
+>
+  内容
+</Card>
+```
+
+**现代化写法（推荐）：**
+```typescript
+<Card
+  title="标题"
+  styles={{
+    body: {
+      padding: 24,
+      backgroundColor: 'var(--nb-bg-container)',
+    }
+  }}
+>
+  内容
+</Card>
+```
+
+#### 2. 组件级样式覆盖策略
+**推荐的现代化样式覆盖方式：**
+```typescript
+// 在 ConfigProvider 中进行全局样式覆盖
+<ConfigProvider
+  theme={{
+    components: {
+      Card: {
+        // 使用新的 styles 语法
+        styles: {
+          body: {
+            padding: 24,
+            backgroundColor: 'var(--nb-bg-container)',
+          }
+        }
+      }
+    }
+  }}
+>
+  {children}
+</ConfigProvider>
+```
+
+#### 3. 向后兼容性处理
+为了确保迁移期间的向后兼容，可以采用条件检查的方式：
+
+```typescript
+function getCardStyles(hasBodyStyle: boolean) {
+  if (hasBodyStyle) {
+    return {
+      bodyStyle: {
+        padding: 24,
+        backgroundColor: 'var(--nb-bg-container)',
+      }
+    }
+  }
+  
+  return {
+    styles: {
+      body: {
+        padding: 24,
+        backgroundColor: 'var(--nb-bg-container)',
+      }
+    }
+  }
+}
+
+// 使用示例
+<Card {...getCardStyles(isModernVersion)}>
+  内容
+</Card>
+```
+
+### 完整迁移示例
+
+#### ChatPage.tsx 迁移示例
+**迁移前：**
+```typescript
+<Card
+  title="配置面板"
+  bodyStyle={{
+    padding: 24,
+    backgroundColor: 'var(--nb-bg-container)',
+  }}
+  className="config-panel-card"
+>
+  {/* 卡片内容 */}
+</Card>
+```
+
+**迁移后：**
+```typescript
+<Card
+  title="配置面板"
+  styles={{
+    body: {
+      padding: 24,
+      backgroundColor: 'var(--nb-bg-container)',
+    }
+  }}
+  className="config-panel-card"
+>
+  {/* 卡片内容 */}
+</Card>
+```
+
+#### AgentsPage.tsx 迁移示例
+**迁移前：**
+```typescript
+{renderCapabilityCards(items, selectedKeys, onToggle, emptyText)}
+```
+
+**迁移后：**
+```typescript
+{renderCapabilityCards(items, selectedKeys, onToggle, emptyText)}
+```
+
+#### ChannelsPage.tsx 迁移示例
+**迁移前：**
+```typescript
+<Card
+  title="消息推送设置"
+  bodyStyle={{
+    padding: 24,
+    backgroundColor: 'var(--nb-bg-container)',
+  }}
+  className="config-panel-card"
+>
+  {/* 卡片内容 */}
+</Card>
+```
+
+**迁移后：**
+```typescript
+<Card
+  title="消息推送设置"
+  styles={{
+    body: {
+      padding: 24,
+      backgroundColor: 'var(--nb-bg-container)',
+    }
+  }}
+  className="config-panel-card"
+>
+  {/* 卡片内容 */}
+</Card>
+```
+
+### 迁移检查清单
+
+#### 必须检查的文件
+- [ChatPage.tsx](file://web-ui/src/pages/ChatPage.tsx) - 聊天界面卡片样式
+- [AgentsPage.tsx](file://web-ui/src/pages/AgentsPage.tsx) - 智能体管理卡片样式  
+- [ChannelsPage.tsx](file://web-ui/src/pages/ChannelsPage.tsx) - 渠道管理卡片样式
+- [PageHero.tsx](file://web-ui/src/components/PageHero.tsx) - 英雄区块卡片样式
+- [SectionTabs.tsx](file://web-ui/src/components/SectionTabs.tsx) - 分段标签卡片样式
+
+#### 迁移验证步骤
+1. **代码审查**：检查所有 `bodyStyle` 属性使用情况
+2. **编译检查**：确保 TypeScript 编译通过
+3. **运行测试**：验证页面渲染和样式效果
+4. **视觉回归**：对比迁移前后的视觉差异
+5. **功能测试**：确保交互功能不受影响
+
+### 兼容性说明
+
+#### 版本兼容性
+- **Ant Design 5.x+**：推荐使用 `styles.body` 语法
+- **Ant Design 4.x**：仍支持 `bodyStyle`，但已标记为废弃
+- **混合环境**：可通过条件判断实现向后兼容
+
+#### 性能影响
+- **样式覆盖**：`styles.body` 语法在性能上与 `bodyStyle` 基本相同
+- **内存占用**：现代化语法不会增加额外的内存开销
+- **渲染性能**：样式对象的创建和销毁开销极小
+
+### 最佳实践建议
+
+#### 1. 统一迁移策略
+- 优先迁移主要页面组件（ChatPage、AgentsPage、ChannelsPage）
+- 逐步迁移通用组件（PageHero、SectionTabs）
+- 更新文档和代码示例
+
+#### 2. 样式管理优化
+- 使用 CSS 变量统一管理主题色彩
+- 通过 ConfigProvider 进行全局样式覆盖
+- 避免在组件内部重复定义样式
+
+#### 3. 测试策略
+- 编写针对样式变更的单元测试
+- 进行跨浏览器兼容性测试
+- 执行视觉回归测试
+
+**章节来源**
+- [ChatPage.tsx:1-200](file://web-ui/src/pages/ChatPage.tsx#L1-L200)
+- [AgentsPage.tsx:1-200](file://web-ui/src/pages/AgentsPage.tsx#L1-L200)
+- [ChannelsPage.tsx:1-200](file://web-ui/src/pages/ChannelsPage.tsx#L1-L200)
+- [PageHero.tsx:1-81](file://web-ui/src/components/PageHero.tsx#L1-L81)
+- [SectionTabs.tsx:1-57](file://web-ui/src/components/SectionTabs.tsx#L1-L57)
 
 ## 依赖关系分析
 - 构建与打包：Vite 配置按依赖包拆分 chunk，将 antd、@ant-design/x、react 生态与 markdown 工具链独立打包，优化缓存与加载性能。
@@ -292,13 +543,13 @@ PW["playwright.config.ts"] --> E2E["端到端测试"]
 TS["setup.ts"] --> Mock["DOM/Storage/ResizeObserver 模拟"]
 ```
 
-图示来源
+**图示来源**
 - [vite.config.ts:20-81](file://web-ui/vite.config.ts#L20-L81)
 - [vite.config.ts:127-135](file://web-ui/vite.config.ts#L127-L135)
 - [playwright.config.ts:1-34](file://web-ui/playwright.config.ts#L1-L34)
 - [setup.ts:1-86](file://web-ui/src/test/setup.ts#L1-L86)
 
-章节来源
+**章节来源**
 - [vite.config.ts:1-138](file://web-ui/vite.config.ts#L1-L138)
 - [playwright.config.ts:1-34](file://web-ui/playwright.config.ts#L1-L34)
 - [setup.ts:1-86](file://web-ui/src/test/setup.ts#L1-L86)
@@ -321,6 +572,10 @@ TS["setup.ts"] --> Mock["DOM/Storage/ResizeObserver 模拟"]
 - 聊天无响应
   - 检查 NanobotChatProvider 的 fetchChatStream 是否返回 200 且有 SSE 流。
   - 确认 api.ts 的 sendMessageStream 事件解析与 done/error 分支处理。
+- 卡片样式问题
+  - 检查是否正确使用 `styles.body` 替代 `bodyStyle`。
+  - 确认样式覆盖是否在 ConfigProvider 中正确配置。
+  - 验证 CSS 变量是否正确定义。
 - 单元测试失败
   - 确认 setup.ts 中 localStorage/sessionStorage 的 mock 是否生效。
   - 检查 ResizeObserver 与 matchMedia 的模拟实现。
@@ -328,16 +583,19 @@ TS["setup.ts"] --> Mock["DOM/Storage/ResizeObserver 模拟"]
   - 查看 playwright.config.ts 的 baseURL 与 webServer 启动脚本。
   - 关注 trace/screenshot/video 报告定位问题。
 
-章节来源
+**章节来源**
 - [themeMode.tsx:35-86](file://web-ui/src/themeMode.tsx#L35-L86)
 - [App.tsx:38-107](file://web-ui/src/App.tsx#L38-L107)
 - [NanobotChatProvider.ts:20-79](file://web-ui/src/chat/NanobotChatProvider.ts#L20-L79)
 - [api.ts:311-387](file://web-ui/src/api.ts#L311-L387)
+- [ChatPage.tsx:1-200](file://web-ui/src/pages/ChatPage.tsx#L1-L200)
 - [setup.ts:1-86](file://web-ui/src/test/setup.ts#L1-L86)
 - [playwright.config.ts:1-34](file://web-ui/playwright.config.ts#L1-L34)
 
 ## 结论
-本指南围绕 Nanobot Web UI 的主题系统、Ant Design 使用、自定义组件开发、国际化与响应式设计、动画与用户体验、测试与构建流程等方面提供了系统化的开发指引。遵循本文档的规范与最佳实践，可在保证一致性的前提下高效迭代 UI 功能，并获得良好的性能与可维护性。
+本指南围绕 Nanobot Web UI 的主题系统、Ant Design 使用、自定义组件开发、国际化与响应式设计、动画与用户体验、测试与构建流程等方面提供了系统化的开发指引。随着 Ant Design 组件现代化迁移的推进，开发者需要重点关注从 `bodyStyle` 到 `styles.body` 的迁移，确保应用的兼容性和稳定性。遵循本文档的规范与最佳实践，可在保证一致性的前提下高效迭代 UI 功能，并获得良好的性能与可维护性。
+
+**更新** 新增的现代化迁移指南为开发者提供了完整的迁移策略和最佳实践，确保在升级 Ant Design 版本时能够平滑过渡并保持应用的视觉一致性。
 
 ## 附录
 
@@ -346,16 +604,19 @@ TS["setup.ts"] --> Mock["DOM/Storage/ResizeObserver 模拟"]
 - 使用 CSS 变量与类名统一管理主题色彩与间距，确保明暗模式一致。
 - 页面组件尽量保持纯展示与少量状态，复杂逻辑下沉至 Hooks 或工具模块。
 - 路由守卫与鉴权逻辑集中在 App.tsx，确保用户流程可控。
+- **现代化迁移**：优先使用 `styles.body` 语法替代废弃的 `bodyStyle` 属性。
 
 ### 代码规范
 - 类型安全：优先使用 types.ts 中定义的接口与类型，避免 any。
 - 错误处理：在 API 层统一抛出 ApiError，并在组件中捕获与展示。
 - 动画一致性：统一使用 motionTokens.ts 中的动效参数，避免各自为政。
+- **样式规范**：遵循现代化的样式语法，使用 `styles.body` 替代 `bodyStyle`。
 
 ### 测试策略
 - 单元测试：Vitest + @testing-library/react，关注组件渲染、状态变更与事件触发。
 - 端到端测试：Playwright，覆盖关键用户路径与跨浏览器兼容性。
 - 辅助工具：setup.ts 提供 DOM/Storage/ResizeObserver 的模拟，确保测试稳定。
+- **迁移测试**：编写针对样式迁移的专门测试用例，确保向后兼容性。
 
 ### 构建与部署流程
 - 开发：npm run dev 启动 Vite 开发服务器，自动代理 /api。
@@ -363,7 +624,7 @@ TS["setup.ts"] --> Mock["DOM/Storage/ResizeObserver 模拟"]
 - 预览：npm run preview 在本地预览生产构建。
 - 测试：npm run test 运行单元测试；npm run test:e2e:* 运行端到端测试。
 
-章节来源
+**章节来源**
 - [package.json:6-14](file://web-ui/package.json#L6-L14)
 - [vite.config.ts:83-137](file://web-ui/vite.config.ts#L83-L137)
 - [playwright.config.ts:1-34](file://web-ui/playwright.config.ts#L1-L34)

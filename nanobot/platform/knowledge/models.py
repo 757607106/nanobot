@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+from nanobot.platform.model_resources.models import ModelSelection
+
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
@@ -86,6 +88,14 @@ class KnowledgeBaseDefinition:
     description: str = ""
     enabled: bool = True
     tags: list[str] = field(default_factory=list)
+    kb_backend: str = "sqlite"
+    embedding_model_selection: ModelSelection | None = None
+    reranker_model_selection: ModelSelection | None = None
+    auto_index_after_parse: bool = True
+    vector_collection: str | None = None
+    legacy_config: bool = False
+    reindex_required: bool = False
+    reindex_reason: str | None = None
     retrieval_profile: KnowledgeRetrievalProfile = field(default_factory=KnowledgeRetrievalProfile)
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
@@ -95,6 +105,18 @@ class KnowledgeBaseDefinition:
             {
                 "description": self.description,
                 "tags": self.tags,
+                "kb_backend": self.kb_backend,
+                "embedding_model_selection": (
+                    self.embedding_model_selection.to_storage_dict() if self.embedding_model_selection else None
+                ),
+                "reranker_model_selection": (
+                    self.reranker_model_selection.to_storage_dict() if self.reranker_model_selection else None
+                ),
+                "auto_index_after_parse": self.auto_index_after_parse,
+                "vector_collection": self.vector_collection,
+                "legacy_config": self.legacy_config,
+                "reindex_required": self.reindex_required,
+                "reindex_reason": self.reindex_reason,
                 "retrieval_profile": self.retrieval_profile.to_dict(),
             },
             ensure_ascii=False,
@@ -111,6 +133,46 @@ class KnowledgeBaseDefinition:
             description=stored.get("description", ""),
             enabled=bool(record.get("enabled", True)),
             tags=list(stored.get("tags") or []),
+            kb_backend=str(stored.get("kb_backend") or stored.get("kbBackend") or "sqlite"),
+            embedding_model_selection=ModelSelection.from_dict(
+                stored.get("embedding_model_selection") or stored.get("embeddingModelSelection"),
+                default_capability="embedding",
+            ),
+            reranker_model_selection=ModelSelection.from_dict(
+                stored.get("reranker_model_selection") or stored.get("rerankerModelSelection"),
+                default_capability="reranker",
+            ),
+            auto_index_after_parse=bool(
+                stored.get("auto_index_after_parse")
+                if "auto_index_after_parse" in stored
+                else stored.get("autoIndexAfterParse", True)
+            ),
+            vector_collection=stored.get("vector_collection") or stored.get("vectorCollection"),
+            legacy_config=bool(
+                stored.get("legacy_config")
+                if "legacy_config" in stored
+                else stored.get("legacyConfig")
+                if "legacyConfig" in stored
+                else not any(
+                    key in stored
+                    for key in (
+                        "kb_backend",
+                        "kbBackend",
+                        "auto_index_after_parse",
+                        "autoIndexAfterParse",
+                        "vector_collection",
+                        "vectorCollection",
+                        "reindex_required",
+                        "reindexRequired",
+                    )
+                )
+            ),
+            reindex_required=bool(
+                stored.get("reindex_required")
+                if "reindex_required" in stored
+                else stored.get("reindexRequired", False)
+            ),
+            reindex_reason=stored.get("reindex_reason") or stored.get("reindexReason"),
             retrieval_profile=KnowledgeRetrievalProfile.from_dict(stored.get("retrieval_profile")),
             created_at=record.get("created_at") or now_iso(),
             updated_at=record.get("updated_at") or now_iso(),
@@ -122,6 +184,20 @@ class KnowledgeBaseDefinition:
         payload["tenantId"] = payload.pop("tenant_id")
         payload["instanceId"] = payload.pop("instance_id")
         payload.pop("retrieval_profile", None)
+        payload["kbBackend"] = payload.pop("kb_backend")
+        payload.pop("embedding_model_selection", None)
+        payload["embeddingModelSelection"] = (
+            self.embedding_model_selection.to_dict() if self.embedding_model_selection else None
+        )
+        payload.pop("reranker_model_selection", None)
+        payload["rerankerModelSelection"] = (
+            self.reranker_model_selection.to_dict() if self.reranker_model_selection else None
+        )
+        payload["autoIndexAfterParse"] = payload.pop("auto_index_after_parse")
+        payload["vectorCollection"] = payload.pop("vector_collection")
+        payload["legacyConfig"] = payload.pop("legacy_config")
+        payload["reindexRequired"] = payload.pop("reindex_required")
+        payload["reindexReason"] = payload.pop("reindex_reason")
         payload["retrievalProfile"] = self.retrieval_profile.to_dict()
         payload["createdAt"] = payload.pop("created_at")
         payload["updatedAt"] = payload.pop("updated_at")

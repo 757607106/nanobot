@@ -50,6 +50,7 @@ class WebChatRuntimeService:
             "createdAt": item.get("created_at"),
             "updatedAt": item.get("updated_at"),
             "messageCount": item.get("message_count", 0),
+            "agentId": item.get("agent_id") or item.get("agentId"),
         }
 
     @staticmethod
@@ -68,7 +69,66 @@ class WebChatRuntimeService:
             payload["toolCallId"] = message["tool_call_id"]
         if message.get("name"):
             payload["name"] = message["name"]
+        if isinstance(message.get("citations"), list):
+            payload["citations"] = message["citations"]
+        if isinstance(message.get("knowledge_hits"), list):
+            payload["knowledgeHits"] = message["knowledge_hits"]
+        if isinstance(message.get("applied_bindings"), dict):
+            payload["appliedBindings"] = message["applied_bindings"]
+        if message.get("resolved_model"):
+            payload["resolvedModel"] = message["resolved_model"]
         return payload
+
+    @staticmethod
+    def extract_citations(knowledge_hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        citations: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, Any]] = set()
+        for hit in knowledge_hits:
+            citation = hit.get("citation")
+            if not isinstance(citation, dict):
+                continue
+            key = (
+                str(citation.get("kbId") or ""),
+                str(citation.get("docId") or ""),
+                str(citation.get("title") or ""),
+                citation.get("chunkOrdinal"),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            citations.append(dict(citation))
+        return citations
+
+    def annotate_last_assistant_message(
+        self,
+        session_key: str,
+        *,
+        citations: list[dict[str, Any]] | None = None,
+        knowledge_hits: list[dict[str, Any]] | None = None,
+        applied_bindings: dict[str, Any] | None = None,
+        resolved_model: str | None = None,
+    ) -> None:
+        if not self.state.sessions:
+            return
+        session = self.state.sessions.get(session_key)
+        if session is None:
+            return
+        for index in range(len(session.messages) - 1, -1, -1):
+            message = session.messages[index]
+            if message.get("role") != "assistant":
+                continue
+            updated = dict(message)
+            if citations is not None:
+                updated["citations"] = citations
+            if knowledge_hits is not None:
+                updated["knowledge_hits"] = knowledge_hits
+            if applied_bindings is not None:
+                updated["applied_bindings"] = applied_bindings
+            if resolved_model:
+                updated["resolved_model"] = resolved_model
+            session.messages[index] = updated
+            self.state.sessions.save(session)
+            return
 
     @staticmethod
     def format_upload_item(path: Path, workspace_path: Path) -> dict[str, Any]:
@@ -98,7 +158,7 @@ class WebChatRuntimeService:
             "total": total,
         }
 
-    def create_session(self, title: str | None = None) -> dict[str, Any]:
+    def create_session(self, title: str | None = None, agent_id: str | None = None) -> dict[str, Any]:
         session_id = self.state.instance.next_id("web-session") if hasattr(self.state.instance, "next_id") else None
         if not session_id:
             from uuid import uuid4
@@ -106,6 +166,8 @@ class WebChatRuntimeService:
             session_id = uuid4().hex
         session = self.state.sessions.get_or_create(self.session_key(session_id))
         session.metadata["title"] = title or self.default_title()
+        if agent_id:
+            session.metadata["agentId"] = agent_id
         self.state.sessions.save(session)
         return self.format_session_summary(
             {
@@ -114,6 +176,7 @@ class WebChatRuntimeService:
                 "updated_at": session.updated_at.isoformat(),
                 "message_count": len(session.messages),
                 "title": session.metadata.get("title"),
+                "agent_id": session.metadata.get("agentId"),
             }
         )
 
@@ -206,6 +269,7 @@ class WebChatRuntimeService:
             "createdAt": session.created_at.isoformat(),
             "updatedAt": session.updated_at.isoformat(),
             "messageCount": len(session.messages),
+            "agentId": session.metadata.get("agentId"),
         }
 
     def format_recent_tool_activity(
@@ -228,7 +292,7 @@ class WebChatRuntimeService:
                     if isinstance(tool_call, dict)
                     else ""
                 )
-                if tool_name:
+                if tool_name and tool_name not in RECENT_TOOL_ACTIVITY_HIDDEN_TOOLS:
                     recent_tool_activity.append(
                         {
                             "sessionId": session_id,
@@ -238,7 +302,7 @@ class WebChatRuntimeService:
                             "createdAt": message.get("createdAt"),
                         }
                     )
-            if message.get("role") == "tool":
+            if message.get("role") == "tool" and str(message.get("name") or "tool").strip() not in RECENT_TOOL_ACTIVITY_HIDDEN_TOOLS:
                 recent_tool_activity.append(
                     {
                         "sessionId": session_id,
@@ -283,6 +347,30 @@ class WebChatRuntimeService:
 
     def list_active_mcp(self) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
+        server_entries = (
+            self.state.app_mcp_servers.list_servers(self.state.config).get("items", [])
+            if getattr(self.state, "app_mcp_servers", None) is not None
+            else []
+        )
+        if server_entries:
+            for entry in server_entries:
+                if not entry.get("enabled", True):
+                    continue
+                enabled_tools = [
+                    str(item.get("toolName") or "").strip()
+                    for item in list(entry.get("tools") or [])
+                    if str(item.get("toolName") or "").strip() and bool(item.get("enabled", True))
+                ]
+                items.append(
+                    {
+                        "name": entry.get("name") or "",
+                        "displayName": entry.get("displayName") or entry.get("name") or "",
+                        "toolCount": len(enabled_tools) if enabled_tools else entry.get("toolCount"),
+                        "toolNames": enabled_tools,
+                        "status": entry.get("status") or "enabled",
+                    }
+                )
+            return items
         for name, entry in self.state.config.tools.mcp_servers.items():
             if not getattr(entry, "enabled", True):
                 continue
@@ -309,12 +397,18 @@ class WebChatRuntimeService:
 
     def get_chat_workspace(self) -> dict[str, Any]:
         active_mcp = self.list_active_mcp()
+        agents = (
+            self.state.app_agents.list_agents(tenant_id="default", enabled=True)
+            if self.state.app_agents is not None
+            else []
+        )
+        resolved = self.state.config_runtime.resolve_chat_model_config(self.state.config)
         return {
             "generatedAt": datetime.now().isoformat(),
             "runtime": {
                 "workspace": str(self.state.config.workspace_path),
-                "provider": self.state.config.agents.defaults.provider,
-                "model": self.state.config.agents.defaults.model,
+                "provider": resolved.get("providerName") or self.state.config.agents.defaults.provider,
+                "model": resolved.get("model") or self.state.config.agents.defaults.model,
                 "status": "ready",
                 "enabledChannels": self.list_enabled_channels(),
                 "activeMcpCount": len(active_mcp),
@@ -322,6 +416,17 @@ class WebChatRuntimeService:
             "recentUploads": self.list_chat_uploads(limit=6),
             "recentToolActivity": self.list_recent_tool_activity(limit=8),
             "activeMcp": active_mcp,
+            "availableAgents": [
+                {
+                    "agentId": item.get("agentId"),
+                    "name": item.get("name"),
+                    "description": item.get("description"),
+                    "knowledgeBindingIds": item.get("knowledgeBindingIds") or [],
+                    "mcpServerIds": item.get("mcpServerIds") or [],
+                    "chatModelSelection": item.get("chatModelSelection"),
+                }
+                for item in agents
+            ],
             "quickPrompts": [
                 "帮我先梳理这个工作区最近最值得关注的内容",
                 "结合当前会话和附件，给我一个下一步执行计划",
@@ -340,10 +445,20 @@ class WebChatRuntimeService:
             for index, message in enumerate(session.messages[-limit:])
         ]
         summary = self.format_session_summary_from_session(session, session_id)
+        server_entry = (
+            self.state.app_mcp_servers.get_server(self.state.config, server_name)
+            if getattr(self.state, "app_mcp_servers", None) is not None
+            else None
+        )
+        tool_names = [
+            str(item.get("toolName") or "").strip()
+            for item in list((server_entry or {}).get("tools") or [])
+            if str(item.get("toolName") or "").strip() and bool(item.get("enabled", True))
+        ]
         return {
             "session": summary,
             "messages": messages,
-            "toolNames": [],
+            "toolNames": tool_names,
             "recentToolActivity": self.format_recent_tool_activity(
                 messages,
                 session_id=session_id,
@@ -387,7 +502,10 @@ class WebChatRuntimeService:
             cron_service=self.state.cron,
             restrict_to_workspace=isolated_config.tools.restrict_to_workspace,
             session_manager=self.state.sessions,
-            mcp_servers=isolated_config.tools.mcp_servers,
+            mcp_servers=self.state.config_runtime.resolve_mcp_server_configs(
+                isolated_config,
+                [server_name],
+            ),
             channels_config=isolated_config.channels,
         )
         try:
@@ -426,6 +544,20 @@ class WebChatRuntimeService:
         if not session.metadata.get("title"):
             session.metadata["title"] = self.default_title(content)
             self.state.sessions.save(session)
+        agent_id = str(session.metadata.get("agentId") or "").strip()
+        if agent_id:
+            if self.state.app_agents is None:
+                raise RuntimeError("Agent definitions are not available.")
+            agent = self.state.app_agents.get_agent(agent_id)
+            return await self.state.agent_runtime.run_agent_definition(
+                agent,
+                task=content,
+                label=agent.get("name") or agent_id,
+                session_key=key,
+                session_id=session_id,
+                session_title=session.metadata.get("title") or self.default_title(content),
+                origin_chat_id=session_id,
+            )
         response = await self.state.agent.process_direct(
             content=content,
             session_key=key,
@@ -437,3 +569,4 @@ class WebChatRuntimeService:
             "content": response,
             "assistantMessage": self.get_last_assistant_message(session_id),
         }
+RECENT_TOOL_ACTIVITY_HIDDEN_TOOLS = {"message"}

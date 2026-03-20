@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from nanobot.platform.mcp_resources import McpResourceNotFoundError, McpResourceService
 from nanobot.platform.instances import PlatformInstance, coerce_instance
 from nanobot.web.mcp_registry import WebMCPRegistryManager
 
@@ -18,10 +19,17 @@ from nanobot.web.mcp_registry import WebMCPRegistryManager
 class MCPRepositoryService:
     """Analyze GitHub repositories and register MCP servers."""
 
-    def __init__(self, config_path: Path | PlatformInstance, registry: WebMCPRegistryManager):
+    def __init__(
+        self,
+        config_path: Path | PlatformInstance,
+        registry: WebMCPRegistryManager,
+        *,
+        resources: McpResourceService | None = None,
+    ):
         self._instance = coerce_instance(config_path)
         self._config_path = self._instance.config_path
         self._registry = registry
+        self._resources = resources
         self._installs_dir = self._instance.mcp_installs_dir()
 
     def analyze_repository(self, source: str) -> dict[str, Any]:
@@ -83,6 +91,32 @@ class MCPRepositoryService:
                 required_env=analysis["required_env"],
                 optional_env=analysis["optional_env"],
             )
+            if self._resources is not None:
+                resource_payload = {
+                    "serverName": server_name,
+                    "displayName": analysis["display_name"],
+                    "sourceKind": "repository",
+                    "sourceLabel": "仓库安装",
+                    "enabled": False,
+                    "transport": analysis["transport"],
+                    "command": server_payload.get("command"),
+                    "args": server_payload.get("args"),
+                    "env": server_payload.get("env"),
+                    "url": server_payload.get("url"),
+                    "headers": server_payload.get("headers"),
+                    "toolTimeout": server_payload.get("toolTimeout"),
+                    "repoUrl": repo_url,
+                    "cloneUrl": analysis["clone_url"],
+                    "installDir": str(install_dir) if install_dir is not None else None,
+                    "installMode": analysis["install_mode"],
+                    "installSteps": [step["display"] for step in analysis["install_steps"]],
+                    "requiredEnv": analysis["required_env"],
+                    "optionalEnv": analysis["optional_env"],
+                }
+                try:
+                    self._resources.update_server(server_name, resource_payload, tenant_id="default")
+                except McpResourceNotFoundError:
+                    self._resources.create_server(resource_payload, tenant_id="default")
         except Exception:
             if install_dir is not None and install_dir.exists():
                 shutil.rmtree(install_dir, ignore_errors=True)

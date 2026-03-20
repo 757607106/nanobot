@@ -89,6 +89,8 @@ export function normalizeChatMessage(message: ChatMessage): ChatMessage {
     toolCalls: Array.isArray(message.toolCalls) ? message.toolCalls : [],
     attachments: dedupeAttachmentRefs(Array.isArray(message.attachments) ? message.attachments : []),
     progressSteps: Array.isArray(message.progressSteps) ? message.progressSteps : [],
+    citations: Array.isArray(message.citations) ? message.citations : [],
+    knowledgeHits: Array.isArray(message.knowledgeHits) ? message.knowledgeHits : [],
   }
 
   if (normalized.role === 'user' && normalized.content) {

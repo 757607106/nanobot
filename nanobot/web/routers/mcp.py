@@ -22,10 +22,25 @@ class MCPServerToggleRequest(BaseModel):
     enabled: bool
 
 
+class MCPServerCreateRequest(BaseModel):
+    serverName: str | None = None
+    displayName: str | None = None
+    sourceKind: str | None = None
+    sourceLabel: str | None = None
+    enabled: bool = False
+    transport: Literal["stdio", "sse", "streamableHttp"]
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    url: str | None = None
+    headers: dict[str, str] = Field(default_factory=dict)
+    toolTimeout: int = 30
+
+
 class MCPServerUpdateRequest(BaseModel):
     displayName: str | None = None
-    enabled: bool
-    type: Literal["stdio", "sse", "streamableHttp"]
+    enabled: bool | None = None
+    type: Literal["stdio", "sse", "streamableHttp"] | None = None
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
@@ -38,13 +53,35 @@ class MCPRepairRequest(BaseModel):
     dangerousMode: bool = False
 
 
+class MCPToolToggleRequest(BaseModel):
+    enabled: bool
+
+
 class MCPTestMessageRequest(BaseModel):
     content: str | None = None
 
 
 @router.get("/api/v1/mcp/servers")
 def list_mcp_servers(request: Request) -> JSONResponse:
-    return _json_response(200, _ok(request.app.state.mcp_registry.list_servers(request.app.state.web.config)))
+    return _json_response(200, _ok(request.app.state.mcp_servers.list_servers(request.app.state.web.config)))
+
+
+@router.post("/api/v1/mcp/servers")
+def create_mcp_server(
+    request: Request,
+    payload: MCPServerCreateRequest,
+) -> JSONResponse:
+    try:
+        data = request.app.state.mcp_servers.create_server(
+            payload=payload.model_dump(exclude_none=True),
+            current_config=request.app.state.web.get_config(),
+            update_config=request.app.state.web.update_config,
+        )
+    except ValueError as exc:
+        raise APIError(400, "MCP_SERVER_CREATE_FAILED", str(exc)) from exc
+    except RuntimeError as exc:
+        raise APIError(500, "MCP_SERVER_CREATE_FAILED", str(exc)) from exc
+    return _json_response(201, _ok(data))
 
 
 @router.get("/api/v1/mcp/servers/{server_name}")
@@ -150,6 +187,26 @@ def toggle_mcp_server(request: Request, server_name: str, payload: MCPServerTogg
     return _json_response(200, _ok(data))
 
 
+@router.put("/api/v1/mcp/servers/{server_name}/tools/{tool_name}")
+def toggle_mcp_tool(
+    request: Request,
+    server_name: str,
+    tool_name: str,
+    payload: MCPToolToggleRequest,
+) -> JSONResponse:
+    try:
+        data = request.app.state.mcp_servers.set_tool_enabled(
+            server_name,
+            tool_name,
+            enabled=payload.enabled,
+        )
+    except ValueError as exc:
+        raise APIError(404, "MCP_SERVER_NOT_FOUND", str(exc)) from exc
+    except KeyError as exc:
+        raise APIError(404, "MCP_TOOL_NOT_FOUND", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
 @router.put("/api/v1/mcp/servers/{server_name}")
 def update_mcp_server(
     request: Request,
@@ -159,7 +216,7 @@ def update_mcp_server(
     try:
         data = request.app.state.mcp_servers.update_server(
             server_name,
-            payload=payload.model_dump(),
+            payload=payload.model_dump(exclude_unset=True),
             current_config=request.app.state.web.get_config(),
             update_config=request.app.state.web.update_config,
         )

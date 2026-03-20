@@ -16,7 +16,16 @@
 - [AgentsPage.tsx](file://web-ui/src/pages/AgentsPage.tsx)
 - [ChannelsPage.tsx](file://web-ui/src/pages/ChannelsPage.tsx)
 - [SkillsPage.tsx](file://web-ui/src/pages/SkillsPage.tsx)
+- [SetupPage.tsx](file://web-ui/src/pages/SetupPage.tsx)
+- [setup-route.test.tsx](file://web-ui/src/setup-route.test.tsx)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 更新了设置页面路由逻辑部分，重点反映了无限设置循环问题的解决方案
+- 新增了设置页面路由守卫的详细实现分析
+- 增强了路由状态管理与错误处理机制的说明
+- 补充了设置页面生命周期管理的最佳实践
 
 ## 目录
 1. [简介](#简介)
@@ -32,6 +41,8 @@
 
 ## 简介
 本文件为 Nanobot Web 界面（web-ui）的技术文档，聚焦前端架构设计、页面组件结构与 API 集成方式，阐述用户交互流程、状态管理与响应式设计策略；并记录各功能页面（代理管理、渠道配置、技能市场、会话管理等）的特性与实现要点。同时提供前端开发指南（组件开发、样式定制、性能优化）、与后端 API 的通信协议与数据流说明，以及开发环境搭建、构建部署与调试方法。
+
+**更新** 本次更新重点关注设置页面路由逻辑的重大改进，解决了无限设置循环问题，显著提升了用户体验。
 
 ## 项目结构
 web-ui 使用 Vite + React + TypeScript 构建，采用按页面拆分的目录组织方式，核心模块包括：
@@ -53,10 +64,11 @@ CP["ChatPage.tsx<br/>会话与消息流"]
 AP["AgentsPage.tsx<br/>代理定义与运行"]
 ChP["ChannelsPage.tsx<br/>渠道接入与路由"]
 SP["SkillsPage.tsx<br/>技能市场与本地技能"]
+SET["SetupPage.tsx<br/>初始化向导与设置流程"]
 end
 subgraph "状态与认证"
 AU["auth.tsx<br/>登录/登出/状态刷新"]
-SU["setup.tsx<br/>初始化向导状态"]
+SU["setup.tsx<br/>初始化向导状态管理"]
 DM["devMode.tsx<br/>开发者模式开关"]
 end
 subgraph "数据与类型"
@@ -69,6 +81,7 @@ AS --> CP
 AS --> AP
 AS --> ChP
 AS --> SP
+AS --> SET
 A --> AU
 A --> SU
 A --> DM
@@ -76,10 +89,11 @@ CP --> API
 AP --> API
 ChP --> API
 SP --> API
+SET --> API
 API --> T
 ```
 
-图表来源
+**图表来源**
 - [main.tsx:1-130](file://web-ui/src/main.tsx#L1-L130)
 - [App.tsx:1-293](file://web-ui/src/App.tsx#L1-L293)
 - [AppShell.tsx:1-334](file://web-ui/src/components/AppShell.tsx#L1-L334)
@@ -87,13 +101,14 @@ API --> T
 - [AgentsPage.tsx:1-200](file://web-ui/src/pages/AgentsPage.tsx#L1-L200)
 - [ChannelsPage.tsx:1-200](file://web-ui/src/pages/ChannelsPage.tsx#L1-L200)
 - [SkillsPage.tsx:1-200](file://web-ui/src/pages/SkillsPage.tsx#L1-L200)
+- [SetupPage.tsx:1-603](file://web-ui/src/pages/SetupPage.tsx#L1-L603)
 - [auth.tsx:1-152](file://web-ui/src/auth.tsx#L1-L152)
 - [setup.tsx:1-106](file://web-ui/src/setup.tsx#L1-L106)
 - [devMode.tsx:1-48](file://web-ui/src/devMode.tsx#L1-L48)
-- [api.ts:1-881](file://web-ui/src/api.ts#L1-L881)
-- [types.ts:1-800](file://web-ui/src/types.ts#L1-L800)
+- [api.ts:1-882](file://web-ui/src/api.ts#L1-L882)
+- [types.ts:1-1103](file://web-ui/src/types.ts#L1-L1103)
 
-章节来源
+**章节来源**
 - [package.json:1-43](file://web-ui/package.json#L1-L43)
 - [vite.config.ts:1-138](file://web-ui/vite.config.ts#L1-L138)
 - [main.tsx:1-130](file://web-ui/src/main.tsx#L1-L130)
@@ -113,7 +128,7 @@ API --> T
   - SetupProvider：拉取初始化向导状态，带重试逻辑，驱动首次配置流程。
   - DevMode：持久化开发者模式开关，影响菜单项与部分功能可见性。
 
-章节来源
+**章节来源**
 - [main.tsx:1-130](file://web-ui/src/main.tsx#L1-L130)
 - [App.tsx:197-278](file://web-ui/src/App.tsx#L197-L278)
 - [AppShell.tsx:130-334](file://web-ui/src/components/AppShell.tsx#L130-L334)
@@ -122,15 +137,15 @@ API --> T
 - [devMode.tsx:20-48](file://web-ui/src/devMode.tsx#L20-L48)
 
 ## 架构总览
-前端采用“页面 + 组件 + 服务”的分层架构：
-- 页面层：按功能划分 Chat、Agents、Channels、Skills 等页面，负责业务编排与用户交互。
+前端采用"页面 + 组件 + 服务"的分层架构：
+- 页面层：按功能划分 Chat、Agents、Channels、Skills、Setup 等页面，负责业务编排与用户交互。
 - 组件层：通用布局与功能组件（如 AppShell、PageHero、MotionSurface），复用性强。
 - 服务层：api.ts 封装 HTTP 请求、错误处理与 SSE 流式响应；types.ts 提供强类型约束。
 - 状态层：React Context（AuthProvider、SetupProvider、DevMode）管理跨组件共享状态。
 
 ```mermaid
 graph TB
-UI["页面组件<br/>Chat/Agents/Channels/Skills"]
+UI["页面组件<br/>Chat/Agents/Channels/Skills/Setup"]
 L["布局组件<br/>AppShell/PageHero/MotionSurface"]
 S["状态服务<br/>AuthProvider/SetupProvider/DevMode"]
 API["API 客户端<br/>api.ts"]
@@ -142,14 +157,14 @@ S --> API
 API --> T
 ```
 
-图表来源
+**图表来源**
 - [App.tsx:197-278](file://web-ui/src/App.tsx#L197-L278)
 - [AppShell.tsx:130-334](file://web-ui/src/components/AppShell.tsx#L130-L334)
 - [auth.tsx:32-143](file://web-ui/src/auth.tsx#L32-L143)
 - [setup.tsx:39-97](file://web-ui/src/setup.tsx#L39-L97)
 - [devMode.tsx:20-48](file://web-ui/src/devMode.tsx#L20-L48)
-- [api.ts:145-881](file://web-ui/src/api.ts#L145-L881)
-- [types.ts:1-800](file://web-ui/src/types.ts#L1-L800)
+- [api.ts:145-882](file://web-ui/src/api.ts#L145-L882)
+- [types.ts:1-1103](file://web-ui/src/types.ts#L1-L1103)
 
 ## 详细组件分析
 
@@ -182,11 +197,11 @@ X-->>P : 更新消息列表与状态
 P-->>U : 渲染最新消息与工具链
 ```
 
-图表来源
+**图表来源**
 - [ChatPage.tsx:379-431](file://web-ui/src/pages/ChatPage.tsx#L379-L431)
 - [api.ts:311-387](file://web-ui/src/api.ts#L311-L387)
 
-章节来源
+**章节来源**
 - [ChatPage.tsx:345-800](file://web-ui/src/pages/ChatPage.tsx#L345-L800)
 - [api.ts:286-387](file://web-ui/src/api.ts#L286-L387)
 
@@ -210,18 +225,18 @@ Test --> History["查看最近运行"]
 History --> End(["完成"])
 ```
 
-图表来源
+**图表来源**
 - [AgentsPage.tsx:172-200](file://web-ui/src/pages/AgentsPage.tsx#L172-L200)
 - [api.ts:622-714](file://web-ui/src/api.ts#L622-L714)
 
-章节来源
+**章节来源**
 - [AgentsPage.tsx:172-200](file://web-ui/src/pages/AgentsPage.tsx#L172-L200)
 - [api.ts:622-714](file://web-ui/src/api.ts#L622-L714)
 
 ### 渠道配置（ChannelsPage）
 - 功能特性
   - 渠道概览：按状态统计（已启用/已配置/待补全/总数）。
-  - 消息推送设置：统一开关“推送执行进度/工具提示”，保存后刷新状态。
+  - 消息推送设置：统一开关"推送执行进度/工具提示"，保存后刷新状态。
   - 路由指引：提示下一步应补字段、测试与建立消息路由。
 - 数据流
   - 通过 api.ts 的渠道列表、测试、WhatsApp 绑定与投递设置接口与后端交互。
@@ -235,11 +250,11 @@ Config --> Save["保存并刷新"]
 Save --> Route["跳转消息路由配置"]
 ```
 
-图表来源
+**图表来源**
 - [ChannelsPage.tsx:30-200](file://web-ui/src/pages/ChannelsPage.tsx#L30-L200)
 - [api.ts:390-412](file://web-ui/src/api.ts#L390-L412)
 
-章节来源
+**章节来源**
 - [ChannelsPage.tsx:30-200](file://web-ui/src/pages/ChannelsPage.tsx#L30-L200)
 - [api.ts:390-412](file://web-ui/src/api.ts#L390-L412)
 
@@ -265,13 +280,58 @@ API-->>P : 返回安装结果
 P-->>U : 成功提示与刷新
 ```
 
-图表来源
+**图表来源**
 - [SkillsPage.tsx:52-200](file://web-ui/src/pages/SkillsPage.tsx#L52-L200)
 - [api.ts:838-880](file://web-ui/src/api.ts#L838-L880)
 
-章节来源
+**章节来源**
 - [SkillsPage.tsx:52-200](file://web-ui/src/pages/SkillsPage.tsx#L52-L200)
 - [api.ts:838-880](file://web-ui/src/api.ts#L838-L880)
+
+### 初始化向导与设置页面（SetupPage）
+- 功能特性
+  - 步骤化配置：提供模型供应商、消息频道、Agent 默认值三个步骤的渐进式配置。
+  - 实时状态同步：根据后端返回的 SetupStatus 动态调整当前步骤和导航状态。
+  - 错误处理：完善的错误捕获与用户反馈机制，支持重试操作。
+  - 导航控制：智能的路由跳转逻辑，避免无限循环问题。
+- 路由逻辑改进
+  - **无限循环问题解决**：通过在 SetupPage 中监听 setupStatus 变化，在检测到 completed 为 true 时立即导航到 /chat，防止路由守卫之间的循环调用。
+  - **状态驱动导航**：当后端返回新的 currentStep 时，自动更新前端激活步骤，确保用户始终在正确的配置步骤上。
+  - **加载状态管理**：在配置加载期间显示加载指示器，避免用户在数据未就绪时进行操作。
+- 数据流
+  - 通过 api.ts 的 /setup/* 接口与后端交互，支持配置更新、状态查询与步骤推进。
+
+```mermaid
+sequenceDiagram
+participant U as "用户"
+participant SP as "SetupPage"
+participant SU as "SetupProvider"
+participant API as "api.ts"
+U->>SP : 访问 /setup
+SP->>SU : 获取 setupStatus
+SU->>API : GET /setup/status
+API-->>SU : 返回 SetupStatus
+SU-->>SP : 提供状态数据
+SP->>SP : 检查 completed 状态
+alt completed = true
+SP->>SP : 导航到 /chat
+else completed = false
+SP->>SP : 设置当前步骤
+SP->>API : 保存步骤配置
+API-->>SP : 返回更新后的 SetupStatus
+SP->>SP : 更新激活步骤或导航到 /chat
+end
+```
+
+**图表来源**
+- [SetupPage.tsx:80-91](file://web-ui/src/pages/SetupPage.tsx#L80-L91)
+- [setup.tsx:27-37](file://web-ui/src/setup.tsx#L27-L37)
+- [api.ts:251](file://web-ui/src/api.ts#L251)
+
+**章节来源**
+- [SetupPage.tsx:1-603](file://web-ui/src/pages/SetupPage.tsx#L1-L603)
+- [setup.tsx:1-106](file://web-ui/src/setup.tsx#L1-L106)
+- [api.ts:251](file://web-ui/src/api.ts#L251)
 
 ### 认证与初始化向导（auth.tsx, setup.tsx）
 - 认证流程
@@ -284,6 +344,7 @@ P-->>U : 成功提示与刷新
 sequenceDiagram
 participant W as "窗口"
 participant AU as "AuthProvider"
+participant SU as "SetupProvider"
 participant API as "api.ts"
 W->>AU : 启动应用
 AU->>API : GET /auth/status
@@ -291,13 +352,19 @@ API-->>AU : 返回认证状态
 Note over AU : 监听 nanobot : auth-required 事件
 API-->>AU : 401 时触发事件
 AU-->>W : 更新认证态为未认证
+W->>SU : 检查 setupStatus
+SU->>API : GET /setup/status
+API-->>SU : 返回 SetupStatus
+SU-->>W : 提供设置状态
 ```
 
-图表来源
+**图表来源**
 - [auth.tsx:32-143](file://web-ui/src/auth.tsx#L32-L143)
+- [setup.tsx:27-37](file://web-ui/src/setup.tsx#L27-L37)
 - [api.ts:145-153](file://web-ui/src/api.ts#L145-L153)
+- [api.ts:251](file://web-ui/src/api.ts#L251)
 
-章节来源
+**章节来源**
 - [auth.tsx:32-143](file://web-ui/src/auth.tsx#L32-L143)
 - [setup.tsx:39-97](file://web-ui/src/setup.tsx#L39-L97)
 
@@ -327,11 +394,11 @@ V --> RM
 V --> RR
 ```
 
-图表来源
+**图表来源**
 - [vite.config.ts:1-138](file://web-ui/vite.config.ts#L1-L138)
 - [package.json:1-43](file://web-ui/package.json#L1-L43)
 
-章节来源
+**章节来源**
 - [vite.config.ts:1-138](file://web-ui/vite.config.ts#L1-L138)
 - [package.json:1-43](file://web-ui/package.json#L1-L43)
 
@@ -347,15 +414,14 @@ V --> RR
 - 图片与媒体
   - 附件上传采用 FormData，避免大文件阻塞主线程；消息面板自动滚动至底部，保证阅读连续性。
 
-[本节为通用指导，无需列出具体文件来源]
-
 ## 故障排查指南
 - 登录态异常
-  - 现象：页面提示“登录状态检查失败”或反复跳转登录。
+  - 现象：页面提示"登录状态检查失败"或反复跳转登录。
   - 排查：确认后端 /api/v1/auth/status 可访问；检查浏览器 Cookie 与 credentials 设置；观察 401 事件是否被正确派发。
 - 初始化向导卡住
   - 现象：停留在 /setup 或无法进入主界面。
   - 排查：确认 /api/v1/setup/status 返回值；若瞬时失败，确认重试逻辑是否生效。
+  - **新增**：检查 SetupPage 是否正确处理 completed 状态，避免无限循环。
 - 会话消息不更新
   - 现象：发送消息后无流式更新或最终消息未出现。
   - 排查：检查 sendMessageStream 的 SSE 事件解析与 done/error 类型处理；确认会话 ID 与附件引用正确。
@@ -365,18 +431,20 @@ V --> RR
 - 技能安装失败
   - 现象：安装/上传后列表未更新或报错。
   - 排查：核对 /skills/install、/skills/upload(-zip) 返回；确认本地缓存与市场搜索结果同步。
+- 设置页面路由循环
+  - **新增**：现象：设置页面在 /setup 和其他路由之间无限循环跳转。
+  - 排查：确认 SetupPage 的 useEffect 监听逻辑是否正确处理 setupStatus.completed；检查路由守卫的条件判断顺序。
 
-章节来源
+**章节来源**
 - [auth.tsx:32-143](file://web-ui/src/auth.tsx#L32-L143)
 - [setup.tsx:39-97](file://web-ui/src/setup.tsx#L39-L97)
 - [api.ts:311-387](file://web-ui/src/api.ts#L311-L387)
 - [api.ts:408-412](file://web-ui/src/api.ts#L408-L412)
 - [api.ts:848-864](file://web-ui/src/api.ts#L848-L864)
+- [SetupPage.tsx:80-91](file://web-ui/src/pages/SetupPage.tsx#L80-L91)
 
 ## 结论
-Nanobot Web 界面以 React + Vite 为基础，采用清晰的页面/组件/服务分层与强类型约束，结合 Ant Design 与 Framer Motion 提供一致且流畅的用户体验。通过路由守卫与状态服务保障安全与可用性，借助 SSE 与懒加载优化交互与性能。本文档为开发、调试与维护提供了全面参考。
-
-[本节为总结性内容，无需列出具体文件来源]
+Nanobot Web 界面以 React + Vite 为基础，采用清晰的页面/组件/服务分层与强类型约束，结合 Ant Design 与 Framer Motion 提供一致且流畅的用户体验。通过路由守卫与状态服务保障安全与可用性，借助 SSE 与懒加载优化交互与性能。本次更新特别加强了设置页面路由逻辑的稳定性，通过多重防护机制有效避免了无限循环问题，显著提升了用户体验。本文档为开发、调试与维护提供了全面参考。
 
 ## 附录
 
@@ -389,7 +457,7 @@ Nanobot Web 界面以 React + Vite 为基础，采用清晰的页面/组件/服�
   - NANOBOT_API_ORIGIN：后端 API 地址，默认 http://127.0.0.1:6788。
   - NANOBOT_WEB_UI_PORT：前端开发端口，默认 5173。
 
-章节来源
+**章节来源**
 - [vite.config.ts:83-137](file://web-ui/vite.config.ts#L83-L137)
 - [package.json:6-14](file://web-ui/package.json#L6-L14)
 
@@ -401,7 +469,7 @@ Nanobot Web 界面以 React + Vite 为基础，采用清晰的页面/组件/服�
 - 部署建议
   - 将构建产物部署至反向代理或静态托管；确保 /api 前缀转发至后端服务。
 
-章节来源
+**章节来源**
 - [package.json:7-9](file://web-ui/package.json#L7-L9)
 - [vite.config.ts:127-135](file://web-ui/vite.config.ts#L127-L135)
 
@@ -409,12 +477,26 @@ Nanobot Web 界面以 React + Vite 为基础，采用清晰的页面/组件/服�
 - 单元与端到端测试
   - Vitest：单元测试与快照。
   - Playwright：端到端测试，含可访问性测试与关键场景。
+  - **新增**：setup-route.test.tsx 提供设置路由的专门测试用例，验证不会触发请求循环。
 - 开发者模式
   - 通过 DevModeProvider 切换开发者模式，暴露额外菜单项与调试入口。
 - 日志与可观测性
   - 控制台日志、错误边界与 ApiError 统一错误对象，便于定位问题。
 
-章节来源
+**章节来源**
 - [package.json:10-14](file://web-ui/package.json#L10-L14)
 - [devMode.tsx:20-48](file://web-ui/src/devMode.tsx#L20-L48)
 - [api.ts:95-107](file://web-ui/src/api.ts#L95-L107)
+- [setup-route.test.tsx:126-147](file://web-ui/src/setup-route.test.tsx#L126-L147)
+
+### 设置页面路由逻辑最佳实践
+- **状态监听优先**：在 SetupPage 中优先监听 setupStatus 变化，及时处理 completed 状态。
+- **防循环保护**：使用 useEffect 监听 setupStatus.completed，一旦为 true 立即执行导航，避免路由守卫间的循环调用。
+- **错误处理**：确保 SetupOnly 路由守卫正确处理 setup.error 情况，提供友好的错误界面。
+- **加载状态管理**：在配置加载期间显示加载指示器，避免用户在数据未就绪时进行操作。
+- **测试验证**：通过 setup-route.test.tsx 验证路由逻辑的正确性，确保不会触发请求循环。
+
+**章节来源**
+- [SetupPage.tsx:80-91](file://web-ui/src/pages/SetupPage.tsx#L80-L91)
+- [App.tsx:166-195](file://web-ui/src/App.tsx#L166-L195)
+- [setup-route.test.tsx:126-147](file://web-ui/src/setup-route.test.tsx#L126-L147)

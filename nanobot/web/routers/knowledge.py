@@ -32,6 +32,17 @@ def create_knowledge_base(
     request: Request,
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
+    payload = dict(payload)
+    try:
+        defaults = request.app.state.model_providers.get_defaults(tenant_id="default")
+        if (
+            payload.get("embeddingModelSelection") is None
+            and payload.get("embedding_model_selection") is None
+            and defaults.get("defaultEmbedding") is not None
+        ):
+            payload["embeddingModelSelection"] = defaults.get("defaultEmbedding")
+    except Exception:
+        pass
     try:
         data = request.app.state.knowledge.create_knowledge_base(payload)
     except KnowledgeBaseConflictError as exc:
@@ -109,6 +120,21 @@ def update_knowledge_source(
         raise APIError(404, "KNOWLEDGE_SOURCE_NOT_FOUND", "Knowledge source not found.") from exc
     except KnowledgeBaseValidationError as exc:
         raise APIError(400, "KNOWLEDGE_SOURCE_INVALID", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
+@router.delete("/api/v1/knowledge-bases/{kb_id}/sources/{source_id}")
+def delete_knowledge_source(
+    request: Request,
+    kb_id: str,
+    source_id: str,
+) -> JSONResponse:
+    try:
+        data = request.app.state.knowledge.delete_source(kb_id, source_id)
+    except KnowledgeBaseNotFoundError as exc:
+        raise APIError(404, "KNOWLEDGE_BASE_NOT_FOUND", "Knowledge base not found.") from exc
+    except KnowledgeSourceNotFoundError as exc:
+        raise APIError(404, "KNOWLEDGE_SOURCE_NOT_FOUND", "Knowledge source not found.") from exc
     return _json_response(200, _ok(data))
 
 
@@ -208,6 +234,36 @@ def retrieve_test(
         raise APIError(404, "KNOWLEDGE_BASE_NOT_FOUND", "Knowledge base not found.") from exc
     except KnowledgeBaseValidationError as exc:
         raise APIError(400, "KNOWLEDGE_RETRIEVE_INVALID", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/knowledge-bases/{kb_id}/documents/parse")
+def parse_knowledge_documents(
+    request: Request,
+    kb_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+) -> JSONResponse:
+    try:
+        data = request.app.state.knowledge.parse_documents(kb_id, payload)
+    except KnowledgeBaseNotFoundError as exc:
+        raise APIError(404, "KNOWLEDGE_BASE_NOT_FOUND", "Knowledge base not found.") from exc
+    except KnowledgeBaseValidationError as exc:
+        raise APIError(400, "KNOWLEDGE_PARSE_INVALID", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/knowledge-bases/{kb_id}/documents/index")
+def index_knowledge_documents(
+    request: Request,
+    kb_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+) -> JSONResponse:
+    try:
+        data = request.app.state.knowledge.index_documents(kb_id, payload)
+    except KnowledgeBaseNotFoundError as exc:
+        raise APIError(404, "KNOWLEDGE_BASE_NOT_FOUND", "Knowledge base not found.") from exc
+    except KnowledgeBaseValidationError as exc:
+        raise APIError(400, "KNOWLEDGE_INDEX_INVALID", str(exc)) from exc
     return _json_response(200, _ok(data))
 
 

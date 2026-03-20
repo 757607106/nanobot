@@ -18,6 +18,7 @@ router = APIRouter()
 
 class SessionCreateRequest(BaseModel):
     title: str | None = None
+    agentId: str | None = None
 
 
 class SessionRenameRequest(BaseModel):
@@ -62,7 +63,8 @@ def create_session(
     payload: SessionCreateRequest | None = Body(default=None),
 ) -> JSONResponse:
     title = payload.title if payload else None
-    return _json_response(201, _ok(request.app.state.web.create_session(title)))
+    agent_id = payload.agentId if payload else None
+    return _json_response(201, _ok(request.app.state.web.create_session(title, agent_id)))
 
 
 @router.patch("/api/v1/chat/sessions/{session_id}")

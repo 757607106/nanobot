@@ -79,6 +79,9 @@ class PlatformInstance:
     def knowledge_db_path(self) -> Path:
         return self.data_dir / "web-knowledge.db"
 
+    def model_resources_db_path(self) -> Path:
+        return self.data_dir / "web-models.db"
+
     def team_definitions_db_path(self) -> Path:
         return self.data_dir / "web-teams.db"
 
@@ -96,6 +99,9 @@ class PlatformInstance:
 
     def mcp_registry_path(self) -> Path:
         return self.data_dir / "web-mcp-registry.json"
+
+    def mcp_resources_db_path(self) -> Path:
+        return self.data_dir / "web-mcp.db"
 
     def tenants_db_path(self) -> Path:
         return self.data_dir / "web-tenants.db"
