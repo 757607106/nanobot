@@ -381,7 +381,7 @@ class WebChatRuntimeService:
             model=isolated_config.agents.defaults.model,
             max_iterations=isolated_config.agents.defaults.max_tool_iterations,
             context_window_tokens=isolated_config.agents.defaults.context_window_tokens,
-            brave_api_key=isolated_config.tools.web.search.api_key or None,
+            web_search_config=isolated_config.tools.web.search,
             web_proxy=isolated_config.tools.web.proxy or None,
             exec_config=isolated_config.tools.exec,
             cron_service=self.state.cron,

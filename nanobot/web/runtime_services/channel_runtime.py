@@ -104,14 +104,16 @@ class WebChannelRuntimeService:
 
         loop = self._loop
         thread = self._thread
-        if loop is not None:
+        if loop is not None and not loop.is_closed():
             try:
                 future = asyncio.run_coroutine_threadsafe(self._stop_pipeline(), loop)
                 future.result(timeout=10)
             except Exception:  # noqa: BLE001
                 logger.exception("Error stopping channel pipeline")
-
-            loop.call_soon_threadsafe(loop.stop)
+            try:
+                loop.call_soon_threadsafe(loop.stop)
+            except RuntimeError:
+                logger.debug("Channel runtime loop already closed during stop")
 
         if thread is not None and thread.is_alive():
             thread.join(timeout=5)
@@ -161,7 +163,7 @@ class WebChannelRuntimeService:
             model=config.agents.defaults.model,
             max_iterations=config.agents.defaults.max_tool_iterations,
             context_window_tokens=config.agents.defaults.context_window_tokens,
-            brave_api_key=config.tools.web.search.api_key or None,
+            web_search_config=config.tools.web.search,
             web_proxy=config.tools.web.proxy or None,
             exec_config=config.tools.exec,
             restrict_to_workspace=config.tools.restrict_to_workspace,
@@ -171,18 +173,20 @@ class WebChannelRuntimeService:
             channel_dispatcher=dispatcher,
         )
 
-        self._channel_manager = ChannelManager(
-            config, self._bus, routing_service=routing_service,
-        )
-
-        logger.info("Channel routing pipeline ready — starting agent loop and channels")
         try:
+            self._channel_manager = ChannelManager(
+                config, self._bus, routing_service=routing_service,
+            )
+            logger.info("Channel routing pipeline ready — starting agent loop and channels")
             await asyncio.gather(
                 self._agent.run(),
                 self._channel_manager.start_all(),
             )
         except asyncio.CancelledError:
             pass
+        except BaseException:  # noqa: BLE001
+            logger.exception("Channel routing pipeline crashed")
+            await self._stop_pipeline()
 
     async def _stop_pipeline(self) -> None:
         """Gracefully tear down the running pipeline."""
@@ -228,7 +232,7 @@ class WebChannelRuntimeService:
             model=config.agents.defaults.model,
             max_iterations=config.agents.defaults.max_tool_iterations,
             context_window_tokens=config.agents.defaults.context_window_tokens,
-            brave_api_key=config.tools.web.search.api_key or None,
+            web_search_config=config.tools.web.search,
             web_proxy=config.tools.web.proxy or None,
             exec_config=config.tools.exec,
             restrict_to_workspace=config.tools.restrict_to_workspace,
@@ -328,7 +332,7 @@ class WebChannelRuntimeService:
                     model=config.agents.defaults.model,
                     max_iterations=config.agents.defaults.max_tool_iterations,
                     context_window_tokens=config.agents.defaults.context_window_tokens,
-                    brave_api_key=config.tools.web.search.api_key or None,
+                    web_search_config=config.tools.web.search,
                     web_proxy=config.tools.web.proxy or None,
                     exec_config=config.tools.exec,
                     restrict_to_workspace=config.tools.restrict_to_workspace,

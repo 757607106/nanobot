@@ -1,15 +1,15 @@
 .worktrees/
 .references/
 .assets
+.docs
 .env
 node_modules/
 *.pyc
 dist/
 build/
-docs/
 *.egg-info/
 *.egg
-*.pyc
+*.pycs
 *.pyo
 *.pyd
 *.pyw
@@ -26,3 +26,5 @@ nano.*.save
 web-ui/test-results/
 web-ui/playwright-report/
 tmp/web-e2e-runtime/
+.DS_Store
+uv.lock
