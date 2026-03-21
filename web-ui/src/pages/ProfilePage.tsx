@@ -502,8 +502,8 @@ export default function ProfilePage() {
             <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
               选择图片
             </Button>
-            <Text type="secondary">
-              {selectedFile ? `待上传：${selectedFile.name}` : '支持 PNG、JPEG、WEBP、GIF，建议控制在 2 MB 内。'}
+            <Text type="secondary" className="account-avatar-note">
+              {selectedFile ? selectedFile.name : 'PNG / JPEG / WEBP / GIF，2 MB 内'}
             </Text>
           </div>
 

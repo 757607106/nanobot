@@ -119,19 +119,6 @@ export default function ChannelDetailPage() {
     }
     return meta.primaryFields.length - missingLabels.length
   }, [meta, missingLabels.length])
-  const nextStepCopy = useMemo(() => {
-    if (!detail) {
-      return '补齐字段后继续。'
-    }
-    if (missingLabels.length > 0) {
-      return `补齐 ${missingLabels.join('、')} 后再测。`
-    }
-    if (!detail.channel.enabled) {
-      return '字段已齐，可直接启用。'
-    }
-    return '当前可用，可继续配置路由。'
-  }, [detail, missingLabels])
-
   async function loadChannel() {
     try {
       setLoading(true)
@@ -342,13 +329,7 @@ export default function ChannelDetailPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="渠道详情"
         title={`配置 ${meta.label}`}
-        description="管理接入字段、状态和连通性。"
-        badges={[
-          <Tag color={statusColorMap[detail.channel.status]} key="status">{detail.channel.statusLabel}</Tag>,
-          <Tag key="category">{channelCategoryLabels[meta.category]}</Tag>,
-        ]}
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadChannel()}>
@@ -368,20 +349,13 @@ export default function ChannelDetailPage() {
             </Button>
           </Space>
         )}
-        stats={[
-          { label: '当前状态', value: detail.channel.statusLabel },
-          { label: '是否启用', value: detail.channel.enabled ? '是' : '否' },
-          { label: '字段完成度', value: `${completedFieldCount}/${meta.primaryFields.length}` },
-          { label: '缺失字段', value: detail.channel.missingRequiredFields.length },
-        ]}
       />
 
       {missingLabels.length > 0 ? (
         <Alert
           showIcon
           type={detail.channel.enabled ? 'warning' : 'info'}
-          message="当前配置未完成"
-          description={`缺少：${missingLabels.join('、')}。${nextStepCopy}`}
+          message={`缺少：${missingLabels.join('、')}`}
         />
       ) : null}
 
@@ -390,7 +364,6 @@ export default function ChannelDetailPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>接入字段</Typography.Title>
-              <Text type="secondary">先补齐核心字段。</Text>
             </div>
             <Tag color="blue">{completedFieldCount}/{meta.primaryFields.length}</Tag>
           </div>
@@ -413,7 +386,6 @@ export default function ChannelDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>接入进度</Typography.Title>
-                <Text type="secondary">查看状态、缺失项和下一步。</Text>
               </div>
               <Switch
                 checked={Boolean(draftConfig.enabled)}
@@ -432,13 +404,6 @@ export default function ChannelDetailPage() {
               </div>
             </div>
 
-            <Text type="secondary">{detail.channel.statusDetail}</Text>
-
-            <div className="channel-detail-note">
-              <Text strong>下一步</Text>
-              <Text type="secondary">{nextStepCopy}</Text>
-            </div>
-
             {missingLabels.length > 0 ? (
               <div className="channel-card-meta">
                 {missingLabels.map((label) => (
@@ -448,7 +413,7 @@ export default function ChannelDetailPage() {
             ) : (
               <div className="channel-card-meta">
                 <Tag color="success">核心字段已齐全</Tag>
-                {Boolean(draftConfig.enabled) ? <Tag color="processing">可进入消息路由</Tag> : <Tag>下一步建议启用</Tag>}
+                {Boolean(draftConfig.enabled) ? <Tag color="processing">已启用</Tag> : <Tag>未启用</Tag>}
               </div>
             )}
           </Card>
@@ -457,7 +422,6 @@ export default function ChannelDetailPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>测试连接</Typography.Title>
-                <Text type="secondary">可直接用当前草稿测试。</Text>
               </div>
               <Button
                 icon={<SearchOutlined />}
@@ -488,9 +452,7 @@ export default function ChannelDetailPage() {
                   ))}
                 </div>
               </Space>
-            ) : (
-              <Text type="secondary">点击后执行探测。</Text>
-            )}
+            ) : null}
           </Card>
 
           {isWhatsApp ? (
@@ -498,7 +460,6 @@ export default function ChannelDetailPage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>绑定流程</Typography.Title>
-                  <Text type="secondary">启动 bridge、扫码并查看状态。</Text>
                 </div>
                 <Space wrap>
                   <Button
@@ -565,13 +526,12 @@ export default function ChannelDetailPage() {
                     <Space direction="vertical" size={8}>
                       <Text strong>扫码完成绑定</Text>
                       <QRCode value={whatsappBinding.qrCode} size={192} />
-                      <Text type="secondary">二维码刷新后需重新扫码。</Text>
                     </Space>
                   ) : (
                     <Text type="secondary">
                       {whatsappBinding.bindingRequired
-                        ? '启动后会在这里显示二维码。'
-                        : '当前已存在认证数据。'}
+                        ? '启动后显示二维码。'
+                        : '已存在认证数据。'}
                     </Text>
                   )}
 

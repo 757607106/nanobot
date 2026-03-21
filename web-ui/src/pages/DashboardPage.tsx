@@ -163,7 +163,6 @@ export default function DashboardPage() {
             <div className="chat-dashboard-channel-head">
               <div>
                 <strong>渠道概览</strong>
-                <span>严格参照参考项目的渠道状态卡布局，数据继续来自当前项目后端。</span>
               </div>
             </div>
 
@@ -212,7 +211,6 @@ export default function DashboardPage() {
               <div className="chat-dashboard-channel-head">
                 <div>
                   <strong>技能概览</strong>
-                  <span>展示当前实例已安装的技能状态。</span>
                 </div>
               </div>
 
@@ -228,7 +226,6 @@ export default function DashboardPage() {
                     <div key={item.id} className="dashboard-data-item">
                       <div>
                         <strong>{item.name}</strong>
-                        <span>{item.description}</span>
                       </div>
                       <Tag color={item.enabled !== false ? 'green' : 'default'}>
                         {item.enabled !== false ? '已启用' : '未启用'}
@@ -243,7 +240,6 @@ export default function DashboardPage() {
               <div className="chat-dashboard-channel-head">
                 <div>
                   <strong>自动化状态</strong>
-                  <span>只展示当前定时任务运行状态，不在这里放管理按钮。</span>
                 </div>
               </div>
 
@@ -260,7 +256,6 @@ export default function DashboardPage() {
                 <div className="dashboard-data-item">
                   <div>
                     <strong>任务数量</strong>
-                    <span>当前已登记的自动化任务数</span>
                   </div>
                   <Tag>{cron?.jobs ?? 0}</Tag>
                 </div>
@@ -278,7 +273,6 @@ export default function DashboardPage() {
               <div className="chat-dashboard-channel-head">
                 <div>
                   <strong>最近会话</strong>
-                  <span>只做数据展示，不再把会话工作台直接嵌进仪表板。</span>
                 </div>
               </div>
 

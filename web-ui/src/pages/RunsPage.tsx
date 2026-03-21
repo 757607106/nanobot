@@ -23,7 +23,6 @@ import {
 import type { TableProps } from 'antd'
 import {
   ClockCircleOutlined,
-  CodeOutlined,
   DownloadOutlined,
   PauseCircleOutlined,
   ReloadOutlined,
@@ -265,7 +264,7 @@ function renderTreeNode(node: AgentRunTreeNode, selectedRunId: string | null, na
           <Badge status={statusBadgeStatus(node.status)} text={statusLabel(node.status)} />
         </div>
         {node.resultSummary?.content && (
-          <Paragraph type="secondary" ellipsis={{ rows: 1 }} style={{ margin: 0, fontSize: 12 }}>
+          <Paragraph type="secondary" ellipsis={{ rows: 1 }} style={{ margin: 0 }}>
             {node.resultSummary.content}
           </Paragraph>
         )}
@@ -313,7 +312,7 @@ export default function RunsPage() {
       render: (text, record) => (
         <Space direction="vertical" size={0}>
           <Text strong>{text}</Text>
-          <Text type="secondary" style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>{record.runId}</Text>
+          <Text type="secondary" style={{ fontFamily: 'var(--font-mono)' }}>{record.runId}</Text>
         </Space>
       ),
     },
@@ -509,7 +508,7 @@ export default function RunsPage() {
             {selectedRun.resultSummary?.content ? (
               <Card title="执行结果" className="page-card" bordered={false}>
                 <div className="markdown-body" style={{ background: 'var(--nb-surface-strong)', padding: 24, borderRadius: 8 }}>
-                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', fontSize: 14, lineHeight: 1.6 }}>
+                  <pre className="studio-run-pre">
                     {selectedRun.resultSummary.content}
                   </pre>
                 </div>
@@ -566,18 +565,12 @@ export default function RunsPage() {
                       <Space>
                         <Text strong>{eventLabel(event.eventType, devMode)}</Text>
                         <Tag bordered={false}>{event.eventType}</Tag>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{formatDateTimeZh(event.createdAt)}</Text>
+                        <Text type="secondary">{formatDateTimeZh(event.createdAt)}</Text>
                       </Space>
                     ),
                     description: eventPayloadSummary(event.eventType, event.payload, devMode) && (
-                      <div style={{ 
-                        marginTop: 12, 
-                        padding: '12px 16px', 
-                        background: 'var(--nb-surface-strong)', 
-                        borderRadius: 8,
-                        border: '1px solid var(--nb-border)'
-                      }}>
-                        <Text type="secondary" style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}>
+                      <div className="studio-run-event-summary">
+                        <Text type="secondary" style={{ fontFamily: 'var(--font-mono)' }}>
                           {eventPayloadSummary(event.eventType, event.payload, devMode)}
                         </Text>
                       </div>
@@ -614,33 +607,20 @@ export default function RunsPage() {
             <List
               dataSource={threadMessages}
               renderItem={(item) => (
-                <List.Item style={{ border: 'none', padding: '16px 0' }}>
-                  <div style={{ width: '100%' }}>
-                    <div style={{ display: 'flex', gap: 16 }}>
-                      <div style={{ 
-                        width: 36, height: 36, borderRadius: 18, 
-                        background: item.role === 'user' ? 'var(--nb-accent)' : 'var(--nb-surface-strong)',
-                        color: item.role === 'user' ? '#fff' : 'var(--nb-text-secondary)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
+                <List.Item className="studio-run-message-item">
+                  <div className="studio-run-message-shell">
+                      <div className={`studio-run-message-avatar${item.role === 'user' ? ' is-user' : ''}`}>
                         {item.role === 'user' ? <UserOutlined /> : <RobotOutlined />}
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <Text strong style={{ fontSize: 15 }}>{item.role === 'user' ? '用户' : item.role}</Text>
-                          <Text type="secondary" style={{ fontSize: 12 }}>{formatDateTimeZh(item.createdAt)}</Text>
+                      <div className="studio-run-message-content">
+                        <div className="studio-run-message-meta">
+                          <Text strong>{item.role === 'user' ? '用户' : item.role}</Text>
+                          <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
                         </div>
-                        <div style={{ 
-                          padding: 16, 
-                          background: item.role === 'user' ? 'var(--nb-surface-strong)' : 'transparent',
-                          borderRadius: 8,
-                          border: item.role === 'user' ? 'none' : '1px solid var(--nb-border)'
-                        }}>
+                        <div className={`studio-run-message-bubble${item.role === 'user' ? ' is-user' : ''}`}>
                           <Text style={{ lineHeight: 1.6 }}>{item.content}</Text>
                         </div>
                       </div>
-                    </div>
                   </div>
                 </List.Item>
               )}
@@ -658,19 +638,16 @@ export default function RunsPage() {
         icon: <FileTextOutlined />,
         children: (
           <Card className="page-card" bordered={false} title="任务产出归档">
-            <div style={{ padding: 24, textAlign: 'center', background: 'var(--nb-surface-strong)', borderRadius: 8 }}>
-              <Space direction="vertical" size={16}>
-                <FileTextOutlined style={{ fontSize: 48, color: 'var(--nb-primary)' }} />
-                <Title level={4} style={{ margin: 0 }}>任务生成了归档文件</Title>
-                <Text type="secondary">包含执行过程中生成的所有代码、文档和数据。</Text>
-                <Space size={16} style={{ marginTop: 16 }}>
-                  <Button type="primary" icon={<DownloadOutlined />} onClick={handleDownloadArtifact} size="large">
-                    下载结果
-                  </Button>
-                  <Button icon={<CodeOutlined />} onClick={() => { /* View logic */ }} size="large">
-                    查看源码
-                  </Button>
-                </Space>
+            <div className="studio-run-artifact-panel">
+              <Space direction="vertical" size={14}>
+                <FileTextOutlined className="studio-run-artifact-icon" />
+                <Title level={4} style={{ margin: 0 }}>{artifact?.fileName || '运行归档'}</Title>
+                <Text type="secondary" className="studio-run-artifact-path">
+                  {artifact?.artifactPath || selectedRun.artifactPath}
+                </Text>
+                <Button type="primary" icon={<DownloadOutlined />} onClick={handleDownloadArtifact} size="large">
+                  下载结果
+                </Button>
               </Space>
             </div>
           </Card>
@@ -682,20 +659,7 @@ export default function RunsPage() {
       <div className="page-stack">
         <PageHero
           className="page-hero-compact studio-hero"
-          eyebrow={
-            <Space>
-              <a onClick={() => navigate('/studio/runs')} style={{ color: 'inherit', cursor: 'pointer' }}>执行记录</a>
-              <span>/</span>
-              <span>详情</span>
-            </Space>
-          }
           title={selectedRun.label}
-          description={selectedRun.taskPreview || '查看任务执行详情与结果。'}
-          badges={[
-            <Badge key="status" status={statusBadgeStatus(selectedRun.status)} text={statusLabel(selectedRun.status)} />,
-            <Tag key="kind" bordered={false}>{selectedRun.kind === 'team' ? 'Team' : 'Agent'}</Tag>,
-            selectedRun.teamId ? <Tag key="team" color="geekblue" bordered={false}>Team: {selectedRun.teamId}</Tag> : null
-          ]}
           actions={(
             <Space>
               <Tooltip title="刷新状态">
@@ -726,14 +690,7 @@ export default function RunsPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="任务中心"
         title="执行记录"
-        description="追踪 Agent 与团队协作任务的执行状态与历史。"
-        stats={[
-          { label: '总任务', value: runs.length },
-          { label: '运行中', value: activeCount },
-          { label: '异常终止', value: failedCount },
-        ]}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadRuns()} loading={loadingRuns}>
             刷新列表

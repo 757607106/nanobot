@@ -45,7 +45,6 @@ import {
   modelMatchesProvider,
 } from '../modelConfig'
 import { interactiveLift, interactiveTap, shellSpring } from '../motionTokens'
-import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type {
   AgentDefinition,
@@ -592,7 +591,6 @@ export default function AgentsPage() {
       <div className="page-header-block">
         <div className="page-section-title">
           <Typography.Title level={4}>所有数字员工</Typography.Title>
-          <Text type="secondary">查看和管理您的数字员工，点击卡片进行详细配置。</Text>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
@@ -790,7 +788,6 @@ export default function AgentsPage() {
             <div style={{ marginTop: 16 }}>
               <div style={{ marginBottom: 12 }}>
                 <Typography.Title level={5} style={{ marginBottom: 4 }}>能力配置</Typography.Title>
-                <Text type="secondary">为这个员工分配工具、技能和外部资源。</Text>
               </div>
               <Tabs
                 activeKey={capabilityTab}
@@ -880,7 +877,7 @@ export default function AgentsPage() {
               className="studio-inline-alert"
               type="info"
               showIcon
-              message="试运行会使用员工的完整配置真实执行任务，帮助你验证员工效果。"
+              message="试运行会使用当前员工配置执行任务。"
             />
 
             <div className="studio-form-actions">
@@ -902,7 +899,6 @@ export default function AgentsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>员工试运行</Typography.Title>
-                <Text type="secondary">给当前员工一个真实任务，确认它的角色说明、能力绑定和知识库是否按预期工作。</Text>
               </div>
               {currentAgent ? <DevOnly><Tag color="blue">{currentAgent.agentId}</Tag></DevOnly> : <Tag>未保存</Tag>}
             </div>

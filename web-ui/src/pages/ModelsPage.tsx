@@ -55,7 +55,7 @@ import type {
   ProviderMeta,
 } from '../types'
 
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 
 type WorkspaceMode = 'bindings' | 'agents'
 
@@ -338,18 +338,6 @@ export default function ModelsPage() {
     return bindingPresets.filter((preset) => getProviderMeta(configMeta, preset.providerName))
   }, [configMeta])
 
-  const configuredBindingsCount = useMemo(
-    () => bindingEntries.filter((entry) => entry.configured).length,
-    [bindingEntries],
-  )
-  const configuredProviderCount = useMemo(
-    () => new Set(bindingEntries.filter((entry) => entry.configured).map((entry) => entry.meta.name)).size,
-    [bindingEntries],
-  )
-  const activeCategoryCount = useMemo(
-    () => new Set(bindingEntries.map((entry) => entry.meta.category)).size,
-    [bindingEntries],
-  )
   const providerRows = useMemo(() => {
     if (!configMeta) {
       return [] as Array<{
@@ -834,9 +822,6 @@ export default function ModelsPage() {
   }
 
   const heroTitle = workspaceMode === 'bindings' ? '模型供应商' : '自定义 Agent 工作台'
-  const heroDescription = workspaceMode === 'bindings'
-    ? '严格参照参考项目的供应商页交互，主视图展示完整供应商列表，并在列表内直接展开配置。'
-    : '这里只看 Agent 的模型覆盖和连接差异，避免把平台配置和角色定制搅在一起。'
   const heroActions = (
     <Space wrap>
       <Button icon={<ReloadOutlined />} onClick={() => void loadModels()}>
@@ -866,43 +851,12 @@ export default function ModelsPage() {
       </Button>
     </Space>
   )
-  const heroBadges = workspaceMode === 'bindings'
-    ? [
-        defaultBinding ? <Tag key="default-binding">{defaultBinding.label || defaultBindingName}</Tag> : null,
-        defaultModelMismatch ? <Tag key="mismatch" color="warning">默认绑定与模型存在错配风险</Tag> : null,
-      ].filter(Boolean)
-    : [
-        <Tag key="agent-overrides" color={agentOverrideCount > 0 ? 'gold' : 'green'}>
-          {agentOverrideCount} 个 Agent 覆盖
-        </Tag>,
-        agentAttentionItems.length > 0
-          ? <Tag key="agent-attention" color="warning">{agentAttentionItems.length} 个待关注</Tag>
-          : null,
-      ].filter(Boolean)
-  const heroStats = workspaceMode === 'bindings'
-    ? [
-        { label: '已配置绑定', value: configuredBindingsCount },
-        { label: '默认绑定', value: defaultBinding?.label || '未设置' },
-        { label: '默认模型', value: config.agents.defaults.model || '待选择' },
-        { label: 'Agent 覆盖', value: agentOverrideCount },
-      ]
-    : [
-        { label: '自定义 Agent', value: agentOverrideCount },
-        { label: '继承全局', value: inheritedAgents.length },
-        { label: '需要关注', value: agentAttentionItems.length },
-        { label: '默认绑定', value: defaultBinding?.label || '未设置' },
-      ]
-
   return (
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="AI 模型"
         title={heroTitle}
-        description={heroDescription}
-        badges={heroBadges}
         actions={heroActions}
-        stats={heroStats}
       />
 
       <div className="models-mode-tabs">
@@ -931,7 +885,6 @@ export default function ModelsPage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>默认运行</Typography.Title>
-                  <Text type="secondary">保留当前项目的平台级默认模型、binding 和推理参数能力。</Text>
                 </div>
                 <Tag color="blue">平台级</Tag>
               </div>
@@ -943,7 +896,7 @@ export default function ModelsPage() {
                   </span>
                   <div className="models-provider-preview-copy">
                     <strong>{defaultBinding?.label || '尚未设置默认 binding'}</strong>
-                    <span>{defaultBindingMeta ? (providerDescriptions[defaultBindingMeta.name] || defaultBindingMeta.label) : '默认 binding 会决定平台级供应商、模型和访问地址。'}</span>
+                    <span>{defaultBindingMeta ? defaultBindingMeta.label : '未设置默认 binding'}</span>
                   </div>
                 </div>
                 <div className="models-provider-preview-stats">
@@ -1071,7 +1024,6 @@ export default function ModelsPage() {
               <div className="models-provider-list-header">
                 <div>
                   <Typography.Title level={4}>模型供应商</Typography.Title>
-                  <Text type="secondary">严格参照参考项目的供应商页交互，主视图展示完整供应商列表，点击某一行后在列表内直接展开配置。</Text>
                 </div>
                 <div className="models-directory-toolbar">
                   <Input
@@ -1125,11 +1077,7 @@ export default function ModelsPage() {
                           <div className="models-provider-row-intro">
                             <div className="models-provider-row-intro-copy">
                               <strong>{providerDescriptions[providerRow.meta.name] || providerRow.meta.label}</strong>
-                              <span>
-                                {providerRow.items.length > 0
-                                  ? `当前共有 ${providerRow.items.length} 个 binding，可在下面切换不同账号、地址和模型实例。`
-                                  : '当前还没有这个供应商的 binding，可以先创建第一条连接。'}
-                              </span>
+                              <span>{providerRow.items.length > 0 ? `${providerRow.items.length} 个 binding` : '未配置 binding'}</span>
                             </div>
                             <div className="models-editor-badge-row">
                               <Tag>{providerCategoryLabels[providerRow.meta.category]}</Tag>
@@ -1142,7 +1090,6 @@ export default function ModelsPage() {
                             <div className="models-form-section">
                               <div className="models-form-section-head">
                                 <strong>快速预设</strong>
-                                <span>这里保留当前项目的一键预设能力，但只显示当前供应商可用的预设。</span>
                               </div>
                               <div className="models-preset-grid">
                                 {providerRow.presets.map((preset) => (
@@ -1163,9 +1110,6 @@ export default function ModelsPage() {
 
                           {providerRow.items.length === 0 ? (
                             <div className="models-provider-empty-state">
-                              <Paragraph className="models-helper-copy">
-                                这个供应商还没有任何 binding。点击下面按钮后，会按当前供应商自动创建第一条连接。
-                              </Paragraph>
                               <Button type="primary" icon={<PlusOutlined />} onClick={() => addBinding(providerRow.meta.name)}>
                                 创建第一条绑定
                               </Button>
@@ -1217,7 +1161,6 @@ export default function ModelsPage() {
                                   <div className="models-form-section">
                                     <div className="models-form-section-head">
                                       <strong>基础信息</strong>
-                                      <span>可以保留多个同厂商实例，所以这里仍然保留当前项目的 binding 名称与供应商切换能力。</span>
                                     </div>
                                     <div className="models-editor-grid">
                                       <div className="config-field-block">
@@ -1247,7 +1190,6 @@ export default function ModelsPage() {
                                   <div className="models-form-section">
                                     <div className="models-form-section-head">
                                       <strong>模型与发现</strong>
-                                      <span>保留当前项目的模型拉取、模型建议和模型测试能力。</span>
                                     </div>
                                     <div className="config-field-block">
                                       <div className="config-field-label-row">
@@ -1282,14 +1224,12 @@ export default function ModelsPage() {
                                           </Button>
                                         ))
                                       ) : (
-                                        <Text type="secondary">当前供应商没有预置模型目录，可以直接手动输入。</Text>
+                                        <Text type="secondary">可手动输入模型。</Text>
                                       )}
                                     </div>
 
                                     {activeModelResult ? (
-                                      <Paragraph className="models-helper-copy">
-                                        {activeModelResult.message}，下方展示的是当前 API Key 和 API 地址返回的模型 ID。
-                                      </Paragraph>
+                                      <Text type="secondary">{activeModelResult.message}</Text>
                                     ) : null}
                                   </div>
 
@@ -1298,13 +1238,11 @@ export default function ModelsPage() {
                                       showIcon
                                       type="info"
                                       message="该供应商走 OAuth"
-                                      description="这类连接不在当前页面录入 API Key，仍通过外部登录流程完成认证。"
                                     />
                                   ) : (
                                     <div className="models-form-section">
                                       <div className="models-form-section-head">
                                         <strong>认证与地址</strong>
-                                        <span>保留当前项目的 API Key、API Base 和归一化地址逻辑。</span>
                                       </div>
                                       <div className="models-editor-grid">
                                         <div className="config-field-block">
@@ -1383,11 +1321,7 @@ export default function ModelsPage() {
                                         activeTestResult.responsePreview ? `响应: ${activeTestResult.responsePreview}` : null,
                                       ].filter(Boolean).join(' | ')}
                                     />
-                                  ) : (
-                                    <Paragraph className="models-helper-copy">
-                                      检测会直接用当前表单里的 API Key、API Base 和模型发起一次最小请求，适合验证百炼、豆包、DeepSeek、Kimi、智谱以及各类 OpenAI 兼容网关。
-                                    </Paragraph>
-                                  )}
+                                  ) : null}
                                 </>
                               ) : null}
                             </>
@@ -1409,7 +1343,6 @@ export default function ModelsPage() {
                 <div className="config-card-header">
                   <div className="page-section-title">
                     <Typography.Title level={4}>自定义 Agent 总览</Typography.Title>
-                    <Text type="secondary">这一屏只回答两件事：哪些 Agent 覆盖了默认模型，哪些配置值得你回去修。</Text>
                   </div>
                   <Tag color={agentOverrideCount > 0 ? 'gold' : 'green'}>
                     {agentOverrideCount} 个自定义
@@ -1420,7 +1353,6 @@ export default function ModelsPage() {
                   showIcon
                   type="info"
                   message="平台配置和角色配置已经拆开"
-                  description="Models 页面只负责默认 binding 和供应商连接；Agent 页面只负责个体覆盖。如果 Agent 同时配置 binding 和 model，会先使用 binding 的连接，再用模型覆盖默认模型。"
                 />
 
                 <div className="models-agent-kpi-grid">
@@ -1457,7 +1389,6 @@ export default function ModelsPage() {
                 <div className="config-card-header">
                   <div className="page-section-title">
                     <Typography.Title level={4}>需要关注</Typography.Title>
-                    <Text type="secondary">这些 Agent 已经偏离全局策略，但连接归属还不够清晰。</Text>
                   </div>
                   <Tag color={agentAttentionItems.length > 0 ? 'warning' : 'green'}>
                     {agentAttentionItems.length > 0 ? `${agentAttentionItems.length} 个待关注` : '已清空'}
@@ -1469,7 +1400,6 @@ export default function ModelsPage() {
                     showIcon
                     type="success"
                     message="目前没有需要优先处理的 Agent 覆盖"
-                    description="所有自定义 Agent 都有比较明确的连接归属，或者它们正在完整继承全局默认配置。"
                   />
                 ) : (
                   <div className="models-agent-list">
@@ -1501,7 +1431,6 @@ export default function ModelsPage() {
                 <div className="config-card-header">
                   <div className="page-section-title">
                     <Typography.Title level={4}>已自定义 Agent</Typography.Title>
-                    <Text type="secondary">这里列出所有显式覆盖了 binding、provider 或 model 的 Agent。</Text>
                   </div>
                   <Tag color={agentOverrideCount > 0 ? 'gold' : 'default'}>{agentOverrideCount} 个</Tag>
                 </div>
@@ -1538,7 +1467,6 @@ export default function ModelsPage() {
                 <div className="config-card-header">
                   <div className="page-section-title">
                     <Typography.Title level={4}>继承全局的 Agent</Typography.Title>
-                    <Text type="secondary">这些 Agent 会直接跟着默认 binding 和默认模型走，不需要在这里反复确认。</Text>
                   </div>
                   <Tag color="blue">{inheritedAgents.length} 个</Tag>
                 </div>
@@ -1561,9 +1489,7 @@ export default function ModelsPage() {
                       ))}
                     </div>
                     {inheritedAgents.length > 10 ? (
-                      <Paragraph className="models-helper-copy">
-                        还有 {inheritedAgents.length - 10} 个 Agent 正在完整继承全局配置，进入 Agent 页面可以继续查看。
-                      </Paragraph>
+                      <Text type="secondary">还有 {inheritedAgents.length - 10} 个 Agent。</Text>
                     ) : null}
                   </>
                 )}

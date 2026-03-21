@@ -76,23 +76,12 @@ export default function OperationsPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="Operations Center"
         title="日志与运维"
-        description="查看日志尾部和可用运维动作。"
-        badges={[
-          <Tag key="scope">实例日志 + Hook 动作</Tag>,
-          runningActions > 0 ? <Tag key="running" color="processing">执行中 {runningActions}</Tag> : null,
-        ].filter(Boolean)}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadOps()} loading={loading}>
             刷新
           </Button>
         )}
-        stats={[
-          { label: '日志文件', value: logs?.items.length ?? 0 },
-          { label: '可执行动作', value: actions.length },
-          { label: '已配置动作', value: configuredActions },
-        ].filter(Boolean)}
       />
 
       <div className="page-grid system-dashboard-grid">
@@ -100,7 +89,6 @@ export default function OperationsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>日志尾部</Typography.Title>
-              <Text type="secondary">查看最新日志尾部。</Text>
             </div>
           </div>
 
@@ -133,7 +121,6 @@ export default function OperationsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>运维动作</Typography.Title>
-              <Text type="secondary">只展示当前实例已开放的动作。</Text>
             </div>
           </div>
 
@@ -147,7 +134,6 @@ export default function OperationsPage() {
                       <div className="config-card-header">
                         <div className="page-section-title">
                           <Typography.Title level={5}>{item.label}</Typography.Title>
-                          <Text type="secondary">{item.description}</Text>
                         </div>
                         <Tag>{item.lastStatus}</Tag>
                       </div>

@@ -123,20 +123,6 @@ export default function ChannelBindingsPage() {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  // Stats
-  const stats = useMemo(() => {
-    const total = bindings.length
-    const enabled = bindings.filter((b) => b.enabled).length
-    const agentCount = bindings.filter((b) => b.targetType === 'agent').length
-    const teamCount = bindings.filter((b) => b.targetType === 'team').length
-    return [
-      { label: '绑定总数', value: total },
-      { label: '启用中', value: enabled },
-      { label: '员工绑定', value: agentCount },
-      { label: '团队绑定', value: teamCount },
-    ]
-  }, [bindings])
-
   const filteredBindings = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     return bindings.filter((binding) => {
@@ -320,14 +306,7 @@ export default function ChannelBindingsPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="渠道"
         title="消息路由"
-        description="管理渠道分发规则。"
-        stats={stats}
-        badges={[
-          <Tag key="route" color="processing">聊天 ID 匹配</Tag>,
-          <Tag key="scope">{filteredBindings.length} 条规则可见</Tag>,
-        ]}
         actions={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={loadWorkspace}>
@@ -352,7 +331,6 @@ export default function ChannelBindingsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>绑定列表</Typography.Title>
-              <Text type="secondary">筛选后进入编辑。</Text>
             </div>
             <Tag>{filteredBindings.length}/{bindings.length}</Tag>
           </div>
@@ -397,7 +375,7 @@ export default function ChannelBindingsPage() {
                           <LinkOutlined />
                           <strong>{item.channelName}</strong>
                           {item.channelChatId !== '*' && (
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Text type="secondary">
                               ({item.channelChatId})
                             </Text>
                           )}
@@ -428,7 +406,6 @@ export default function ChannelBindingsPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>{currentBinding ? '编辑绑定' : '新建绑定'}</Typography.Title>
-              <Text type="secondary">设置渠道、目标和启用状态。</Text>
             </div>
             {currentBinding ? <Tag color="purple">{currentBinding.bindingId}</Tag> : <Tag>草稿</Tag>}
           </div>
@@ -508,9 +485,6 @@ export default function ChannelBindingsPage() {
                   onChange={(val) => updateForm('priority', val ?? 0)}
                   style={{ width: '100%' }}
                 />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  数值越大优先级越高。
-                </Text>
               </div>
             </DevOnly>
 

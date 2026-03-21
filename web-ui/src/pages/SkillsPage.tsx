@@ -296,7 +296,7 @@ export default function SkillsPage() {
                   >
                     <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                        <Space direction="vertical" size={2} style={{ flex: 1, minWidth: 0 }}>
-                         <Text strong ellipsis style={{ fontSize: 16 }}>{skill.name}</Text>
+                         <Text strong ellipsis className="skills-card-title">{skill.name}</Text>
                          <Space size={6}>
                             <Tag bordered={false} style={{ margin: 0 }}>{skill.version || '1.0.0'}</Tag>
                             <Tag color={skill.source === 'workspace' ? 'green' : 'blue'} bordered={false} style={{ margin: 0 }}>
@@ -306,18 +306,18 @@ export default function SkillsPage() {
                        </Space>
                     </div>
                     
-                    <div style={{ flex: 1, marginBottom: 16 }}>
-                      <Paragraph type="secondary" ellipsis={{ rows: 2, expandable: false }} style={{ marginBottom: 0, minHeight: 44 }}>
+                    <div className="skills-card-copy">
+                      <Paragraph type="secondary" ellipsis={{ rows: 2, expandable: false }} className="skills-card-description">
                         {skill.description || '暂无描述。'}
                       </Paragraph>
                     </div>
 
                     <Space direction="vertical" size={6} style={{ width: '100%' }}>
-                      {skill.author ? <Text type="secondary" style={{ fontSize: 12 }}>作者：{getSkillAuthorLabel(skill.author)}</Text> : null}
+                      {skill.author ? <Text type="secondary" className="skills-card-author">{getSkillAuthorLabel(skill.author)}</Text> : null}
                       {skill.tags && skill.tags.length > 0 ? (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', height: 24, overflow: 'hidden' }}>
+                        <div className="skills-tag-cloud">
                           {skill.tags.map((tag) => (
-                            <Tag key={tag} style={{ margin: 0, fontSize: 12, lineHeight: '20px' }}>{tag}</Tag>
+                            <Tag key={tag} style={{ margin: 0 }}>{tag}</Tag>
                           ))}
                         </div>
                       ) : null}
@@ -406,7 +406,7 @@ export default function SkillsPage() {
                       >
                         <div style={{ marginBottom: 12 }}>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                              <Text strong ellipsis style={{ fontSize: 16, flex: 1 }}>{skill.name}</Text>
+                              <Text strong ellipsis className="skills-card-title" style={{ flex: 1 }}>{skill.name}</Text>
                               {alreadyInstalled && <Tag color="success" style={{ margin: 0 }}>已安装</Tag>}
                            </div>
                            <Space size={6}>
@@ -417,21 +417,21 @@ export default function SkillsPage() {
                            </Space>
                         </div>
 
-                        <div style={{ flex: 1, marginBottom: 16 }}>
-                          <Paragraph type="secondary" ellipsis={{ rows: 2, expandable: false }} style={{ marginBottom: 0, minHeight: 44 }}>
+                        <div className="skills-card-copy">
+                          <Paragraph type="secondary" ellipsis={{ rows: 2, expandable: false }} className="skills-card-description">
                             {skill.description || '暂无描述。'}
                           </Paragraph>
                         </div>
 
                         <Space direction="vertical" size={6} style={{ width: '100%' }}>
-                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--nb-text-secondary)' }}>
+                           <div className="skills-market-meta">
                               <span>下载 {skill.downloads}</span>
                               <span>{skill.updatedAt ? formatDateTimeZh(skill.updatedAt).split(' ')[0] : '-'}</span>
                            </div>
                           {skill.tags && skill.tags.length > 0 ? (
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', height: 24, overflow: 'hidden' }}>
+                            <div className="skills-tag-cloud">
                               {skill.tags.map((tag) => (
-                                <Tag key={tag} style={{ margin: 0, fontSize: 12, lineHeight: '20px' }}>{tag}</Tag>
+                                <Tag key={tag} style={{ margin: 0 }}>{tag}</Tag>
                               ))}
                             </div>
                           ) : null}
@@ -465,13 +465,7 @@ export default function SkillsPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="扩展能力"
         title="技能中心"
-        description="管理工作区已安装的技能，或从 SkillHub 市场发现新能力。"
-        stats={[
-          { label: '已安装', value: skills.length },
-          { label: '市场资源', value: marketplaceTotal },
-        ]}
       />
 
       <input

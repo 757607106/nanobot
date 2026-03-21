@@ -258,19 +258,7 @@ export default function MemoryAuditPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="审计工作台"
         title="团队记忆审计"
-        description="把团队共享记忆、候选内容、对话上下文和检索证据放到同一个审计台里，帮助你判断哪些信息该沉淀、哪些只属于一次性上下文。"
-        stats={[
-          { label: '团队数', value: teams.length },
-          { label: '待审候选', value: pendingCount },
-          { label: 'Thread 消息', value: teamThread?.session.messageCount ?? 0 },
-          { label: '最近 Runs', value: recentRuns.length },
-        ]}
-        badges={[
-          <Tag key="mode" color="processing">支持候选审核</Tag>,
-          <Tag key="scope">支持记忆检索</Tag>,
-        ]}
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
@@ -292,13 +280,12 @@ export default function MemoryAuditPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>团队列表</Typography.Title>
-              <Text type="secondary">先选定一个团队，再在右侧统一查看共享记忆、候选审核和检索证据。</Text>
             </div>
             <Tag color="blue">{teams.length}</Tag>
           </div>
 
           {teams.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有 Team。">
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 Team">
               <Button type="primary" onClick={() => navigate('/studio/teams/new')}>
                 创建第一个 Team
               </Button>
@@ -320,7 +307,6 @@ export default function MemoryAuditPage() {
                       </Space>
                       <Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '启用' : '停用'}</Tag>
                     </div>
-                    <Text type="secondary">{item.description || '暂未补充团队说明。'}</Text>
                     <div className="studio-agent-list-meta">
                       <Tag>{item.memberCount} 位成员</Tag>
                       <Tag>{item.enabled ? '可审计' : '已停用'}</Tag>
@@ -337,17 +323,12 @@ export default function MemoryAuditPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>{currentTeam ? currentTeam.name : '审计概览'}</Typography.Title>
-                <Text type="secondary">
-                  {currentTeam
-                    ? currentTeam.description || '先看共享记忆、候选状态和最近执行，再决定从哪一块继续排查。'
-                    : '从左侧选择一个团队，在这里查看它的完整记忆审计工作台。'}
-                </Text>
               </div>
               {currentTeam ? <Tag color="purple">{currentTeam.teamId}</Tag> : <Tag>未选择</Tag>}
             </div>
 
             {!currentTeam ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择一个 Team。" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择 Team" />
             ) : (
               <Space wrap className="studio-chip-wrap">
                 <Tag>{currentTeam.memberCount} 位成员</Tag>
@@ -377,7 +358,6 @@ export default function MemoryAuditPage() {
                       <div className="config-card-header">
                         <div className="page-section-title">
                           <Typography.Title level={4}>共享记忆概览</Typography.Title>
-                          <Text type="secondary">先判断当前长期记忆里写了什么，再决定哪些候选值得继续沉淀。</Text>
                         </div>
                         <Tag color="purple">{teamMemory?.candidateCount ?? pendingCount} 候选</Tag>
                       </div>
@@ -391,13 +371,12 @@ export default function MemoryAuditPage() {
                       <div className="config-card-header">
                         <div className="page-section-title">
                           <Typography.Title level={4}>最近执行</Typography.Title>
-                          <Text type="secondary">从这里跳转最近的 team run 和 thread，核对记忆是怎么被产出的。</Text>
                         </div>
                         <Tag>{recentRuns.length}</Tag>
                       </div>
 
                       {recentRuns.length === 0 ? (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有运行记录。" />
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无运行记录" />
                       ) : (
                         <List
                           className="studio-run-list"
@@ -438,13 +417,12 @@ export default function MemoryAuditPage() {
                     <div className="config-card-header">
                       <div className="page-section-title">
                         <Typography.Title level={4}>最近对话</Typography.Title>
-                        <Text type="secondary">回看团队级多轮对话，帮助你判断某条候选记忆究竟来自稳定事实还是一次性上下文。</Text>
                       </div>
                       {teamThread ? <Tag color="cyan">{teamThread.session.messageCount} 条消息</Tag> : null}
                     </div>
 
                     {teamThreadMessages.length === 0 ? (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个团队还没有对话记录。" />
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无对话" />
                     ) : (
                       <List
                         className="studio-run-list"
@@ -477,7 +455,6 @@ export default function MemoryAuditPage() {
                     <div className="config-card-header">
                       <div className="page-section-title">
                         <Typography.Title level={4}>候选记录</Typography.Title>
-                        <Text type="secondary">把候选记忆和状态变化独立拉出来，方便集中审核和处理。</Text>
                       </div>
                       <Tag color={pendingCount > 0 ? 'processing' : 'default'}>{filteredCandidates.length}/{memoryCandidates.length}</Tag>
                     </div>
@@ -495,7 +472,7 @@ export default function MemoryAuditPage() {
                     />
 
                     {filteredCandidates.length === 0 ? (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下没有候选记忆。" />
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无候选记忆" />
                     ) : (
                       <List
                         className="studio-run-list"
@@ -540,7 +517,6 @@ export default function MemoryAuditPage() {
                     <div className="config-card-header">
                       <div className="page-section-title">
                         <Typography.Title level={4}>上下文参考</Typography.Title>
-                        <Text type="secondary">优先查看候选全文；如果还不能判断，再回看最近的团队对话上下文。</Text>
                       </div>
                       {selectedMemorySource ? <Tag color="purple">{selectedMemorySource.sourceType}</Tag> : <Tag>最近对话</Tag>}
                     </div>
@@ -554,7 +530,7 @@ export default function MemoryAuditPage() {
                         <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
                       </div>
                     ) : teamThreadMessages.length === 0 ? (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧候选点“查看全文”后，会在这里展示原文。" />
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="点击“查看全文”后显示原文" />
                     ) : (
                       <List
                         className="studio-run-list"
@@ -586,7 +562,6 @@ export default function MemoryAuditPage() {
                   <div className="config-card-header">
                     <div className="page-section-title">
                       <Typography.Title level={4}>记忆检索</Typography.Title>
-                      <Text type="secondary">在一处检索团队记忆、候选内容、团队对话和结果文档，先把证据链串起来。</Text>
                     </div>
                     <Tag color="blue">{currentTeam.name}</Tag>
                   </div>
@@ -619,9 +594,7 @@ export default function MemoryAuditPage() {
                       ]}
                     />
                     <Text type="secondary">
-                      {memorySearchEffectiveMode
-                        ? `当前使用：${memorySearchEffectiveMode}`
-                        : '标准适合快速查找，平衡适合通用检索，深度适合更宽松的语义召回。'}
+                      {memorySearchEffectiveMode ? `当前：${memorySearchEffectiveMode}` : '选择检索模式'}
                     </Text>
                   </div>
 
@@ -631,11 +604,10 @@ export default function MemoryAuditPage() {
                     <Card className="config-panel-card">
                       <div className="page-section-title">
                         <Typography.Title level={5}>Search Hits</Typography.Title>
-                        <Text type="secondary">优先从命中的摘要和来源类型判断，这条信息到底属于长期记忆、短期线程还是运行产物。</Text>
                       </div>
 
                       {memorySearchResults.length === 0 ? (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="执行一次检索后，会在这里看到命中的记忆源。" />
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无检索结果" />
                       ) : (
                         <List
                           className="studio-run-list"
@@ -666,7 +638,6 @@ export default function MemoryAuditPage() {
                     <Card className="config-panel-card">
                       <div className="page-section-title">
                         <Typography.Title level={5}>Source Preview</Typography.Title>
-                        <Text type="secondary">这里展示原始记忆源全文，便于核对命中片段是不是该写入长期记忆，或者只是一次性上下文。</Text>
                       </div>
 
                       {selectedMemorySource ? (
@@ -678,7 +649,7 @@ export default function MemoryAuditPage() {
                           <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
                         </div>
                       ) : (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧选中一条命中的记忆源后，会在这里显示全文。" />
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选择结果后显示全文" />
                       )}
                     </Card>
                   </div>

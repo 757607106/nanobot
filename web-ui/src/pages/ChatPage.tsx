@@ -194,11 +194,6 @@ function RecentUploadActions({
     <div className={['chat-recent-uploads', variant === 'welcome' ? 'is-welcome' : 'is-inline'].join(' ')}>
       <div className="chat-inline-section-head">
         <span>{variant === 'welcome' ? '从最近文件开始' : '最近文件'}</span>
-        <Text type="secondary">
-          {variant === 'welcome'
-            ? '直接把文件加入上下文，或者插入路径继续提问。'
-            : '只保留和当前对话最相关的文件入口。'}
-        </Text>
       </div>
       <div className="chat-recent-upload-list">
         {visibleUploads.map((item) => {
@@ -931,11 +926,6 @@ export default function ChatPage() {
               <div className="chat-stage-copy">
                 <span className="section-kicker">当前会话</span>
                 <Title level={4}>{selectedSessionTitle}</Title>
-                <Text type="secondary">
-                  {selectedSession
-                    ? `最后更新于 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}，继续追问或补充附件即可。`
-                    : '直接开始输入，系统会自动创建新会话。'}
-                </Text>
               </div>
               <div className="chat-stage-actions">
                 {workspaceData?.runtime.model ? (
@@ -962,8 +952,7 @@ export default function ChatPage() {
                     <Welcome
                       variant="borderless"
                       icon={<RobotOutlined />}
-                      title={selectedSession ? '继续这个对话' : '开始一个更干净的工作区对话'}
-                      description="把问题、文件和必要上下文放进同一个输入区。"
+                      title={selectedSession ? '继续这个对话' : '开始新对话'}
                     extra={
                       <div className="chat-empty-extra">
                         {quickPromptItems.length > 0 ? (
@@ -998,7 +987,6 @@ export default function ChatPage() {
                 <div className="composer-pending-attachments">
                   <div className="chat-inline-section-head">
                     <span>待发送附件</span>
-                    <Text type="secondary">发送时会自动上传到当前工作区。</Text>
                   </div>
                   <div>
                     <Attachments
@@ -1042,7 +1030,7 @@ export default function ChatPage() {
                         placeholder={{
                           icon: <CloudUploadOutlined />,
                           title: '拖拽文件到这里',
-                          description: '支持文档、图片、代码等，发送时自动上传。',
+                          description: '发送时自动上传。',
                         }}
                       >
                         <Button
@@ -1056,16 +1044,16 @@ export default function ChatPage() {
                     </span>
                   }
                   footer={
-                    <div className="composer-footer">
-                      <div className="composer-footer-copy">
-                        <Text type="secondary">
-                          {uploadingFiles
-                            ? '正在上传附件，请稍候...'
-                            : pendingAttachments.length
-                            ? `发送时将自动上传 ${pendingAttachments.length} 个附件。Enter 发送，Shift + Enter 换行。`
-                            : 'Enter 发送，Shift + Enter 换行。也可以直接拖拽或粘贴文件。'}
-                        </Text>
-                      </div>
+                      <div className="composer-footer">
+                        <div className="composer-footer-copy">
+                          <Text type="secondary">
+                            {uploadingFiles
+                              ? '附件上传中...'
+                              : pendingAttachments.length
+                            ? `发送时上传 ${pendingAttachments.length} 个附件。Enter 发送。`
+                            : 'Enter 发送。'}
+                          </Text>
+                        </div>
                       <div className="composer-footer-actions">
                         {draftAttachmentRefs.length ? (
                           <AttachmentTags

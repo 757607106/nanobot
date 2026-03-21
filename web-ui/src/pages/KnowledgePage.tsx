@@ -473,7 +473,7 @@ export default function KnowledgePage() {
       render: (text, record) => (
         <Space direction="vertical" size={0}>
           <Text strong>{text || record.fileName}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>{record.fileName}</Text>
+          <Text type="secondary" className="knowledge-meta-text">{record.fileName}</Text>
         </Space>
       ),
     },
@@ -615,7 +615,7 @@ export default function KnowledgePage() {
                           <Paragraph ellipsis={{ rows: 3, expandable: true }}>
                             {item.content}
                           </Paragraph>
-                          <Text type="secondary" style={{ fontSize: 12 }}>Doc ID: {item.docId}</Text>
+                          <Text type="secondary" className="knowledge-meta-text">Doc ID: {item.docId}</Text>
                         </Space>
                       </List.Item>
                     )}
@@ -711,14 +711,7 @@ export default function KnowledgePage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="企业知识库"
         title="知识库"
-        description="管理知识资料、内容接入与检索验证。"
-        stats={[
-          { label: '知识库', value: knowledgeBases.length },
-          { label: '文档', value: documents.length },
-          { label: '任务', value: jobs.length },
-        ]}
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
@@ -760,7 +753,7 @@ export default function KnowledgePage() {
                           <Text strong>{item.name}</Text>
                           <Badge status={item.enabled ? 'success' : 'default'} />
                         </div>
-                        <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+                        <Text type="secondary" ellipsis>
                           {item.description || '暂无描述'}
                         </Text>
                       </div>
@@ -775,7 +768,7 @@ export default function KnowledgePage() {
             {!selectedKbId && !isCreatingKb ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="请从左侧选择一个知识库或新建"
+                description="选择知识库或新建"
                 style={{ background: 'var(--nb-card-bg)', padding: 48, borderRadius: 12 }}
               />
             ) : (

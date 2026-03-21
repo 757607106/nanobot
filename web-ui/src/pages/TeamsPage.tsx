@@ -653,7 +653,6 @@ export default function TeamsPage() {
       <div className="page-header-block">
         <div className="page-section-title">
           <Typography.Title level={4}>所有协作团队</Typography.Title>
-          <Text type="secondary">将 AI 员工组建成团队，实现多角色协作完成复杂任务。</Text>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
@@ -671,7 +670,7 @@ export default function TeamsPage() {
       {teams.length === 0 && !loadingWorkspace ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="当前还没有可复用团队。"
+          description="暂无团队"
           className="page-card"
         >
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/teams/new')}>
@@ -705,7 +704,7 @@ export default function TeamsPage() {
                 <div className="id-badge-info">
                   <h4>{item.name}</h4>
                   <p className="ant-typography-ellipsis ant-typography-ellipsis-single-line">
-                    {item.description || '暂未补充团队说明。'}
+                    {item.description || '暂无说明'}
                   </p>
                   <div className="id-badge-id">{item.teamId.split('-')[0].toUpperCase()}</div>
                 </div>
@@ -760,7 +759,6 @@ export default function TeamsPage() {
             <div className="config-card-header">
               <div className="page-section-title">
                 <Typography.Title level={4}>{currentTeam ? '团队配置' : '新建团队'}</Typography.Title>
-                <Text type="secondary">设置负责人、成员、协作方式和可共享的知识资源。</Text>
               </div>
               {currentTeam ? <DevOnly><Tag color="blue">{currentTeam.teamId}</Tag></DevOnly> : <Tag>未保存</Tag>}
             </div>
@@ -864,13 +862,6 @@ export default function TeamsPage() {
               ]}
             />
 
-            <Alert
-              className="studio-inline-alert"
-              type="info"
-              showIcon
-              message="保存后就可以直接发起团队试运行，验证负责人分工、成员协作和最终汇总结果。"
-            />
-
             <div className="studio-form-actions">
               <Space wrap>
                 <Button icon={<CopyOutlined />} onClick={() => void handleCopy()} disabled={!currentTeam} loading={copying}>
@@ -893,7 +884,6 @@ export default function TeamsPage() {
                 <div className="config-card-header">
                   <div className="page-section-title">
                     <Typography.Title level={4}>团队对话</Typography.Title>
-                    <Text type="secondary">这里记录团队任务和团队回复，方便回看一次协作是怎么完成的。</Text>
                   </div>
                   {teamThread ? <Tag color="cyan">{teamThread.session.messageCount} 条消息</Tag> : null}
                 </div>
@@ -914,13 +904,13 @@ export default function TeamsPage() {
                 </div>
 
                 {!currentTeam ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先保存团队，才能生成团队对话。" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先保存团队" />
                 ) : loadingThread && teamThreadMessages.length === 0 ? (
                   <div className="center-box">
                     <Spin />
                   </div>
                 ) : teamThreadMessages.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个团队还没有对话记录。" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无对话" />
                 ) : (
                   <List
                     className="studio-run-list"
@@ -949,7 +939,6 @@ export default function TeamsPage() {
                 <div className="config-card-header">
                   <div className="page-section-title">
                     <Typography.Title level={4}>团队试运行</Typography.Title>
-                    <Text type="secondary">发起一次真实团队任务，验证负责人分工、成员协作和最终汇总结果。</Text>
                   </div>
                   <Tag color="geekblue">{devMode ? 'Supervisor 模式' : '负责人汇总模式'}</Tag>
                 </div>
@@ -996,7 +985,6 @@ export default function TeamsPage() {
 
                 <div className="page-section-title">
                   <Typography.Title level={5}>当前团队摘要</Typography.Title>
-                  <Text type="secondary">这里展示当前团队的基础配置，方便和最近一次执行结果对照。</Text>
                 </div>
 
                 <Space wrap size={[8, 8]}>
@@ -1005,16 +993,11 @@ export default function TeamsPage() {
                   <Tag color="gold">共享知识库：{form.sharedKnowledgeBindingIds.length}</Tag>
                 </Space>
 
-                <Paragraph className="studio-result-copy">
-                  负责人统筹任务分配，成员协作完成并汇总结果。
-                </Paragraph>
-
                 {activeRecentRun ? (
                   <Alert
                     type="info"
                     showIcon
                     message={`检测到运行中的团队任务：${activeRecentRun.label}`}
-                    description="最近执行列表会自动刷新，你也可以直接跳转到执行记录页面查看完整过程。"
                   />
                 ) : null}
 
@@ -1126,7 +1109,7 @@ export default function TeamsPage() {
                     <Spin />
                   </div>
                 ) : recentRuns.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个团队还没有执行记录。" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行记录" />
                 ) : (
                   <List
                     className="studio-run-list"
@@ -1178,7 +1161,7 @@ export default function TeamsPage() {
                 </div>
 
                 {selectedMembers.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有选择团队成员。" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无团队成员" />
                 ) : (
                   <List
                     className="studio-run-list"
@@ -1207,7 +1190,6 @@ export default function TeamsPage() {
               <div className="config-card-header">
                 <div className="page-section-title">
                   <Typography.Title level={4}>团队记忆</Typography.Title>
-                  <Text type="secondary">维护团队共享记忆，并审核成员沉淀出来的候选内容。</Text>
                 </div>
                 <Tag color="purple">
                   {teamMemory?.candidateCount ?? memoryCandidates.filter((item) => item.status === 'proposed').length} 待处理
@@ -1228,7 +1210,7 @@ export default function TeamsPage() {
                   />
                   <Space wrap>
                     <Text type="secondary">
-                      {teamMemory?.updatedAt ? `最近更新时间：${formatDateTimeZh(teamMemory.updatedAt)}` : '当前还没有保存过团队共享记忆。'}
+                      {teamMemory?.updatedAt ? `最近更新：${formatDateTimeZh(teamMemory.updatedAt)}` : '未保存'}
                     </Text>
                     {currentTeam ? (
                       <Tag>
@@ -1252,7 +1234,6 @@ export default function TeamsPage() {
 
               <div className="studio-runs-header">
                 <Typography.Title level={5}>记忆候选</Typography.Title>
-                <Text type="secondary">成员只提出候选，不直接改写团队共享记忆；这里由负责人或人工决定是否采用。</Text>
               </div>
 
               {loadingMemory && memoryCandidates.length === 0 ? (
@@ -1260,7 +1241,7 @@ export default function TeamsPage() {
                   <Spin />
                 </div>
               ) : memoryCandidates.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有团队记忆候选。" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无记忆候选" />
               ) : (
                 <List
                   className="studio-run-list"
@@ -1303,7 +1284,6 @@ export default function TeamsPage() {
 
               <div className="studio-runs-header">
                 <Typography.Title level={5}>记忆检索</Typography.Title>
-                <Text type="secondary">可以一起检索工作区记忆、团队记忆、候选内容、团队对话和结果文档。</Text>
               </div>
 
               <div className="studio-form-field">
@@ -1333,11 +1313,9 @@ export default function TeamsPage() {
                     { label: '深度', value: 'semantic' },
                   ]}
                 />
-                <Text type="secondary">
-                  {memorySearchEffectiveMode
-                    ? `当前使用：${memorySearchEffectiveMode}`
-                    : '标准适合快速查找，平衡适合通用检索，深度适合更宽松的语义召回。'}
-                </Text>
+                {memorySearchEffectiveMode ? (
+                  <Text type="secondary">当前：{memorySearchEffectiveMode}</Text>
+                ) : null}
               </div>
 
               {memorySearchResults?.length ? (

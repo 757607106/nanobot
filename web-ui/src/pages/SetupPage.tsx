@@ -18,7 +18,6 @@ import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
 import { MotionGroup, MotionPanel } from '../components/MotionSurface'
 import PageHero from '../components/PageHero'
-import { providerDescriptions } from '../configMeta'
 import {
   ensureProviderSelection,
   getAllModelBindings,
@@ -302,23 +301,8 @@ export default function SetupPage() {
     <div className="setup-screen">
       <div className="setup-shell">
         <PageHero
-          eyebrow="FIRST-RUN SETUP"
           title="欢迎使用 Nanobot"
-          description="三步完成初始化。"
           className="page-hero-compact"
-          badges={setupStatus.steps.map((step) => (
-            <span className="hero-badge" key={step.key}>
-              {step.label} · {step.complete ? (step.skipped ? '已跳过' : '已完成') : step.optional ? '可选' : '待完成'}
-            </span>
-          ))}
-          stats={[
-            { label: '当前步骤', value: setupStatus.currentStep === 'done' ? '完成' : setupStatus.currentStep },
-            {
-              label: '完成进度',
-              value: `${setupStatus.steps.filter((step) => step.complete).length} / ${setupStatus.steps.length}`,
-            },
-            { label: '实例状态', value: setupStatus.completed ? '可进入工作台' : '等待初始化' },
-          ]}
         />
 
         <MotionGroup className="page-card setup-step-card">
@@ -357,9 +341,6 @@ export default function SetupPage() {
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
                   <Typography.Title level={4}>1. 选择 AI 服务</Typography.Title>
-                  <Typography.Paragraph>
-                    选择当前实例默认使用的 provider，并补齐模型名与基础认证信息。
-                  </Typography.Paragraph>
                 </div>
 
                 <label className="setup-field">
@@ -382,10 +363,6 @@ export default function SetupPage() {
                   />
                 </label>
 
-                <div className="setup-note-block">
-                  {providerMeta ? providerDescriptions[providerMeta.name] || providerMeta.label : '选择一个可用供应商。'}
-                </div>
-
                 {!providerMeta?.isOauth ? (
                   <label className="setup-field">
                     <span>访问密钥</span>
@@ -396,11 +373,7 @@ export default function SetupPage() {
                       data-testid={testIds.setup.apiKeyInput}
                     />
                   </label>
-                ) : (
-                  <div className="setup-note-block">
-                    该供应商走 OAuth，不在本向导里录入 API Key。
-                  </div>
-                )}
+                ) : null}
 
                 {!providerMeta?.isOauth ? (
                   <label className="setup-field">
@@ -435,9 +408,6 @@ export default function SetupPage() {
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
                   <Typography.Title level={4}>2. 消息频道</Typography.Title>
-                  <Typography.Paragraph>
-                    这是可选步骤。你可以先跳过，也可以先把 Telegram 接起来。
-                  </Typography.Paragraph>
                 </div>
 
                 <Segmented
@@ -500,11 +470,7 @@ export default function SetupPage() {
                       />
                     </div>
                   </>
-                ) : (
-                  <div className="setup-note-block">
-                    跳过后依然可以在配置页继续维护频道，向导会把这一步标记为已完成。
-                  </div>
-                )}
+                ) : null}
 
                 <div className="setup-actions-row">
                   <Button loading={saving} onClick={() => setActiveStep('provider')}>
@@ -530,9 +496,6 @@ export default function SetupPage() {
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
                   <Typography.Title level={4}>3. 默认工作参数</Typography.Title>
-                  <Typography.Paragraph>
-                    确认工作区、上下文窗口、温度和工具循环边界，后续所有新会话都会继承这里的默认值。
-                  </Typography.Paragraph>
                 </div>
 
                 <label className="setup-field">

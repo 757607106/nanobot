@@ -13,7 +13,6 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ChannelDetailPage = lazy(() => import('./pages/ChannelDetailPage'))
 const ChannelsPage = lazy(() => import('./pages/ChannelsPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
-// const MainPromptPage = lazy(() => import('./pages/MainPromptPage'))
 const McpPage = lazy(() => import('./pages/McpPage'))
 const McpServerDetailPage = lazy(() => import('./pages/McpServerDetailPage'))
 const ModelsPage = lazy(() => import('./pages/ModelsPage'))
@@ -31,7 +30,6 @@ const RunsPage = lazy(() => import('./pages/RunsPage'))
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'))
 const SystemLayoutPage = lazy(() => import('./pages/SystemLayoutPage'))
 const SystemPage = lazy(() => import('./pages/SystemPage'))
-// const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const ValidationPage = lazy(() => import('./pages/ValidationPage'))
 const ChannelBindingsPage = lazy(() => import('./pages/ChannelBindingsPage'))
 const ChannelsLayoutPage = lazy(() => import('./pages/ChannelsLayoutPage'))
@@ -255,21 +253,15 @@ export function AppRoutes() {
           />
           <Route path="knowledge/new" element={withRouteSuspense(<KnowledgePage />)} />
           <Route path="knowledge/:kbId" element={withRouteSuspense(<KnowledgePage />)} />
-          {/* 暂时隐藏“模板”页面路由，保留实现便于后续恢复。 */}
-          {/* <Route path="templates" element={withRouteSuspense(<TemplatesPage />)} /> */}
         </Route>
         <Route path="mcp" element={withRouteSuspense(<McpPage />)} />
         <Route path="mcp/:serverName" element={withRouteSuspense(<McpServerDetailPage />)} />
-        {/* 暂时隐藏“行为引导”页面路由，保留实现便于后续恢复。 */}
-        {/* <Route path="prompt" element={withRouteSuspense(<MainPromptPage />)} /> */}
         <Route path="skills" element={withRouteSuspense(<SkillsPage />)} />
         <Route path="system" element={withRouteSuspense(<SystemLayoutPage />)}>
           <Route index element={withRouteSuspense(<SystemPage />)} />
           <Route path="preferences" element={withRouteSuspense(<PreferencesPage />)} />
           <Route path="validation" element={withRouteSuspense(<ValidationPage />)} />
           <Route path="automation" element={withRouteSuspense(<AutomationPage />)} />
-          {/* 暂时隐藏“模板”系统别名路由，保留实现便于后续恢复。 */}
-          {/* <Route path="templates" element={<Navigate to="/studio/templates" replace />} /> */}
           <Route path="operations" element={withRouteSuspense(<OperationsPage />)} />
           <Route path="admin" element={withRouteSuspense(<ProfilePage />)} />
         </Route>

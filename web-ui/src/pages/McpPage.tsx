@@ -652,7 +652,6 @@ export default function McpPage() {
           <div className="config-card-header">
             <div className="page-section-title">
               <Typography.Title level={4}>从仓库安装</Typography.Title>
-              <Text type="secondary">当前项目特有的仓库预检与安装能力仍保留在这里。</Text>
             </div>
           </div>
 
@@ -715,11 +714,11 @@ export default function McpPage() {
 
                 <div className="detail-grid mcp-detail-grid">
                   <div className="detail-block">
-                    <Text type="secondary">运行预览</Text>
+                    <span className="mcp-detail-label">运行预览</span>
                     <div className="mono-block mono-block-large">{analysis.commandPreview || analysis.runUrl || '--'}</div>
                   </div>
                   <div className="detail-block">
-                    <Text type="secondary">下一步</Text>
+                    <span className="mcp-detail-label">下一步</span>
                     <div className="mono-block mono-block-large">{analysis.nextStep}</div>
                   </div>
                 </div>

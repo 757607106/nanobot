@@ -54,13 +54,11 @@ function ValidationActions({
 
 function ValidationList({
   title,
-  description,
   items,
   emptyText,
   onRefresh,
 }: {
   title: string
-  description: string
   items: ValidationActionItem[]
   emptyText: string
   onRefresh: () => Promise<void>
@@ -70,7 +68,6 @@ function ValidationList({
       <div className="config-card-header">
         <div className="page-section-title">
           <Typography.Title level={4}>{title}</Typography.Title>
-          <Text type="secondary">{description}</Text>
         </div>
       </div>
 
@@ -86,7 +83,6 @@ function ValidationList({
                   <div className="config-card-header">
                     <div className="page-section-title">
                       <Typography.Title level={5}>{check.label}</Typography.Title>
-                      <Text type="secondary">{check.summary}</Text>
                     </div>
                     <Tag color={meta.alert === 'error' ? 'red' : meta.alert === 'warning' ? 'gold' : 'green'}>{meta.label}</Tag>
                   </div>
@@ -154,36 +150,22 @@ export default function ValidationPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        eyebrow="配置验证"
         title="配置修复中心"
-        description="查看配置状态与风险项。"
-        badges={[
-          <Tag key="summary">{summary.label}</Tag>,
-          <Tag key="danger">危险配置 {result.dangerousOptions.length}</Tag>,
-        ]}
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadValidation()} loading={loading}>
             重新检查
           </Button>
         )}
-        stats={[
-          { label: '通过', value: result.summary.passed },
-          { label: '提醒', value: result.summary.warnings },
-          { label: '阻塞', value: result.summary.failures },
-          { label: '生成时间', value: formatDateTimeZh(result.generatedAt) },
-        ]}
       />
 
       <Alert
         type={getReadinessAlertType(result.summary.status)}
         message={summary.label}
-        description={summary.description}
       />
 
       <div className="page-grid validation-page-grid">
         <ValidationList
           title="核心检查"
-          description="直接影响实例可用性。"
           items={result.checks}
           emptyText="暂无核心检查结果"
           onRefresh={loadValidation}
@@ -191,7 +173,6 @@ export default function ValidationPage() {
 
         <ValidationList
           title="危险配置隔离区"
-          description="高风险项单独列出。"
           items={result.dangerousOptions}
           emptyText="暂无额外风险项"
           onRefresh={loadValidation}

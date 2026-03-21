@@ -280,7 +280,7 @@ describe('ModelsPage', () => {
 
     expect(await screen.findByText('自定义 Agent 工作台')).toBeInTheDocument()
     expect(screen.getByText('自定义 Agent 总览')).toBeInTheDocument()
-    expect(screen.getByText('这些 Agent 已经偏离全局策略，但连接归属还不够清晰。')).toBeInTheDocument()
+    expect(screen.getByText('平台配置和角色配置已经拆开')).toBeInTheDocument()
     expect(screen.getByText('已自定义 Agent')).toBeInTheDocument()
     expect(screen.getByText('继承全局的 Agent')).toBeInTheDocument()
     expect(screen.getAllByText('中文写作').length).toBeGreaterThan(0)
@@ -354,7 +354,7 @@ describe('ModelsPage', () => {
       provider: 'moonshot',
       apiBase: 'https://api.moonshot.cn/v1',
     })
-    expect(await screen.findByText(/下方展示的是当前 API Key 和 API 地址返回的模型 ID/)).toBeInTheDocument()
+    expect((await screen.findAllByText('已获取 2 个模型')).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'kimi-k2-0905-preview' })).toBeInTheDocument()
   })
 })
