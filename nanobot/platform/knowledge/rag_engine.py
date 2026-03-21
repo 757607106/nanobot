@@ -9,7 +9,11 @@ that the rest of the platform relies on.
 from __future__ import annotations
 
 import asyncio
+import io
+import json
+import os
 import shutil
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -56,6 +60,18 @@ class RetrievalHit:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class MineruParseArtifacts:
+    """Normalized parse artifacts returned by the official MinerU API."""
+
+    content_list: list[dict[str, Any]]
+    output_dir: Path
+    markdown: str = ""
+    batch_id: str | None = None
+    model_version: str | None = None
+    full_zip_url: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # RAG Engine
 # ---------------------------------------------------------------------------
@@ -75,32 +91,35 @@ class RAGEngine:
         *,
         storage_root: Path,
         default_model: str,
+        provider_name: str | None = None,
         api_key: str | None = None,
         api_base: str | None = None,
         extra_headers: dict[str, str] | None = None,
+        embedding_provider_name: str | None = None,
         embedding_api_key: str | None = None,
         embedding_api_base: str | None = None,
         embedding_extra_headers: dict[str, str] | None = None,
         embedding_model: str = "text-embedding-3-large",
         embedding_dim: int = 3072,
         embedding_max_tokens: int = 8192,
-        parser: str = "auto",
         mineru_api_base: str = "",
-        parse_method: str = "auto",
-        enable_image_processing: bool = True,
-        enable_table_processing: bool = True,
-        enable_equation_processing: bool = True,
+        mineru_api_token: str = "",
+        mineru_model_version: str = "pipeline",
     ) -> None:
         self._storage_root = storage_root
         self._storage_root.mkdir(parents=True, exist_ok=True)
 
         # Provider config for LLM / embedding calls
         self._default_model = default_model
+        self._provider_name = provider_name or ""
         self._api_key = api_key or ""
         self._api_base = api_base or ""
         self._extra_headers = extra_headers or {}
 
         # Embedding config
+        self._embedding_provider_name = (
+            self._provider_name if embedding_provider_name is None else (embedding_provider_name or "")
+        )
         self._embedding_api_key = self._api_key if embedding_api_key is None else embedding_api_key
         self._embedding_api_base = self._api_base if embedding_api_base is None else embedding_api_base
         self._embedding_extra_headers = (
@@ -110,15 +129,10 @@ class RAGEngine:
         self._embedding_dim = embedding_dim
         self._embedding_max_tokens = embedding_max_tokens
 
-        # Parser config
-        self._parser = parser
+        # Document parsing config
         self._mineru_api_base = mineru_api_base
-        self._parse_method = parse_method
-
-        # Multimodal switches
-        self._enable_image_processing = enable_image_processing
-        self._enable_table_processing = enable_table_processing
-        self._enable_equation_processing = enable_equation_processing
+        self._mineru_api_token = mineru_api_token
+        self._mineru_model_version = mineru_model_version or "pipeline"
 
         # Per-KB instances (lazy loaded)
         self._instances: dict[str, Any] = {}  # kb_id -> RAGAnything
@@ -240,11 +254,11 @@ class RAGEngine:
 
             config = RAGAnythingConfig(
                 working_dir=str(working_dir),
-                parser=self._parser if self._parser != "auto" else "mineru",
-                parse_method=self._parse_method,
-                enable_image_processing=self._enable_image_processing,
-                enable_table_processing=self._enable_table_processing,
-                enable_equation_processing=self._enable_equation_processing,
+                parser="mineru",
+                parse_method="auto",
+                enable_image_processing=True,
+                enable_table_processing=True,
+                enable_equation_processing=True,
             )
 
             rag = RAGAnything(
@@ -278,6 +292,66 @@ class RAGEngine:
     # LLM / Embedding / Vision function builders
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _canonicalize_provider_prefix(model: str, spec_name: str, canonical_prefix: str) -> str:
+        if "/" not in model:
+            return model
+        prefix, remainder = model.split("/", 1)
+        if prefix.lower().replace("-", "_") != spec_name:
+            return model
+        return f"{canonical_prefix}/{remainder}"
+
+    @staticmethod
+    def _resolve_litellm_runtime(
+        *,
+        model: str,
+        provider_name: str | None,
+        api_key: str | None,
+        api_base: str | None,
+        request_type: str = "chat",
+    ) -> tuple[str, str | None, str | None]:
+        from nanobot.providers.registry import find_by_model, find_by_name, find_gateway
+
+        resolved_model = str(model or "").strip()
+        resolved_provider_name = str(provider_name or "").strip() or None
+        resolved_api_key = str(api_key or "").strip() or None
+        resolved_api_base = str(api_base or "").strip() or None
+        custom_llm_provider: str | None = None
+
+        # DashScope embeddings use the OpenAI-compatible embeddings endpoint
+        # according to Alibaba Cloud's official docs.
+        if request_type == "embedding" and resolved_provider_name == "dashscope":
+            return (
+                resolved_model.split("/", 1)[-1],
+                "openai",
+                resolved_api_base or "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            )
+
+        spec = find_gateway(resolved_provider_name, resolved_api_key, resolved_api_base)
+        if spec is None and resolved_provider_name:
+            candidate = find_by_name(resolved_provider_name)
+            if candidate and not (candidate.is_gateway or candidate.is_local or candidate.is_oauth or candidate.is_direct):
+                spec = candidate
+        if spec is None and resolved_model:
+            spec = find_by_model(resolved_model)
+
+        if spec and spec.litellm_prefix:
+            resolved_model = RAGEngine._canonicalize_provider_prefix(
+                resolved_model,
+                spec.name,
+                spec.litellm_prefix,
+            )
+            if spec.strip_model_prefix:
+                resolved_model = resolved_model.split("/", 1)[-1]
+            if not any(resolved_model.startswith(prefix) for prefix in spec.skip_prefixes):
+                resolved_model = f"{spec.litellm_prefix}/{resolved_model}"
+        elif resolved_api_base and "/" not in resolved_model:
+            # OpenAI-compatible custom endpoints still need a provider hint when the
+            # model id itself does not include a LiteLLM provider prefix.
+            custom_llm_provider = "openai"
+
+        return resolved_model, custom_llm_provider, resolved_api_base or None
+
     def _build_llm_func(self):
         """Build the async LLM function for RAG-Anything / LightRAG."""
         from litellm import acompletion
@@ -285,6 +359,7 @@ class RAGEngine:
         api_key = self._api_key
         api_base = self._api_base or None
         model = self._default_model
+        provider_name = self._provider_name
         extra_headers = self._extra_headers or None
 
         async def llm_model_func(
@@ -300,18 +375,19 @@ class RAGEngine:
                 messages.extend(history_messages)
             messages.append({"role": "user", "content": prompt})
 
-            kw: dict[str, Any] = {"model": model, "messages": messages}
+            resolved_model, custom_llm_provider, resolved_api_base = self._resolve_litellm_runtime(
+                model=model,
+                provider_name=provider_name,
+                api_key=api_key,
+                api_base=api_base,
+            )
+            kw: dict[str, Any] = {"model": resolved_model, "messages": messages}
             if api_key:
                 kw["api_key"] = api_key
-            if api_base:
-                kw["api_base"] = api_base
-                if "/" not in model:
-                    kw["custom_llm_provider"] = "openai"
-            elif "/" not in model:
-                # If no api_base is provided but it's a known model without prefix, litellm needs a prefix.
-                # deepseek-chat -> deepseek/deepseek-chat
-                if model.startswith("deepseek"):
-                    kw["model"] = f"deepseek/{model}"
+            if resolved_api_base:
+                kw["api_base"] = resolved_api_base
+            if custom_llm_provider:
+                kw["custom_llm_provider"] = custom_llm_provider
             if extra_headers:
                 kw["extra_headers"] = extra_headers
 
@@ -328,28 +404,37 @@ class RAGEngine:
     def _build_embedding_func(self):
         """Build the embedding function for LightRAG."""
         from litellm import aembedding
+        import numpy as np
         from lightrag.utils import EmbeddingFunc
 
         api_key = self._embedding_api_key
         api_base = self._embedding_api_base or None
         model = self._embedding_model
+        provider_name = self._embedding_provider_name
         extra_headers = self._embedding_extra_headers or None
 
         async def _embed(texts: list[str]) -> list[list[float]]:
-            kw: dict[str, Any] = {"model": model, "input": texts}
+            resolved_model, custom_llm_provider, resolved_api_base = self._resolve_litellm_runtime(
+                model=model,
+                provider_name=provider_name,
+                api_key=api_key,
+                api_base=api_base,
+                request_type="embedding",
+            )
+            kw: dict[str, Any] = {"model": resolved_model, "input": texts}
             if api_key:
                 kw["api_key"] = api_key
-            if api_base:
-                kw["api_base"] = api_base
-                if "/" not in model:
-                    kw["custom_llm_provider"] = "openai"
-            elif "/" not in model and model.startswith("deepseek"):
-                kw["model"] = f"deepseek/{model}"
+            if resolved_api_base:
+                kw["api_base"] = resolved_api_base
+            if custom_llm_provider:
+                kw["custom_llm_provider"] = custom_llm_provider
+            if provider_name == "dashscope" and custom_llm_provider == "openai":
+                kw["encoding_format"] = "float"
             if extra_headers:
                 kw["extra_headers"] = extra_headers
 
             response = await aembedding(**kw)
-            return [item["embedding"] for item in response.data]
+            return np.asarray([item["embedding"] for item in response.data], dtype=float)
 
         return EmbeddingFunc(
             embedding_dim=self._embedding_dim,
@@ -364,6 +449,7 @@ class RAGEngine:
         api_key = self._api_key
         api_base = self._api_base or None
         model = self._default_model
+        provider_name = self._provider_name
         extra_headers = self._extra_headers or None
 
         async def vision_model_func(
@@ -374,16 +460,19 @@ class RAGEngine:
             messages: list | None = None,
             **kwargs: Any,
         ) -> str:
-            kw: dict[str, Any] = {"model": model}
+            resolved_model, custom_llm_provider, resolved_api_base = self._resolve_litellm_runtime(
+                model=model,
+                provider_name=provider_name,
+                api_key=api_key,
+                api_base=api_base,
+            )
+            kw: dict[str, Any] = {"model": resolved_model}
             if api_key:
                 kw["api_key"] = api_key
-            if api_base:
-                kw["api_base"] = api_base
-                if "/" not in model:
-                    kw["custom_llm_provider"] = "openai"
-            elif "/" not in model:
-                if model.startswith("deepseek"):
-                    kw["model"] = f"deepseek/{model}"
+            if resolved_api_base:
+                kw["api_base"] = resolved_api_base
+            if custom_llm_provider:
+                kw["custom_llm_provider"] = custom_llm_provider
             if extra_headers:
                 kw["extra_headers"] = extra_headers
 
@@ -424,19 +513,224 @@ class RAGEngine:
 
         return vision_model_func
 
-    def _default_parse_kwargs(self) -> dict[str, Any]:
-        """Build parser kwargs derived from engine configuration."""
-        if self._parser == "docling":
-            return {}
+    @staticmethod
+    def _supported_mineru_api_extensions() -> set[str]:
+        return {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg", ".html"}
 
-        mineru_api_base = str(self._mineru_api_base or "").strip()
-        if not mineru_api_base:
-            return {}
+    @staticmethod
+    def _office_like_extensions() -> set[str]:
+        return {".doc", ".docx", ".ppt", ".pptx", ".html"}
 
+    def _mineru_api_enabled(self) -> bool:
+        return bool(str(self._mineru_api_token or "").strip())
+
+    def _mineru_api_base_url(self) -> str:
+        return str(self._mineru_api_base or "").strip().rstrip("/") or "https://mineru.net"
+
+    def _mineru_model_version_for_file(self, file_path: str) -> str:
+        suffix = Path(file_path).suffix.lower()
+        configured = str(self._mineru_model_version or "pipeline").strip() or "pipeline"
+        if suffix == ".html":
+            return "MinerU-HTML"
+        if configured == "MinerU-HTML":
+            logger.warning(
+                "RAGEngine: MinerU-HTML only applies to .html files, fallback to pipeline for {}",
+                file_path,
+            )
+            return "pipeline"
+        return configured
+
+    def _should_use_mineru_api(self, file_path: str) -> bool:
+        return self._mineru_api_enabled() and Path(file_path).suffix.lower() in self._supported_mineru_api_extensions()
+
+    def _requires_official_mineru_api(self, file_path: str) -> bool:
+        return Path(file_path).suffix.lower() in self._office_like_extensions()
+
+    def _mineru_headers(self) -> dict[str, str]:
+        token = str(self._mineru_api_token or "").strip()
+        if not token:
+            raise RuntimeError("MinerU API token is not configured.")
         return {
-            "backend": "vlm-http-client",
-            "vlm_url": mineru_api_base,
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
         }
+
+    @staticmethod
+    def _require_mineru_success(payload: Any, *, operation: str) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"MinerU {operation} returned an invalid response payload.")
+        raw_code = payload.get("code")
+        try:
+            code = int(raw_code)
+        except (TypeError, ValueError):
+            code = -1
+        if code != 0:
+            raise RuntimeError(f"MinerU {operation} failed: {payload.get('msg') or 'unknown error'}")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise RuntimeError(f"MinerU {operation} returned no data payload.")
+        return data
+
+    @staticmethod
+    def _normalize_mineru_content_list(
+        content_list: Any,
+        *,
+        asset_root: Path,
+    ) -> list[dict[str, Any]]:
+        if not isinstance(content_list, list):
+            return []
+
+        normalized: list[dict[str, Any]] = []
+        for index, item in enumerate(content_list):
+            if not isinstance(item, dict):
+                continue
+            next_item = dict(item)
+            img_path = str(next_item.get("img_path") or "").strip()
+            if img_path and not Path(img_path).is_absolute():
+                next_item["img_path"] = str((asset_root / img_path).resolve())
+            if next_item.get("page_idx") is None:
+                next_item["page_idx"] = 0
+            if next_item.get("type") == "text":
+                next_item["text"] = str(next_item.get("text") or "").strip()
+                if not next_item["text"]:
+                    continue
+            normalized.append(next_item)
+            if index > 100_000:
+                break
+        return normalized
+
+    @staticmethod
+    def _load_mineru_artifacts(output_dir: Path) -> tuple[list[dict[str, Any]], str, Path]:
+        content_file = next(output_dir.rglob("*_content_list.json"), None)
+        markdown_file = next(output_dir.rglob("full.md"), None)
+        asset_root = content_file.parent if content_file is not None else (
+            markdown_file.parent if markdown_file is not None else output_dir
+        )
+
+        content_list: list[dict[str, Any]] = []
+        if content_file is not None:
+            try:
+                loaded = json.loads(content_file.read_text(encoding="utf-8"))
+                if isinstance(loaded, list):
+                    content_list = loaded
+            except Exception as exc:
+                raise RuntimeError(f"Failed to read MinerU content_list output: {exc}") from exc
+
+        markdown = ""
+        if markdown_file is not None:
+            markdown = markdown_file.read_text(encoding="utf-8").strip()
+
+        return content_list, markdown, asset_root
+
+    async def _parse_file_with_mineru_api(
+        self,
+        file_path: str,
+        *,
+        output_dir: Path,
+        doc_id: str | None = None,
+    ) -> MineruParseArtifacts:
+        import httpx
+
+        source_path = Path(file_path)
+        if not source_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        headers = self._mineru_headers()
+        base_url = self._mineru_api_base_url()
+        model_version = self._mineru_model_version_for_file(file_path)
+        data_id = str(doc_id or source_path.stem).strip() or source_path.stem
+        payload = {
+            "files": [{"name": source_path.name, "data_id": data_id}],
+            "model_version": model_version,
+        }
+        if model_version != "MinerU-HTML":
+            payload["enable_formula"] = True
+            payload["enable_table"] = True
+
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=15.0, read=60.0, write=60.0, pool=60.0),
+            follow_redirects=True,
+        ) as client:
+            create_response = await client.post(
+                f"{base_url}/api/v4/file-urls/batch",
+                headers=headers,
+                json=payload,
+            )
+            create_response.raise_for_status()
+            create_data = self._require_mineru_success(
+                create_response.json(),
+                operation="file upload URL request",
+            )
+            batch_id = str(create_data.get("batch_id") or "").strip()
+            file_urls = create_data.get("file_urls")
+            if not batch_id or not isinstance(file_urls, list) or not file_urls:
+                raise RuntimeError("MinerU file upload URL request returned no batch_id or file_urls.")
+
+            upload_response = await client.put(str(file_urls[0]), content=source_path.read_bytes())
+            upload_response.raise_for_status()
+
+            result: dict[str, Any] | None = None
+            for _ in range(180):
+                poll_response = await client.get(
+                    f"{base_url}/api/v4/extract-results/batch/{batch_id}",
+                    headers=headers,
+                )
+                poll_response.raise_for_status()
+                poll_data = self._require_mineru_success(
+                    poll_response.json(),
+                    operation="batch result query",
+                )
+                extract_result = poll_data.get("extract_result")
+                if not isinstance(extract_result, list) or not extract_result:
+                    await asyncio.sleep(1.0)
+                    continue
+                result = next(
+                    (
+                        item for item in extract_result
+                        if str(item.get("data_id") or "").strip() == data_id
+                    ),
+                    extract_result[0],
+                )
+                state = str(result.get("state") or "").strip().lower()
+                if state == "done":
+                    break
+                if state == "failed":
+                    raise RuntimeError(str(result.get("err_msg") or "MinerU parsing failed."))
+                await asyncio.sleep(1.0)
+            else:
+                raise RuntimeError(f"MinerU batch {batch_id} did not finish within the polling window.")
+
+            if not isinstance(result, dict):
+                raise RuntimeError(f"MinerU batch {batch_id} returned no extract result.")
+            full_zip_url = str(result.get("full_zip_url") or "").strip()
+            if not full_zip_url:
+                raise RuntimeError(f"MinerU batch {batch_id} finished without full_zip_url.")
+
+            zip_response = await client.get(full_zip_url)
+            zip_response.raise_for_status()
+
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(io.BytesIO(zip_response.content)) as archive:
+            archive.extractall(output_dir)
+
+        raw_content_list, markdown, asset_root = self._load_mineru_artifacts(output_dir)
+        content_list = self._normalize_mineru_content_list(raw_content_list, asset_root=asset_root)
+        if not content_list and markdown:
+            content_list = [{"type": "text", "text": markdown, "page_idx": 0}]
+        if not content_list:
+            raise RuntimeError("MinerU output did not contain content_list.json or full.md.")
+
+        return MineruParseArtifacts(
+            content_list=content_list,
+            output_dir=output_dir,
+            markdown=markdown,
+            batch_id=batch_id,
+            model_version=model_version,
+            full_zip_url=full_zip_url,
+        )
 
     # ------------------------------------------------------------------
     # Instance management
@@ -482,23 +776,65 @@ class RAGEngine:
         try:
             rag = await self._ensure_ready(kb_id)
             working_dir = self._kb_working_dir(kb_id)
-            effective_output_dir = output_dir or str(working_dir / "parsed_output")
-            Path(effective_output_dir).mkdir(parents=True, exist_ok=True)
-            parser_kwargs = self._default_parse_kwargs()
-            parser_kwargs.update(kwargs)
+            output_root = Path(output_dir) if output_dir else (working_dir / "parsed_output")
+            output_dir_path = output_root if output_dir else output_root / str(doc_id or Path(file_path).stem or "document")
+            output_dir_path.mkdir(parents=True, exist_ok=True)
 
-            processed = await rag.process_document_complete(
-                file_path=file_path,
-                output_dir=effective_output_dir,
-                parse_method=self._parse_method,
-                doc_id=doc_id,
-                **parser_kwargs,
-            )
-            if processed is False:
+            parser_name = "mineru"
+            use_mineru_api = self._should_use_mineru_api(file_path)
+            if not use_mineru_api and self._requires_official_mineru_api(file_path):
                 raise RuntimeError(
-                    f"RAGAnything reported unsuccessful document processing for kb_id={kb_id}, "
-                    f"file_path={file_path}."
+                    "Office/HTML documents require the official MinerU API path. "
+                    "Please configure MinerU API Token and restart the Web backend to apply the new RAG engine."
                 )
+
+            logger.info(
+                "RAGEngine: parse route for kb_id={} file_path={} -> {}",
+                kb_id,
+                file_path,
+                "official MinerU API" if use_mineru_api else "local RAG-Anything parser",
+            )
+
+            if use_mineru_api:
+                parser_name = "mineru_api"
+                artifacts = await self._parse_file_with_mineru_api(
+                    file_path,
+                    output_dir=output_dir_path,
+                    doc_id=doc_id,
+                )
+                await rag.insert_content_list(
+                    artifacts.content_list,
+                    file_path=file_path,
+                    doc_id=doc_id,
+                )
+                metadata: dict[str, Any] = {
+                    "output_dir": str(artifacts.output_dir),
+                    "file_path": file_path,
+                    "mineru_batch_id": artifacts.batch_id,
+                    "mineru_model_version": artifacts.model_version,
+                    "mineru_full_zip_url": artifacts.full_zip_url,
+                }
+                if doc_id:
+                    metadata["doc_id"] = doc_id
+            else:
+                processed = await rag.process_document_complete(
+                    file_path=file_path,
+                    output_dir=str(output_dir_path),
+                    parse_method="auto",
+                    doc_id=doc_id,
+                    **kwargs,
+                )
+                if processed is False:
+                    raise RuntimeError(
+                        f"RAGAnything reported unsuccessful document processing for kb_id={kb_id}, "
+                        f"file_path={file_path}."
+                    )
+                metadata = {
+                    "output_dir": str(output_dir_path),
+                    "file_path": file_path,
+                }
+                if doc_id:
+                    metadata["doc_id"] = doc_id
 
             status = await self._require_processed_status(
                 rag,
@@ -510,15 +846,9 @@ class RAGEngine:
 
             return ParseResult(
                 success=True,
-                parser_name=self._parser,
+                parser_name=parser_name,
                 metadata={
-                    "output_dir": effective_output_dir,
-                    "doc_id": doc_id,
-                    "file_path": file_path,
-                    "chunks_count": int(status.get("chunks_count") or 0),
-                } if doc_id else {
-                    "output_dir": effective_output_dir,
-                    "file_path": file_path,
+                    **metadata,
                     "chunks_count": int(status.get("chunks_count") or 0),
                 },
             )
@@ -526,7 +856,7 @@ class RAGEngine:
             logger.error("RAGEngine: parse_and_index failed for kb_id={}: {}", kb_id, exc)
             return ParseResult(
                 success=False,
-                parser_name=self._parser,
+                parser_name="mineru_api" if self._should_use_mineru_api(file_path) else "mineru",
                 error=str(exc),
             )
 
@@ -759,6 +1089,8 @@ def _resolve_binding_runtime(
     binding_name: str | None = None,
     model: str | None = None,
 ) -> dict[str, Any]:
+    from nanobot.providers.registry import find_by_name
+
     requested_binding = str(binding_name or "").strip()
     provider_name: str | None = None
     matched_binding_name: str | None = None
@@ -776,9 +1108,11 @@ def _resolve_binding_runtime(
         provider_name = config.get_provider_name(model)
 
     provider_cfg = getattr(getattr(config, "providers", None), provider_name, None) if provider_name else None
+    provider_spec = find_by_name(provider_name) if provider_name else None
     api_key = str(
         getattr(binding, "api_key", None)
         or getattr(provider_cfg, "api_key", None)
+        or (os.getenv(provider_spec.env_key) if provider_spec and provider_spec.env_key else None)
         or ""
     )
     api_base = str(
@@ -802,6 +1136,23 @@ def _resolve_binding_runtime(
         "extra_headers": extra_headers,
     }
 
+
+def _first_binding_name_by_capability(config: Any, capability_type: str) -> str | None:
+    for binding_name, binding in getattr(config, "model_bindings", {}).items():
+        if str(getattr(binding, "capability_type", "") or "").strip() == capability_type:
+            return str(binding_name)
+    return None
+
+
+def _infer_embedding_dim(model: str | None, provider_name: str | None = None) -> int:
+    model_name = str(model or "").strip().lower()
+    provider = str(provider_name or "").strip().lower()
+    if provider == "dashscope" and "text-embedding-v4" in model_name:
+        return 1024
+    if "text-embedding-3-small" in model_name or "text-embedding-ada-002" in model_name:
+        return 1536
+    return 3072
+
 def create_rag_engine_from_config(
     config: Any,
     instance_dir: Path,
@@ -819,41 +1170,48 @@ def create_rag_engine_from_config(
         return None
 
     rag_config = config.rag
-    llm_model = str(rag_config.llm_model or "").strip()
+    llm_binding_name = str(rag_config.llm_binding or "").strip() or None
     llm_runtime = _resolve_binding_runtime(
         config,
-        binding_name=rag_config.llm_binding,
-        model=llm_model or None,
+        binding_name=llm_binding_name,
+        model=None,
     )
-    default_model = llm_model or str(
+    default_model = str(
         getattr(llm_runtime.get("binding"), "model", None)
         or config.agents.defaults.model
         or "gpt-4o-mini"
     )
 
-    embedding_binding_name = rag_config.embedding_binding or rag_config.llm_binding
+    embedding_binding_name = (
+        str(rag_config.embedding_binding or "").strip()
+        or _first_binding_name_by_capability(config, "embedding")
+        or llm_binding_name
+    )
     embedding_runtime = _resolve_binding_runtime(
         config,
         binding_name=embedding_binding_name,
-        model=rag_config.embedding_model,
+        model=None,
     )
+    embedding_model = str(
+        getattr(embedding_runtime.get("binding"), "model", None)
+        or "text-embedding-3-large"
+    )
+    embedding_dim = _infer_embedding_dim(embedding_model, embedding_runtime["provider_name"])
 
     return RAGEngine(
         storage_root=instance_dir / "knowledge" / "lightrag",
         default_model=default_model,
+        provider_name=llm_runtime["provider_name"],
         api_key=llm_runtime["api_key"],
         api_base=llm_runtime["api_base"],
         extra_headers=llm_runtime["extra_headers"],
+        embedding_provider_name=embedding_runtime["provider_name"],
         embedding_api_key=embedding_runtime["api_key"],
         embedding_api_base=embedding_runtime["api_base"],
         embedding_extra_headers=embedding_runtime["extra_headers"],
-        embedding_model=rag_config.embedding_model,
-        embedding_dim=rag_config.embedding_dim,
-        embedding_max_tokens=rag_config.embedding_max_tokens,
-        parser=rag_config.parser,
+        embedding_model=embedding_model,
+        embedding_dim=embedding_dim,
         mineru_api_base=rag_config.mineru_api_base,
-        parse_method=rag_config.parse_method,
-        enable_image_processing=rag_config.enable_image_processing,
-        enable_table_processing=rag_config.enable_table_processing,
-        enable_equation_processing=rag_config.enable_equation_processing,
+        mineru_api_token=rag_config.mineru_api_token,
+        mineru_model_version=rag_config.mineru_model_version,
     )

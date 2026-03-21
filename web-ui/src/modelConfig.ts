@@ -2,6 +2,17 @@ import { providerCategoryLabels } from './configMeta'
 import { getModelSuggestions } from './modelCatalog'
 import type { ConfigData, ConfigMeta, ModelBinding, ProviderConfig, ProviderMeta } from './types'
 
+export function resolveBindingCapabilityType(binding: Pick<ModelBinding, 'capabilityType' | 'model' | 'label'> | undefined) {
+  const normalized = `${binding?.model || ''} ${binding?.label || ''}`.trim().toLowerCase()
+  if (['embedding', 'embeddings', 'embed', 'bge', 'e5', 'gte', 'voyage'].some((token) => normalized.includes(token))) {
+    return 'embedding' as const
+  }
+  if (binding?.capabilityType === 'multimodal') {
+    return 'multimodal' as const
+  }
+  return (binding?.capabilityType ?? 'text_chat') as 'text_chat' | 'embedding' | 'multimodal'
+}
+
 export function providerCategoryOrder(meta: ProviderMeta) {
   const order = ['standard', 'gateway', 'local', 'direct', 'oauth']
   return order.indexOf(meta.category)
@@ -190,12 +201,25 @@ export function getProviderOptions(meta: ConfigMeta | null) {
     }))
 }
 
-export function getBindingOptions(config: ConfigData, meta: ConfigMeta | null) {
+export function getBindingOptions(
+  config: ConfigData,
+  meta: ConfigMeta | null,
+  capabilityTypes?: ModelBinding['capabilityType'] | Array<ModelBinding['capabilityType']>,
+) {
   if (!meta) {
     return []
   }
   const bindings = getAllModelBindings(config, meta)
+  const allowedTypes = capabilityTypes
+    ? new Set(Array.isArray(capabilityTypes) ? capabilityTypes : [capabilityTypes])
+    : null
   return Object.entries(bindings)
+    .filter(([, binding]) => {
+      if (!allowedTypes) {
+        return true
+      }
+      return allowedTypes.has(resolveBindingCapabilityType(binding))
+    })
     .slice()
     .sort((left, right) => {
       const leftMeta = getProviderMeta(meta, left[1].provider)
@@ -209,7 +233,8 @@ export function getBindingOptions(config: ConfigData, meta: ConfigMeta | null) {
     })
     .map(([bindingName, binding]) => {
       const providerMeta = getProviderMeta(meta, binding.provider)
-      const typeLabel = binding.capabilityType === 'embedding' ? '[向量嵌入]' : binding.capabilityType === 'multimodal' ? '[多模态]' : '[文本对话]';
+      const capabilityType = resolveBindingCapabilityType(binding)
+      const typeLabel = capabilityType === 'embedding' ? '[向量嵌入]' : capabilityType === 'multimodal' ? '[多模态]' : '[文本对话]';
       return {
         value: bindingName,
         label: `${typeLabel} ${binding.label || bindingName} · ${providerMeta?.label || binding.provider}`,

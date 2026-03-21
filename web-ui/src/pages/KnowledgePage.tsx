@@ -21,7 +21,6 @@ import {
   Select,
   Space,
   Spin,
-  Switch,
   Table,
   Tabs,
   Tag,
@@ -55,7 +54,7 @@ import PageHero from '../components/PageHero'
 import DevOnly from '../components/DevOnly'
 import { formatDateTimeZh } from '../locale'
 import { MotionPanel } from '../components/MotionSurface'
-import { getBindingOptions } from '../modelConfig'
+import { getAllModelBindings, getBindingOptions, getPreferredBinding, resolveBindingCapabilityType } from '../modelConfig'
 import type {
   ConfigData,
   ConfigMeta,
@@ -87,17 +86,7 @@ interface KnowledgeFormState {
 
 interface RagSettingsFormState {
   llmBinding: string
-  llmModel: string
   embeddingBinding: string
-  embeddingModel: string
-  embeddingDim: number
-  embeddingMaxTokens: number
-  parser: string
-  mineruApiBase: string
-  parseMethod: string
-  enableImageProcessing: boolean
-  enableTableProcessing: boolean
-  enableEquationProcessing: boolean
 }
 
 interface SourceEditorState {
@@ -124,17 +113,7 @@ function createEmptyForm(): KnowledgeFormState {
 function createEmptyRagSettings(): RagSettingsFormState {
   return {
     llmBinding: '',
-    llmModel: '',
     embeddingBinding: '',
-    embeddingModel: 'text-embedding-3-large',
-    embeddingDim: 3072,
-    embeddingMaxTokens: 8192,
-    parser: 'auto',
-    mineruApiBase: '',
-    parseMethod: 'auto',
-    enableImageProcessing: true,
-    enableTableProcessing: true,
-    enableEquationProcessing: true,
   }
 }
 
@@ -161,21 +140,18 @@ function kbToForm(kb: KnowledgeBaseDefinition): KnowledgeFormState {
   }
 }
 
-function ragConfigToForm(config: ConfigData | null): RagSettingsFormState {
-  const rag = config?.rag ?? ({} as Partial<import('../types').RagConfigData>)
+function ragConfigToForm(config: ConfigData | null, meta: ConfigMeta | null): RagSettingsFormState {
+  if (!config) {
+    return createEmptyRagSettings()
+  }
+  const rag = config.rag ?? {}
+  const bindings = getAllModelBindings(config, meta)
+  const fallbackEmbeddingBinding = Object.entries(bindings).find(
+    ([, binding]) => resolveBindingCapabilityType(binding) === 'embedding',
+  )?.[0] ?? ''
   return {
-    llmBinding: String(rag.llmBinding || ''),
-    llmModel: String(rag.llmModel || ''),
-    embeddingBinding: String(rag.embeddingBinding || ''),
-    embeddingModel: String(rag.embeddingModel || 'text-embedding-3-large'),
-    embeddingDim: Number(rag.embeddingDim || 3072),
-    embeddingMaxTokens: Number(rag.embeddingMaxTokens || 8192),
-    parser: String(rag.parser || 'auto'),
-    mineruApiBase: String(rag.mineruApiBase || ''),
-    parseMethod: String(rag.parseMethod || 'auto'),
-    enableImageProcessing: rag.enableImageProcessing ?? true,
-    enableTableProcessing: rag.enableTableProcessing ?? true,
-    enableEquationProcessing: rag.enableEquationProcessing ?? true,
+    llmBinding: String(rag.llmBinding || (meta ? getPreferredBinding(config, meta) : '') || ''),
+    embeddingBinding: String(rag.embeddingBinding || fallbackEmbeddingBinding),
   }
 }
 
@@ -220,17 +196,7 @@ function applyRagSettingsToConfig(
     rag: {
       ...(config.rag ?? {}),
       llmBinding: ragSettings.llmBinding || null,
-      llmModel: ragSettings.llmModel.trim(),
       embeddingBinding: ragSettings.embeddingBinding || null,
-      embeddingModel: ragSettings.embeddingModel.trim(),
-      embeddingDim: ragSettings.embeddingDim,
-      embeddingMaxTokens: ragSettings.embeddingMaxTokens,
-      parser: ragSettings.parser,
-      mineruApiBase: ragSettings.mineruApiBase.trim(),
-      parseMethod: ragSettings.parseMethod,
-      enableImageProcessing: ragSettings.enableImageProcessing,
-      enableTableProcessing: ragSettings.enableTableProcessing,
-      enableEquationProcessing: ragSettings.enableEquationProcessing,
     },
   }
 }
@@ -368,14 +334,15 @@ export default function KnowledgePage() {
 
   const ragBindingOptions = useMemo(() => {
     if (!runtimeConfig || !configMeta) {
-      return [
-        { label: '跟随默认模型绑定', value: '' },
-      ]
+      return {
+        llm: [],
+        embedding: [],
+      }
     }
-    return [
-      { label: '跟随默认模型绑定', value: '' },
-      ...getBindingOptions(runtimeConfig, configMeta),
-    ]
+    return {
+      llm: getBindingOptions(runtimeConfig, configMeta, ['text_chat', 'multimodal']),
+      embedding: getBindingOptions(runtimeConfig, configMeta, 'embedding'),
+    }
   }, [configMeta, runtimeConfig])
 
   useEffect(() => {
@@ -400,7 +367,7 @@ export default function KnowledgePage() {
       setRuntimeConfig(loadedConfig)
       setConfigMeta(loadedMeta)
       if (loadedConfig) {
-        setRagSettings(ragConfigToForm(loadedConfig))
+        setRagSettings(ragConfigToForm(loadedConfig, loadedMeta))
       }
       setError(null)
     } catch (loadError) {
@@ -472,7 +439,7 @@ export default function KnowledgePage() {
       setSavingRagSettings(true)
       const savedConfig = await api.updateConfig(applyRagSettingsToConfig(runtimeConfig, ragSettings))
       setRuntimeConfig(savedConfig)
-      setRagSettings(ragConfigToForm(savedConfig))
+      setRagSettings(ragConfigToForm(savedConfig, configMeta))
       setError(null)
       message.success('RAG 引擎配置已保存，后续上传、重建索引和检索将使用新配置')
     } catch (saveError) {
@@ -846,7 +813,7 @@ export default function KnowledgePage() {
                   type="info"
                   showIcon
                   message="项目级 RAG-Anything 配置"
-                  description="这里的设置会影响当前实例下知识库后续的上传解析、重建索引和检索。修改 Embedding 后，已有文档如果要完全切换向量空间，需要重新索引。"
+                  description="这里仅选择知识库使用的 LLM 和 Embedding 模型，候选项来自“模型绑定”页里已经注册的模型。修改 Embedding 后，已有文档如果要完全切换向量空间，需要重新索引。"
                 />
 
                 {!runtimeConfig && (
@@ -858,12 +825,12 @@ export default function KnowledgePage() {
                   />
                 )}
 
-                {runtimeConfig && ragBindingOptions.length <= 1 && (
+                {runtimeConfig && ragBindingOptions.embedding.length === 0 && (
                   <Alert
                     type="warning"
                     showIcon
-                    message="还没有可选的模型绑定"
-                    description="先去模型页面配置至少一个可用 binding，知识库页面才能分别选择 RAG 的 LLM 和 Embedding 通道。"
+                    message="还没有已注册的 Embedding 模型"
+                    description="请先去“模型绑定”页新增 capabilityType 为 Embedding 的模型。"
                   />
                 )}
 
@@ -875,18 +842,9 @@ export default function KnowledgePage() {
                         <Select
                           value={ragSettings.llmBinding}
                           onChange={(value) => updateRagSettings('llmBinding', value)}
-                          options={ragBindingOptions}
+                          options={ragBindingOptions.llm}
                           style={{ width: '100%' }}
-                        />
-                      </div>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">RAG LLM 模型</Text>
-                        <Input
-                          value={ragSettings.llmModel}
-                          onChange={(e) => updateRagSettings('llmModel', e.target.value)}
-                          placeholder="留空则跟随所选 binding 或默认 Agent 模型"
+                          placeholder="选择文本对话或多模态模型"
                         />
                       </div>
                     </Col>
@@ -896,111 +854,9 @@ export default function KnowledgePage() {
                         <Select
                           value={ragSettings.embeddingBinding}
                           onChange={(value) => updateRagSettings('embeddingBinding', value)}
-                          options={ragBindingOptions}
+                          options={ragBindingOptions.embedding}
                           style={{ width: '100%' }}
-                        />
-                      </div>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">Embedding 模型</Text>
-                        <Input
-                          value={ragSettings.embeddingModel}
-                          onChange={(e) => updateRagSettings('embeddingModel', e.target.value)}
-                          placeholder="例如 text-embedding-3-large"
-                        />
-                      </div>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">Embedding 维度</Text>
-                        <InputNumber
-                          min={1}
-                          value={ragSettings.embeddingDim}
-                          onChange={(value) => updateRagSettings('embeddingDim', Number(value) || 3072)}
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">Embedding Max Tokens</Text>
-                        <InputNumber
-                          min={1}
-                          value={ragSettings.embeddingMaxTokens}
-                          onChange={(value) => updateRagSettings('embeddingMaxTokens', Number(value) || 8192)}
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">解析器</Text>
-                        <Select
-                          value={ragSettings.parser}
-                          onChange={(value) => updateRagSettings('parser', value)}
-                          options={[
-                            { label: '自动（默认优先 MinerU）', value: 'auto' },
-                            { label: 'MinerU', value: 'mineru' },
-                            { label: 'Docling', value: 'docling' },
-                          ]}
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">解析模式</Text>
-                        <Select
-                          value={ragSettings.parseMethod}
-                          onChange={(value) => updateRagSettings('parseMethod', value)}
-                          options={[
-                            { label: '自动', value: 'auto' },
-                            { label: 'TXT', value: 'txt' },
-                            { label: 'OCR', value: 'ocr' },
-                          ]}
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </Col>
-                    <Col span={24}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">MinerU API 地址</Text>
-                        <Input
-                          value={ragSettings.mineruApiBase}
-                          onChange={(e) => updateRagSettings('mineruApiBase', e.target.value)}
-                          placeholder="http://127.0.0.1:30000"
-                          disabled={ragSettings.parser === 'docling'}
-                        />
-                        <Text type="secondary" className="knowledge-meta-text">
-                          填写后会以 MinerU HTTP client 模式解析文档；使用 Docling 时这里不会生效。
-                        </Text>
-                      </div>
-                    </Col>
-                    <Col xs={24} md={8}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">图片处理</Text>
-                        <Switch
-                          checked={ragSettings.enableImageProcessing}
-                          onChange={(checked) => updateRagSettings('enableImageProcessing', checked)}
-                        />
-                      </div>
-                    </Col>
-                    <Col xs={24} md={8}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">表格处理</Text>
-                        <Switch
-                          checked={ragSettings.enableTableProcessing}
-                          onChange={(checked) => updateRagSettings('enableTableProcessing', checked)}
-                        />
-                      </div>
-                    </Col>
-                    <Col xs={24} md={8}>
-                      <div className="studio-form-field">
-                        <Text type="secondary">公式处理</Text>
-                        <Switch
-                          checked={ragSettings.enableEquationProcessing}
-                          onChange={(checked) => updateRagSettings('enableEquationProcessing', checked)}
+                          placeholder="选择向量嵌入模型"
                         />
                       </div>
                     </Col>

@@ -1005,11 +1005,25 @@ function makeConfig() {
         apiBase: 'https://api.deepseek.com',
         extraHeaders: {},
       },
+      'openai-embedding': {
+        provider: 'openai',
+        label: 'OpenAI Embedding',
+        model: 'text-embedding-3-large',
+        capabilityType: 'embedding',
+        apiKey: 'sk-openai',
+        apiBase: 'https://api.openai.com/v1',
+        extraHeaders: {},
+      },
     },
     providers: {
       deepseek: {
         apiKey: 'sk-test',
         apiBase: 'https://api.deepseek.com',
+        extraHeaders: {},
+      },
+      openai: {
+        apiKey: 'sk-openai',
+        apiBase: 'https://api.openai.com/v1',
         extraHeaders: {},
       },
       openai_codex: {
@@ -1048,17 +1062,10 @@ function makeConfig() {
     },
     rag: {
       llmBinding: 'deepseek-default',
-      llmModel: 'deepseek/deepseek-chat',
-      embeddingBinding: '',
-      embeddingModel: 'text-embedding-3-large',
-      embeddingDim: 3072,
-      embeddingMaxTokens: 8192,
-      parser: 'mineru',
-      mineruApiBase: 'http://127.0.0.1:30000',
-      parseMethod: 'auto',
-      enableImageProcessing: true,
-      enableTableProcessing: true,
-      enableEquationProcessing: true,
+      embeddingBinding: 'openai-embedding',
+      mineruApiBase: 'https://mineru.net',
+      mineruApiToken: 'mineru-token',
+      mineruModelVersion: 'vlm',
     },
   }
 }
@@ -1077,6 +1084,18 @@ function makeConfigMeta() {
         isLocal: false,
         isOauth: false,
         isDirect: false,
+      },
+      {
+        name: 'openai',
+        label: 'OpenAI',
+        category: 'direct' as const,
+        keywords: ['openai'],
+        defaultApiBase: 'https://api.openai.com/v1',
+        supportsPromptCaching: false,
+        isGateway: false,
+        isLocal: false,
+        isOauth: false,
+        isDirect: true,
       },
       {
         name: 'openai_codex',
@@ -2733,7 +2752,7 @@ describe('web app smoke pages', () => {
     fireEvent.click(screen.getByText('设置'))
     expect(await screen.findByText('RAG 引擎配置')).toBeInTheDocument()
     expect(screen.getByText('RAG LLM 绑定')).toBeInTheDocument()
-    expect(screen.getByText('MinerU API 地址')).toBeInTheDocument()
+    expect(screen.getByText('Embedding 绑定')).toBeInTheDocument()
   })
 
   it('renders teams page with catalog and team run panels', async () => {
@@ -3041,6 +3060,7 @@ describe('web app smoke pages', () => {
     renderPage(<ModelsPage />)
     expect(await screen.findByText('模型供应商')).toBeInTheDocument()
     expect(screen.getByText('保存所有配置')).toBeInTheDocument()
+    expect(screen.getByText('MinerU 文档解析')).toBeInTheDocument()
     expect(screen.getByText('DeepSeek')).toBeInTheDocument()
     fireEvent.click(screen.getByText('DeepSeek'))
     expect(await screen.findByText('云端供应商全局凭据')).toBeInTheDocument()

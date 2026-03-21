@@ -177,17 +177,10 @@ export interface ConfigMeta {
 
 export interface RagConfigData {
   llmBinding?: string | null
-  llmModel?: string
   embeddingBinding?: string | null
-  embeddingModel: string
-  embeddingDim: number
-  embeddingMaxTokens: number
-  parser: string
   mineruApiBase?: string | null
-  parseMethod: string
-  enableImageProcessing: boolean
-  enableTableProcessing: boolean
-  enableEquationProcessing: boolean
+  mineruApiToken?: string | null
+  mineruModelVersion?: 'pipeline' | 'vlm' | 'MinerU-HTML' | null
 }
 
 export interface ConfigData {

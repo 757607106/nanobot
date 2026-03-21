@@ -271,17 +271,10 @@ class RAGConfig(Base):
     """RAG engine configuration for LightRAG / RAG-Anything."""
 
     llm_binding: str | None = None  # Named model binding for RAG LLM / VLM calls; None follows the default agent binding
-    llm_model: str = ""  # Optional LLM model override for RAG queries and extraction
-    embedding_binding: str | None = None  # Named model binding for embedding requests; None follows the RAG/default binding
-    embedding_model: str = "text-embedding-3-large"  # Embedding model name
-    embedding_dim: int = 3072  # Embedding dimensions
-    embedding_max_tokens: int = 8192  # Max token size for embedding
-    parser: str = "auto"  # Document parser: auto, mineru, docling, paddleocr
-    mineru_api_base: str = ""  # MinerU API endpoint (remote/API mode, no GPU needed)
-    parse_method: str = "auto"  # Parse method: auto, ocr, txt
-    enable_image_processing: bool = True  # Process images in documents
-    enable_table_processing: bool = True  # Process tables in documents
-    enable_equation_processing: bool = True  # Process equations in documents
+    embedding_binding: str | None = None  # Named model binding for embedding requests
+    mineru_api_base: str = ""  # MinerU official API base URL, defaulting to https://mineru.net when empty
+    mineru_api_token: str = ""  # MinerU official API token
+    mineru_model_version: Literal["pipeline", "vlm", "MinerU-HTML"] = "pipeline"  # Official MinerU model version
 
 
 class Config(BaseSettings):
@@ -317,6 +310,20 @@ class Config(BaseSettings):
             return None
         return dict(extra_headers)
 
+    @staticmethod
+    def _infer_binding_capability_type(
+        model: str | None,
+        label: str | None = None,
+    ) -> Literal["text_chat", "embedding", "multimodal"]:
+        haystack = " ".join(
+            part.strip().lower()
+            for part in (model or "", label or "")
+            if str(part or "").strip()
+        )
+        if any(token in haystack for token in ("embedding", "embeddings", "embed", "bge", "e5", "gte", "voyage")):
+            return "embedding"
+        return "text_chat"
+
     def _legacy_binding_for_provider(
         self,
         provider_name: str,
@@ -338,6 +345,7 @@ class Config(BaseSettings):
             api_key=provider.api_key,
             api_base=provider.api_base,
             extra_headers=self._copy_headers(provider.extra_headers),
+            capability_type="text_chat",
         )
 
     def _iter_binding_items(self) -> list[tuple[str, ModelBindingConfig]]:
@@ -363,6 +371,7 @@ class Config(BaseSettings):
                 api_key=provider.api_key,
                 api_base=provider.api_base,
                 extra_headers=self._copy_headers(provider.extra_headers),
+                capability_type="text_chat",
             )
             synthesized.append((spec.name, synthesized_binding))
         return synthesized
@@ -543,6 +552,11 @@ class Config(BaseSettings):
                 if not provider_name:
                     continue
                 spec = find_by_name(provider_name)
+                explicit_capability = (
+                    str(getattr(binding, "capability_type", "") or "").strip()
+                    if "capability_type" in getattr(binding, "model_fields_set", set())
+                    else ""
+                )
                 normalized[key] = ModelBindingConfig(
                     provider=provider_name,
                     label=str(binding.label or "").strip() or (spec.label if spec else provider_name),
@@ -550,6 +564,10 @@ class Config(BaseSettings):
                     api_key=binding.api_key,
                     api_base=normalize_api_base_url(provider_name, binding.api_base),
                     extra_headers=self._copy_headers(binding.extra_headers),
+                    capability_type=(
+                        explicit_capability
+                        or self._infer_binding_capability_type(binding.model, binding.label)
+                    ),
                 )
             self.model_bindings = normalized
         else:
@@ -569,6 +587,7 @@ class Config(BaseSettings):
                     api_key=provider.api_key,
                     api_base=normalize_api_base_url(spec.name, provider.api_base),
                     extra_headers=self._copy_headers(provider.extra_headers),
+                    capability_type="text_chat",
                 )
             self.model_bindings = synthesized
 

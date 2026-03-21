@@ -8,6 +8,7 @@ import {
   Empty,
   Form,
   Input,
+  List,
   Modal,
   Select,
   Space,
@@ -32,6 +33,7 @@ import {
   getPreferredBinding,
   getProviderMeta,
   normalizeModelConfig,
+  resolveBindingCapabilityType,
   updateBindingValue,
 } from '../modelConfig'
 import type { ConfigData, ConfigMeta, ModelBinding, ModelBindingTestResult, ProviderMeta } from '../types'
@@ -85,6 +87,17 @@ function getBindingRouteErrorMessage(error: unknown, action: '检测连接' | '�
   return error instanceof Error ? error.message : `${action}失败`
 }
 
+function inferCapabilityType(modelId: string): 'text_chat' | 'embedding' | 'multimodal' {
+  const normalized = modelId.trim().toLowerCase()
+  if (['embedding', 'embeddings', 'embed', 'bge', 'e5', 'gte', 'voyage'].some((token) => normalized.includes(token))) {
+    return 'embedding'
+  }
+  if (['vision', 'vl', 'omni', 'gpt-4o', 'qvq'].some((token) => normalized.includes(token))) {
+    return 'multimodal'
+  }
+  return 'text_chat'
+}
+
 export default function ModelsPage() {
   const { message, modal } = App.useApp()
   const [config, setConfig] = useState<ConfigData | null>(null)
@@ -96,6 +109,10 @@ export default function ModelsPage() {
 
   const [activeProviderName, setActiveProviderName] = useState<string | null>(null)
   const [isAddModelModalOpen, setIsAddModelModalOpen] = useState(false)
+  const [remoteModelsModalOpen, setRemoteModelsModalOpen] = useState(false)
+  const [remoteModels, setRemoteModels] = useState<string[]>([])
+  const [remoteModelsError, setRemoteModelsError] = useState<string | null>(null)
+  const [loadingRemoteModels, setLoadingRemoteModels] = useState(false)
   const [addModelForm] = Form.useForm()
 
   const [testModalOpen, setTestModalOpen] = useState(false)
@@ -213,6 +230,47 @@ export default function ModelsPage() {
     })
   }
 
+  async function loadRemoteModels() {
+    if (!activeProviderName) return
+    try {
+      setLoadingRemoteModels(true)
+      setRemoteModelsError(null)
+      const result = await api.fetchModelBindingModels({
+        provider: activeProviderName,
+        apiKey: activeProviderConfig?.apiKey || '',
+        apiBase: activeProviderConfig?.apiBase || null,
+      })
+      setRemoteModels(result.models)
+      setRemoteModelsModalOpen(true)
+      message.success(`已获取 ${result.count} 个模型`)
+    } catch (error) {
+      const nextError = getBindingRouteErrorMessage(error, '获取模型列表')
+      setRemoteModelsError(nextError)
+      message.error(nextError)
+    } finally {
+      setLoadingRemoteModels(false)
+    }
+  }
+
+  function importRemoteModel(modelId: string) {
+    if (!config || !activeProviderName) return
+    const providerMeta = getProviderMeta(configMeta, activeProviderName)
+    const capabilityType = inferCapabilityType(modelId)
+    const bindingName = createBindingId(modelId, bindings)
+
+    updateConfig((current) => updateBindingValue(
+      current,
+      bindingName,
+      providerMeta,
+      buildModelBinding(activeProviderName, providerMeta ?? undefined, {
+        label: modelId,
+        model: modelId,
+        capabilityType,
+      }),
+    ))
+    message.success(`已导入 ${modelId}`)
+  }
+
   function openTestModal(initialData?: { apiKey?: string; apiBase?: string; model?: string }) {
     testForm.setFieldsValue({
       apiKey: initialData?.apiKey || activeProviderConfig?.apiKey || '',
@@ -272,10 +330,21 @@ export default function ModelsPage() {
   const activeProviderBindings = useMemo(() => {
     return Object.entries(bindings)
       .filter(([, b]) => b.provider === activeProviderName)
-      .map(([name, b]) => ({ bindingName: name, ...b }))
+      .map(([name, b]) => ({ bindingName: name, ...b, capabilityType: resolveBindingCapabilityType(b) }))
   }, [bindings, activeProviderName])
 
   const activeProviderConfig = config?.providers?.[activeProviderName || '']
+  const mineruConfig = config?.rag ?? {}
+
+  function updateRagConfig(field: 'mineruApiBase' | 'mineruApiToken' | 'mineruModelVersion', value: string | null) {
+    updateConfig((current) => ({
+      ...current,
+      rag: {
+        ...(current.rag ?? {}),
+        [field]: value,
+      },
+    }))
+  }
 
   return (
     <div className="page-stack">
@@ -294,6 +363,55 @@ export default function ModelsPage() {
       />
       
       <div className="studio-container" style={{ padding: '0 24px' }}>
+        <Card
+          title="MinerU 文档解析"
+          extra={(
+            <a href="https://mineru.net/apiManage/docs" target="_blank" rel="noreferrer">
+              官方文档
+            </a>
+          )}
+          style={{ marginBottom: 24 }}
+        >
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Alert
+              type="info"
+              showIcon
+              message="知识库文件解析优先使用官方 MinerU API"
+              description="这里仅保留官方文档里真正需要的项目级配置：API Base、API Token 和模型版本。HTML 文件上传时会自动按官方要求走 MinerU-HTML。"
+            />
+            <div className="studio-form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+              <div className="studio-form-field">
+                <Text type="secondary">MinerU API Base</Text>
+                <Input
+                  value={mineruConfig.mineruApiBase || ''}
+                  onChange={(event) => updateRagConfig('mineruApiBase', event.target.value)}
+                  placeholder="https://mineru.net"
+                />
+              </div>
+              <div className="studio-form-field">
+                <Text type="secondary">MinerU API Token</Text>
+                <Input.Password
+                  value={mineruConfig.mineruApiToken || ''}
+                  onChange={(event) => updateRagConfig('mineruApiToken', event.target.value)}
+                  placeholder="官网申请的 API Token"
+                />
+              </div>
+              <div className="studio-form-field">
+                <Text type="secondary">MinerU 模型版本</Text>
+                <Select
+                  value={mineruConfig.mineruModelVersion || 'pipeline'}
+                  onChange={(value) => updateRagConfig('mineruModelVersion', value)}
+                  options={[
+                    { value: 'pipeline', label: 'pipeline' },
+                    { value: 'vlm', label: 'vlm' },
+                    { value: 'MinerU-HTML', label: 'MinerU-HTML' },
+                  ]}
+                />
+              </div>
+            </div>
+          </Space>
+        </Card>
+
         <Input.Search
           placeholder="搜索供应商..."
           value={searchQuery}
@@ -366,7 +484,14 @@ export default function ModelsPage() {
             <Card 
               title="已注册模型" 
               size="small" 
-              extra={<Button type="dashed" icon={<PlusOutlined />} onClick={() => setIsAddModelModalOpen(true)}>添加模型</Button>}
+              extra={(
+                <Space>
+                  <Button onClick={() => void loadRemoteModels()} loading={loadingRemoteModels}>
+                    获取模型列表
+                  </Button>
+                  <Button type="dashed" icon={<PlusOutlined />} onClick={() => setIsAddModelModalOpen(true)}>添加模型</Button>
+                </Space>
+              )}
             >
               <Table 
                 dataSource={activeProviderBindings}
@@ -432,6 +557,48 @@ export default function ModelsPage() {
             ]} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="远端模型列表"
+        open={remoteModelsModalOpen}
+        onCancel={() => setRemoteModelsModalOpen(false)}
+        footer={null}
+        width={720}
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message="导入后会自动生成模型绑定"
+            description="名称里包含 embedding/embed/bge/e5/gte/voyage 的模型会自动识别成 Embedding；如果识别不准，也可以继续用“添加模型”手动修正。"
+          />
+          {remoteModelsError && <Alert type="error" message={remoteModelsError} showIcon />}
+          {remoteModels.length > 0 ? (
+            <List
+              dataSource={remoteModels}
+              renderItem={(modelId) => {
+                const capabilityType = inferCapabilityType(modelId)
+                const tagColor = capabilityType === 'embedding' ? 'orange' : capabilityType === 'multimodal' ? 'purple' : 'blue'
+                const tagLabel = capabilityType === 'embedding' ? 'Embedding' : capabilityType === 'multimodal' ? 'Multimodal' : 'Text Chat'
+                return (
+                  <List.Item
+                    actions={[
+                      <a key="import" onClick={() => importRemoteModel(modelId)}>导入</a>,
+                    ]}
+                  >
+                    <Space wrap>
+                      <Text code>{modelId}</Text>
+                      <Tag color={tagColor}>{tagLabel}</Tag>
+                    </Space>
+                  </List.Item>
+                )
+              }}
+            />
+          ) : (
+            <Empty description="当前供应商没有返回模型列表" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </Space>
       </Modal>
 
       <Modal

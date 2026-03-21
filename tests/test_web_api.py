@@ -2659,7 +2659,9 @@ def test_web_api_config_update_rebuilds_knowledge_rag_engine(
         created.append(engine)
         assert config.rag.llm_binding == "rag-llm"
         assert config.rag.embedding_binding == "rag-embedding"
-        assert config.rag.mineru_api_base == "http://127.0.0.1:30000"
+        assert config.rag.mineru_api_base == "https://mineru.net"
+        assert config.rag.mineru_api_token == "mineru-token"
+        assert config.rag.mineru_model_version == "vlm"
         return engine
 
     monkeypatch.setattr(
@@ -2682,6 +2684,7 @@ def test_web_api_config_update_rebuilds_knowledge_rag_engine(
             "provider": "openai",
             "label": "OpenAI Embedding",
             "model": "text-embedding-3-large",
+            "capabilityType": "embedding",
             "apiKey": "sk-rag-embed",
             "apiBase": "https://api.openai.com/v1",
             "extraHeaders": {},
@@ -2689,17 +2692,10 @@ def test_web_api_config_update_rebuilds_knowledge_rag_engine(
     }
     payload["rag"] = {
         "llmBinding": "rag-llm",
-        "llmModel": "moonshot/kimi-k2.5",
         "embeddingBinding": "rag-embedding",
-        "embeddingModel": "text-embedding-3-large",
-        "embeddingDim": 3072,
-        "embeddingMaxTokens": 8192,
-        "parser": "mineru",
-        "mineruApiBase": "http://127.0.0.1:30000",
-        "parseMethod": "auto",
-        "enableImageProcessing": True,
-        "enableTableProcessing": True,
-        "enableEquationProcessing": True,
+        "mineruApiBase": "https://mineru.net",
+        "mineruApiToken": "mineru-token",
+        "mineruModelVersion": "vlm",
     }
 
     response = web_client.put("/api/v1/config", json=payload)
@@ -2710,7 +2706,9 @@ def test_web_api_config_update_rebuilds_knowledge_rag_engine(
     assert old_engine in web_client.app.state.web.app_knowledge._retired_rag_engines
     assert response.json()["data"]["rag"]["llmBinding"] == "rag-llm"
     assert response.json()["data"]["rag"]["embeddingBinding"] == "rag-embedding"
-    assert response.json()["data"]["rag"]["mineruApiBase"] == "http://127.0.0.1:30000"
+    assert response.json()["data"]["rag"]["mineruApiBase"] == "https://mineru.net"
+    assert response.json()["data"]["rag"]["mineruApiToken"] == "mineru-token"
+    assert response.json()["data"]["rag"]["mineruModelVersion"] == "vlm"
 
 
 def test_web_api_model_binding_test_endpoint_uses_current_payload(web_client: TestClient) -> None:
