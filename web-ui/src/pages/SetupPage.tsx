@@ -83,7 +83,7 @@ export default function SetupPage() {
       return
     }
     if (setupStatus.completed) {
-      navigate('/chat', { replace: true })
+      navigate('/dashboard', { replace: true })
       return
     }
     if (setupStatus.currentStep !== 'done') {
@@ -218,7 +218,7 @@ export default function SetupPage() {
       setError(null)
       message.success(successMessage)
       if (result.setup.completed) {
-        navigate('/chat', { replace: true })
+        navigate('/dashboard', { replace: true })
       } else if (result.setup.currentStep !== 'done') {
         setActiveStep(result.setup.currentStep)
       }
@@ -303,7 +303,7 @@ export default function SetupPage() {
       <div className="setup-shell">
         <PageHero
           eyebrow="FIRST-RUN SETUP"
-          title="欢迎使用 FlexiTeam"
+          title="欢迎使用 Nanobot"
           description="三步完成初始化。"
           className="page-hero-compact"
           badges={setupStatus.steps.map((step) => (

@@ -140,6 +140,28 @@ const bindingPresets: BindingPreset[] = [
   },
 ]
 
+const providerIcons: Record<string, string> = {
+  anthropic: '🟠',
+  openai: '🟢',
+  openrouter: '🔵',
+  deepseek: '🐋',
+  volcengine: '🌋',
+  groq: '⚡',
+  zhipu: '🧠',
+  dashscope: '☁️',
+  vllm: '🖥️',
+  gemini: '💎',
+  moonshot: '🌙',
+  minimax: '🔮',
+  aihubmix: '🎛️',
+  azure_openai: '🪟',
+  custom: '⚙️',
+}
+
+function getProviderIcon(providerName: string) {
+  return providerIcons[providerName] ?? '🤖'
+}
+
 function isBindingConfigured(providerMeta: ProviderMeta, binding: ModelBinding) {
   if (providerMeta.isOauth) {
     return true
@@ -229,6 +251,7 @@ export default function ModelsPage() {
   const [bindingTestResults, setBindingTestResults] = useState<Record<string, ModelBindingTestResult>>({})
   const [bindingQuery, setBindingQuery] = useState('')
   const [selectedBindingName, setSelectedBindingName] = useState('')
+  const [expandedProviderName, setExpandedProviderName] = useState('')
 
   const deferredBindingQuery = useDeferredValue(bindingQuery)
   const bindings = useMemo(
@@ -243,9 +266,6 @@ export default function ModelsPage() {
   const defaultBindingName = config && configMeta ? getPreferredBinding(config, configMeta) : ''
   const defaultBinding = defaultBindingName ? bindings[defaultBindingName] : null
   const defaultBindingMeta = getProviderMeta(configMeta, defaultBinding?.provider || '')
-  const activeBindingName = selectedBindingName || defaultBindingName
-  const selectedBinding = activeBindingName ? bindings[activeBindingName] : null
-  const selectedBindingMeta = getProviderMeta(configMeta, selectedBinding?.provider || '')
   const defaultBindingOptions = useMemo(
     () => (config && configMeta ? getBindingOptions(config, configMeta) : []),
     [config, configMeta],
@@ -254,20 +274,6 @@ export default function ModelsPage() {
   const defaultModelSuggestions = useMemo(
     () => getModelSuggestions(defaultBinding?.provider || '', config?.agents.defaults.model),
     [config?.agents.defaults.model, defaultBinding?.provider],
-  )
-  const selectedBindingSuggestions = useMemo(
-    () => {
-      const values = new Set<string>()
-      const remoteModels = activeBindingName ? bindingModelResults[activeBindingName]?.models ?? [] : []
-      for (const candidate of [selectedBinding?.model || null, ...remoteModels, ...getModelSuggestions(selectedBinding?.provider || '', selectedBinding?.model || null)]) {
-        const value = String(candidate || '').trim()
-        if (value) {
-          values.add(value)
-        }
-      }
-      return Array.from(values)
-    },
-    [activeBindingName, bindingModelResults, selectedBinding?.model, selectedBinding?.provider],
   )
   const defaultModelProviderName = useMemo(
     () => inferProviderFromModel(configMeta, config?.agents.defaults.model),
@@ -328,16 +334,6 @@ export default function ModelsPage() {
     })
   }, [bindings, configMeta, deferredBindingQuery])
 
-  const bindingGroups = useMemo(() => {
-    const groups = new Map<ProviderMeta['category'], BindingEntry[]>()
-    for (const entry of bindingEntries) {
-      const items = groups.get(entry.meta.category) ?? []
-      items.push(entry)
-      groups.set(entry.meta.category, items)
-    }
-    return Array.from(groups.entries())
-  }, [bindingEntries])
-
   const availablePresets = useMemo(() => {
     return bindingPresets.filter((preset) => getProviderMeta(configMeta, preset.providerName))
   }, [configMeta])
@@ -346,6 +342,67 @@ export default function ModelsPage() {
     () => bindingEntries.filter((entry) => entry.configured).length,
     [bindingEntries],
   )
+  const configuredProviderCount = useMemo(
+    () => new Set(bindingEntries.filter((entry) => entry.configured).map((entry) => entry.meta.name)).size,
+    [bindingEntries],
+  )
+  const activeCategoryCount = useMemo(
+    () => new Set(bindingEntries.map((entry) => entry.meta.category)).size,
+    [bindingEntries],
+  )
+  const providerRows = useMemo(() => {
+    if (!configMeta) {
+      return [] as Array<{
+        meta: ProviderMeta
+        items: BindingEntry[]
+        configured: boolean
+        statusLabel: string
+        statusColor: 'green' | 'default'
+        presets: BindingPreset[]
+      }>
+    }
+
+    const query = deferredBindingQuery.trim().toLowerCase()
+
+    return [...configMeta.providers]
+      .sort((left, right) => {
+        const orderDiff = providerCategoryOrder(left) - providerCategoryOrder(right)
+        if (orderDiff !== 0) {
+          return orderDiff
+        }
+        return left.label.localeCompare(right.label)
+      })
+      .map((meta) => {
+        const items = bindingEntries.filter((entry) => entry.meta.name === meta.name)
+        const configured = items.some((entry) => entry.configured)
+        return {
+          meta,
+          items,
+          configured,
+          statusLabel: configured ? '已配置' : '未配置',
+          statusColor: configured ? 'green' as const : 'default' as const,
+          presets: availablePresets.filter((preset) => preset.providerName === meta.name),
+        }
+      })
+      .filter((row) => {
+        if (!query) {
+          return true
+        }
+        const haystack = [
+          row.meta.name,
+          row.meta.label,
+          providerDescriptions[row.meta.name] || '',
+          ...row.meta.keywords,
+          ...row.items.flatMap((item) => [
+            item.bindingName,
+            item.binding.label,
+            item.binding.model,
+            item.endpointLabel,
+          ]),
+        ].join(' ').toLowerCase()
+        return haystack.includes(query)
+      })
+  }, [availablePresets, bindingEntries, configMeta, deferredBindingQuery])
 
   const agentCoverage = useMemo(() => {
     if (!configMeta || !config || !defaultBindingMeta) {
@@ -430,6 +487,7 @@ export default function ModelsPage() {
           ? current
           : getPreferredBinding(normalized, metaResult)
       ))
+      setExpandedProviderName((current) => current || getAllModelBindings(normalized, metaResult)[getPreferredBinding(normalized, metaResult)]?.provider || '')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载模型配置失败')
     } finally {
@@ -501,11 +559,23 @@ export default function ModelsPage() {
     navigate(`/studio/agents/${agentId}`)
   }
 
+  function toggleProvider(providerName: string) {
+    setExpandedProviderName((current) => {
+      const next = current === providerName ? '' : providerName
+      if (next && bindings[selectedBindingName]?.provider !== providerName) {
+        const nextBinding = bindingEntries.find((entry) => entry.meta.name === providerName)
+        setSelectedBindingName(nextBinding?.bindingName || '')
+      }
+      return next
+    })
+  }
+
   function focusBinding(bindingName: string) {
     if (!bindings[bindingName]) {
       return
     }
     setSelectedBindingName(bindingName)
+    setExpandedProviderName(bindings[bindingName].provider)
   }
 
   function applyDefaultBinding(bindingName: string, options?: { keepCurrentModel?: boolean; model?: string }) {
@@ -566,6 +636,7 @@ export default function ModelsPage() {
       }))
       return next
     })
+    setExpandedProviderName(nextProvider)
     setSelectedBindingName(bindingName)
   }
 
@@ -583,6 +654,7 @@ export default function ModelsPage() {
       ...binding,
       label: `${binding.label || bindingName} 副本`,
     }))
+    setExpandedProviderName(binding.provider)
     setSelectedBindingName(nextName)
   }
 
@@ -596,6 +668,9 @@ export default function ModelsPage() {
       const nextSelected = remainingNames[0] || ''
       if (selectedBindingName === bindingName) {
         setSelectedBindingName(nextSelected)
+      }
+      if (expandedProviderName && !Object.values(nextBindings).some((binding) => binding.provider === expandedProviderName)) {
+        setExpandedProviderName('')
       }
 
       const nextDefaults: ConfigData['agents']['defaults'] = { ...current.agents.defaults }
@@ -621,6 +696,7 @@ export default function ModelsPage() {
   }
 
   function applyPreset(preset: BindingPreset) {
+    setExpandedProviderName(preset.providerName)
     setSelectedBindingName(preset.bindingName)
     clearBindingModelResult(preset.bindingName)
     clearBindingTestResult(preset.bindingName)
@@ -670,71 +746,75 @@ export default function ModelsPage() {
     }
   }
 
-  async function testCurrentBinding() {
-    if (!selectedBinding || !selectedBindingMeta || !activeBindingName) {
+  async function testBinding(bindingName: string) {
+    const binding = bindings[bindingName]
+    const providerMeta = getProviderMeta(configMeta, binding?.provider || '')
+    if (!binding || !providerMeta) {
       return
     }
-    const effectiveModel = selectedBinding.model || config?.agents.defaults.model || ''
+    const effectiveModel = binding.model || config?.agents.defaults.model || ''
     try {
-      setTestingBindingName(activeBindingName)
+      setTestingBindingName(bindingName)
       const result = await api.testModelBinding({
-        bindingName: activeBindingName,
-        label: selectedBinding.label || activeBindingName,
-        provider: selectedBinding.provider,
+        bindingName,
+        label: binding.label || bindingName,
+        provider: binding.provider,
         model: effectiveModel,
-        apiKey: selectedBinding.apiKey || '',
-        apiBase: selectedBinding.apiBase || null,
-        extraHeaders: selectedBinding.extraHeaders || {},
+        apiKey: binding.apiKey || '',
+        apiBase: binding.apiBase || null,
+        extraHeaders: binding.extraHeaders || {},
       })
-      setBindingTestResults((current) => ({ ...current, [activeBindingName]: result }))
-      message[result.ok ? 'success' : 'error'](`${result.label || activeBindingName} ${result.ok ? '检测通过' : '检测失败'}`)
+      setBindingTestResults((current) => ({ ...current, [bindingName]: result }))
+      message[result.ok ? 'success' : 'error'](`${result.label || bindingName} ${result.ok ? '检测通过' : '检测失败'}`)
     } catch (error) {
       const fallback: ModelBindingTestResult = {
         ok: false,
-        provider: selectedBinding.provider,
+        provider: binding.provider,
         model: effectiveModel,
-        bindingName: activeBindingName,
-        label: selectedBinding.label || activeBindingName,
+        bindingName,
+        label: binding.label || bindingName,
         latencyMs: 0,
         finishReason: 'error',
         message: getBindingRouteErrorMessage(error, '检测连接'),
         responsePreview: null,
         usage: {},
       }
-      setBindingTestResults((current) => ({ ...current, [activeBindingName]: fallback }))
+      setBindingTestResults((current) => ({ ...current, [bindingName]: fallback }))
       message.error(getBindingRouteErrorMessage(error, '检测连接'))
     } finally {
       setTestingBindingName('')
     }
   }
 
-  async function fetchCurrentBindingModels() {
-    if (!selectedBinding || !selectedBindingMeta || !activeBindingName) {
+  async function fetchBindingModels(bindingName: string) {
+    const binding = bindings[bindingName]
+    const providerMeta = getProviderMeta(configMeta, binding?.provider || '')
+    if (!binding || !providerMeta) {
       return
     }
 
     try {
-      setFetchingModelsBindingName(activeBindingName)
+      setFetchingModelsBindingName(bindingName)
       const result = await api.fetchModelBindingModels({
-        bindingName: activeBindingName,
-        label: selectedBinding.label || activeBindingName,
-        provider: selectedBinding.provider,
-        apiKey: selectedBinding.apiKey || '',
-        apiBase: selectedBinding.apiBase || null,
+        bindingName,
+        label: binding.label || bindingName,
+        provider: binding.provider,
+        apiKey: binding.apiKey || '',
+        apiBase: binding.apiBase || null,
       })
-      setBindingModelResults((current) => ({ ...current, [activeBindingName]: result }))
-      if (!String(selectedBinding.model || '').trim() && result.models[0]) {
+      setBindingModelResults((current) => ({ ...current, [bindingName]: result }))
+      if (!String(binding.model || '').trim() && result.models[0]) {
         updateConfig((current) => updateBindingFieldValue(
           current,
-          activeBindingName,
-          getProviderMeta(configMeta, selectedBinding.provider),
+          bindingName,
+          providerMeta,
           'model',
           result.models[0],
         ))
       }
       message.success(result.message)
     } catch (error) {
-      clearBindingModelResult(activeBindingName)
+      clearBindingModelResult(bindingName)
       message.error(getBindingRouteErrorMessage(error, '获取模型列表'))
     } finally {
       setFetchingModelsBindingName('')
@@ -753,14 +833,9 @@ export default function ModelsPage() {
     return <Empty description="当前无法读取模型绑定配置" className="page-card" />
   }
 
-  const selectedStatus = selectedBinding && selectedBindingMeta
-    ? getBindingStatus(selectedBindingMeta, selectedBinding)
-    : null
-  const selectedModelResult = activeBindingName ? bindingModelResults[activeBindingName] : null
-  const selectedTestResult = activeBindingName ? bindingTestResults[activeBindingName] : null
-  const heroTitle = workspaceMode === 'bindings' ? '模型配置工作台' : '自定义 Agent 工作台'
+  const heroTitle = workspaceMode === 'bindings' ? '模型供应商' : '自定义 Agent 工作台'
   const heroDescription = workspaceMode === 'bindings'
-    ? '先把全局默认、供应商连接和模型检测配稳，再把差异化能力留给 Agent 页面处理。'
+    ? '严格参照参考项目的供应商页交互，主视图展示完整供应商列表，并在列表内直接展开配置。'
     : '这里只看 Agent 的模型覆盖和连接差异，避免把平台配置和角色定制搅在一起。'
   const heroActions = (
     <Space wrap>
@@ -830,69 +905,69 @@ export default function ModelsPage() {
         stats={heroStats}
       />
 
-      <MotionGroup className="page-stack">
-        <MotionPanel hover={false}>
-          <Card className="config-panel-card models-workspace-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>工作台切换</Typography.Title>
-                <Text type="secondary">把平台级模型连接和 Agent 个性化调优拆开处理，才不会在一个页面里同时做两种决策。</Text>
-              </div>
-              <Tag color={workspaceMode === 'bindings' ? 'blue' : 'gold'}>
-                {workspaceMode === 'bindings' ? '模型配置' : '自定义 Agent'}
-              </Tag>
-            </div>
-
-            <div className="models-workspace-switch">
-              <button
-                type="button"
-                className={`models-workspace-button${workspaceMode === 'bindings' ? ' is-active' : ''}`}
-                onClick={() => setWorkspaceMode('bindings')}
-              >
-                <span className="models-workspace-icon"><SettingOutlined /></span>
-                <strong>模型配置</strong>
-                <span>全局默认、供应商 binding、预设、检测连接和模型拉取都留在这里。</span>
-              </button>
-              <button
-                type="button"
-                className={`models-workspace-button${workspaceMode === 'agents' ? ' is-active' : ''}`}
-                onClick={() => setWorkspaceMode('agents')}
-              >
-                <span className="models-workspace-icon"><RobotOutlined /></span>
-                <strong>自定义 Agent</strong>
-                <span>只看哪些 Agent 覆盖了模型或连接，并且一键跳去 Agent 页面继续编辑。</span>
-              </button>
-            </div>
-
-            <Paragraph className="models-helper-copy">
-              推荐流程：先在“模型配置”里把默认运行和供应商连接配稳，再按需进入“自定义 Agent”做角色差异化。
-            </Paragraph>
-          </Card>
-        </MotionPanel>
-      </MotionGroup>
+      <div className="models-mode-tabs">
+        <button
+          type="button"
+          className={`models-mode-tab${workspaceMode === 'bindings' ? ' is-active' : ''}`}
+          onClick={() => setWorkspaceMode('bindings')}
+        >
+          <SettingOutlined />
+          <span>模型供应商</span>
+        </button>
+        <button
+          type="button"
+          className={`models-mode-tab${workspaceMode === 'agents' ? ' is-active' : ''}`}
+          onClick={() => setWorkspaceMode('agents')}
+        >
+          <RobotOutlined />
+          <span>Agent 覆盖</span>
+        </button>
+      </div>
 
       {workspaceMode === 'bindings' ? (
-        <div className="page-grid models-page-grid">
-          <MotionGroup className="page-stack">
-            <MotionPanel hover={false}>
-              <Card className="config-panel-card">
-                <div className="config-card-header">
-                  <div className="page-section-title">
-                    <Typography.Title level={4}>默认运行</Typography.Title>
-                    <Text type="secondary">新会话和未显式覆盖的 Agent 都继承这里。</Text>
-                  </div>
-                  <Tag color="blue">平台级</Tag>
+        <MotionGroup className="page-stack">
+          <MotionPanel hover={false}>
+            <Card className="config-panel-card models-default-runtime-card">
+              <div className="config-card-header">
+                <div className="page-section-title">
+                  <Typography.Title level={4}>默认运行</Typography.Title>
+                  <Text type="secondary">保留当前项目的平台级默认模型、binding 和推理参数能力。</Text>
                 </div>
+                <Tag color="blue">平台级</Tag>
+              </div>
 
-                {defaultModelMismatch && defaultBindingMeta ? (
-                  <Alert
-                    showIcon
-                    type="warning"
-                    message="默认绑定与模型关键字不一致"
-                    description={`当前默认绑定是 ${defaultBindingMeta.label}，但模型更像 ${getProviderMeta(configMeta, defaultModelProviderName || '')?.label || '其他供应商'}。这类错配会让运行时拿错密钥。`}
-                  />
-                ) : null}
+              <div className="models-provider-preview-shell">
+                <div className="models-provider-preview-brand">
+                  <span className="models-provider-emoji models-provider-emoji-large">
+                    {getProviderIcon(defaultBindingMeta?.name || defaultBinding?.provider || '')}
+                  </span>
+                  <div className="models-provider-preview-copy">
+                    <strong>{defaultBinding?.label || '尚未设置默认 binding'}</strong>
+                    <span>{defaultBindingMeta ? (providerDescriptions[defaultBindingMeta.name] || defaultBindingMeta.label) : '默认 binding 会决定平台级供应商、模型和访问地址。'}</span>
+                  </div>
+                </div>
+                <div className="models-provider-preview-stats">
+                  <div className="models-provider-preview-stat">
+                    <span>默认模型</span>
+                    <strong>{config.agents.defaults.model || '待选择'}</strong>
+                  </div>
+                  <div className="models-provider-preview-stat">
+                    <span>Agent 覆盖</span>
+                    <strong>{agentOverrideCount}</strong>
+                  </div>
+                </div>
+              </div>
 
+              {defaultModelMismatch && defaultBindingMeta ? (
+                <Alert
+                  showIcon
+                  type="warning"
+                  message="默认绑定与模型关键字不一致"
+                  description={`当前默认绑定是 ${defaultBindingMeta.label}，但模型更像 ${getProviderMeta(configMeta, defaultModelProviderName || '')?.label || '其他供应商'}。这类错配会让运行时拿错密钥。`}
+                />
+              ) : null}
+
+              <div className="models-editor-grid">
                 <div className="config-field-block">
                   <div className="config-field-label-row">
                     <Text>默认绑定</Text>
@@ -906,7 +981,6 @@ export default function ModelsPage() {
                       keepCurrentModel: modelMatchesProvider(configMeta, bindings[value]?.provider || '', config.agents.defaults.model),
                     })}
                   />
-                  <Text type="secondary">{defaultBindingMeta ? (providerDescriptions[defaultBindingMeta.name] || defaultBindingMeta.label) : '默认绑定会决定全局模型、密钥和地址。'}</Text>
                 </div>
 
                 <div className="config-field-block">
@@ -919,374 +993,414 @@ export default function ModelsPage() {
                     onChange={(event) => updateDefaultModel(event.target.value)}
                   />
                 </div>
+              </div>
 
-                <div className="models-suggestion-list">
-                  {defaultModelSuggestions.map((model) => (
-                    <Button
-                      key={model}
-                      type={config.agents.defaults.model === model ? 'primary' : 'default'}
-                      onClick={() => updateDefaultModel(model)}
-                    >
-                      {model}
-                    </Button>
-                  ))}
+              <div className="models-suggestion-list">
+                {defaultModelSuggestions.map((model) => (
+                  <Button
+                    key={model}
+                    type={config.agents.defaults.model === model ? 'primary' : 'default'}
+                    onClick={() => updateDefaultModel(model)}
+                  >
+                    {model}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="models-settings-grid">
+                <div className="config-field-block">
+                  <div className="config-field-label-row">
+                    <Text>创意程度</Text>
+                  </div>
+                  <InputNumber
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={config.agents.defaults.temperature}
+                    style={{ width: '100%' }}
+                    onChange={(value) => updateDefaults('temperature', value ?? 0)}
+                  />
                 </div>
 
-                <div className="models-settings-grid">
-                  <div className="config-field-block">
-                    <div className="config-field-label-row">
-                      <Text>创意程度</Text>
-                    </div>
-                    <InputNumber
-                      min={0}
-                      max={2}
-                      step={0.1}
-                      value={config.agents.defaults.temperature}
-                      style={{ width: '100%' }}
-                      onChange={(value) => updateDefaults('temperature', value ?? 0)}
-                    />
+                <div className="config-field-block">
+                  <div className="config-field-label-row">
+                    <Text>思考深度</Text>
                   </div>
-
-                  <div className="config-field-block">
-                    <div className="config-field-label-row">
-                      <Text>思考深度</Text>
-                    </div>
-                    <Select
-                      allowClear
-                      value={config.agents.defaults.reasoningEffort ?? undefined}
-                      options={[
-                        { label: '低', value: 'low' },
-                        { label: '中', value: 'medium' },
-                        { label: '高', value: 'high' },
-                      ]}
-                      style={{ width: '100%' }}
-                      onChange={(value) => updateDefaults('reasoningEffort', value ?? null)}
-                    />
-                  </div>
-
-                  <div className="config-field-block">
-                    <div className="config-field-label-row">
-                      <Text>最大回复长度</Text>
-                    </div>
-                    <InputNumber
-                      min={1}
-                      value={config.agents.defaults.maxTokens}
-                      style={{ width: '100%' }}
-                      onChange={(value) => updateDefaults('maxTokens', value ?? 1)}
-                    />
-                  </div>
-
-                  <div className="config-field-block">
-                    <div className="config-field-label-row">
-                      <Text>对话记忆窗口</Text>
-                    </div>
-                    <InputNumber
-                      min={1}
-                      value={config.agents.defaults.contextWindowTokens}
-                      style={{ width: '100%' }}
-                      onChange={(value) => updateDefaults('contextWindowTokens', value ?? 1)}
-                    />
-                  </div>
+                  <Select
+                    allowClear
+                    value={config.agents.defaults.reasoningEffort ?? undefined}
+                    options={[
+                      { label: '低', value: 'low' },
+                      { label: '中', value: 'medium' },
+                      { label: '高', value: 'high' },
+                    ]}
+                    style={{ width: '100%' }}
+                    onChange={(value) => updateDefaults('reasoningEffort', value ?? null)}
+                  />
                 </div>
 
-                <Paragraph className="models-helper-copy">
-                  默认运行会优先使用 `binding`，同一云厂商也可以并存多个账号和地址实例。
-                </Paragraph>
-              </Card>
-            </MotionPanel>
-
-            <MotionPanel hover={false}>
-              <Card className="config-panel-card">
-                <div className="config-card-header">
-                  <div className="page-section-title">
-                    <Typography.Title level={4}>快速预设</Typography.Title>
-                    <Text type="secondary">常见中国厂商场景一键带出模型和地址，减少首配步骤。</Text>
+                <div className="config-field-block">
+                  <div className="config-field-label-row">
+                    <Text>最大回复长度</Text>
                   </div>
-                  <Tag color="cyan">{availablePresets.length} 个可用预设</Tag>
+                  <InputNumber
+                    min={1}
+                    value={config.agents.defaults.maxTokens}
+                    style={{ width: '100%' }}
+                    onChange={(value) => updateDefaults('maxTokens', value ?? 1)}
+                  />
                 </div>
 
-                {availablePresets.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前实例没有可套用的快捷预设" />
-                ) : (
-                  <div className="models-preset-grid">
-                    {availablePresets.map((preset) => (
-                      <button
-                        key={preset.key}
-                        type="button"
-                        className="models-preset-button"
-                        onClick={() => applyPreset(preset)}
-                      >
-                        <strong>{preset.label}</strong>
-                        <span>{preset.caption}</span>
-                        <small>{preset.model}</small>
-                      </button>
-                    ))}
+                <div className="config-field-block">
+                  <div className="config-field-label-row">
+                    <Text>对话记忆窗口</Text>
                   </div>
-                )}
-              </Card>
-            </MotionPanel>
-
-            <MotionPanel hover={false}>
-              <Card className="config-panel-card">
-                <div className="config-card-header">
-                  <div className="page-section-title">
-                    <Typography.Title level={4}>binding 目录</Typography.Title>
-                    <Text type="secondary">先选中一个连接实例，再去右侧编辑它的密钥、地址和模型。</Text>
-                  </div>
-                  <Tag>{configuredBindingsCount} / {bindingEntries.length} 已配置</Tag>
+                  <InputNumber
+                    min={1}
+                    value={config.agents.defaults.contextWindowTokens}
+                    style={{ width: '100%' }}
+                    onChange={(value) => updateDefaults('contextWindowTokens', value ?? 1)}
+                  />
                 </div>
+              </div>
+            </Card>
+          </MotionPanel>
 
+          <MotionPanel hover={false}>
+            <div className="models-provider-list-shell">
+              <div className="models-provider-list-header">
+                <div>
+                  <Typography.Title level={4}>模型供应商</Typography.Title>
+                  <Text type="secondary">严格参照参考项目的供应商页交互，主视图展示完整供应商列表，点击某一行后在列表内直接展开配置。</Text>
+                </div>
                 <div className="models-directory-toolbar">
                   <Input
                     value={bindingQuery}
-                    placeholder="搜索百炼、豆包、DeepSeek、Kimi、GLM..."
+                    placeholder="搜索供应商、binding、模型..."
                     onChange={(event) => setBindingQuery(event.target.value)}
                   />
-                  <Button icon={<PlusOutlined />} onClick={() => addBinding(selectedBinding?.provider || defaultBinding?.provider)}>
-                    新增同类绑定
+                  <Button icon={<PlusOutlined />} onClick={() => addBinding(defaultBinding?.provider)}>
+                    新增绑定
                   </Button>
                 </div>
+              </div>
 
-                {bindingGroups.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有任何 binding，先点“新增绑定”创建一个。" />
-                ) : (
-                  <div className="models-provider-sections">
-                    {bindingGroups.map(([category, items]) => (
-                      <div className="models-provider-section" key={category}>
-                        <div className="models-provider-section-head">
-                          <Text strong>{providerCategoryLabels[category]}</Text>
-                          <Text type="secondary">{items.length} 个</Text>
+              <div className="models-provider-accordion">
+                {providerRows.map((providerRow) => {
+                  const isExpanded = expandedProviderName === providerRow.meta.name
+                  const activeEntry = providerRow.items.find((item) => item.bindingName === selectedBindingName) ?? providerRow.items[0] ?? null
+                  const activeModelResult = activeEntry ? bindingModelResults[activeEntry.bindingName] : null
+                  const activeTestResult = activeEntry ? bindingTestResults[activeEntry.bindingName] : null
+                  const activeSuggestions = activeEntry
+                    ? Array.from(new Set([
+                        activeEntry.binding.model || '',
+                        ...(activeModelResult?.models ?? []),
+                        ...getModelSuggestions(activeEntry.meta.name, activeEntry.binding.model || null),
+                      ].map((item) => String(item || '').trim()).filter(Boolean)))
+                    : []
+
+                  return (
+                    <div className={`models-provider-row${isExpanded ? ' is-expanded' : ''}`} key={providerRow.meta.name}>
+                      <button
+                        type="button"
+                        className="models-provider-row-head"
+                        onClick={() => toggleProvider(providerRow.meta.name)}
+                      >
+                        <div className="models-provider-row-main">
+                          <span className="models-provider-emoji models-provider-row-emoji">
+                            {getProviderIcon(providerRow.meta.name)}
+                          </span>
+                          <span className="models-provider-row-name">{providerRow.meta.label}</span>
                         </div>
-                        <div className="models-provider-list">
-                          {items.map((entry) => {
-                            const status = getBindingStatus(entry.meta, entry.binding)
-                            const isActive = entry.bindingName === activeBindingName
-
-                            return (
-                              <button
-                                key={entry.bindingName}
-                                type="button"
-                                className={`models-binding-item${isActive ? ' is-active' : ''}`}
-                                onClick={() => focusBinding(entry.bindingName)}
-                              >
-                                <div className="models-binding-head">
-                                  <div>
-                                    <strong>{entry.binding.label || entry.bindingName}</strong>
-                                    <p>{entry.meta.label} · {entry.description}</p>
-                                  </div>
-                                  <Tag color={status.color}>{status.label}</Tag>
-                                </div>
-
-                                <div className="models-binding-meta">
-                                  {entry.bindingName === defaultBindingName ? <Tag color="blue">默认绑定</Tag> : null}
-                                  <Tag>{entry.suggestions.length || '自定义'} 个建议</Tag>
-                                  <Tag>{entry.endpointLabel}</Tag>
-                                </div>
-                              </button>
-                            )
-                          })}
+                        <div className="models-provider-row-side">
+                          <span className={`models-provider-status${providerRow.configured ? ' is-configured' : ''}`}>
+                            {providerRow.statusLabel}
+                          </span>
+                          <span className={`models-provider-chevron${isExpanded ? ' is-open' : ''}`}>›</span>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            </MotionPanel>
-          </MotionGroup>
+                      </button>
 
-          <MotionGroup className="page-stack">
-            <MotionPanel hover={false}>
-              <Card className="config-panel-card">
-                <div className="config-card-header">
-                  <div className="page-section-title">
-                    <Typography.Title level={4}>连接编辑器</Typography.Title>
-                    <Text type="secondary">{selectedBindingMeta ? (providerDescriptions[selectedBindingMeta.name] || selectedBindingMeta.label) : '请选择一个 binding 查看详情'}</Text>
-                  </div>
-                  <Space wrap>
-                    {selectedBindingMeta ? <Tag>{providerCategoryLabels[selectedBindingMeta.category]}</Tag> : null}
-                    {activeBindingName && activeBindingName === defaultBindingName ? <Tag color="blue">当前默认</Tag> : null}
-                    {selectedBindingMeta?.supportsPromptCaching ? <Tag color="cyan">支持提示词缓存</Tag> : null}
-                    {selectedStatus ? <Tag color={selectedStatus.color}>{selectedStatus.label}</Tag> : null}
-                  </Space>
-                </div>
-
-                {!selectedBinding || !selectedBindingMeta ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧选择一个 binding，或先新增一个。" />
-                ) : (
-                  <>
-                    <div className="models-status-strip">
-                      <div className="models-status-chip">
-                        <span>供应商</span>
-                        <strong>{selectedBindingMeta.label}</strong>
-                      </div>
-                      <div className="models-status-chip">
-                        <span>服务地址</span>
-                        <strong>{getEndpointLabel(selectedBindingMeta, selectedBinding)}</strong>
-                      </div>
-                    </div>
-
-                    <div className="config-field-block">
-                      <div className="config-field-label-row">
-                        <Text>绑定名称</Text>
-                      </div>
-                      <Input
-                        value={selectedBinding.label || ''}
-                        placeholder={activeBindingName}
-                        onChange={(event) => updateBindingField(activeBindingName, 'label', event.target.value)}
-                      />
-                    </div>
-
-                    <div className="config-field-block">
-                      <div className="config-field-label-row">
-                        <Text>所属供应商</Text>
-                      </div>
-                      <Select
-                        value={selectedBinding.provider}
-                        options={providerOptions}
-                        style={{ width: '100%' }}
-                        onChange={(value) => updateBindingProvider(activeBindingName, value)}
-                      />
-                    </div>
-
-                    <div className="config-field-block">
-                      <div className="config-field-label-row">
-                        <Text>绑定默认模型</Text>
-                        {!selectedBindingMeta.isOauth ? (
-                          <Button
-                            size="small"
-                            icon={<ReloadOutlined />}
-                            loading={fetchingModelsBindingName === activeBindingName}
-                            onClick={() => void fetchCurrentBindingModels()}
-                          >
-                            {selectedModelResult ? '刷新模型' : '获取模型'}
-                          </Button>
-                        ) : null}
-                      </div>
-                      <Input
-                        value={selectedBinding.model || ''}
-                        placeholder={selectedBindingSuggestions[0] || '例如 deepseek-chat / qwen-max / glm-4.5'}
-                        onChange={(event) => updateBindingField(activeBindingName, 'model', event.target.value)}
-                      />
-                    </div>
-
-                    {selectedModelResult ? (
-                      <Paragraph className="models-helper-copy">
-                        {selectedModelResult.message}，下方展示的是当前 API Key 和 API 地址返回的模型 ID。
-                      </Paragraph>
-                    ) : null}
-
-                    <div className="models-suggestion-list">
-                      {selectedBindingSuggestions.length > 0 ? (
-                        selectedBindingSuggestions.map((model) => (
-                          <Button
-                            key={model}
-                            type={selectedBinding.model === model ? 'primary' : 'default'}
-                            onClick={() => updateBindingField(activeBindingName, 'model', model)}
-                          >
-                            {model}
-                          </Button>
-                        ))
-                      ) : (
-                        <Text type="secondary">当前供应商没有预置模型目录，可以直接手动输入。</Text>
-                      )}
-                    </div>
-
-                    {selectedBindingMeta.isOauth ? (
-                      <Alert
-                        showIcon
-                        type="info"
-                        message="该供应商走 OAuth"
-                        description="这类连接不在当前页面录入 API Key，仍通过外部登录流程完成认证。"
-                      />
-                    ) : (
-                      <>
-                        <div className="config-field-block">
-                          <div className="config-field-label-row">
-                            <Text>访问密钥</Text>
+                      {isExpanded ? (
+                        <div className="models-provider-row-body">
+                          <div className="models-provider-row-intro">
+                            <div className="models-provider-row-intro-copy">
+                              <strong>{providerDescriptions[providerRow.meta.name] || providerRow.meta.label}</strong>
+                              <span>
+                                {providerRow.items.length > 0
+                                  ? `当前共有 ${providerRow.items.length} 个 binding，可在下面切换不同账号、地址和模型实例。`
+                                  : '当前还没有这个供应商的 binding，可以先创建第一条连接。'}
+                              </span>
+                            </div>
+                            <div className="models-editor-badge-row">
+                              <Tag>{providerCategoryLabels[providerRow.meta.category]}</Tag>
+                              {defaultBinding?.provider === providerRow.meta.name ? <Tag color="blue">当前默认供应商</Tag> : null}
+                              <Tag>{providerRow.items.length} 个 binding</Tag>
+                            </div>
                           </div>
-                          <Input.Password
-                            value={selectedBinding.apiKey ?? ''}
-                            placeholder={selectedBindingMeta.isLocal ? '本地供应商通常可留空' : '请输入访问密钥'}
-                            onChange={(event) => updateBindingField(activeBindingName, 'apiKey', event.target.value)}
-                          />
-                        </div>
 
-                        <div className="config-field-block">
-                          <div className="config-field-label-row">
-                            <Text>服务地址</Text>
-                            {selectedBindingMeta.defaultApiBase ? <Tag>默认地址</Tag> : null}
-                          </div>
-                          <Input
-                            value={selectedBinding.apiBase ?? ''}
-                            placeholder={selectedBindingMeta.defaultApiBase ?? '留空时使用供应商默认地址'}
-                            onChange={(event) => updateBindingField(activeBindingName, 'apiBase', event.target.value)}
-                          />
-                          <Text type="secondary">
-                            支持直接粘贴完整接口地址，例如 `.../chat/completions`，保存和检测时会自动归一化成可用的 API Base。
-                          </Text>
-                          {selectedBindingMeta.defaultApiBase ? (
-                            <Space wrap>
-                              <Button onClick={() => updateBindingField(activeBindingName, 'apiBase', selectedBindingMeta.defaultApiBase || '')}>
-                                使用默认地址
-                              </Button>
-                              <Text type="secondary">{selectedBindingMeta.defaultApiBase}</Text>
-                            </Space>
+                          {providerRow.presets.length > 0 ? (
+                            <div className="models-form-section">
+                              <div className="models-form-section-head">
+                                <strong>快速预设</strong>
+                                <span>这里保留当前项目的一键预设能力，但只显示当前供应商可用的预设。</span>
+                              </div>
+                              <div className="models-preset-grid">
+                                {providerRow.presets.map((preset) => (
+                                  <button
+                                    key={preset.key}
+                                    type="button"
+                                    className="models-preset-button"
+                                    onClick={() => applyPreset(preset)}
+                                  >
+                                    <strong>{preset.label}</strong>
+                                    <span>{preset.caption}</span>
+                                    <small>{preset.model}</small>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           ) : null}
+
+                          {providerRow.items.length === 0 ? (
+                            <div className="models-provider-empty-state">
+                              <Paragraph className="models-helper-copy">
+                                这个供应商还没有任何 binding。点击下面按钮后，会按当前供应商自动创建第一条连接。
+                              </Paragraph>
+                              <Button type="primary" icon={<PlusOutlined />} onClick={() => addBinding(providerRow.meta.name)}>
+                                创建第一条绑定
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="models-provider-binding-tabs">
+                                {providerRow.items.map((item) => {
+                                  const itemStatus = getBindingStatus(item.meta, item.binding)
+                                  return (
+                                    <button
+                                      key={item.bindingName}
+                                      type="button"
+                                      className={`models-provider-binding-tab${activeEntry?.bindingName === item.bindingName ? ' is-active' : ''}`}
+                                      onClick={() => focusBinding(item.bindingName)}
+                                    >
+                                      <strong>{item.binding.label || item.bindingName}</strong>
+                                      <span>{itemStatus.label}</span>
+                                    </button>
+                                  )
+                                })}
+                                <button
+                                  type="button"
+                                  className="models-provider-binding-tab is-create"
+                                  onClick={() => addBinding(providerRow.meta.name)}
+                                >
+                                  <strong>新增实例</strong>
+                                  <span>添加同供应商新 binding</span>
+                                </button>
+                              </div>
+
+                              {activeEntry ? (
+                                <>
+                                  <div className="models-status-strip">
+                                    <div className="models-status-chip">
+                                      <span>绑定名称</span>
+                                      <strong>{activeEntry.binding.label || activeEntry.bindingName}</strong>
+                                    </div>
+                                    <div className="models-status-chip">
+                                      <span>服务地址</span>
+                                      <strong>{getEndpointLabel(activeEntry.meta, activeEntry.binding)}</strong>
+                                    </div>
+                                    <div className="models-status-chip">
+                                      <span>默认模型</span>
+                                      <strong>{activeEntry.binding.model || '待填写'}</strong>
+                                    </div>
+                                  </div>
+
+                                  <div className="models-form-section">
+                                    <div className="models-form-section-head">
+                                      <strong>基础信息</strong>
+                                      <span>可以保留多个同厂商实例，所以这里仍然保留当前项目的 binding 名称与供应商切换能力。</span>
+                                    </div>
+                                    <div className="models-editor-grid">
+                                      <div className="config-field-block">
+                                        <div className="config-field-label-row">
+                                          <Text>绑定名称</Text>
+                                        </div>
+                                        <Input
+                                          value={activeEntry.binding.label || ''}
+                                          placeholder={activeEntry.bindingName}
+                                          onChange={(event) => updateBindingField(activeEntry.bindingName, 'label', event.target.value)}
+                                        />
+                                      </div>
+                                      <div className="config-field-block">
+                                        <div className="config-field-label-row">
+                                          <Text>所属供应商</Text>
+                                        </div>
+                                        <Select
+                                          value={activeEntry.binding.provider}
+                                          options={providerOptions}
+                                          style={{ width: '100%' }}
+                                          onChange={(value) => updateBindingProvider(activeEntry.bindingName, value)}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="models-form-section">
+                                    <div className="models-form-section-head">
+                                      <strong>模型与发现</strong>
+                                      <span>保留当前项目的模型拉取、模型建议和模型测试能力。</span>
+                                    </div>
+                                    <div className="config-field-block">
+                                      <div className="config-field-label-row">
+                                        <Text>绑定默认模型</Text>
+                                        {!activeEntry.meta.isOauth ? (
+                                          <Button
+                                            size="small"
+                                            icon={<ReloadOutlined />}
+                                            loading={fetchingModelsBindingName === activeEntry.bindingName}
+                                            onClick={() => void fetchBindingModels(activeEntry.bindingName)}
+                                          >
+                                            {activeModelResult ? '刷新模型' : '获取模型'}
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                      <Input
+                                        value={activeEntry.binding.model || ''}
+                                        placeholder={activeEntry.suggestions[0] || '例如 deepseek-chat / qwen-max / glm-4.5'}
+                                        onChange={(event) => updateBindingField(activeEntry.bindingName, 'model', event.target.value)}
+                                      />
+                                    </div>
+
+                                    <div className="models-suggestion-list">
+                                      {activeSuggestions.length > 0 ? (
+                                        activeSuggestions.map((model) => (
+                                          <Button
+                                            key={model}
+                                            type={activeEntry.binding.model === model ? 'primary' : 'default'}
+                                            onClick={() => updateBindingField(activeEntry.bindingName, 'model', model)}
+                                          >
+                                            {model}
+                                          </Button>
+                                        ))
+                                      ) : (
+                                        <Text type="secondary">当前供应商没有预置模型目录，可以直接手动输入。</Text>
+                                      )}
+                                    </div>
+
+                                    {activeModelResult ? (
+                                      <Paragraph className="models-helper-copy">
+                                        {activeModelResult.message}，下方展示的是当前 API Key 和 API 地址返回的模型 ID。
+                                      </Paragraph>
+                                    ) : null}
+                                  </div>
+
+                                  {activeEntry.meta.isOauth ? (
+                                    <Alert
+                                      showIcon
+                                      type="info"
+                                      message="该供应商走 OAuth"
+                                      description="这类连接不在当前页面录入 API Key，仍通过外部登录流程完成认证。"
+                                    />
+                                  ) : (
+                                    <div className="models-form-section">
+                                      <div className="models-form-section-head">
+                                        <strong>认证与地址</strong>
+                                        <span>保留当前项目的 API Key、API Base 和归一化地址逻辑。</span>
+                                      </div>
+                                      <div className="models-editor-grid">
+                                        <div className="config-field-block">
+                                          <div className="config-field-label-row">
+                                            <Text>访问密钥</Text>
+                                          </div>
+                                          <Input.Password
+                                            value={activeEntry.binding.apiKey ?? ''}
+                                            placeholder={activeEntry.meta.isLocal ? '本地供应商通常可留空' : '请输入访问密钥'}
+                                            onChange={(event) => updateBindingField(activeEntry.bindingName, 'apiKey', event.target.value)}
+                                          />
+                                        </div>
+                                        <div className="config-field-block">
+                                          <div className="config-field-label-row">
+                                            <Text>服务地址</Text>
+                                            {activeEntry.meta.defaultApiBase ? <Tag>默认地址</Tag> : null}
+                                          </div>
+                                          <Input
+                                            value={activeEntry.binding.apiBase ?? ''}
+                                            placeholder={activeEntry.meta.defaultApiBase ?? '留空时使用供应商默认地址'}
+                                            onChange={(event) => updateBindingField(activeEntry.bindingName, 'apiBase', event.target.value)}
+                                          />
+                                          {activeEntry.meta.defaultApiBase ? (
+                                            <Space wrap>
+                                              <Button onClick={() => updateBindingField(activeEntry.bindingName, 'apiBase', activeEntry.meta.defaultApiBase || '')}>
+                                                使用默认地址
+                                              </Button>
+                                              <Text type="secondary">{activeEntry.meta.defaultApiBase}</Text>
+                                            </Space>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="models-inline-actions">
+                                    {activeEntry.bindingName !== defaultBindingName ? (
+                                      <Button
+                                        onClick={() => applyDefaultBinding(activeEntry.bindingName, {
+                                          keepCurrentModel: modelMatchesProvider(configMeta, activeEntry.binding.provider, config.agents.defaults.model),
+                                          model: activeEntry.binding.model || config.agents.defaults.model,
+                                        })}
+                                      >
+                                        设为全局默认绑定
+                                      </Button>
+                                    ) : null}
+                                    {!activeEntry.meta.isOauth ? (
+                                      <Button
+                                        type="primary"
+                                        loading={testingBindingName === activeEntry.bindingName}
+                                        disabled={!activeEntry.binding.provider || !(activeEntry.binding.model || config.agents.defaults.model)}
+                                        onClick={() => void testBinding(activeEntry.bindingName)}
+                                      >
+                                        检测连接
+                                      </Button>
+                                    ) : null}
+                                    <Button icon={<CopyOutlined />} onClick={() => copyBinding(activeEntry.bindingName)}>
+                                      复制绑定
+                                    </Button>
+                                    <Button icon={<SaveOutlined />} onClick={() => void saveCurrentConfig()} loading={saving}>
+                                      保存配置
+                                    </Button>
+                                    <Button danger icon={<DeleteOutlined />} onClick={() => deleteBinding(activeEntry.bindingName)}>
+                                      删除绑定
+                                    </Button>
+                                  </div>
+
+                                  {activeTestResult ? (
+                                    <Alert
+                                      showIcon
+                                      type={activeTestResult.ok ? 'success' : 'error'}
+                                      message={`${activeTestResult.message} · ${activeTestResult.latencyMs} ms`}
+                                      description={[
+                                        `供应商: ${activeTestResult.provider}`,
+                                        `模型: ${activeTestResult.model}`,
+                                        activeTestResult.responsePreview ? `响应: ${activeTestResult.responsePreview}` : null,
+                                      ].filter(Boolean).join(' | ')}
+                                    />
+                                  ) : (
+                                    <Paragraph className="models-helper-copy">
+                                      检测会直接用当前表单里的 API Key、API Base 和模型发起一次最小请求，适合验证百炼、豆包、DeepSeek、Kimi、智谱以及各类 OpenAI 兼容网关。
+                                    </Paragraph>
+                                  )}
+                                </>
+                              ) : null}
+                            </>
+                          )}
                         </div>
-                      </>
-                    )}
-
-                    <div className="models-inline-actions">
-                      {activeBindingName !== defaultBindingName ? (
-                        <Button
-                          onClick={() => applyDefaultBinding(activeBindingName, {
-                            keepCurrentModel: modelMatchesProvider(configMeta, selectedBinding.provider, config.agents.defaults.model),
-                            model: selectedBinding.model || config.agents.defaults.model,
-                          })}
-                        >
-                          设为全局默认绑定
-                        </Button>
                       ) : null}
-                      {!selectedBindingMeta.isOauth ? (
-                        <Button
-                          type="primary"
-                          loading={testingBindingName === activeBindingName}
-                          disabled={!selectedBinding.provider || !(selectedBinding.model || config.agents.defaults.model)}
-                          onClick={() => void testCurrentBinding()}
-                        >
-                          检测连接
-                        </Button>
-                      ) : null}
-                      <Button icon={<CopyOutlined />} onClick={() => copyBinding(activeBindingName)}>
-                        复制绑定
-                      </Button>
-                      <Button danger icon={<DeleteOutlined />} onClick={() => deleteBinding(activeBindingName)}>
-                        删除绑定
-                      </Button>
                     </div>
-
-                    {selectedTestResult ? (
-                      <Alert
-                        showIcon
-                        type={selectedTestResult.ok ? 'success' : 'error'}
-                        message={`${selectedTestResult.message} · ${selectedTestResult.latencyMs} ms`}
-                        description={[
-                          `供应商: ${selectedTestResult.provider}`,
-                          `模型: ${selectedTestResult.model}`,
-                          selectedTestResult.responsePreview ? `响应: ${selectedTestResult.responsePreview}` : null,
-                        ].filter(Boolean).join(' | ')}
-                      />
-                    ) : (
-                      <Paragraph className="models-helper-copy">
-                        检测会直接用当前表单里的 API Key、API Base 和模型发起一次最小请求，适合验证百炼、豆包、DeepSeek、Kimi、智谱以及各类 OpenAI 兼容网关。
-                      </Paragraph>
-                    )}
-                  </>
-                )}
-              </Card>
-            </MotionPanel>
-          </MotionGroup>
-        </div>
+                  )
+                })}
+              </div>
+            </div>
+          </MotionPanel>
+        </MotionGroup>
       ) : (
         <div className="page-grid models-page-grid">
           <MotionGroup className="page-stack">

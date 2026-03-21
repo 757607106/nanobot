@@ -136,7 +136,7 @@ describe('setup route', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('欢迎使用 FlexiTeam', undefined, { timeout: 3000 })).toBeInTheDocument()
+    expect(await screen.findByText('欢迎使用 Nanobot', undefined, { timeout: 3000 })).toBeInTheDocument()
 
     await waitFor(() => {
       expect(mockApi.getAuthStatus).toHaveBeenCalledTimes(1)

@@ -1,14 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
-import { Alert, App, Button, Card, Empty, Input, Space, Spin, Tag, Typography } from 'antd'
-import { DeleteOutlined, ReloadOutlined, SaveOutlined, UploadOutlined, UserOutlined } from '@ant-design/icons'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, App, Button, Empty, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  LockOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  UploadOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
 import { api, ApiError } from '../api'
-import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import { useAuth } from '../auth'
 import { testIds } from '../testIds'
 import type { ProfileData } from '../types'
 
 const { Text } = Typography
+
+type DialogMode = 'profile' | 'password' | 'avatar' | null
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -36,6 +45,7 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [dialogMode, setDialogMode] = useState<DialogMode>(null)
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
@@ -50,6 +60,11 @@ export default function ProfilePage() {
   useEffect(() => {
     void loadProfile()
   }, [])
+
+  const accountRows = useMemo(
+    () => (profile ? [{ key: 'current-account', ...profile }] : []),
+    [profile],
+  )
 
   function applyProfile(next: ProfileData) {
     setProfile(next)
@@ -73,6 +88,33 @@ export default function ProfilePage() {
     }
   }
 
+  function openProfileDialog() {
+    if (profile) {
+      setUsername(profile.username)
+      setDisplayName(profile.displayName || '')
+      setEmail(profile.email || '')
+    }
+    setProfileError(null)
+    setDialogMode('profile')
+  }
+
+  function openPasswordDialog() {
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setPasswordError(null)
+    setDialogMode('password')
+  }
+
+  function openAvatarDialog() {
+    setSelectedFile(null)
+    setAvatarError(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+    setDialogMode('avatar')
+  }
+
   async function handleSaveProfile() {
     const cleanUsername = username.trim()
     if (cleanUsername.length < 3) {
@@ -90,6 +132,7 @@ export default function ProfilePage() {
       applyProfile(result.profile)
       setProfileError(null)
       await refresh()
+      setDialogMode(null)
       message.success('管理员资料已保存')
     } catch (error) {
       setProfileError(getErrorMessage(error, '保存管理员资料失败'))
@@ -124,6 +167,7 @@ export default function ProfilePage() {
       setConfirmPassword('')
       setPasswordError(null)
       await refresh()
+      setDialogMode(null)
       message.success('密码已更新，旧会话已失效')
     } catch (error) {
       setPasswordError(getErrorMessage(error, '更新密码失败'))
@@ -184,193 +228,288 @@ export default function ProfilePage() {
   }
 
   if (!profile) {
-    return <Empty description="当前无法读取管理员资料" className="page-card" />
+    return (
+      <section className="account-admin-shell">
+        <div className="account-admin-topbar">
+          <div className="account-admin-title-chip">账户管理</div>
+          <div className="account-admin-topbar-actions">
+            <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} loading={loading}>
+              刷新
+            </Button>
+          </div>
+        </div>
+        <div className="account-admin-table-shell">
+          <Empty description="当前无法读取管理员资料" />
+        </div>
+      </section>
+    )
   }
 
   return (
-    <div className="page-stack">
-      <PageHero
-        className="page-hero-compact studio-hero"
-        eyebrow="账户管理"
-        title="账户信息与安全"
-        description="管理资料、头像和密码。"
-        badges={[
-          <Tag key="username">@{profile.username}</Tag>,
-          <Tag key="security">安全设置</Tag>,
-        ]}
-        actions={(
+    <section className="account-admin-shell">
+      <div className="account-admin-topbar">
+        <div className="account-admin-title-chip">账户管理</div>
+        <div className="account-admin-topbar-actions">
           <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} loading={loading}>
             刷新
           </Button>
-        )}
-        stats={[
-          { label: '展示名称', value: profileLabel(profile) },
-          { label: '邮箱', value: profile.email || '--' },
-          { label: '头像状态', value: profile.hasAvatar ? '已上传' : '未设置' },
-          { label: '最后更新', value: formatDateTimeZh(profile.updatedAt) },
-        ]}
-      />
+          <Button icon={<EditOutlined />} onClick={openProfileDialog}>
+            编辑资料
+          </Button>
+          <Button icon={<LockOutlined />} onClick={openPasswordDialog}>
+            修改密码
+          </Button>
+          <Button type="primary" icon={<UploadOutlined />} onClick={openAvatarDialog}>
+            头像管理
+          </Button>
+        </div>
+      </div>
 
-      <div className="page-grid profile-page-grid">
-        <Card className="config-panel-card">
-          <div className="config-card-header">
-            <div className="page-section-title">
-              <Typography.Title level={4}>账户资料</Typography.Title>
-              <Text type="secondary">用于登录、展示和通知。</Text>
-            </div>
-          </div>
+      <div className="account-admin-summary">
+        <Tag color="orange">管理员</Tag>
+        <span>当前实例仅开放当前管理员账号资料管理，页面样式参照参考项目的用户管理页。</span>
+      </div>
 
-          <div className="page-stack">
-            <label className="auth-field">
-              <span>管理员名称</span>
-              <Input
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                data-testid={testIds.profile.username}
-              />
-            </label>
+      {profileError && dialogMode !== 'profile' ? (
+        <Alert className="account-admin-alert" type="error" showIcon message={profileError} />
+      ) : null}
 
-            <label className="auth-field">
-              <span>展示名称</span>
-              <Input
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                data-testid={testIds.profile.displayName}
-              />
-            </label>
+      <div className="account-admin-table-shell">
+        <Table
+          pagination={false}
+          rowKey="username"
+          dataSource={accountRows}
+          locale={{ emptyText: '暂无账号数据' }}
+          columns={[
+            {
+              title: '用户名',
+              dataIndex: 'username',
+              key: 'username',
+              render: (value: string, row: ProfileData) => (
+                <div className="account-admin-user">
+                  <div className="account-admin-avatar">
+                    {row.avatarUrl ? (
+                      <img src={row.avatarUrl} alt={profileLabel(row)} className="account-admin-avatar-image" />
+                    ) : (
+                      <UserOutlined />
+                    )}
+                  </div>
+                  <div className="account-admin-user-copy">
+                    <div className="account-admin-user-primary">
+                      <strong>{value}</strong>
+                      <span>当前账号</span>
+                    </div>
+                    <div className="account-admin-user-secondary">
+                      {row.displayName || '未设置展示名称'}
+                    </div>
+                  </div>
+                </div>
+              ),
+            },
+            {
+              title: '身份',
+              key: 'role',
+              render: () => <Tag color="orange">管理员</Tag>,
+            },
+            {
+              title: '联系信息',
+              key: 'contact',
+              render: (_: unknown, row: ProfileData) => (
+                <div className="account-admin-multi-line">
+                  <strong>{row.email || '--'}</strong>
+                  <span>{row.displayName || '展示名称未设置'}</span>
+                </div>
+              ),
+            },
+            {
+              title: '状态',
+              key: 'state',
+              render: (_: unknown, row: ProfileData) => (
+                <div className="account-admin-multi-line">
+                  <strong>{row.hasAvatar ? '头像已设置' : '头像未设置'}</strong>
+                  <span>更新时间：{formatDateTimeZh(row.updatedAt)}</span>
+                </div>
+              ),
+            },
+            {
+              title: '操作',
+              key: 'actions',
+              align: 'right' as const,
+              render: () => (
+                <Space size={[8, 8]} wrap className="account-admin-action-row">
+                  <Button size="small" onClick={openProfileDialog}>
+                    编辑资料
+                  </Button>
+                  <Button size="small" onClick={openPasswordDialog}>
+                    修改密码
+                  </Button>
+                  <Button size="small" type="primary" ghost onClick={openAvatarDialog}>
+                    头像
+                  </Button>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </div>
 
-            <label className="auth-field">
-              <span>邮箱</span>
-              <Input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="owner@example.com"
-                data-testid={testIds.profile.email}
-              />
-            </label>
-
-            {profileError ? <Alert type="error" showIcon message={profileError} /> : null}
-
-            <Space wrap>
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                loading={savingProfile}
-                onClick={() => void handleSaveProfile()}
-                data-testid={testIds.profile.saveProfile}
-              >
-                保存
-              </Button>
-              <Text type="secondary">创建时间：{formatDateTimeZh(profile.createdAt)}</Text>
-            </Space>
-          </div>
-        </Card>
-
-        <Card className="config-panel-card">
-          <div className="config-card-header">
-            <div className="page-section-title">
-              <Typography.Title level={4}>头像</Typography.Title>
-              <Text type="secondary">上传或移除头像。</Text>
-            </div>
-          </div>
-
-          <div className="page-stack">
-            {profile.avatarUrl ? (
-              <img
-                src={profile.avatarUrl}
-                alt={profileLabel(profile)}
-                className="profile-avatar-preview"
-              />
-            ) : (
-              <div className="page-meta-card profile-avatar-empty">
-                <span>头像</span>
-                <strong><UserOutlined /></strong>
-              </div>
-            )}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className="hidden-file-input"
-              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+      <Modal
+        destroyOnHidden
+        open={dialogMode === 'profile'}
+        title="编辑账户资料"
+        onCancel={() => setDialogMode(null)}
+        onOk={() => void handleSaveProfile()}
+        confirmLoading={savingProfile}
+        okText="保存"
+      >
+        <div className="account-dialog-stack">
+          <label className="account-dialog-field">
+            <span>管理员名称</span>
+            <Input
+              aria-label="管理员名称"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              data-testid={testIds.profile.username}
             />
+          </label>
 
-            <div className="profile-avatar-picker">
-              <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-                选择图片
-              </Button>
-              <Text type="secondary">
-                {selectedFile ? `待上传：${selectedFile.name}` : '支持 PNG、JPEG、WEBP、GIF，2 MB 内。'}
-              </Text>
-            </div>
+          <label className="account-dialog-field">
+            <span>展示名称</span>
+            <Input
+              aria-label="展示名称"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              placeholder="用于页面展示"
+              data-testid={testIds.profile.displayName}
+            />
+          </label>
 
-            {avatarError ? <Alert type="error" showIcon message={avatarError} /> : null}
+          <label className="account-dialog-field">
+            <span>邮箱</span>
+            <Input
+              aria-label="邮箱"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="owner@example.com"
+              data-testid={testIds.profile.email}
+            />
+          </label>
 
-            <Space wrap>
-              <Button type="primary" icon={<SaveOutlined />} loading={uploadingAvatar} onClick={() => void handleUploadAvatar()}>
-                上传
-              </Button>
-              <Button danger icon={<DeleteOutlined />} loading={uploadingAvatar} disabled={!profile.hasAvatar} onClick={() => void handleDeleteAvatar()}>
-                移除头像
-              </Button>
-            </Space>
-          </div>
-        </Card>
+          {profileError ? <Alert type="error" showIcon message={profileError} /> : null}
+        </div>
+      </Modal>
 
-        <Card className="config-panel-card">
-          <div className="config-card-header">
-            <div className="page-section-title">
-              <Typography.Title level={4}>密码轮换</Typography.Title>
-              <Text type="secondary">更新后旧会话会失效。</Text>
-            </div>
-          </div>
+      <Modal
+        destroyOnHidden
+        open={dialogMode === 'password'}
+        title="修改密码"
+        onCancel={() => setDialogMode(null)}
+        onOk={() => void handleRotatePassword()}
+        confirmLoading={savingPassword}
+        okText="更新密码"
+      >
+        <div className="account-dialog-stack">
+          <label className="account-dialog-field">
+            <span>当前密码</span>
+            <Input.Password
+              aria-label="当前密码"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              data-testid={testIds.profile.currentPassword}
+            />
+          </label>
 
-          <div className="page-stack">
-            <label className="auth-field">
-              <span>当前密码</span>
-              <Input.Password
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                data-testid={testIds.profile.currentPassword}
-              />
-            </label>
+          <label className="account-dialog-field">
+            <span>新密码</span>
+            <Input.Password
+              aria-label="新密码"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              data-testid={testIds.profile.newPassword}
+            />
+          </label>
 
-            <label className="auth-field">
-              <span>新密码</span>
-              <Input.Password
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                data-testid={testIds.profile.newPassword}
-              />
-            </label>
+          <label className="account-dialog-field">
+            <span>确认新密码</span>
+            <Input.Password
+              aria-label="确认新密码"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              data-testid={testIds.profile.confirmPassword}
+            />
+          </label>
 
-            <label className="auth-field">
-              <span>确认新密码</span>
-              <Input.Password
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                data-testid={testIds.profile.confirmPassword}
-              />
-            </label>
+          {passwordError ? <Alert type="error" showIcon message={passwordError} /> : null}
+        </div>
+      </Modal>
 
-            {passwordError ? <Alert type="error" showIcon message={passwordError} /> : null}
-
+      <Modal
+        destroyOnHidden
+        open={dialogMode === 'avatar'}
+        title="头像管理"
+        onCancel={() => setDialogMode(null)}
+        footer={(
+          <Space wrap>
+            <Button onClick={() => setDialogMode(null)}>关闭</Button>
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              loading={uploadingAvatar}
+              disabled={!profile.hasAvatar}
+              onClick={() => void handleDeleteAvatar()}
+            >
+              移除头像
+            </Button>
             <Button
               type="primary"
               icon={<SaveOutlined />}
-              loading={savingPassword}
-              onClick={() => void handleRotatePassword()}
-              data-testid={testIds.profile.rotatePassword}
+              loading={uploadingAvatar}
+              onClick={() => void handleUploadAvatar()}
             >
-              更新密码
+              上传头像
             </Button>
+          </Space>
+        )}
+      >
+        <div className="account-avatar-dialog">
+          <div className="account-avatar-preview">
+            <div className="account-admin-avatar account-admin-avatar-large">
+              {profile.avatarUrl ? (
+                <img src={profile.avatarUrl} alt={profileLabel(profile)} className="account-admin-avatar-image" />
+              ) : (
+                <UserOutlined />
+              )}
+            </div>
+            <div className="account-avatar-copy">
+              <strong>{profileLabel(profile)}</strong>
+              <span>@{profile.username}</span>
+              <span>{profile.hasAvatar ? '当前已配置头像' : '当前未设置头像'}</span>
+            </div>
           </div>
-        </Card>
-      </div>
-    </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="hidden-file-input"
+            onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+          />
+
+          <div className="account-avatar-toolbar">
+            <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+              选择图片
+            </Button>
+            <Text type="secondary">
+              {selectedFile ? `待上传：${selectedFile.name}` : '支持 PNG、JPEG、WEBP、GIF，建议控制在 2 MB 内。'}
+            </Text>
+          </div>
+
+          {avatarError ? <Alert type="error" showIcon message={avatarError} /> : null}
+        </div>
+      </Modal>
+    </section>
   )
 }

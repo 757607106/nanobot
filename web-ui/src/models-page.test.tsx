@@ -269,14 +269,14 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('模型配置工作台')).toBeInTheDocument()
-    expect(screen.getByText('工作台切换')).toBeInTheDocument()
+    expect(await screen.findByText('默认运行')).toBeInTheDocument()
+    expect(screen.getAllByText('模型供应商').length).toBeGreaterThan(0)
     expect(screen.getByText('默认运行')).toBeInTheDocument()
     expect(screen.getByText('快速预设')).toBeInTheDocument()
-    expect(screen.getByText('binding 目录')).toBeInTheDocument()
-    expect(screen.getByText('连接编辑器')).toBeInTheDocument()
+    expect(screen.getByText('当前默认供应商')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /新增绑定/i }).length).toBeGreaterThan(0)
 
-    await user.click(screen.getByRole('button', { name: /自定义 Agent/i }))
+    await user.click(screen.getByRole('button', { name: /Agent 覆盖/i }))
 
     expect(await screen.findByText('自定义 Agent 工作台')).toBeInTheDocument()
     expect(screen.getByText('自定义 Agent 总览')).toBeInTheDocument()
@@ -291,7 +291,8 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('模型配置工作台')
+    await screen.findByText('默认运行')
+    await user.click(screen.getByRole('button', { name: /Moonshot/i }))
     await user.click(screen.getByRole('button', { name: /Kimi 国内/i }))
 
     expect(screen.getAllByDisplayValue('kimi-k2.5').length).toBeGreaterThan(0)
@@ -316,7 +317,8 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('模型配置工作台')
+    await screen.findByText('默认运行')
+    await user.click(screen.getByRole('button', { name: /Moonshot/i }))
     await user.click(screen.getByRole('button', { name: /Kimi 国内/i }))
     await user.click(screen.getByRole('button', { name: '检测连接' }))
 
@@ -338,7 +340,8 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('模型配置工作台')
+    await screen.findByText('默认运行')
+    await user.click(screen.getByRole('button', { name: /Moonshot/i }))
     await user.click(screen.getByRole('button', { name: /Kimi 国内/i }))
     await user.click(screen.getByRole('button', { name: /获取模型/i }))
 

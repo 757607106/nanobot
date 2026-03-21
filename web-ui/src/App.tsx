@@ -9,6 +9,7 @@ import { SetupProvider, useSetup } from './setup'
 import { testIds } from './testIds'
 
 const ChatPage = lazy(() => import('./pages/ChatPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ChannelDetailPage = lazy(() => import('./pages/ChannelDetailPage'))
 const ChannelsPage = lazy(() => import('./pages/ChannelsPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
@@ -103,7 +104,7 @@ function AuthIndexRedirect() {
     return <SetupStateError />
   }
 
-  return <Navigate to={setup.status?.completed ? '/chat' : '/setup'} replace />
+  return <Navigate to={setup.status?.completed ? '/dashboard' : '/setup'} replace />
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -157,7 +158,7 @@ function GuestOnly({ children }: { children: ReactNode }) {
     if (setup.error && !setup.status) {
       return <SetupStateError />
     }
-    return <Navigate to={setup.status?.completed ? '/chat' : '/setup'} replace />
+    return <Navigate to={setup.status?.completed ? '/dashboard' : '/setup'} replace />
   }
 
   return <>{children}</>
@@ -188,7 +189,7 @@ function SetupOnly({ children }: { children: ReactNode }) {
   }
 
   if (setup.status?.completed) {
-    return <Navigate to="/chat" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   return <>{children}</>
@@ -222,6 +223,7 @@ export function AppRoutes() {
           </RequireAuth>
         )}
       >
+        <Route path="dashboard" element={withRouteSuspense(<DashboardPage />)} />
         <Route path="chat" element={withRouteSuspense(<ChatPage />)} />
         <Route path="channels" element={withRouteSuspense(<ChannelsLayoutPage />)}>
           <Route index element={<Navigate to="list" replace />} />

@@ -921,6 +921,7 @@ import ChannelDetailPage from '../pages/ChannelDetailPage'
 import ChannelsLayoutPage from '../pages/ChannelsLayoutPage'
 import ChannelsPage from '../pages/ChannelsPage'
 import ChatPage from '../pages/ChatPage'
+import DashboardPage from '../pages/DashboardPage'
 import CronPage from '../pages/CronPage'
 import MainPromptPage from '../pages/MainPromptPage'
 import McpPage from '../pages/McpPage'
@@ -1710,7 +1711,7 @@ function renderShell() {
 
   return renderWithProviders(
     <MemoryRouter
-      initialEntries={['/chat']}
+      initialEntries={['/dashboard']}
       future={{
         v7_startTransition: true,
         v7_relativeSplatPath: true,
@@ -1718,6 +1719,7 @@ function renderShell() {
     >
       <Routes>
         <Route path="/" element={<AppShell />}>
+          <Route path="dashboard" element={<div>Route body</div>} />
           <Route path="chat" element={<div>Route body</div>} />
         </Route>
       </Routes>
@@ -2820,6 +2822,7 @@ describe('web app smoke pages', () => {
     renderShell()
 
     expect((await screen.findAllByText('工作区')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('仪表板', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(await screen.findByText('对话', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('协作', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('模型', { selector: '.nav-item-title' })).toBeInTheDocument()
@@ -3046,7 +3049,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('登录 FlexiTeam')).toBeInTheDocument()
+    expect(await screen.findByText('登录 Nanobot')).toBeInTheDocument()
   })
 
   it('sends first-time users to the bootstrap page', async () => {
@@ -3069,7 +3072,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('创建 FlexiTeam 管理员')).toBeInTheDocument()
+    expect(await screen.findByText('创建 Nanobot 管理员')).toBeInTheDocument()
   })
 
   it('renders the setup wizard page', async () => {
@@ -3097,10 +3100,10 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('欢迎使用 FlexiTeam', undefined, { timeout: 3000 })).toBeInTheDocument()
+    expect(await screen.findByText('欢迎使用 Nanobot', undefined, { timeout: 3000 })).toBeInTheDocument()
   })
 
-  it('sends authenticated users to the chat landing page', async () => {
+  it('sends authenticated users to the dashboard landing page', async () => {
     installMatchMedia(false)
 
     renderWithProviders(
@@ -3115,10 +3118,10 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Smoke Session', { selector: '.conversation-title' })).toBeInTheDocument()
+    expect(await screen.findByText('仪表板', { selector: '.chat-dashboard-title-chip' })).toBeInTheDocument()
   })
 
-  it('falls back to the chat landing page when a hidden route is requested', async () => {
+  it('falls back to the dashboard landing page when a hidden route is requested', async () => {
     installMatchMedia(false)
 
     let resolveAuthStatus!: (value: {
@@ -3153,8 +3156,17 @@ describe('web app smoke pages', () => {
       username: 'admin',
     })
 
-    expect(await screen.findByText('Smoke Session', { selector: '.conversation-title' })).toBeInTheDocument()
+    expect(await screen.findByText('仪表板', { selector: '.chat-dashboard-title-chip' })).toBeInTheDocument()
     expect(screen.queryByText('登录到工作台')).not.toBeInTheDocument()
+  })
+
+  it('renders the dashboard page', async () => {
+    renderPage(<DashboardPage />)
+    expect(await screen.findByText('仪表板')).toBeInTheDocument()
+    expect(screen.getByText('渠道概览')).toBeInTheDocument()
+    expect(screen.getByText('技能概览')).toBeInTheDocument()
+    expect(screen.getByText('自动化状态')).toBeInTheDocument()
+    expect(screen.getByText('最近会话')).toBeInTheDocument()
   })
 
   it('renders the chat page', async () => {
@@ -3171,7 +3183,8 @@ describe('web app smoke pages', () => {
 
   it('renders the cron page', async () => {
     renderPage(<CronPage />)
-    expect(await screen.findByText('自动化任务')).toBeInTheDocument()
+    expect(await screen.findByText('定时任务')).toBeInTheDocument()
+    expect(screen.getByText('新建任务')).toBeInTheDocument()
   })
 
   it('renders the skills page', async () => {
@@ -3199,8 +3212,9 @@ describe('web app smoke pages', () => {
 
   it('renders the mcp page', async () => {
     renderPage(<McpPage />)
-    expect(await screen.findByText('第三方服务连接')).toBeInTheDocument()
-    expect(screen.getByText('MCP 目录')).toBeInTheDocument()
+    expect(await screen.findByText('MCP 服务器')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '导入配置' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '添加 MCP 服务器' })).toBeInTheDocument()
     expect(screen.getByText('Workspace Files')).toBeInTheDocument()
   })
 
@@ -3226,16 +3240,16 @@ describe('web app smoke pages', () => {
 
   it('renders the models page', async () => {
     renderPage(<ModelsPage />)
-    expect(await screen.findByText('模型配置工作台')).toBeInTheDocument()
-    expect(screen.getByText('工作台切换')).toBeInTheDocument()
+    expect(await screen.findByText('默认运行')).toBeInTheDocument()
+    expect(screen.getAllByText('模型供应商').length).toBeGreaterThan(0)
     expect(screen.getByText('默认运行')).toBeInTheDocument()
-    expect(screen.getByText('binding 目录')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /新增绑定/i }).length).toBeGreaterThan(0)
   })
 
   it('renders the channels page', async () => {
     renderPage(<ChannelsPage />)
-    expect(await screen.findByText('消息渠道')).toBeInTheDocument()
-    expect(screen.getByText('消息路由')).toBeInTheDocument()
+    expect(await screen.findByText('渠道管理')).toBeInTheDocument()
+    expect(screen.getByText('保存投递设置')).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
   })
 
@@ -3330,8 +3344,8 @@ describe('web app smoke pages', () => {
 
   it('renders the profile page', async () => {
     renderPage(<ProfilePage />)
-    expect(await screen.findByText('账户信息与安全')).toBeInTheDocument()
-    expect(screen.getByText('密码轮换')).toBeInTheDocument()
+    expect(await screen.findByText('账户管理')).toBeInTheDocument()
+    expect(screen.getByText('头像管理')).toBeInTheDocument()
   })
 
   it('renders the operations page', async () => {

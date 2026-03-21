@@ -5,7 +5,6 @@ import { staggerChildren, surfaceChild, surfaceReveal } from '../motionTokens'
 export interface SectionTabItem {
   key: string
   label: string
-  summary?: string
 }
 
 interface SectionTabsProps {
@@ -20,6 +19,7 @@ interface SectionTabsProps {
 export default function SectionTabs({
   eyebrow,
   title,
+  description,
   activeKey,
   items,
   onChange,
@@ -33,8 +33,9 @@ export default function SectionTabs({
     >
       <motion.div className="section-tabs-head" variants={staggerChildren}>
         <motion.div className="section-tabs-copy" variants={surfaceChild}>
-          {eyebrow ? <span className="section-tabs-eyebrow">{eyebrow}</span> : null}
+          {eyebrow ? <Typography.Text type="secondary">{eyebrow}</Typography.Text> : null}
           <Typography.Title level={4}>{title}</Typography.Title>
+          {description ? <Typography.Paragraph>{description}</Typography.Paragraph> : null}
         </motion.div>
       </motion.div>
 

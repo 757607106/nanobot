@@ -3,10 +3,10 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import SectionTabs from '../components/SectionTabs'
 
 const studioRoutes = [
-  { key: '/studio/agents', label: 'AI 员工', shortLabel: '员工', summary: '维护角色、能力绑定与试运行。' },
-  { key: '/studio/teams', label: '团队', shortLabel: '团队', summary: '组织多员工协作、团队运行与记忆。' },
-  { key: '/studio/runs', label: '执行记录', shortLabel: '记录', summary: '统一回看运行树、过程与产物。' },
-  { key: '/studio/knowledge', label: '知识库', shortLabel: '知识', summary: '接入内容、治理来源并验证检索效果。' },
+  { key: '/studio/agents', label: 'AI 员工', shortLabel: '员工' },
+  { key: '/studio/teams', label: '团队', shortLabel: '团队' },
+  { key: '/studio/runs', label: '执行记录', shortLabel: '记录' },
+  { key: '/studio/knowledge', label: '知识库', shortLabel: '知识' },
   // 暂时隐藏“模板”页签，保留实现便于后续恢复。
   // { key: '/studio/templates', label: '模板', shortLabel: '模板', summary: '沉淀可复用的员工模板与导入导出。' },
 ]
@@ -33,9 +33,7 @@ export default function StudioLayoutPage() {
   return (
     <div className="page-stack">
       <SectionTabs
-        eyebrow="Studio"
         title="协作工作台"
-        description="把员工、团队、知识与执行放在同一条协作链上维护。"
         activeKey={activeKey}
         onChange={(key) => navigate(key)}
         items={items}

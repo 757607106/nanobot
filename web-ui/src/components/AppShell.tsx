@@ -1,25 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Avatar, Button, Drawer, Grid, Layout, Menu, Typography } from 'antd'
+import { Button, Drawer, Grid, Layout, Menu, Typography } from 'antd'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ApiOutlined,
   ApartmentOutlined,
   BookOutlined,
   ClusterOutlined,
+  DashboardOutlined,
   DesktopOutlined,
   LogoutOutlined,
   MenuOutlined,
   MessageOutlined,
-  ProfileOutlined,
   SettingOutlined,
-  UserOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import {
   PLATFORM_BADGE_LABEL,
-  PLATFORM_BRAND_MARK,
+  PLATFORM_BRAND_LOGO_SRC,
   PLATFORM_BRAND_NAME,
+  PLATFORM_SUBTITLE,
 } from '../branding'
 import { useDevMode } from '../devMode'
 import { shellSpring, surfaceReveal } from '../motionTokens'
@@ -32,7 +32,6 @@ type AppRoute = {
   key: string
   icon: JSX.Element
   label: string
-  summary: string
   sectionLabel: string
   testId?: string
 }
@@ -50,10 +49,16 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
       label: '工作区',
       routes: [
         {
+          key: '/dashboard',
+          icon: <DashboardOutlined />,
+          label: '仪表板',
+          sectionLabel: '工作区',
+          testId: testIds.app.navDashboard,
+        },
+        {
           key: '/chat',
           icon: <MessageOutlined />,
           label: '对话',
-          summary: '工作区会话、附件与上下文协作入口。',
           sectionLabel: '工作区',
           testId: testIds.app.navChat,
         },
@@ -61,7 +66,6 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           key: '/studio',
           icon: <ApartmentOutlined />,
           label: '协作',
-          summary: '员工、团队、知识库与执行协作工作台。',
           sectionLabel: '工作区',
           testId: testIds.app.navStudio,
         },
@@ -69,7 +73,6 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           key: '/channels',
           icon: <ClusterOutlined />,
           label: '渠道',
-          summary: '渠道接入、路由规则与对外消息流转。',
           sectionLabel: '工作区',
           testId: testIds.app.navChannels,
         },
@@ -83,21 +86,18 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           key: '/models',
           icon: <SettingOutlined />,
           label: '模型',
-          summary: '默认模型、供应商连接与推理参数。',
           sectionLabel: '构建',
         },
         {
           key: '/skills',
           icon: <BookOutlined />,
           label: '技能',
-          summary: '安装、筛选并管理可复用能力扩展。',
           sectionLabel: '构建',
         },
         {
           key: '/mcp',
           icon: <ApiOutlined />,
           label: devMode ? 'MCP 扩展' : '连接',
-          summary: devMode ? '登记、探测并测试 MCP 服务。' : '维护第三方服务连接与状态。',
           sectionLabel: '构建',
           testId: testIds.app.navMcp,
         },
@@ -119,7 +119,6 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           key: '/system',
           icon: <DesktopOutlined />,
           label: '系统',
-          summary: '系统状态、自动化、验证与账户管理。',
           sectionLabel: '系统',
         },
       ],
@@ -132,7 +131,7 @@ export default function AppShell() {
   const navigate = useNavigate()
   const screens = Grid.useBreakpoint()
   const isDesktop = Boolean(screens.lg)
-  const navWidth = 224
+  const navWidth = 216
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const { resolvedTheme } = useThemeMode()
   const { logout, status: authStatus, submitting } = useAuth()
@@ -188,20 +187,11 @@ export default function AppShell() {
       transition={shellSpring}
     >
       <div className="brand-block">
+        <div className="brand-chip">{PLATFORM_BADGE_LABEL}</div>
         <div className="brand-head">
+          <img className="brand-logo" src={PLATFORM_BRAND_LOGO_SRC} alt={PLATFORM_BRAND_NAME} />
           <div className="brand-copy">
-            <Typography.Title 
-              level={2} 
-              style={{ 
-                margin: 0, 
-                fontSize: '20px', 
-                fontWeight: 600, 
-                letterSpacing: '-0.02em',
-                lineHeight: 1
-              }}
-            >
-              {PLATFORM_BRAND_NAME}
-            </Typography.Title>
+            <Typography.Text className="brand-subtitle">{PLATFORM_SUBTITLE}</Typography.Text>
           </div>
         </div>
       </div>
@@ -223,17 +213,10 @@ export default function AppShell() {
       </div>
 
       <div className="sidebar-footer">
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          padding: '8px 12px',
-          background: 'rgba(0, 0, 0, 0.02)',
-          borderRadius: '8px',
-          border: '1px solid transparent'
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div className="mono-block mono-block-tight" style={{ fontSize: 13, fontWeight: 500, color: 'var(--nb-text-secondary)' }}>
+        <div className="sidebar-account-card">
+          <div className="sidebar-account-copy">
+            <span className="sidebar-account-label">当前用户</span>
+            <div className="mono-block mono-block-tight">
               {authStatus?.username || '未登录'}
             </div>
           </div>
@@ -244,7 +227,7 @@ export default function AppShell() {
             loading={submitting}
             onClick={() => void handleLogout()}
             data-testid={testIds.app.logout}
-            style={{ color: 'var(--nb-muted)', marginLeft: 8 }}
+            className="sidebar-account-action"
           />
         </div>
       </div>
