@@ -10,30 +10,23 @@ import {
   DashboardOutlined,
   DesktopOutlined,
   LogoutOutlined,
-  MenuOutlined,
   MessageOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
-import {
-  PLATFORM_BADGE_LABEL,
-  PLATFORM_BRAND_LOGO_SRC,
-  PLATFORM_BRAND_NAME,
-  PLATFORM_SUBTITLE,
-} from '../branding'
+import { PLATFORM_BRAND_LOGO_SRC, PLATFORM_BRAND_NAME } from '../branding'
 import { useDevMode } from '../devMode'
 import { shellSpring, surfaceReveal } from '../motionTokens'
 import { testIds } from '../testIds'
 import { useThemeMode } from '../themeMode'
 
-const { Header, Sider, Content } = Layout
+const { Sider, Content } = Layout
 
 type AppRoute = {
   key: string
   icon: JSX.Element
   label: string
-  sectionLabel: string
   testId?: string
 }
 
@@ -53,28 +46,24 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           key: '/dashboard',
           icon: <DashboardOutlined />,
           label: '看板',
-          sectionLabel: '工作区',
           testId: testIds.app.navDashboard,
         },
         {
           key: '/chat',
           icon: <MessageOutlined />,
           label: '对话',
-          sectionLabel: '工作区',
           testId: testIds.app.navChat,
         },
         {
           key: '/studio',
           icon: <ApartmentOutlined />,
           label: '协作',
-          sectionLabel: '工作区',
           testId: testIds.app.navStudio,
         },
         {
           key: '/channels',
           icon: <ClusterOutlined />,
           label: '渠道',
-          sectionLabel: '工作区',
           testId: testIds.app.navChannels,
         },
       ],
@@ -87,26 +76,22 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           key: '/models',
           icon: <SettingOutlined />,
           label: '模型',
-          sectionLabel: '构建',
         },
         {
           key: '/skills',
           icon: <BookOutlined />,
           label: '技能',
-          sectionLabel: '构建',
         },
         {
           key: '/mcp',
           icon: <ApiOutlined />,
           label: devMode ? 'MCP 扩展' : '连接',
-          sectionLabel: '构建',
           testId: testIds.app.navMcp,
         },
         {
           key: '/knowledge',
           icon: <DatabaseOutlined />,
           label: '知识库',
-          sectionLabel: '构建',
           testId: testIds.app.navKnowledge,
         },
         // 暂时隐藏“行为引导”页面入口，保留实现便于后续恢复。
@@ -115,7 +100,6 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
         //   icon: <ProfileOutlined />,
         //   label: '行为引导',
         //   summary: '维护工作区引导文件与长期记忆文档。',
-        //   sectionLabel: '构建',
         // },
       ],
     },
@@ -127,7 +111,6 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           key: '/system',
           icon: <DesktopOutlined />,
           label: '系统',
-          sectionLabel: '系统',
         },
       ],
     },

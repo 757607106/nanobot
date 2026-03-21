@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { Button } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import CalendarPage from './CalendarPage'
@@ -14,11 +13,6 @@ export default function AutomationPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const activeTab = normalizeTab(searchParams.get('tab'))
-
-  const content = useMemo(
-    () => (activeTab === 'cron' ? <CronPage /> : <CalendarPage />),
-    [activeTab],
-  )
 
   return (
     <div className="automation-hub-shell">
@@ -44,7 +38,7 @@ export default function AutomationPage() {
         保留当前项目的日程提醒与 Cron 任务能力，但页面布局参照参考项目的定时任务管理方式统一整理。
       </div>
 
-      {content}
+      {activeTab === 'cron' ? <CronPage /> : <CalendarPage />}
     </div>
   )
 }

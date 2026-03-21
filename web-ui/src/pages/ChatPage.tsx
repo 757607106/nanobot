@@ -65,10 +65,6 @@ function getDisplaySessionTitle(title?: string) {
   return title
 }
 
-function isDefaultSessionTitle(title?: string) {
-  return !title || title === 'New Chat' || title === '新会话'
-}
-
 function getSessionGroup(value?: string) {
   if (!value) {
     return '最近'
@@ -382,7 +378,6 @@ export default function ChatPage() {
   const historyRef = useRef<HTMLDivElement | null>(null)
   const chatPanelRef = useRef<HTMLDivElement | null>(null)
   const senderRef = useRef<React.ComponentRef<typeof Sender> | null>(null)
-  const sessionFileInputRef = useRef<HTMLInputElement | null>(null)
   const currentSessionIdRef = useRef<string | null>(null)
   const pendingSyncSessionIdRef = useRef<string | null>(null)
   const shouldSyncSessionRef = useRef(false)
@@ -720,10 +715,6 @@ export default function ChatPage() {
       setSessionFiles(files)
       setDraftAttachmentRefs((prev) => prev.filter((item) => files.some((file) => file.relativePath === item.relativePath)))
     } catch (error) {
-      if (typeof error === 'object' && error && 'status' in error && error.status === 404) {
-        setSessionFiles([])
-        return
-      }
       message.error(error instanceof Error ? error.message : '加载会话文件失败')
     }
   }
@@ -875,24 +866,6 @@ export default function ChatPage() {
     senderRef.current?.focus()
   }
 
-  async function handleUploadFilesToSession(files: FileList | File[]) {
-    const selectedFiles = Array.from(files)
-    if (!selectedFiles.length) {
-      return
-    }
-
-    try {
-      const sessionId = await ensureActiveSession()
-      await uploadAttachmentsToSession(
-        sessionId,
-        selectedFiles.map((file) => createPendingAttachment(file)),
-      )
-      senderRef.current?.focus()
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '上传文件失败')
-    }
-  }
-
   async function handleImportSessionFile(item: ChatUploadItem) {
     try {
       const sessionId = await ensureActiveSession()
@@ -1042,20 +1015,6 @@ export default function ChatPage() {
 
         <section className="chat-shell-main">
           <div className="chat-panel chat-panel-independent" ref={chatPanelRef}>
-            <input
-              ref={sessionFileInputRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => {
-                const files = event.target.files
-                if (files?.length) {
-                  void handleUploadFilesToSession(files)
-                }
-                event.target.value = ''
-              }}
-            />
-
             <div className="chat-stage-header">
               <div className="chat-stage-copy">
                 <span className="section-kicker">会话</span>

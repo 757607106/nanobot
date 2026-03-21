@@ -7,11 +7,6 @@ import type {
   AgentTestRunResult,
   RunCancelResult,
   RunArtifactDetail,
-  AgentTemplateExportResult,
-  AgentTemplateImportResult,
-  AgentTemplateItem,
-  AgentTemplateMutationInput,
-  AgentTemplateMutationResult,
   AgentTemplateTool,
   AuthStatus,
   CalendarEvent,
@@ -23,7 +18,6 @@ import type {
   ChannelListResponse,
   ChannelProbeResult,
   ChatMessage,
-  ChatResponse,
   ChatSessionFilesMutationResult,
   ChatUploadItem,
   ChatWorkspaceData,
@@ -64,7 +58,6 @@ import type {
   SessionSummary,
   SetupMutationResult,
   SetupStatus,
-  StreamEvent,
   SystemStatus,
   TeamDefinition,
   TeamDefinitionMutationInput,
@@ -74,8 +67,6 @@ import type {
   TeamTestRunResult,
   ValidationRunResult,
   WhatsAppBindingStatus,
-  WorkspaceDocument,
-  WorkspaceDocumentSummary,
 } from './types'
 
 const API_BASE = '/api/v1'
@@ -291,12 +282,6 @@ export const api = {
   getSessions: (page = 1, pageSize = 20) =>
     request<SessionListResponse>(`/chat/sessions?page=${page}&pageSize=${pageSize}`),
   getChatWorkspace: () => request<ChatWorkspaceData>('/chat/workspace'),
-  uploadChatFile: (formData: FormData) =>
-    request<ChatUploadItem>('/chat/uploads', {
-      method: 'POST',
-      body: formData,
-      skipJsonContentType: true,
-    }),
   getSessionFiles: (sessionId: string) => request<ChatUploadItem[]>(`/chat/sessions/${sessionId}/files`),
   uploadSessionChatFile: (sessionId: string, formData: FormData) =>
     request<ChatSessionFilesMutationResult>(`/chat/sessions/${sessionId}/uploads`, {
@@ -308,11 +293,6 @@ export const api = {
     request<ChatSessionFilesMutationResult>(`/chat/sessions/${sessionId}/files/import`, {
       method: 'POST',
       body: JSON.stringify({ attachments }),
-    }),
-  removeSessionFile: (sessionId: string, relativePath: string) =>
-    request<ChatSessionFilesMutationResult>(`/chat/sessions/${sessionId}/files`, {
-      method: 'DELETE',
-      body: JSON.stringify({ relativePath }),
     }),
   createSession: (title?: string) =>
     request<SessionSummary>('/chat/sessions', {
@@ -330,83 +310,6 @@ export const api = {
     }),
   getMessages: (sessionId: string, limit = 200) =>
     request<ChatMessage[]>(`/chat/sessions/${sessionId}/messages?limit=${limit}`),
-  sendMessageStream: async (
-    sessionId: string,
-    content: string,
-    onEvent: (event: StreamEvent) => void,
-  ): Promise<ChatResponse> => {
-    const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}/messages?stream=1`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({ content }),
-    })
-
-    if (!response.ok) {
-      let message = '流式请求失败'
-      let code: string | undefined
-      let details: unknown
-      try {
-        const payload = (await response.json()) as ApiEnvelope<never>
-        message = payload.error?.message || message
-        code = payload.error?.code
-        details = payload.error?.details
-      } catch {
-        // Keep the fallback message when the response body is not JSON.
-      }
-      if (response.status === 401) {
-        notifyAuthRequired()
-      }
-      throw new ApiError(message, response.status, code, details)
-    }
-
-    if (!response.body) {
-      throw new ApiError('流式请求失败', response.status)
-    }
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) {
-          break
-        }
-        buffer += decoder.decode(value, { stream: true })
-        const blocks = buffer.split('\n\n')
-        buffer = blocks.pop() ?? ''
-
-        for (const block of blocks) {
-          const lines = block
-            .split('\n')
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trim())
-          if (lines.length === 0) {
-            continue
-          }
-          const event = JSON.parse(lines.join('\n')) as StreamEvent
-          onEvent(event)
-          if (event.type === 'done') {
-            return {
-              content: event.content,
-              assistantMessage: event.assistantMessage,
-            }
-          }
-          if (event.type === 'error') {
-            throw new Error(event.message)
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock()
-    }
-
-    throw new Error('流式响应意外中断')
-  },
   getConfig: () => request<ConfigData>('/config'),
   getConfigMeta: () => request<ConfigMeta>('/config/meta'),
   testModelBinding: (payload: {
@@ -478,11 +381,6 @@ export const api = {
   deleteChannelBinding: (bindingId: string) =>
     request<{ deleted: boolean }>(`/channel-bindings/${encodeURIComponent(bindingId)}`, {
       method: 'DELETE',
-    }),
-  resolveChannelBinding: (payload: { channelName: string; chatId: string }) =>
-    request<{ binding: ChannelBinding | null; resolved: boolean }>('/channel-bindings/resolve', {
-      method: 'POST',
-      body: JSON.stringify(payload),
     }),
 
   updateConfig: (config: ConfigData) =>
@@ -581,36 +479,11 @@ export const api = {
     request<KnowledgeDocument[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/documents`),
   getKnowledgeSources: (kbId: string) =>
     request<KnowledgeSource[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/sources`),
-  updateKnowledgeSource: (
-    kbId: string,
-    sourceId: string,
-    payload: {
-      title?: string
-      enabled?: boolean
-      url?: string
-      items?: Array<{ question: string; answer: string }>
-    },
-  ) =>
-    request<KnowledgeSource>(
-      `/knowledge-bases/${encodeURIComponent(kbId)}/sources/${encodeURIComponent(sourceId)}`,
-      {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      },
-    ),
   deleteKnowledgeDocument: (kbId: string, docId: string) =>
     request<{ deleted: boolean }>(
       `/knowledge-bases/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(docId)}`,
       {
         method: 'DELETE',
-      },
-    ),
-  deleteKnowledgeDocuments: (kbId: string, docIds: string[]) =>
-    request<{ deletedCount: number; docIds: string[] }>(
-      `/knowledge-bases/${encodeURIComponent(kbId)}/documents/delete`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ docIds }),
       },
     ),
   getKnowledgeJobs: (kbId: string) =>
@@ -643,13 +516,6 @@ export const api = {
       {
         method: 'POST',
         body: JSON.stringify(payload ?? {}),
-      },
-    ),
-  syncKnowledgeSource: (kbId: string, sourceId: string) =>
-    request<{ source: KnowledgeSource; document: KnowledgeDocument; job: KnowledgeIngestJob }>(
-      `/knowledge-bases/${encodeURIComponent(kbId)}/sources/${encodeURIComponent(sourceId)}/sync`,
-      {
-        method: 'POST',
       },
     ),
   retrieveKnowledgeBase: (
@@ -693,10 +559,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(name ? { name } : {}),
     }),
-  setAgentEnabled: (agentId: string, enabled: boolean) =>
-    request<AgentDefinition>(`/agents/${encodeURIComponent(agentId)}/${enabled ? 'enable' : 'disable'}`, {
-      method: 'POST',
-    }),
   testRunAgent: (agentId: string, content: string) =>
     request<AgentTestRunResult>(`/agents/${encodeURIComponent(agentId)}/test-run`, {
       method: 'POST',
@@ -736,10 +598,6 @@ export const api = {
     request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}/copy`, {
       method: 'POST',
       body: JSON.stringify(name ? { name } : {}),
-    }),
-  setTeamEnabled: (teamId: string, enabled: boolean) =>
-    request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}/${enabled ? 'enable' : 'disable'}`, {
-      method: 'POST',
     }),
   runTeam: (teamId: string, content: string) =>
     request<TeamTestRunResult>(`/teams/${encodeURIComponent(teamId)}/runs`, {
@@ -849,38 +707,7 @@ export const api = {
     request<RunCancelResult>(`/runs/${encodeURIComponent(runId)}/cancel`, {
       method: 'POST',
     }),
-  getAgentTemplates: () => request<AgentTemplateItem[]>('/agent-templates'),
-  getAgentTemplate: (templateName: string) =>
-    request<AgentTemplateItem>(`/agent-templates/${encodeURIComponent(templateName)}`),
   getValidTemplateTools: () => request<AgentTemplateTool[]>('/agent-templates/tools/valid'),
-  createAgentTemplate: (payload: AgentTemplateMutationInput) =>
-    request<AgentTemplateMutationResult>('/agent-templates', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  updateAgentTemplate: (templateName: string, payload: Partial<AgentTemplateMutationInput>) =>
-    request<AgentTemplateMutationResult>(`/agent-templates/${encodeURIComponent(templateName)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
-    }),
-  deleteAgentTemplate: (templateName: string) =>
-    request<AgentTemplateMutationResult>(`/agent-templates/${encodeURIComponent(templateName)}`, {
-      method: 'DELETE',
-    }),
-  importAgentTemplates: (payload: { content: string; on_conflict: 'skip' | 'rename' | 'replace' }) =>
-    request<AgentTemplateImportResult>('/agent-templates/import', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  exportAgentTemplates: (names?: string[]) =>
-    request<AgentTemplateExportResult>('/agent-templates/export', {
-      method: 'POST',
-      body: JSON.stringify({ names }),
-    }),
-  reloadAgentTemplates: () =>
-    request<{ success: boolean }>('/agent-templates/reload', {
-      method: 'POST',
-    }),
   getInstalledSkills: () => request<InstalledSkill[]>('/skills/installed'),
   searchMarketplaceSkills: (query = '', limit = 24, offset = 0) => {
     const params = new URLSearchParams()
@@ -912,16 +739,5 @@ export const api = {
   deleteSkill: (skillId: string) =>
     request<{ deleted: boolean }>(`/skills/${encodeURIComponent(skillId)}`, {
       method: 'DELETE',
-    }),
-  getDocuments: () => request<WorkspaceDocumentSummary[]>('/documents'),
-  getDocument: (documentId: string) => request<WorkspaceDocument>(`/documents/${encodeURIComponent(documentId)}`),
-  updateDocument: (documentId: string, content: string) =>
-    request<WorkspaceDocument>(`/documents/${encodeURIComponent(documentId)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ content }),
-    }),
-  resetDocument: (documentId: string) =>
-    request<WorkspaceDocument>(`/documents/${encodeURIComponent(documentId)}/reset`, {
-      method: 'POST',
     }),
 }

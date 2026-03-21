@@ -16,6 +16,7 @@ import {
 } from './chatMessageUtils'
 
 const API_BASE = '/api/v1'
+const XREQUEST_PLACEHOLDER_URL = `${API_BASE}/chat/sessions/__provider__`
 
 async function fetchChatStream(
   _baseURL: RequestInfo | URL,
@@ -100,7 +101,7 @@ function getStreamEvents(info: TransformMessage<ChatMessage, SSEOutput>) {
 export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatRequestInput, SSEOutput> {
   constructor() {
     super({
-      request: XRequest(`${API_BASE}/chat/sessions/stream`, {
+      request: XRequest(XREQUEST_PLACEHOLDER_URL, {
         manual: true,
         fetch: fetchChatStream,
       }),

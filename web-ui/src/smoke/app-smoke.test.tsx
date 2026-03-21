@@ -6,7 +6,6 @@ const mockApi = vi.hoisted(() => ({
   createSession: vi.fn(),
   applyMemoryCandidate: vi.fn(),
   createAgent: vi.fn(),
-  createAgentTemplate: vi.fn(),
   createTeam: vi.fn(),
   createCalendarEvent: vi.fn(),
   createKnowledgeBase: vi.fn(),
@@ -16,13 +15,10 @@ const mockApi = vi.hoisted(() => ({
   deleteTeam: vi.fn(),
   deleteKnowledgeBase: vi.fn(),
   deleteKnowledgeDocument: vi.fn(),
-  deleteKnowledgeDocuments: vi.fn(),
   deleteSession: vi.fn(),
   health: vi.fn(),
   getAgent: vi.fn(),
   getAgents: vi.fn(),
-  getAgentTemplate: vi.fn(),
-  getAgentTemplates: vi.fn(),
   getAuthStatus: vi.fn(),
   bootstrapAuth: vi.fn(),
   getChatWorkspace: vi.fn(),
@@ -46,8 +42,6 @@ const mockApi = vi.hoisted(() => ({
   getKnowledgeJobs: vi.fn(),
   getWhatsAppBindingStatus: vi.fn(),
   testChannel: vi.fn(),
-  getDocument: vi.fn(),
-  getDocuments: vi.fn(),
   getMcpServer: vi.fn(),
   getMcpServers: vi.fn(),
   getMcpRepairPlan: vi.fn(),
@@ -69,14 +63,12 @@ const mockApi = vi.hoisted(() => ({
   setMcpServerEnabled: vi.fn(),
   rotateProfilePassword: vi.fn(),
   triggerOpsAction: vi.fn(),
-  uploadChatFile: vi.fn(),
   uploadSessionChatFile: vi.fn(),
   uploadProfileAvatar: vi.fn(),
   deleteProfileAvatar: vi.fn(),
   updateProfile: vi.fn(),
   updateMcpServer: vi.fn(),
   deleteMcpServer: vi.fn(),
-  deleteAgentTemplate: vi.fn(),
   deleteCalendarEvent: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
@@ -94,31 +86,20 @@ const mockApi = vi.hoisted(() => ({
   getCronJobs: vi.fn(),
   getInstalledSkills: vi.fn(),
   getValidTemplateTools: vi.fn(),
-  importAgentTemplates: vi.fn(),
-  exportAgentTemplates: vi.fn(),
-  reloadAgentTemplates: vi.fn(),
-  resetDocument: vi.fn(),
   renameSession: vi.fn(),
-  removeSessionFile: vi.fn(),
   retryTeamRun: vi.fn(),
   retrieveKnowledgeBase: vi.fn(),
   reindexKnowledgeBase: vi.fn(),
-  syncKnowledgeSource: vi.fn(),
   installMarketplaceSkill: vi.fn(),
   importSessionFiles: vi.fn(),
-  setAgentEnabled: vi.fn(),
-  setTeamEnabled: vi.fn(),
   testRunAgent: vi.fn(),
   uploadKnowledgeDocuments: vi.fn(),
   uploadSkillZip: vi.fn(),
   updateAgent: vi.fn(),
   updateTeam: vi.fn(),
   updateKnowledgeBase: vi.fn(),
-  updateKnowledgeSource: vi.fn(),
   updateTeamMemory: vi.fn(),
   updateConfig: vi.fn(),
-  updateDocument: vi.fn(),
-  updateAgentTemplate: vi.fn(),
   updateCalendarEvent: vi.fn(),
   updateCalendarSettings: vi.fn(),
   updateChannel: vi.fn(),
@@ -131,7 +112,6 @@ const mockApi = vi.hoisted(() => ({
   createChannelBinding: vi.fn(),
   updateChannelBinding: vi.fn(),
   deleteChannelBinding: vi.fn(),
-  resolveChannelBinding: vi.fn(),
   updateSetupAgentDefaults: vi.fn(),
   updateSetupChannel: vi.fn(),
   updateSetupProvider: vi.fn(),
@@ -927,7 +907,6 @@ import ChannelsPage from '../pages/ChannelsPage'
 import ChatPage from '../pages/ChatPage'
 import DashboardPage from '../pages/DashboardPage'
 import CronPage from '../pages/CronPage'
-import MainPromptPage from '../pages/MainPromptPage'
 import McpPage from '../pages/McpPage'
 import McpServerDetailPage from '../pages/McpServerDetailPage'
 import ModelsPage from '../pages/ModelsPage'
@@ -942,7 +921,6 @@ import StudioLayoutPage from '../pages/StudioLayoutPage'
 import SystemLayoutPage from '../pages/SystemLayoutPage'
 import SystemPage from '../pages/SystemPage'
 import TeamsPage from '../pages/TeamsPage'
-import TemplatesPage from '../pages/TemplatesPage'
 import ValidationPage from '../pages/ValidationPage'
 import { renderWithProviders } from '../test/renderApp'
 
@@ -1445,116 +1423,6 @@ function makeProfile() {
   }
 }
 
-function makeDocuments() {
-  return [
-    {
-      id: 'AGENTS.md',
-      label: 'AGENTS.md',
-      path: '/tmp/workspace/AGENTS.md',
-      hasTemplate: true,
-      updatedAt: '2026-03-13T10:05:00Z',
-    },
-    {
-      id: 'SOUL.md',
-      label: 'SOUL.md',
-      path: '/tmp/workspace/SOUL.md',
-      hasTemplate: true,
-      updatedAt: '2026-03-13T09:55:00Z',
-    },
-    {
-      id: 'USER.md',
-      label: 'USER.md',
-      path: '/tmp/workspace/USER.md',
-      hasTemplate: true,
-      updatedAt: '2026-03-13T09:50:00Z',
-    },
-    {
-      id: 'TOOLS.md',
-      label: 'TOOLS.md',
-      path: '/tmp/workspace/TOOLS.md',
-      hasTemplate: true,
-      updatedAt: '2026-03-13T09:45:00Z',
-    },
-    {
-      id: 'HEARTBEAT.md',
-      label: 'HEARTBEAT.md',
-      path: '/tmp/workspace/HEARTBEAT.md',
-      hasTemplate: true,
-      updatedAt: '2026-03-13T09:40:00Z',
-    },
-    {
-      id: 'memory/MEMORY.md',
-      label: 'MEMORY.md',
-      path: '/tmp/workspace/memory/MEMORY.md',
-      hasTemplate: true,
-      updatedAt: '2026-03-13T09:35:00Z',
-    },
-    {
-      id: 'memory/HISTORY.md',
-      label: 'HISTORY.md',
-      path: '/tmp/workspace/memory/HISTORY.md',
-      hasTemplate: false,
-      updatedAt: '2026-03-13T09:30:00Z',
-    },
-  ]
-}
-
-function makeDocument(documentId = 'AGENTS.md') {
-  const relativePath = documentId.startsWith('memory/') ? documentId : documentId
-  const pathSegments = documentId.split('/')
-  return {
-    id: documentId,
-    label: documentId.startsWith('memory/') ? pathSegments[pathSegments.length - 1] || documentId : documentId,
-    content: '# Agent Instructions\n\nStay concise.',
-    updatedAt: '2026-03-13T10:05:00Z',
-    sourcePath: `/tmp/workspace/${relativePath}`,
-    hasTemplate: documentId !== 'memory/HISTORY.md',
-  }
-}
-
-function makeAgentTemplates() {
-  return [
-    {
-      name: 'coder',
-      description: 'Code-oriented template',
-      tools: ['read_file', 'write_file', 'list_dir'],
-      rules: ['Read before editing', 'Validate your change'],
-      system_prompt: 'Review the assigned task: {task}',
-      skills: [],
-      model: null,
-      backend: 'claude_code',
-      source: 'builtin',
-      is_builtin: true,
-      is_editable: false,
-      is_deletable: false,
-      enabled: true,
-      created_at: '2026-03-13T08:00:00Z',
-      updated_at: '2026-03-13T08:00:00Z',
-    },
-    {
-      name: 'repo-reviewer',
-      description: 'Review-oriented template',
-      tools: ['read_file', 'list_dir', 'web_search'],
-      rules: ['Check key files first', 'Summarize findings clearly'],
-      system_prompt: 'Review this repository for the assigned task: {task}',
-      skills: ['skill-creator'],
-      model: 'deepseek/deepseek-chat',
-      backend: null,
-      source: 'user',
-      is_builtin: false,
-      is_editable: true,
-      is_deletable: true,
-      enabled: true,
-      created_at: '2026-03-13T09:10:00Z',
-      updated_at: '2026-03-13T09:40:00Z',
-    },
-  ]
-}
-
-function makeAgentTemplate() {
-  return makeAgentTemplates()[1]
-}
-
 function makeAgents() {
   return [
     {
@@ -1766,8 +1634,6 @@ describe('web app smoke pages', () => {
       authenticated: true,
       username: 'admin',
     })
-    mockApi.getAgentTemplates.mockResolvedValue(makeAgentTemplates())
-    mockApi.getAgentTemplate.mockResolvedValue(makeAgentTemplate())
     mockApi.getAgents.mockResolvedValue(makeAgents())
     mockApi.getAgent.mockResolvedValue(makeAgents()[0])
     mockApi.getCalendarEvents.mockResolvedValue(makeCalendarEvents())
@@ -1832,10 +1698,6 @@ describe('web app smoke pages', () => {
       updatedAt: '2026-03-14T10:06:00Z',
     })
     mockApi.deleteChannelBinding.mockResolvedValue({ deleted: true })
-    mockApi.resolveChannelBinding.mockResolvedValue({
-      binding: null,
-      resolved: false,
-    })
     mockApi.getKnowledgeBases.mockResolvedValue([
       {
         kbId: 'support-kb',
@@ -1927,84 +1789,6 @@ describe('web app smoke pages', () => {
       },
     ])
     mockApi.getKnowledgeJobs.mockResolvedValue([])
-    mockApi.syncKnowledgeSource.mockResolvedValue({
-      source: {
-        sourceId: 'src_support_url',
-        kbId: 'support-kb',
-        tenantId: 'default',
-        instanceId: 'instance-default',
-        sourceType: 'web_url',
-        title: 'Support Help Center',
-        enabled: true,
-        sourceUri: 'https://example.com/help/worker-restart',
-        latestDocId: 'doc_support_url',
-        syncCount: 3,
-        lastSyncedAt: '2026-03-14T10:25:00Z',
-        config: {
-          url: 'https://example.com/help/worker-restart',
-          title: 'Support Help Center',
-        },
-        docCount: 1,
-        syncSupported: true,
-        latestDocument: null,
-        latestJob: null,
-      },
-      document: {
-        docId: 'doc_support_url',
-        kbId: 'support-kb',
-        tenantId: 'default',
-        instanceId: 'instance-default',
-        sourceId: 'src_support_url',
-        sourceType: 'web_url',
-        title: 'Support Help Center',
-        sourceUri: 'https://example.com/help/worker-restart',
-        docStatus: 'uploaded',
-        chunkCount: 4,
-        metadata: {},
-      },
-      job: {
-        jobId: 'job_support_url_sync',
-        tenantId: 'default',
-        instanceId: 'instance-default',
-        kbId: 'support-kb',
-        docId: 'doc_support_url',
-        status: 'queued',
-        trackId: 'track_support_url_sync',
-      },
-    })
-    mockApi.updateKnowledgeSource.mockResolvedValue({
-      sourceId: 'src_support_url',
-      kbId: 'support-kb',
-      tenantId: 'default',
-      instanceId: 'instance-default',
-      sourceType: 'web_url',
-      title: 'Support Help Center',
-      enabled: true,
-      sourceUri: 'https://example.com/help/worker-restart',
-      latestDocId: 'doc_support_url',
-      syncCount: 2,
-      lastSyncedAt: '2026-03-14T10:20:00Z',
-      config: {
-        url: 'https://example.com/help/worker-restart',
-        title: 'Support Help Center',
-      },
-      docCount: 1,
-      syncSupported: true,
-      latestDocument: {
-        docId: 'doc_support_url',
-        kbId: 'support-kb',
-        tenantId: 'default',
-        instanceId: 'instance-default',
-        sourceId: 'src_support_url',
-        sourceType: 'web_url',
-        title: 'Support Help Center',
-        sourceUri: 'https://example.com/help/worker-restart',
-        docStatus: 'indexed',
-        chunkCount: 4,
-        metadata: {},
-      },
-      latestJob: null,
-    })
     mockApi.getTeams.mockResolvedValue(makeTeams())
     mockApi.getTeam.mockResolvedValue(makeTeams()[0])
     mockApi.getTeamThread.mockResolvedValue({
@@ -2415,7 +2199,6 @@ describe('web app smoke pages', () => {
       name: 'Support Lead Copy',
     })
     mockApi.deleteAgent.mockResolvedValue({ deleted: true })
-    mockApi.setAgentEnabled.mockResolvedValue(makeAgents()[0])
     mockApi.createTeam.mockResolvedValue(makeTeams()[0])
     mockApi.updateTeam.mockResolvedValue(makeTeams()[0])
     mockApi.copyTeam.mockResolvedValue({
@@ -2424,7 +2207,6 @@ describe('web app smoke pages', () => {
       name: 'Support Team Copy',
     })
     mockApi.deleteTeam.mockResolvedValue({ deleted: true })
-    mockApi.setTeamEnabled.mockResolvedValue(makeTeams()[0])
     mockApi.runTeam.mockResolvedValue({
       team: makeTeams()[0],
       run: {
@@ -2509,7 +2291,6 @@ describe('web app smoke pages', () => {
       teamKnowledgeHits: [],
     })
     mockApi.deleteKnowledgeDocument.mockResolvedValue({ deleted: true })
-    mockApi.deleteKnowledgeDocuments.mockResolvedValue({ deletedCount: 1, docIds: ['doc-1'] })
     mockApi.uploadKnowledgeDocuments.mockResolvedValue({ documents: [], jobs: [] })
     mockApi.addKnowledgeSource.mockResolvedValue({ documents: [], jobs: [] })
     mockApi.reindexKnowledgeBase.mockResolvedValue({ documents: [], jobs: [] })
@@ -2520,8 +2301,6 @@ describe('web app smoke pages', () => {
       filters: {},
     })
     mockApi.getWhatsAppBindingStatus.mockResolvedValue(makeWhatsAppBindingStatus())
-    mockApi.getDocuments.mockResolvedValue(makeDocuments())
-    mockApi.getDocument.mockResolvedValue(makeDocument())
     mockApi.getMcpServers.mockResolvedValue(makeMcpRegistry())
     mockApi.getMcpServer.mockResolvedValue(makeMcpRegistry().items[0])
     mockApi.getMcpRepairPlan.mockResolvedValue(makeMcpRepairPlan())
@@ -2589,22 +2368,9 @@ describe('web app smoke pages', () => {
     mockApi.deleteProfileAvatar.mockResolvedValue({
       profile: { ...makeProfile(), hasAvatar: false, avatarUrl: null, avatarUpdatedAt: null },
     })
-    mockApi.createAgentTemplate.mockResolvedValue({
-      name: 'repo-reviewer',
-      success: true,
-    })
-    mockApi.updateAgentTemplate.mockResolvedValue({
-      name: 'repo-reviewer',
-      success: true,
-    })
-    mockApi.deleteAgentTemplate.mockResolvedValue({
-      name: 'repo-reviewer',
-      success: true,
-    })
     mockApi.createCalendarEvent.mockResolvedValue(makeCalendarEvents()[0])
     mockApi.updateCalendarEvent.mockResolvedValue(makeCalendarEvents()[0])
     mockApi.deleteCalendarEvent.mockResolvedValue({ deleted: true })
-    mockApi.uploadChatFile.mockResolvedValue(makeChatUpload())
     mockApi.getSessionFiles.mockResolvedValue([makeChatUpload()])
     mockApi.uploadSessionChatFile.mockResolvedValue({
       uploadedFile: makeChatUpload(),
@@ -2612,9 +2378,6 @@ describe('web app smoke pages', () => {
     })
     mockApi.importSessionFiles.mockResolvedValue({
       sessionFiles: [makeChatUpload()],
-    })
-    mockApi.removeSessionFile.mockResolvedValue({
-      sessionFiles: [],
     })
     mockApi.triggerOpsAction.mockResolvedValue({
       item: {
@@ -2624,19 +2387,7 @@ describe('web app smoke pages', () => {
         lastStatus: 'running' as const,
       },
     })
-    mockApi.updateDocument.mockResolvedValue(makeDocument())
-    mockApi.resetDocument.mockResolvedValue(makeDocument())
     mockApi.getValidTemplateTools.mockResolvedValue(makeValidTemplateTools())
-    mockApi.importAgentTemplates.mockResolvedValue({
-      imported: [{ name: 'repo-reviewer-imported', action: 'created' }],
-      errors: [],
-    })
-    mockApi.exportAgentTemplates.mockResolvedValue({
-      content: 'agents:\n  - name: repo-reviewer\n',
-    })
-    mockApi.reloadAgentTemplates.mockResolvedValue({
-      success: true,
-    })
     mockApi.updateCalendarSettings.mockResolvedValue(makeCalendarSettings())
     mockApi.updateChannel.mockResolvedValue(makeChannelDetail())
     mockApi.updateChannelDelivery.mockResolvedValue(makeChannelsList())
@@ -3220,19 +2971,6 @@ describe('web app smoke pages', () => {
     expect(screen.getByRole('button', { name: /已安装技能/ })).toBeInTheDocument()
     expect(screen.getByText('原生可用')).toBeInTheDocument()
     expect(screen.getByText('SkillHub 官网')).toBeInTheDocument()
-  })
-
-  it('renders the main prompt page', async () => {
-    renderPage(<MainPromptPage />)
-    expect(await screen.findByText('工作区引导与记忆')).toBeInTheDocument()
-    expect(screen.getByText('工作区文件选择')).toBeInTheDocument()
-    expect(screen.getByText('长期记忆')).toBeInTheDocument()
-  })
-
-  it('renders the templates page', async () => {
-    renderPage(<TemplatesPage />)
-    expect(await screen.findByText('Agent 模板中心')).toBeInTheDocument()
-    expect(screen.getByText('导入 / 导出 / 冲突策略')).toBeInTheDocument()
   })
 
   it('renders the mcp page', async () => {

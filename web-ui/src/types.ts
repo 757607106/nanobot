@@ -54,11 +54,6 @@ export interface ChatMessage {
   progressSteps?: ChatProgressStep[]
 }
 
-export interface ChatResponse {
-  content: string
-  assistantMessage: ChatMessage | null
-}
-
 export interface ChatRequestInput {
   sessionId: string
   query: string
@@ -450,41 +445,6 @@ export interface AgentTemplateTool {
   description: string
 }
 
-export interface AgentTemplateItem {
-  name: string
-  description: string
-  tools: string[]
-  rules: string[]
-  system_prompt: string
-  skills: string[]
-  model?: string | null
-  backend?: string | null
-  source: string
-  is_builtin: boolean
-  is_editable: boolean
-  is_deletable: boolean
-  enabled: boolean
-  created_at?: string | null
-  updated_at?: string | null
-}
-
-export interface AgentTemplateMutationInput {
-  name: string
-  description: string
-  tools: string[]
-  rules: string[]
-  system_prompt: string
-  skills: string[]
-  model?: string | null
-  backend?: string | null
-  enabled: boolean
-}
-
-export interface AgentTemplateMutationResult {
-  name: string
-  success: boolean
-}
-
 export interface AgentDefinition {
   agentId: string
   tenantId: string
@@ -824,35 +784,6 @@ export interface TeamTestRunResult {
   memberRuns: AgentRunSummary[]
   finalAssistantMessage: ChatMessage | null
   teamKnowledgeHits: KnowledgeHit[]
-}
-
-export interface AgentTemplateImportResult {
-  imported: Array<{
-    name: string
-    action: string
-  }>
-  errors: string[]
-}
-
-export interface AgentTemplateExportResult {
-  content: string
-}
-
-export interface WorkspaceDocumentSummary {
-  id: string
-  label: string
-  path: string
-  hasTemplate: boolean
-  updatedAt?: string
-}
-
-export interface WorkspaceDocument {
-  id: string
-  label: string
-  content: string
-  updatedAt?: string
-  sourcePath: string
-  hasTemplate: boolean
 }
 
 export interface AuthStatus {

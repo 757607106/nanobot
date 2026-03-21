@@ -5,17 +5,8 @@ import { surfaceChild, surfaceReveal } from '../motionTokens'
 
 const { Title } = Typography
 
-export interface HeroStat {
-  label: string
-  value: ReactNode
-}
-
 interface PageHeroProps {
-  eyebrow?: ReactNode
   title: string
-  description?: ReactNode
-  stats?: HeroStat[]
-  badges?: ReactNode[]
   actions?: ReactNode
   className?: string
 }

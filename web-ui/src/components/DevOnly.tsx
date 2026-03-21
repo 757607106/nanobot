@@ -3,13 +3,12 @@ import { useDevMode } from '../devMode'
 
 interface DevOnlyProps {
   children: ReactNode
-  fallback?: ReactNode
 }
 
-export default function DevOnly({ children, fallback }: DevOnlyProps) {
+export default function DevOnly({ children }: DevOnlyProps) {
   const { devMode } = useDevMode()
   if (devMode) {
     return <>{children}</>
   }
-  return fallback ? <>{fallback}</> : null
+  return null
 }

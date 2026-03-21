@@ -286,9 +286,7 @@ export default function CalendarPage() {
     <div className="page-stack">
       <PageHero
         className="page-hero-compact"
-        eyebrow="日程"
         title="日程与提醒"
-        description="管理事件、默认提醒和派生任务。"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadCalendar()} loading={loading}>
@@ -299,12 +297,6 @@ export default function CalendarPage() {
             </Button>
           </Space>
         )}
-        stats={[
-          { label: '事件数', value: events.length },
-          { label: '提醒任务', value: derivedJobCount },
-          { label: '默认视图', value: settings?.defaultView || '--' },
-          { label: '默认优先级', value: settings?.defaultPriority || '--' },
-        ]}
       />
 
       <div className="page-grid calendar-page-grid">
