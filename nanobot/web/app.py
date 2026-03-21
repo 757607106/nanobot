@@ -19,6 +19,7 @@ from nanobot.platform.agents import AgentDefinitionService, AgentDefinitionStore
 from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBindingStore
 from nanobot.platform.instances import PlatformInstanceService
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
+from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.memory import TeamMemoryService, TeamMemoryStore
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.platform.teams import TeamDefinitionService, TeamDefinitionStore
@@ -84,10 +85,12 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         AgentDefinitionStore(instance.agent_definitions_db_path()),
         instance_id=instance.id,
     )
+    rag_engine = create_rag_engine_from_config(config, instance.data_dir)
     knowledge = KnowledgeBaseService(
         KnowledgeBaseStore(instance.knowledge_db_path()),
         instance=instance,
         instance_id=instance.id,
+        rag_engine=rag_engine,
     )
     teams = TeamDefinitionService(
         TeamDefinitionStore(instance.team_definitions_db_path()),

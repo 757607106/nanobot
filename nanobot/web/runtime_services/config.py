@@ -10,6 +10,7 @@ import httpx
 
 from nanobot.agent.loop import AgentLoop
 from nanobot.config.schema import Config, ModelBindingConfig, normalize_api_base_url
+from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import GenerationSettings
 from nanobot.providers.custom_provider import CustomProvider
@@ -153,6 +154,9 @@ class WebConfigRuntimeService:
         if old_agent is not None:
             asyncio.run(old_agent.close_mcp())
         self.rebuild_runtime(config)
+        if self.state.app_knowledge is not None:
+            rag_engine = create_rag_engine_from_config(config, self.state.instance.data_dir)
+            self.state.app_knowledge.set_rag_engine(rag_engine)
         self.state.channel_runtime.restart()
         return self.get_config()
 

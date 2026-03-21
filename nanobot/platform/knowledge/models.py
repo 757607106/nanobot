@@ -19,8 +19,11 @@ class KnowledgeDocumentStatus(StrEnum):
     PARSED = "parsed"
     INDEXING = "indexing"
     INDEXED = "indexed"
+    KG_BUILDING = "kg_building"
+    KG_BUILT = "kg_built"
     ERROR_PARSING = "error_parsing"
     ERROR_INDEXING = "error_indexing"
+    ERROR_KG = "error_kg"
 
 
 class KnowledgeJobStatus(StrEnum):
@@ -32,13 +35,12 @@ class KnowledgeJobStatus(StrEnum):
 
 @dataclass(slots=True)
 class KnowledgeRetrievalProfile:
-    mode: str = "hybrid"
+    mode: str = "hybrid"  # LightRAG modes: local, global, hybrid, naive
     top_k: int = 8
-    chunk_top_k: int = 20
     chunk_size: int = 800
     chunk_overlap: int = 120
     citation_required: bool = True
-    rerank_enabled: bool = False
+    vlm_enhanced: bool = False  # VLM-enhanced query mode
     metadata_filters: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -47,7 +49,6 @@ class KnowledgeRetrievalProfile:
         return cls(
             mode=str(payload.get("mode") or "hybrid").strip() or "hybrid",
             top_k=max(1, int(payload.get("top_k") or payload.get("topK") or 8)),
-            chunk_top_k=max(1, int(payload.get("chunk_top_k") or payload.get("chunkTopK") or 20)),
             chunk_size=max(200, int(payload.get("chunk_size") or payload.get("chunkSize") or 800)),
             chunk_overlap=max(0, int(payload.get("chunk_overlap") or payload.get("chunkOverlap") or 120)),
             citation_required=bool(
@@ -55,10 +56,10 @@ class KnowledgeRetrievalProfile:
                 if "citation_required" in payload
                 else payload.get("citationRequired", True)
             ),
-            rerank_enabled=bool(
-                payload.get("rerank_enabled")
-                if "rerank_enabled" in payload
-                else payload.get("rerankEnabled", False)
+            vlm_enhanced=bool(
+                payload.get("vlm_enhanced")
+                if "vlm_enhanced" in payload
+                else payload.get("vlmEnhanced", False)
             ),
             metadata_filters=dict(
                 payload.get("metadata_filters") or payload.get("metadataFilters") or {}
@@ -68,11 +69,10 @@ class KnowledgeRetrievalProfile:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["topK"] = payload.pop("top_k")
-        payload["chunkTopK"] = payload.pop("chunk_top_k")
         payload["chunkSize"] = payload.pop("chunk_size")
         payload["chunkOverlap"] = payload.pop("chunk_overlap")
         payload["citationRequired"] = payload.pop("citation_required")
-        payload["rerankEnabled"] = payload.pop("rerank_enabled")
+        payload["vlmEnhanced"] = payload.pop("vlm_enhanced")
         payload["metadataFilters"] = payload.pop("metadata_filters")
         return payload
 

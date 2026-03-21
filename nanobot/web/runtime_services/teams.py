@@ -84,10 +84,10 @@ class WebTeamRuntimeService:
 
     def _retrieve_team_knowledge(self, team: dict[str, Any], task: str) -> dict[str, Any]:
         if not self.state.app_knowledge:
-            return {"hits": [], "requestedMode": "keyword", "effectiveMode": "keyword"}
+            return {"hits": [], "requestedMode": "hybrid", "effectiveMode": "hybrid"}
         kb_ids = list(team.get("sharedKnowledgeBindingIds") or [])
         if not kb_ids:
-            return {"hits": [], "requestedMode": "keyword", "effectiveMode": "keyword"}
+            return {"hits": [], "requestedMode": "hybrid", "effectiveMode": "hybrid"}
         return self.state.app_knowledge.retrieve(kb_ids=kb_ids, query=task, limit=8)
 
     def _get_team_memory_sections(self, team_id: str) -> list[tuple[str, str]]:

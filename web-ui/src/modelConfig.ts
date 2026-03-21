@@ -24,6 +24,7 @@ export function buildModelBinding(
     provider: providerName,
     label: overrides?.label ?? meta?.label ?? providerName,
     model: overrides?.model ?? null,
+    capabilityType: overrides?.capabilityType ?? 'text_chat',
     apiKey: overrides?.apiKey ?? '',
     apiBase: overrides?.apiBase ?? meta?.defaultApiBase ?? null,
     extraHeaders: overrides?.extraHeaders ?? {},
@@ -208,9 +209,10 @@ export function getBindingOptions(config: ConfigData, meta: ConfigMeta | null) {
     })
     .map(([bindingName, binding]) => {
       const providerMeta = getProviderMeta(meta, binding.provider)
+      const typeLabel = binding.capabilityType === 'embedding' ? '[向量嵌入]' : binding.capabilityType === 'multimodal' ? '[多模态]' : '[文本对话]';
       return {
         value: bindingName,
-        label: `${binding.label || bindingName} · ${providerMeta?.label || binding.provider}`,
+        label: `${typeLabel} ${binding.label || bindingName} · ${providerMeta?.label || binding.provider}`,
       }
     })
 }

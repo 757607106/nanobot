@@ -127,6 +127,7 @@ export interface ModelBinding {
   provider: string
   label?: string | null
   model?: string | null
+  capabilityType?: 'text_chat' | 'embedding' | 'multimodal'
   apiKey: string
   apiBase?: string | null
   extraHeaders?: Record<string, string> | null
@@ -174,6 +175,21 @@ export interface ConfigMeta {
   resolvedBinding?: string | null
 }
 
+export interface RagConfigData {
+  llmBinding?: string | null
+  llmModel?: string
+  embeddingBinding?: string | null
+  embeddingModel: string
+  embeddingDim: number
+  embeddingMaxTokens: number
+  parser: string
+  mineruApiBase?: string | null
+  parseMethod: string
+  enableImageProcessing: boolean
+  enableTableProcessing: boolean
+  enableEquationProcessing: boolean
+}
+
 export interface ConfigData {
   agents: {
     defaults: {
@@ -215,6 +231,7 @@ export interface ConfigData {
     }
     mcpServers?: Record<string, unknown>
   }
+  rag?: RagConfigData
   [key: string]: unknown
 }
 
@@ -579,13 +596,12 @@ export interface MemorySourceDetail {
 }
 
 export interface KnowledgeRetrievalProfile {
-  mode: 'keyword' | 'semantic' | 'hybrid' | string
+  mode: 'local' | 'global' | 'hybrid' | 'naive' | string
   topK: number
-  chunkTopK: number
   chunkSize: number
   chunkOverlap: number
   citationRequired: boolean
-  rerankEnabled: boolean
+  vlmEnhanced: boolean
   metadataFilters: Record<string, unknown>
 }
 
@@ -668,20 +684,19 @@ export interface KnowledgeSource {
 }
 
 export interface KnowledgeHit {
-  chunkId: string
-  kbId: string
-  kbName: string
-  docId: string
-  title: string
+  kbId?: string
+  kbName?: string
+  docId?: string
+  title?: string
   content: string
-  preview: string
+  preview?: string
   score: number
   metadata: Record<string, unknown>
-  citation: {
-    kbId: string
-    kbName: string
-    docId: string
-    title: string
+  citation?: {
+    kbId?: string
+    kbName?: string
+    docId?: string
+    title?: string
     sourceType?: string | null
     sourceUri?: string | null
     fileName?: string | null

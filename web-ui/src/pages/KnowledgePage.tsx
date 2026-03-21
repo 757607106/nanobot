@@ -21,6 +21,7 @@ import {
   Select,
   Space,
   Spin,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -54,7 +55,10 @@ import PageHero from '../components/PageHero'
 import DevOnly from '../components/DevOnly'
 import { formatDateTimeZh } from '../locale'
 import { MotionPanel } from '../components/MotionSurface'
+import { getBindingOptions } from '../modelConfig'
 import type {
+  ConfigData,
+  ConfigMeta,
   KnowledgeBaseDefinition,
   KnowledgeBaseMutationInput,
   KnowledgeDocument,
@@ -76,9 +80,24 @@ interface KnowledgeFormState {
   tags: string[]
   mode: string
   topK: number
-  chunkTopK: number
   chunkSize: number
   chunkOverlap: number
+  vlmEnhanced: boolean
+}
+
+interface RagSettingsFormState {
+  llmBinding: string
+  llmModel: string
+  embeddingBinding: string
+  embeddingModel: string
+  embeddingDim: number
+  embeddingMaxTokens: number
+  parser: string
+  mineruApiBase: string
+  parseMethod: string
+  enableImageProcessing: boolean
+  enableTableProcessing: boolean
+  enableEquationProcessing: boolean
 }
 
 interface SourceEditorState {
@@ -96,9 +115,26 @@ function createEmptyForm(): KnowledgeFormState {
     tags: [],
     mode: 'hybrid',
     topK: 8,
-    chunkTopK: 20,
     chunkSize: 800,
     chunkOverlap: 120,
+    vlmEnhanced: false,
+  }
+}
+
+function createEmptyRagSettings(): RagSettingsFormState {
+  return {
+    llmBinding: '',
+    llmModel: '',
+    embeddingBinding: '',
+    embeddingModel: 'text-embedding-3-large',
+    embeddingDim: 3072,
+    embeddingMaxTokens: 8192,
+    parser: 'auto',
+    mineruApiBase: '',
+    parseMethod: 'auto',
+    enableImageProcessing: true,
+    enableTableProcessing: true,
+    enableEquationProcessing: true,
   }
 }
 
@@ -119,9 +155,27 @@ function kbToForm(kb: KnowledgeBaseDefinition): KnowledgeFormState {
     tags: [...kb.tags],
     mode: kb.retrievalProfile.mode,
     topK: kb.retrievalProfile.topK,
-    chunkTopK: kb.retrievalProfile.chunkTopK,
     chunkSize: kb.retrievalProfile.chunkSize,
     chunkOverlap: kb.retrievalProfile.chunkOverlap,
+    vlmEnhanced: kb.retrievalProfile.vlmEnhanced,
+  }
+}
+
+function ragConfigToForm(config: ConfigData | null): RagSettingsFormState {
+  const rag = config?.rag ?? ({} as Partial<import('../types').RagConfigData>)
+  return {
+    llmBinding: String(rag.llmBinding || ''),
+    llmModel: String(rag.llmModel || ''),
+    embeddingBinding: String(rag.embeddingBinding || ''),
+    embeddingModel: String(rag.embeddingModel || 'text-embedding-3-large'),
+    embeddingDim: Number(rag.embeddingDim || 3072),
+    embeddingMaxTokens: Number(rag.embeddingMaxTokens || 8192),
+    parser: String(rag.parser || 'auto'),
+    mineruApiBase: String(rag.mineruApiBase || ''),
+    parseMethod: String(rag.parseMethod || 'auto'),
+    enableImageProcessing: rag.enableImageProcessing ?? true,
+    enableTableProcessing: rag.enableTableProcessing ?? true,
+    enableEquationProcessing: rag.enableEquationProcessing ?? true,
   }
 }
 
@@ -148,12 +202,35 @@ function toPayload(form: KnowledgeFormState): KnowledgeBaseMutationInput {
     retrievalProfile: {
       mode: form.mode,
       topK: form.topK,
-      chunkTopK: form.chunkTopK,
       chunkSize: form.chunkSize,
       chunkOverlap: form.chunkOverlap,
       citationRequired: true,
-      rerankEnabled: false,
+      vlmEnhanced: form.vlmEnhanced,
       metadataFilters: {},
+    },
+  }
+}
+
+function applyRagSettingsToConfig(
+  config: ConfigData,
+  ragSettings: RagSettingsFormState,
+): ConfigData {
+  return {
+    ...config,
+    rag: {
+      ...(config.rag ?? {}),
+      llmBinding: ragSettings.llmBinding || null,
+      llmModel: ragSettings.llmModel.trim(),
+      embeddingBinding: ragSettings.embeddingBinding || null,
+      embeddingModel: ragSettings.embeddingModel.trim(),
+      embeddingDim: ragSettings.embeddingDim,
+      embeddingMaxTokens: ragSettings.embeddingMaxTokens,
+      parser: ragSettings.parser,
+      mineruApiBase: ragSettings.mineruApiBase.trim(),
+      parseMethod: ragSettings.parseMethod,
+      enableImageProcessing: ragSettings.enableImageProcessing,
+      enableTableProcessing: ragSettings.enableTableProcessing,
+      enableEquationProcessing: ragSettings.enableEquationProcessing,
     },
   }
 }
@@ -169,13 +246,13 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 function statusBadgeStatus(status: string) {
-  if (status === 'indexed' || status === 'succeeded') {
+  if (status === 'indexed' || status === 'kg_built' || status === 'succeeded') {
     return 'success'
   }
   if (status.startsWith('error') || status === 'failed') {
     return 'error'
   }
-  if (status === 'indexing' || status === 'running' || status === 'parsing') {
+  if (status === 'indexing' || status === 'running' || status === 'parsing' || status === 'kg_building') {
     return 'processing'
   }
   return 'default'
@@ -186,15 +263,18 @@ function statusLabel(status: string) {
     case 'indexed': return '已索引'
     case 'parsing': return '解析中'
     case 'indexing': return '索引中'
+    case 'kg_building': return '知识图谱构建中'
+    case 'kg_built': return '知识图谱已构建'
     case 'error_parsing': return '解析失败'
     case 'error_indexing': return '索引失败'
+    case 'error_kg': return '知识图谱构建失败'
     case 'uploaded': return '已上传'
     default: return status
   }
 }
 
 function isActiveDocumentStatus(status: string) {
-  return ['uploaded', 'parsing', 'parsed', 'indexing'].includes(status)
+  return ['uploaded', 'parsing', 'parsed', 'indexing', 'kg_building'].includes(status)
 }
 
 function isActiveJobStatus(status: string) {
@@ -202,7 +282,7 @@ function isActiveJobStatus(status: string) {
 }
 
 function isFailedDocumentStatus(status: string) {
-  return ['error_parsing', 'error_indexing'].includes(status)
+  return ['error_parsing', 'error_indexing', 'error_kg'].includes(status)
 }
 
 export default function KnowledgePage() {
@@ -220,6 +300,9 @@ export default function KnowledgePage() {
   const [sources, setSources] = useState<KnowledgeSource[]>([])
   const [jobs, setJobs] = useState<KnowledgeIngestJob[]>([])
   const [form, setForm] = useState<KnowledgeFormState>(() => createEmptyForm())
+  const [runtimeConfig, setRuntimeConfig] = useState<ConfigData | null>(null)
+  const [configMeta, setConfigMeta] = useState<ConfigMeta | null>(null)
+  const [ragSettings, setRagSettings] = useState<RagSettingsFormState>(() => createEmptyRagSettings())
   const [sourceEditor, setSourceEditor] = useState<SourceEditorState>(() => createEmptySourceEditor())
   const [sourceMode, setSourceMode] = useState<SourceMode>('file')
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
@@ -241,6 +324,7 @@ export default function KnowledgePage() {
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [savingRagSettings, setSavingRagSettings] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [ingesting, setIngesting] = useState(false)
   const [reindexingTarget, setReindexingTarget] = useState<string | 'all' | null>(null)
@@ -282,6 +366,18 @@ export default function KnowledgePage() {
     [documents, jobs],
   )
 
+  const ragBindingOptions = useMemo(() => {
+    if (!runtimeConfig || !configMeta) {
+      return [
+        { label: '跟随默认模型绑定', value: '' },
+      ]
+    }
+    return [
+      { label: '跟随默认模型绑定', value: '' },
+      ...getBindingOptions(runtimeConfig, configMeta),
+    ]
+  }, [configMeta, runtimeConfig])
+
   useEffect(() => {
     if (!currentKb || !hasActiveIngest) {
       return
@@ -295,8 +391,17 @@ export default function KnowledgePage() {
   async function loadWorkspace() {
     try {
       setLoadingWorkspace(true)
-      const kbList = await api.getKnowledgeBases()
+      const [kbList, loadedConfig, loadedMeta] = await Promise.all([
+        api.getKnowledgeBases(),
+        api.getConfig().catch(() => null),
+        api.getConfigMeta().catch(() => null),
+      ])
       setKnowledgeBases(kbList)
+      setRuntimeConfig(loadedConfig)
+      setConfigMeta(loadedMeta)
+      if (loadedConfig) {
+        setRagSettings(ragConfigToForm(loadedConfig))
+      }
       setError(null)
     } catch (loadError) {
       setError(getErrorMessage(loadError, '加载知识库列表失败'))
@@ -332,6 +437,10 @@ export default function KnowledgePage() {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  function updateRagSettings<K extends keyof RagSettingsFormState>(key: K, value: RagSettingsFormState[K]) {
+    setRagSettings((current) => ({ ...current, [key]: value }))
+  }
+
   async function handleSave() {
     const payload = toPayload(form)
     if (!payload.name) {
@@ -351,6 +460,25 @@ export default function KnowledgePage() {
       setError(getErrorMessage(saveError, '保存知识库失败'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSaveRagSettings() {
+    if (!runtimeConfig) {
+      setError('当前无法读取项目级 RAG 配置，请稍后重试。')
+      return
+    }
+    try {
+      setSavingRagSettings(true)
+      const savedConfig = await api.updateConfig(applyRagSettingsToConfig(runtimeConfig, ragSettings))
+      setRuntimeConfig(savedConfig)
+      setRagSettings(ragConfigToForm(savedConfig))
+      setError(null)
+      message.success('RAG 引擎配置已保存，后续上传、重建索引和检索将使用新配置')
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, '保存 RAG 引擎配置失败'))
+    } finally {
+      setSavingRagSettings(false)
     }
   }
 
@@ -529,8 +657,9 @@ export default function KnowledgePage() {
                 </Descriptions.Item>
                 <Descriptions.Item label="文档数量">{documents.length}</Descriptions.Item>
                 <Descriptions.Item label="检索模式">
-                  {currentKb?.retrievalProfile.mode === 'keyword' ? '标准 (Keyword)' : 
-                   currentKb?.retrievalProfile.mode === 'semantic' ? '深度 (Semantic)' : '平衡 (Hybrid)'}
+                  {currentKb?.retrievalProfile.mode === 'local' ? '局部 (Local)' : 
+                   currentKb?.retrievalProfile.mode === 'global' ? '全局 (Global)' :
+                   currentKb?.retrievalProfile.mode === 'naive' ? '朴素 (Naive)' : '混合 (Hybrid)'}
                 </Descriptions.Item>
                 <Descriptions.Item label="描述" span={2}>
                   {currentKb?.description || '暂无描述'}
@@ -612,12 +741,12 @@ export default function KnowledgePage() {
                         <Space direction="vertical" style={{ width: '100%' }}>
                           <Space>
                             <Tag color="blue">{item.score.toFixed(4)}</Tag>
-                            <Text strong>{String(item.metadata?.title || '未命名文档')}</Text>
+                            <Text strong>{String(item.kbName || item.metadata?.title || '未命名文档')}</Text>
                           </Space>
                           <Paragraph ellipsis={{ rows: 3, expandable: true }}>
                             {item.content}
                           </Paragraph>
-                          <Text type="secondary" className="knowledge-meta-text">Doc ID: {item.docId}</Text>
+                          {item.kbId && <Text type="secondary" className="knowledge-meta-text">KB: {item.kbId}</Text>}
                         </Space>
                       </List.Item>
                     )}
@@ -629,72 +758,272 @@ export default function KnowledgePage() {
         )
       case 'settings':
         return (
-          <Card className="page-card" bordered={false} title="知识库配置">
-             <div className="studio-form-grid knowledge-settings-shell">
-              <Row gutter={[24, 24]}>
-                <Col span={24}>
-                  <div className="studio-form-field">
-                    <Text type="secondary">名称</Text>
-                    <Input value={form.name} onChange={(e) => updateForm('name', e.target.value)} />
-                  </div>
-                </Col>
-                <Col span={24}>
-                  <div className="studio-form-field">
-                    <Text type="secondary">描述</Text>
-                    <TextArea value={form.description} onChange={(e) => updateForm('description', e.target.value)} rows={3} />
-                  </div>
-                </Col>
-                <Col xs={24} md={12}>
-                  <div className="studio-form-field">
-                    <Text type="secondary">检索模式</Text>
-                    <Select
-                      value={form.mode}
-                      onChange={(v) => updateForm('mode', v)}
-                      options={[
-                        { label: '标准 (Keyword)', value: 'keyword' },
-                        { label: '平衡 (Hybrid)', value: 'hybrid' },
-                        { label: '深度 (Semantic)', value: 'semantic' },
-                      ]}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </Col>
-                <Col xs={24} md={12}>
-                  <div className="studio-form-field">
-                    <Text type="secondary">Chunk Size</Text>
-                    <InputNumber 
-                      value={form.chunkSize} 
-                      onChange={(v) => updateForm('chunkSize', v || 800)} 
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </Col>
-                <Col xs={24} md={12}>
-                  <div className="studio-form-field">
-                    <Text type="secondary">Top K</Text>
-                    <InputNumber 
-                      value={form.topK} 
-                      onChange={(v) => updateForm('topK', v || 8)} 
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </Col>
-              </Row>
-              
-              <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--nb-border)' }}>
-                <Space>
-                  <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saving}>
-                    保存配置
-                  </Button>
-                  {currentKb && (
-                    <Popconfirm title="确定删除此知识库？" onConfirm={handleDelete} okButtonProps={{ danger: true }}>
-                      <Button danger icon={<DeleteOutlined />} loading={deleting}>删除</Button>
-                    </Popconfirm>
-                  )}
-                </Space>
+          <Space direction="vertical" size={24} style={{ width: '100%' }}>
+            <Card className="page-card" bordered={false} title="知识库配置">
+              <div className="studio-form-grid knowledge-settings-shell">
+                <Row gutter={[24, 24]}>
+                  <Col span={24}>
+                    <div className="studio-form-field">
+                      <Text type="secondary">名称</Text>
+                      <Input value={form.name} onChange={(e) => updateForm('name', e.target.value)} />
+                    </div>
+                  </Col>
+                  <Col span={24}>
+                    <div className="studio-form-field">
+                      <Text type="secondary">描述</Text>
+                      <TextArea value={form.description} onChange={(e) => updateForm('description', e.target.value)} rows={3} />
+                    </div>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <div className="studio-form-field">
+                      <Text type="secondary">检索模式</Text>
+                      <Select
+                        value={form.mode}
+                        onChange={(v) => updateForm('mode', v)}
+                        options={[
+                          { label: '混合 (Hybrid)', value: 'hybrid' },
+                          { label: '局部 (Local)', value: 'local' },
+                          { label: '全局 (Global)', value: 'global' },
+                          { label: '朴素 (Naive)', value: 'naive' },
+                        ]}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <div className="studio-form-field">
+                      <Text type="secondary">Top K</Text>
+                      <InputNumber
+                        value={form.topK}
+                        onChange={(v) => updateForm('topK', v || 8)}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <div className="studio-form-field">
+                      <Text type="secondary">VLM 多模态增强</Text>
+                      <Select
+                        value={form.vlmEnhanced ? 'enabled' : 'disabled'}
+                        onChange={(v) => updateForm('vlmEnhanced', v === 'enabled')}
+                        options={[
+                          { label: '关闭', value: 'disabled' },
+                          { label: '开启', value: 'enabled' },
+                        ]}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </Col>
+                </Row>
+
+                <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--nb-border)' }}>
+                  <Space>
+                    <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saving}>
+                      保存配置
+                    </Button>
+                    {currentKb && (
+                      <Popconfirm title="确定删除此知识库？" onConfirm={handleDelete} okButtonProps={{ danger: true }}>
+                        <Button danger icon={<DeleteOutlined />} loading={deleting}>删除</Button>
+                      </Popconfirm>
+                    )}
+                  </Space>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+
+            <Card
+              className="page-card"
+              bordered={false}
+              title="RAG 引擎配置"
+              extra={(
+                <Button icon={<SettingOutlined />} onClick={() => navigate('/models')}>
+                  模型绑定
+                </Button>
+              )}
+            >
+              <Space direction="vertical" size={20} style={{ width: '100%' }}>
+                <Alert
+                  type="info"
+                  showIcon
+                  message="项目级 RAG-Anything 配置"
+                  description="这里的设置会影响当前实例下知识库后续的上传解析、重建索引和检索。修改 Embedding 后，已有文档如果要完全切换向量空间，需要重新索引。"
+                />
+
+                {!runtimeConfig && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="暂时无法读取项目配置"
+                    description="请稍后刷新页面后重试。"
+                  />
+                )}
+
+                {runtimeConfig && ragBindingOptions.length <= 1 && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="还没有可选的模型绑定"
+                    description="先去模型页面配置至少一个可用 binding，知识库页面才能分别选择 RAG 的 LLM 和 Embedding 通道。"
+                  />
+                )}
+
+                <div className="studio-form-grid knowledge-settings-shell">
+                  <Row gutter={[24, 24]}>
+                    <Col xs={24} md={12}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">RAG LLM 绑定</Text>
+                        <Select
+                          value={ragSettings.llmBinding}
+                          onChange={(value) => updateRagSettings('llmBinding', value)}
+                          options={ragBindingOptions}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">RAG LLM 模型</Text>
+                        <Input
+                          value={ragSettings.llmModel}
+                          onChange={(e) => updateRagSettings('llmModel', e.target.value)}
+                          placeholder="留空则跟随所选 binding 或默认 Agent 模型"
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">Embedding 绑定</Text>
+                        <Select
+                          value={ragSettings.embeddingBinding}
+                          onChange={(value) => updateRagSettings('embeddingBinding', value)}
+                          options={ragBindingOptions}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">Embedding 模型</Text>
+                        <Input
+                          value={ragSettings.embeddingModel}
+                          onChange={(e) => updateRagSettings('embeddingModel', e.target.value)}
+                          placeholder="例如 text-embedding-3-large"
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">Embedding 维度</Text>
+                        <InputNumber
+                          min={1}
+                          value={ragSettings.embeddingDim}
+                          onChange={(value) => updateRagSettings('embeddingDim', Number(value) || 3072)}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">Embedding Max Tokens</Text>
+                        <InputNumber
+                          min={1}
+                          value={ragSettings.embeddingMaxTokens}
+                          onChange={(value) => updateRagSettings('embeddingMaxTokens', Number(value) || 8192)}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">解析器</Text>
+                        <Select
+                          value={ragSettings.parser}
+                          onChange={(value) => updateRagSettings('parser', value)}
+                          options={[
+                            { label: '自动（默认优先 MinerU）', value: 'auto' },
+                            { label: 'MinerU', value: 'mineru' },
+                            { label: 'Docling', value: 'docling' },
+                          ]}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">解析模式</Text>
+                        <Select
+                          value={ragSettings.parseMethod}
+                          onChange={(value) => updateRagSettings('parseMethod', value)}
+                          options={[
+                            { label: '自动', value: 'auto' },
+                            { label: 'TXT', value: 'txt' },
+                            { label: 'OCR', value: 'ocr' },
+                          ]}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </Col>
+                    <Col span={24}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">MinerU API 地址</Text>
+                        <Input
+                          value={ragSettings.mineruApiBase}
+                          onChange={(e) => updateRagSettings('mineruApiBase', e.target.value)}
+                          placeholder="http://127.0.0.1:30000"
+                          disabled={ragSettings.parser === 'docling'}
+                        />
+                        <Text type="secondary" className="knowledge-meta-text">
+                          填写后会以 MinerU HTTP client 模式解析文档；使用 Docling 时这里不会生效。
+                        </Text>
+                      </div>
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">图片处理</Text>
+                        <Switch
+                          checked={ragSettings.enableImageProcessing}
+                          onChange={(checked) => updateRagSettings('enableImageProcessing', checked)}
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">表格处理</Text>
+                        <Switch
+                          checked={ragSettings.enableTableProcessing}
+                          onChange={(checked) => updateRagSettings('enableTableProcessing', checked)}
+                        />
+                      </div>
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <div className="studio-form-field">
+                        <Text type="secondary">公式处理</Text>
+                        <Switch
+                          checked={ragSettings.enableEquationProcessing}
+                          onChange={(checked) => updateRagSettings('enableEquationProcessing', checked)}
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+
+                <Space wrap>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    onClick={() => void handleSaveRagSettings()}
+                    loading={savingRagSettings}
+                    disabled={!runtimeConfig}
+                  >
+                    保存 RAG 配置
+                  </Button>
+                  <Button icon={<SettingOutlined />} onClick={() => navigate('/models')}>
+                    打开模型绑定
+                  </Button>
+                </Space>
+              </Space>
+            </Card>
+          </Space>
         )
       default:
         return null

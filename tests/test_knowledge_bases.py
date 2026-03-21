@@ -6,6 +6,7 @@ from pathlib import Path
 
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
+from tests.knowledge_test_utils import FakeRAGEngine
 
 
 def _make_instance(tmp_path: Path) -> PlatformInstance:
@@ -22,6 +23,7 @@ def test_knowledge_base_service_crud_ingest_and_retrieve(tmp_path) -> None:
         KnowledgeBaseStore(instance.knowledge_db_path()),
         instance=instance,
         instance_id=instance.id,
+        rag_engine=FakeRAGEngine(),
     )
 
     created = service.create_knowledge_base(
@@ -93,6 +95,7 @@ def test_knowledge_base_service_delete_documents(tmp_path) -> None:
         KnowledgeBaseStore(instance.knowledge_db_path()),
         instance=instance,
         instance_id=instance.id,
+        rag_engine=FakeRAGEngine(),
     )
 
     created = service.create_knowledge_base({"name": "Support KB"})
@@ -132,6 +135,7 @@ def test_knowledge_base_service_sources_backfill_and_sync(tmp_path) -> None:
         KnowledgeBaseStore(instance.knowledge_db_path()),
         instance=instance,
         instance_id=instance.id,
+        rag_engine=FakeRAGEngine(),
     )
 
     created = service.create_knowledge_base({"name": "Support KB"})

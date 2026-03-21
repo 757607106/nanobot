@@ -461,13 +461,23 @@ vi.mock('antd', async () => {
     </button>
   )
 
-  const Card = ({ title, extra, children, actions, className }: Props) => (
-    <section className={className}>
-      {title}
-      {extra}
-      {children}
-      {actions?.map((action, index) => <div key={index}>{action}</div>)}
-    </section>
+  const Card = Object.assign(
+    ({ title, extra, children, actions, className, onClick }: Props) => (
+      <section className={className} onClick={onClick}>
+        {title}
+        {extra}
+        {children}
+        {actions?.map((action, index) => <div key={index}>{action}</div>)}
+      </section>
+    ),
+    {
+      Meta: ({ title, description }: Props) => (
+        <div>
+          <div>{title}</div>
+          <div>{description}</div>
+        </div>
+      ),
+    },
   )
 
   const InputBase = React.forwardRef<HTMLInputElement, Props>((props, ref) => {
@@ -977,12 +987,23 @@ function makeConfig() {
       defaults: {
         workspace: '/tmp/workspace',
         model: 'deepseek/deepseek-chat',
+        binding: 'deepseek-default',
         provider: 'deepseek',
         maxTokens: 4096,
         contextWindowTokens: 128000,
         temperature: 0.7,
         maxToolIterations: 12,
         reasoningEffort: 'medium',
+      },
+    },
+    modelBindings: {
+      'deepseek-default': {
+        provider: 'deepseek',
+        label: 'DeepSeek 默认',
+        model: 'deepseek/deepseek-chat',
+        apiKey: 'sk-test',
+        apiBase: 'https://api.deepseek.com',
+        extraHeaders: {},
       },
     },
     providers: {
@@ -1024,6 +1045,20 @@ function makeConfig() {
         },
       },
       mcpServers: {},
+    },
+    rag: {
+      llmBinding: 'deepseek-default',
+      llmModel: 'deepseek/deepseek-chat',
+      embeddingBinding: '',
+      embeddingModel: 'text-embedding-3-large',
+      embeddingDim: 3072,
+      embeddingMaxTokens: 8192,
+      parser: 'mineru',
+      mineruApiBase: 'http://127.0.0.1:30000',
+      parseMethod: 'auto',
+      enableImageProcessing: true,
+      enableTableProcessing: true,
+      enableEquationProcessing: true,
     },
   }
 }
@@ -1710,11 +1745,10 @@ describe('web app smoke pages', () => {
         retrievalProfile: {
           mode: 'hybrid',
           topK: 8,
-          chunkTopK: 20,
           chunkSize: 800,
           chunkOverlap: 120,
           citationRequired: true,
-          rerankEnabled: false,
+          vlmEnhanced: false,
           metadataFilters: {},
         },
       },
@@ -1730,11 +1764,10 @@ describe('web app smoke pages', () => {
       retrievalProfile: {
         mode: 'hybrid',
         topK: 8,
-        chunkTopK: 20,
         chunkSize: 800,
         chunkOverlap: 120,
         citationRequired: true,
-        rerankEnabled: false,
+        vlmEnhanced: false,
         metadataFilters: {},
       },
     })
@@ -2163,11 +2196,10 @@ describe('web app smoke pages', () => {
       retrievalProfile: {
         mode: 'hybrid',
         topK: 8,
-        chunkTopK: 20,
         chunkSize: 800,
         chunkOverlap: 120,
         citationRequired: true,
-        rerankEnabled: false,
+        vlmEnhanced: false,
         metadataFilters: {},
       },
     })
@@ -2182,11 +2214,10 @@ describe('web app smoke pages', () => {
       retrievalProfile: {
         mode: 'hybrid',
         topK: 8,
-        chunkTopK: 20,
         chunkSize: 800,
         chunkOverlap: 120,
         citationRequired: true,
-        rerankEnabled: false,
+        vlmEnhanced: false,
         metadataFilters: {},
       },
     })
@@ -2698,6 +2729,11 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('文档管理')).toBeInTheDocument()
     expect(screen.getByText('添加文档')).toBeInTheDocument()
     expect(screen.getByText('文档名称')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('设置'))
+    expect(await screen.findByText('RAG 引擎配置')).toBeInTheDocument()
+    expect(screen.getByText('RAG LLM 绑定')).toBeInTheDocument()
+    expect(screen.getByText('MinerU API 地址')).toBeInTheDocument()
   })
 
   it('renders teams page with catalog and team run panels', async () => {
@@ -3003,10 +3039,14 @@ describe('web app smoke pages', () => {
 
   it('renders the models page', async () => {
     renderPage(<ModelsPage />)
-    expect(await screen.findByText('默认运行')).toBeInTheDocument()
+    expect(await screen.findByText('模型供应商')).toBeInTheDocument()
+    expect(screen.getByText('保存所有配置')).toBeInTheDocument()
+    expect(screen.getByText('DeepSeek')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('DeepSeek'))
+    expect(await screen.findByText('云端供应商全局凭据')).toBeInTheDocument()
+    expect(screen.getByText('已注册模型')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /添加模型/i })).toBeInTheDocument()
     expect(screen.getAllByText('模型供应商').length).toBeGreaterThan(0)
-    expect(screen.getByText('默认运行')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /新增绑定/i }).length).toBeGreaterThan(0)
   })
 
   it('renders the channels page', async () => {

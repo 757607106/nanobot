@@ -54,6 +54,8 @@ dependencies = [
     "PyYAML>=6.0.2,<7.0.0",
     "openpyxl>=3.1.0,<4.0.0",
     "Pillow>=10.0.0,<12.0.0",
+    "raganything>=0.3.0",
+    "lightrag-hku>=1.0.0",
 ]
 
 [project.optional-dependencies]

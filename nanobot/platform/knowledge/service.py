@@ -1,7 +1,13 @@
-"""Service layer for the first embedded enterprise knowledge base slice."""
+"""Service layer for the first embedded enterprise knowledge base slice.
+
+Refactored to use RAG-Anything / LightRAG as the core retrieval engine.
+Old FTS5 chunk-based retrieval has been replaced with knowledge-graph +
+vector-graph fusion retrieval.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import hashlib
 import io
@@ -12,14 +18,14 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import chardet
 import httpx
-from lxml import html as lxml_html
 from loguru import logger
 from openpyxl import load_workbook
 from readability import Document as ReadabilityDocument
+from lxml import html as lxml_html
 
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge.models import (
@@ -33,14 +39,10 @@ from nanobot.platform.knowledge.models import (
     now_iso,
 )
 from nanobot.platform.knowledge.store import KnowledgeBaseStore
-from nanobot.platform.search_scoring import (
-    build_preview,
-    normalize_mode,
-    normalize_query_tokens,
-    retrieval_score,
-    score_threshold,
-)
 from nanobot.utils.helpers import ensure_dir, safe_filename
+
+if TYPE_CHECKING:
+    from nanobot.platform.knowledge.rag_engine import RAGEngine
 
 
 class KnowledgeBaseNotFoundError(KeyError):
@@ -69,30 +71,93 @@ def _short_id(prefix: str) -> str:
 
 
 class KnowledgeBaseService:
-    """Instance-scoped knowledge base CRUD, ingest, and retrieval service."""
+    """Instance-scoped knowledge base CRUD, ingest, and retrieval service.
+
+    Uses RAGEngine (RAG-Anything / LightRAG) for document parsing, knowledge
+    graph construction, and retrieval.  The SQLite store retains metadata
+    (knowledge bases, documents, sources, jobs) but no longer stores chunks.
+    """
 
     def __init__(
         self,
         store: KnowledgeBaseStore,
         *,
-        instance: PlatformInstance,
-        instance_id: str,
+        instance: PlatformInstance | None = None,
+        instance_id: str = "default",
         tenant_id: str = "default",
-        max_background_jobs: int = 2,
-    ):
+        rag_engine: RAGEngine | None = None,
+        max_background_jobs: int = 5,
+    ) -> None:
         self.store = store
         self.instance = instance
         self.instance_id = instance_id
         self.tenant_id = tenant_id
+        self.rag_engine = rag_engine
+        self._retired_rag_engines: list[RAGEngine] = []
+        self._rag_engine_lock = Lock()
         self._executor = ThreadPoolExecutor(
             max_workers=max(1, max_background_jobs),
             thread_name_prefix=f"knowledge-{instance_id}",
         )
         self._futures: set[Future[Any]] = set()
         self._futures_lock = Lock()
+        
+        # Dedicated background event loop for running async RAGEngine operations from sync threads.
+        # LightRAG maintains long-lived async primitives (queues, locks) so they MUST live in one loop.
+        import threading
+        self._loop = asyncio.new_event_loop()
+        self._loop_thread = threading.Thread(
+            target=self._execute_loop, 
+            name=f"KGLoop-{instance_id}", 
+            daemon=True
+        )
+        self._loop_thread.start()
+
+    def _execute_loop(self) -> None:
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
+    def _run_async(self, coro: Any) -> Any:
+        """Run an async coroutine on the dedicated background loop."""
+        if not self._loop.is_running():
+            raise RuntimeError("Knowledge base background event loop is not running.")
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result()
 
     def shutdown(self) -> None:
+        engines_to_shutdown: list[RAGEngine] = []
+        with self._rag_engine_lock:
+            if self.rag_engine is not None:
+                engines_to_shutdown.append(self.rag_engine)
+            engines_to_shutdown.extend(self._retired_rag_engines)
+            self._retired_rag_engines = []
+
+        if self._loop.is_running():
+            for engine in engines_to_shutdown:
+                try:
+                    self._run_async(engine.shutdown_async())
+                except Exception:
+                    logger.exception("Knowledge RAG engine shutdown failed")
+        if self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._loop_thread.is_alive():
+            self._loop_thread.join(timeout=1.0)
         self._executor.shutdown(wait=False, cancel_futures=True)
+
+    def set_rag_engine(self, rag_engine: RAGEngine | None) -> None:
+        """Swap the active RAG engine for future knowledge operations.
+
+        Existing background jobs may still be using the previous engine instance,
+        so we retain old engines until service shutdown instead of finalizing them
+        immediately.
+        """
+        with self._rag_engine_lock:
+            current = self.rag_engine
+            if current is rag_engine:
+                return
+            if current is not None:
+                self._retired_rag_engines.append(current)
+            self.rag_engine = rag_engine
 
     def _track_future(self, future: Future[Any]) -> None:
         with self._futures_lock:
@@ -719,65 +784,6 @@ class KnowledgeBaseService:
             raise KnowledgeBaseValidationError("faq_table requires non-empty question/answer pairs.")
         return result
 
-    @staticmethod
-    def _split_text(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
-        paragraphs = [item.strip() for item in re.split(r"\n\s*\n", text) if item.strip()]
-        if not paragraphs:
-            return [text]
-        chunks: list[str] = []
-        current = ""
-        step = max(1, chunk_size - chunk_overlap)
-        for paragraph in paragraphs:
-            candidate = paragraph if not current else f"{current}\n\n{paragraph}"
-            if len(candidate) <= chunk_size:
-                current = candidate
-                continue
-            if current:
-                chunks.append(current)
-            if len(paragraph) <= chunk_size:
-                overlap_prefix = current[-chunk_overlap:].strip() if current and chunk_overlap else ""
-                current = f"{overlap_prefix}\n{paragraph}".strip() if overlap_prefix else paragraph
-                if len(current) <= chunk_size:
-                    continue
-            for start in range(0, len(paragraph), step):
-                piece = paragraph[start:start + chunk_size].strip()
-                if piece:
-                    chunks.append(piece)
-            current = ""
-        if current:
-            chunks.append(current)
-        deduped: list[str] = []
-        for chunk in chunks:
-            if chunk and (not deduped or deduped[-1] != chunk):
-                deduped.append(chunk)
-        return deduped or [text]
-
-    def _build_chunk_rows(
-        self,
-        *,
-        content: str,
-        title: str,
-        profile: KnowledgeRetrievalProfile,
-        faq_items: list[dict[str, Any]] | None = None,
-    ) -> list[dict[str, Any]]:
-        raw_chunks = self._faq_chunks(faq_items) if faq_items else self._split_text(
-            content,
-            chunk_size=profile.chunk_size,
-            chunk_overlap=profile.chunk_overlap,
-        )
-        rows: list[dict[str, Any]] = []
-        for ordinal, chunk in enumerate(raw_chunks, start=1):
-            rows.append(
-                {
-                    "chunk_id": _short_id("chunk"),
-                    "ordinal": ordinal,
-                    "content": chunk,
-                    "metadata": {"title": title, "length": len(chunk)},
-                    "created_at": now_iso(),
-                }
-            )
-        return rows
-
     def _document_paths(self, kb_id: str, doc_id: str, file_name: str | None, source_type: str) -> tuple[Path | None, Path]:
         raw_dir = ensure_dir(self.instance.knowledge_files_dir() / kb_id)
         parsed_dir = ensure_dir(self.instance.knowledge_parsed_dir() / kb_id)
@@ -950,12 +956,11 @@ class KnowledgeBaseService:
         file_name: str,
         mime_type: str | None,
     ) -> None:
-        kb = self.store.get_kb(kb_id)
         document = self.store.get_document(doc_id)
         job = self.store.get_job(job_id)
-        if kb is None or document is None or job is None:
+        if document is None or job is None:
             return
-        phase = "parsing"
+        phase = "kg_building"
         try:
             job = self._start_job(job)
             document = self.store.update_document(
@@ -964,63 +969,43 @@ class KnowledgeBaseService:
             raw_path = Path(document.file_path or "")
             if not raw_path.exists():
                 raise KnowledgeBaseValidationError(f"Uploaded knowledge file missing for document {document.doc_id}.")
-            parsed_text, parser_name, metadata, faq_items = self._parse_file_content(
-                title=document.title,
-                file_name=file_name,
-                mime_type=mime_type,
-                content=raw_path.read_bytes(),
-            )
-            parsed_path = Path(document.parsed_path or self._document_paths(kb_id, doc_id, file_name, "upload_file")[1])
-            parsed_path.write_text(parsed_text, encoding="utf-8")
+            if self.rag_engine is None:
+                raise KnowledgeBaseValidationError("RAGEngine is not configured.")
             document = self.store.update_document(
-                replace(
-                    document,
-                    parser_name=parser_name,
-                    metadata=metadata,
-                    parsed_path=str(parsed_path),
-                    doc_status=KnowledgeDocumentStatus.PARSED,
-                    updated_at=now_iso(),
+                replace(document, doc_status=KnowledgeDocumentStatus.KG_BUILDING, updated_at=now_iso())
+            ) or document
+            result = self._run_async(
+                self.rag_engine.parse_and_index(
+                    kb_id,
+                    str(raw_path),
+                    doc_id=doc_id,
                 )
-            ) or document
-            phase = "indexing"
+            )
+            if not result.success:
+                raise KnowledgeBaseValidationError(f"RAGEngine parse_and_index failed: {result.error}")
             document = self.store.update_document(
-                replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
-            ) or document
-            chunks = self._build_chunk_rows(
-                content=parsed_text,
-                title=document.title,
-                profile=kb.retrieval_profile,
-                faq_items=faq_items,
-            )
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=document.title,
-                chunks=chunks,
-            )
-            self.store.update_document(
                 replace(
                     document,
+                    parser_name=result.parser_name,
+                    metadata=result.metadata,
+                    chunk_count=int((result.metadata or {}).get("chunks_count") or document.chunk_count or 0),
                     doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
                     error_summary=None,
                     updated_at=now_iso(),
                 )
-            )
+            ) or document
             self._refresh_source_from_document(document)
             self._finish_job(job)
         except Exception as exc:
             message = str(exc)
+            error_status = {
+                "parsing": KnowledgeDocumentStatus.ERROR_PARSING,
+                "kg_building": KnowledgeDocumentStatus.ERROR_KG,
+            }.get(phase, KnowledgeDocumentStatus.ERROR_INDEXING)
             self.store.update_document(
                 replace(
                     document,
-                    doc_status=(
-                        KnowledgeDocumentStatus.ERROR_INDEXING
-                        if phase == "indexing"
-                        else KnowledgeDocumentStatus.ERROR_PARSING
-                    ),
+                    doc_status=error_status,
                     error_summary=message,
                     updated_at=now_iso(),
                 )
@@ -1028,10 +1013,9 @@ class KnowledgeBaseService:
             self._finish_job(job, error_summary=message)
 
     def _run_url_job(self, kb_id: str, doc_id: str, job_id: str) -> None:
-        kb = self.store.get_kb(kb_id)
         document = self.store.get_document(doc_id)
         job = self.store.get_job(job_id)
-        if kb is None or document is None or job is None:
+        if document is None or job is None:
             return
         phase = "parsing"
         try:
@@ -1041,53 +1025,57 @@ class KnowledgeBaseService:
             ) or document
             url = self._normalize_text(document.source_uri, required=True, field_name="url")
             parsed_text, detected_title, parser_name = self._parse_url(url)
-            parsed_path = Path(document.parsed_path or self._document_paths(kb_id, doc_id, "web-url.md", "web_url")[1])
-            parsed_path.write_text(parsed_text, encoding="utf-8")
             title = document.title or detected_title or url
             document = self.store.update_document(
                 replace(
                     document,
                     title=title,
                     parser_name=parser_name,
-                    parsed_path=str(parsed_path),
                     doc_status=KnowledgeDocumentStatus.PARSED,
                     updated_at=now_iso(),
                 )
             ) or document
-            phase = "indexing"
+
+            if self.rag_engine is None:
+                raise KnowledgeBaseValidationError("RAGEngine is not configured.")
+            if document.parsed_path:
+                Path(document.parsed_path).write_text(f"{parsed_text}\n", encoding="utf-8")
+
+            phase = "kg_building"
             document = self.store.update_document(
-                replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
+                replace(document, doc_status=KnowledgeDocumentStatus.KG_BUILDING, updated_at=now_iso())
             ) or document
-            chunks = self._build_chunk_rows(content=parsed_text, title=title, profile=kb.retrieval_profile)
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=title,
-                chunks=chunks,
+            result = self._run_async(
+                self.rag_engine.insert_text(
+                    kb_id,
+                    parsed_text,
+                    doc_id=doc_id,
+                    file_path=url,
+                )
             )
-            self.store.update_document(
+            if not result.success:
+                raise KnowledgeBaseValidationError(f"RAGEngine insert_text failed: {result.error}")
+            document = self.store.update_document(
                 replace(
                     document,
+                    chunk_count=int((result.metadata or {}).get("chunks_count") or document.chunk_count or 0),
                     doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
                     error_summary=None,
                     updated_at=now_iso(),
                 )
-            )
+            ) or document
             self._refresh_source_from_document(document)
             self._finish_job(job)
         except Exception as exc:
             message = str(exc)
+            error_status = {
+                "parsing": KnowledgeDocumentStatus.ERROR_PARSING,
+                "kg_building": KnowledgeDocumentStatus.ERROR_KG,
+            }.get(phase, KnowledgeDocumentStatus.ERROR_INDEXING)
             self.store.update_document(
                 replace(
                     document,
-                    doc_status=(
-                        KnowledgeDocumentStatus.ERROR_INDEXING
-                        if phase == "indexing"
-                        else KnowledgeDocumentStatus.ERROR_PARSING
-                    ),
+                    doc_status=error_status,
                     error_summary=message,
                     updated_at=now_iso(),
                 )
@@ -1095,10 +1083,9 @@ class KnowledgeBaseService:
             self._finish_job(job, error_summary=message)
 
     def _run_faq_job(self, kb_id: str, doc_id: str, job_id: str) -> None:
-        kb = self.store.get_kb(kb_id)
         document = self.store.get_document(doc_id)
         job = self.store.get_job(job_id)
-        if kb is None or document is None or job is None:
+        if document is None or job is None:
             return
         phase = "indexing"
         try:
@@ -1110,51 +1097,54 @@ class KnowledgeBaseService:
             if not isinstance(items, list):
                 raise KnowledgeBaseValidationError("faq_table requires an 'items' list.")
             parsed_text = "\n\n".join(self._faq_chunks(items))
-            parsed_path = Path(document.parsed_path or self._document_paths(kb_id, doc_id, "faq.json", "faq_table")[1])
-            parsed_path.write_text(parsed_text, encoding="utf-8")
             document = self.store.update_document(
                 replace(
                     document,
-                    parsed_path=str(parsed_path),
                     parser_name="faq_table",
                     doc_status=KnowledgeDocumentStatus.PARSED,
                     updated_at=now_iso(),
                 )
             ) or document
+
+            if self.rag_engine is None:
+                raise KnowledgeBaseValidationError("RAGEngine is not configured.")
+            if document.parsed_path:
+                Path(document.parsed_path).write_text(f"{parsed_text}\n", encoding="utf-8")
+
+            phase = "kg_building"
             document = self.store.update_document(
-                replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
+                replace(document, doc_status=KnowledgeDocumentStatus.KG_BUILDING, updated_at=now_iso())
             ) or document
-            chunks = self._build_chunk_rows(
-                content=parsed_text,
-                title=document.title,
-                profile=kb.retrieval_profile,
-                faq_items=items,
+            result = self._run_async(
+                self.rag_engine.insert_text(
+                    kb_id,
+                    parsed_text,
+                    doc_id=doc_id,
+                    file_path=document.title or document.file_name or "faq.json",
+                )
             )
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=document.title,
-                chunks=chunks,
-            )
-            self.store.update_document(
+            if not result.success:
+                raise KnowledgeBaseValidationError(f"RAGEngine insert_text failed: {result.error}")
+            document = self.store.update_document(
                 replace(
                     document,
+                    chunk_count=int((result.metadata or {}).get("chunks_count") or document.chunk_count or 0),
                     doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
                     error_summary=None,
                     updated_at=now_iso(),
                 )
-            )
+            ) or document
             self._refresh_source_from_document(document)
             self._finish_job(job)
         except Exception as exc:
             message = str(exc)
+            error_status = {
+                "kg_building": KnowledgeDocumentStatus.ERROR_KG,
+            }.get(phase, KnowledgeDocumentStatus.ERROR_INDEXING)
             self.store.update_document(
                 replace(
                     document,
-                    doc_status=KnowledgeDocumentStatus.ERROR_INDEXING,
+                    doc_status=error_status,
                     error_summary=message,
                     updated_at=now_iso(),
                 )
@@ -1437,48 +1427,28 @@ class KnowledgeBaseService:
             job = self._create_job(kb_id, doc_id)
             try:
                 job = self._start_job(job)
+                if self.rag_engine is None:
+                    raise KnowledgeBaseValidationError("RAGEngine is not configured.")
                 document = self.store.update_document(
-                    replace(document, doc_status=KnowledgeDocumentStatus.PARSING, updated_at=now_iso())
+                    replace(document, doc_status=KnowledgeDocumentStatus.KG_BUILDING, updated_at=now_iso())
                 ) or document
-                parsed_text, parser_name, metadata, faq_items = self._parse_file_content(
-                    title=document.title,
-                    file_name=file_name,
-                    mime_type=mime_type,
-                    content=bytes(content),
-                )
-                parsed_path.write_text(parsed_text, encoding="utf-8")
-                document = self.store.update_document(
-                    replace(
-                        document,
-                        parser_name=parser_name,
-                        metadata=metadata,
-                        parsed_path=str(parsed_path),
-                        doc_status=KnowledgeDocumentStatus.PARSED,
-                        updated_at=now_iso(),
+                result = self._run_async(
+                    self.rag_engine.parse_and_index(
+                        kb_id,
+                        str(raw_path or ""),
+                        doc_id=doc_id,
                     )
-                ) or document
-                document = self.store.update_document(
-                    replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
-                ) or document
-                chunks = self._build_chunk_rows(
-                    content=parsed_text,
-                    title=document.title,
-                    profile=kb.retrieval_profile,
-                    faq_items=faq_items,
                 )
-                self.store.replace_chunks(
-                    tenant_id=self.tenant_id,
-                    instance_id=self.instance_id,
-                    kb_id=kb_id,
-                    doc_id=doc_id,
-                    title=document.title,
-                    chunks=chunks,
-                )
+                if not result.success:
+                    raise KnowledgeBaseValidationError(f"RAGEngine parse_and_index failed: {result.error}")
                 document = self.store.update_document(
                     replace(
                         document,
+                        parser_name=result.parser_name,
+                        metadata=result.metadata,
+                        chunk_count=int((result.metadata or {}).get("chunks_count") or document.chunk_count or 0),
                         doc_status=KnowledgeDocumentStatus.INDEXED,
-                        chunk_count=len(chunks),
+                        error_summary=None,
                         updated_at=now_iso(),
                     )
                 ) or document
@@ -1488,11 +1458,7 @@ class KnowledgeBaseService:
                 document = self.store.update_document(
                     replace(
                         document,
-                        doc_status=(
-                            KnowledgeDocumentStatus.ERROR_INDEXING
-                            if document.doc_status == KnowledgeDocumentStatus.INDEXING
-                            else KnowledgeDocumentStatus.ERROR_PARSING
-                        ),
+                        doc_status=KnowledgeDocumentStatus.ERROR_KG,
                         error_summary=message,
                         updated_at=now_iso(),
                     )
@@ -1531,7 +1497,6 @@ class KnowledgeBaseService:
                 replace(document, doc_status=KnowledgeDocumentStatus.PARSING, updated_at=now_iso())
             ) or document
             parsed_text, detected_title, parser_name = self._parse_url(url)
-            parsed_path.write_text(parsed_text, encoding="utf-8")
             title = title_override or detected_title or url
             document = self.store.update_document(
                 replace(
@@ -1542,23 +1507,31 @@ class KnowledgeBaseService:
                     updated_at=now_iso(),
                 )
             ) or document
+
+            if self.rag_engine is None:
+                raise KnowledgeBaseValidationError("RAGEngine is not configured.")
+            if document.parsed_path:
+                Path(document.parsed_path).write_text(f"{parsed_text}\n", encoding="utf-8")
+
             document = self.store.update_document(
-                replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
+                replace(document, doc_status=KnowledgeDocumentStatus.KG_BUILDING, updated_at=now_iso())
             ) or document
-            chunks = self._build_chunk_rows(content=parsed_text, title=title, profile=kb.retrieval_profile)
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=title,
-                chunks=chunks,
+            result = self._run_async(
+                self.rag_engine.insert_text(
+                    kb_id,
+                    parsed_text,
+                    doc_id=doc_id,
+                    file_path=url,
+                )
             )
+            if not result.success:
+                raise KnowledgeBaseValidationError(f"RAGEngine insert_text failed: {result.error}")
             document = self.store.update_document(
                 replace(
                     document,
+                    chunk_count=int((result.metadata or {}).get("chunks_count") or document.chunk_count or 0),
                     doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
+                    error_summary=None,
                     updated_at=now_iso(),
                 )
             ) or document
@@ -1568,7 +1541,7 @@ class KnowledgeBaseService:
             document = self.store.update_document(
                 replace(
                     document,
-                    doc_status=KnowledgeDocumentStatus.ERROR_PARSING,
+                    doc_status=KnowledgeDocumentStatus.ERROR_KG,
                     error_summary=message,
                     updated_at=now_iso(),
                 )
@@ -1589,7 +1562,6 @@ class KnowledgeBaseService:
         if raw_path is not None:
             raw_path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
         parsed_text = "\n\n".join(faq_items)
-        parsed_path.write_text(parsed_text, encoding="utf-8")
         document = self.store.insert_document(
             KnowledgeDocument(
                 doc_id=doc_id,
@@ -1613,28 +1585,29 @@ class KnowledgeBaseService:
             document = self.store.update_document(
                 replace(document, doc_status=KnowledgeDocumentStatus.PARSED, updated_at=now_iso())
             ) or document
+            if self.rag_engine is None:
+                raise KnowledgeBaseValidationError("RAGEngine is not configured.")
+            if parsed_path:
+                parsed_path.write_text(f"{parsed_text}\n", encoding="utf-8")
             document = self.store.update_document(
-                replace(document, doc_status=KnowledgeDocumentStatus.INDEXING, updated_at=now_iso())
+                replace(document, doc_status=KnowledgeDocumentStatus.KG_BUILDING, updated_at=now_iso())
             ) or document
-            chunks = self._build_chunk_rows(
-                content=parsed_text,
-                title=title,
-                profile=kb.retrieval_profile,
-                faq_items=items,
+            result = self._run_async(
+                self.rag_engine.insert_text(
+                    kb_id,
+                    parsed_text,
+                    doc_id=doc_id,
+                    file_path=title,
+                )
             )
-            self.store.replace_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_id=kb_id,
-                doc_id=doc_id,
-                title=title,
-                chunks=chunks,
-            )
+            if not result.success:
+                raise KnowledgeBaseValidationError(f"RAGEngine insert_text failed: {result.error}")
             document = self.store.update_document(
                 replace(
                     document,
+                    chunk_count=int((result.metadata or {}).get("chunks_count") or document.chunk_count or 0),
                     doc_status=KnowledgeDocumentStatus.INDEXED,
-                    chunk_count=len(chunks),
+                    error_summary=None,
                     updated_at=now_iso(),
                 )
             ) or document
@@ -1644,80 +1617,13 @@ class KnowledgeBaseService:
             document = self.store.update_document(
                 replace(
                     document,
-                    doc_status=KnowledgeDocumentStatus.ERROR_INDEXING,
+                    doc_status=KnowledgeDocumentStatus.ERROR_KG,
                     error_summary=message,
                     updated_at=now_iso(),
                 )
             ) or document
             job = self._finish_job(job, error_summary=message)
         return {"documents": [document.to_dict()], "jobs": [job.to_dict()]}
-
-    @staticmethod
-    def _build_match_query(query: str) -> str:
-        terms = normalize_query_tokens(query)
-        if not terms:
-            return query.strip()
-        return " OR ".join(f'"{term}"' for term in terms[:8])
-
-    @staticmethod
-    def _build_prefix_match_query(query: str) -> str:
-        terms = normalize_query_tokens(query)
-        if not terms:
-            return query.strip()
-        parts: list[str] = []
-        for term in terms[:8]:
-            variants = {term}
-            for suffix in ("ing", "ed", "es", "s"):
-                if len(term) > len(suffix) + 2 and term.endswith(suffix):
-                    variants.add(term[: -len(suffix)])
-            for variant in sorted(variants):
-                if len(variant) >= 3:
-                    parts.append(f"{variant}*")
-                else:
-                    parts.append(f'"{variant}"')
-        return " OR ".join(parts)
-
-    @staticmethod
-    def _row_retrieval_score(row: dict[str, Any], *, mode: str, query: str, query_tokens: list[str]) -> float:
-        text = "\n".join(
-            part
-            for part in [str(row.get("title") or "").strip(), str(row.get("content") or "").strip()]
-            if part
-        )
-        base_score = retrieval_score(mode, query, text, query_tokens=query_tokens)
-        raw_rank = float(row.get("rank") or 0.0)
-        fts_score = 0.0 if raw_rank == 0.0 else round(1.0 / (1.0 + abs(raw_rank)), 6)
-        if mode == "keyword":
-            return max(base_score, fts_score)
-        if mode == "hybrid":
-            return round((base_score * 0.8) + (fts_score * 0.2), 6)
-        return base_score
-
-    @staticmethod
-    def _apply_filters(rows: list[dict[str, Any]], filters: dict[str, Any]) -> list[dict[str, Any]]:
-        if not filters:
-            return rows
-        doc_id = str(filters.get("doc_id") or filters.get("docId") or "").strip()
-        source_type = str(filters.get("source_type") or filters.get("sourceType") or "").strip()
-        locale = str(filters.get("locale") or "").strip()
-        tags = filters.get("tags") or []
-        normalized_tags = {str(item).strip() for item in tags if str(item).strip()} if isinstance(tags, list) else set()
-
-        result: list[dict[str, Any]] = []
-        for row in rows:
-            doc_metadata = json.loads(row.get("document_metadata_json") or "{}")
-            if doc_id and row["doc_id"] != doc_id:
-                continue
-            if source_type and row["source_type"] != source_type:
-                continue
-            if locale and str(doc_metadata.get("locale") or "") != locale:
-                continue
-            if normalized_tags:
-                doc_tags = {str(item).strip() for item in doc_metadata.get("tags") or [] if str(item).strip()}
-                if not normalized_tags.intersection(doc_tags):
-                    continue
-            result.append(row)
-        return result
 
     def retrieve(
         self,
@@ -1731,80 +1637,113 @@ class KnowledgeBaseService:
         bindings = self.resolve_bound_kbs(kb_ids)
         if not query.strip():
             raise KnowledgeBaseValidationError("query is required.")
+
         if not bindings:
-            requested = normalize_mode(requested_mode, default="hybrid")
+            requested = str(requested_mode or "hybrid").strip().lower() or "hybrid"
             return {"hits": [], "requestedMode": requested, "effectiveMode": requested}
+
         primary_profile = bindings[0].retrieval_profile
-        requested = normalize_mode(requested_mode, default=normalize_mode(primary_profile.mode, default="hybrid"))
+        requested = str(requested_mode or primary_profile.mode or "hybrid").strip().lower() or "hybrid"
         effective_limit = max(1, min(int(limit or primary_profile.top_k), 20))
-        query_tokens = normalize_query_tokens(query)
         kb_binding_ids = [kb.kb_id for kb in bindings]
-        pool_limit = max(primary_profile.chunk_top_k * 4, effective_limit * 6, 40)
-        candidate_rows: dict[str, dict[str, Any]] = {}
-
-        match_queries = [self._build_match_query(query)]
-        if requested in {"semantic", "hybrid"}:
-            prefix_query = self._build_prefix_match_query(query)
-            if prefix_query and prefix_query not in match_queries:
-                match_queries.append(prefix_query)
-
-        for match_query in match_queries:
-            if not match_query:
-                continue
-            for row in self.store.search_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_ids=kb_binding_ids,
-                query_text=match_query,
-                limit=pool_limit,
-            ):
-                candidate_rows.setdefault(row["chunk_id"], row)
-
-        if requested in {"semantic", "hybrid"}:
-            for row in self.store.list_chunks(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                kb_ids=kb_binding_ids,
-                limit=max(primary_profile.chunk_top_k * 10, effective_limit * 12, 120),
-            ):
-                candidate_rows.setdefault(row["chunk_id"], row)
-
-        rows = list(candidate_rows.values())
-        filtered_rows = self._apply_filters(rows, filters or primary_profile.metadata_filters)
         kb_lookup = {kb.kb_id: kb for kb in bindings}
+
+        indexed_docs: list[KnowledgeDocument] = []
+        for kb in bindings:
+            indexed_docs.extend(
+                [
+                    item
+                    for item in self.store.list_documents(kb.kb_id)
+                    if item.doc_status == KnowledgeDocumentStatus.INDEXED
+                ]
+            )
+        if not indexed_docs:
+            return {
+                "hits": [],
+                "requestedMode": requested,
+                "effectiveMode": requested,
+                "filters": filters or primary_profile.metadata_filters,
+            }
+
+        if self.rag_engine is None:
+            return {
+                "hits": [],
+                "requestedMode": requested,
+                "effectiveMode": requested,
+                "filters": filters or primary_profile.metadata_filters,
+                "error": "RAGEngine is not configured.",
+            }
+
+        doc_by_reference: dict[str, KnowledgeDocument] = {}
+        for document in indexed_docs:
+            for candidate in (
+                document.file_path,
+                Path(document.file_path).name if document.file_path else None,
+                document.file_name,
+                document.source_uri,
+                document.title,
+            ):
+                normalized = str(candidate or "").strip()
+                if normalized and normalized not in doc_by_reference:
+                    doc_by_reference[normalized] = document
+
+        try:
+            rag_hits = self._run_async(
+                self.rag_engine.query(
+                    kb_ids=kb_binding_ids,
+                    query_text=query,
+                    mode=requested,
+                    top_k=effective_limit,
+                    vlm_enhanced=primary_profile.vlm_enhanced,
+                )
+            )
+        except Exception as exc:
+            logger.warning("RAGEngine query failed: {}", exc)
+            return {
+                "hits": [],
+                "requestedMode": requested,
+                "effectiveMode": requested,
+                "filters": filters or primary_profile.metadata_filters,
+                "error": str(exc),
+            }
+
         hits: list[dict[str, Any]] = []
-        for row in filtered_rows:
-            kb = kb_lookup.get(row["kb_id"])
-            metadata = json.loads(row.get("metadata_json") or "{}")
-            score = self._row_retrieval_score(row, mode=requested, query=query, query_tokens=query_tokens)
-            if score <= score_threshold(requested):
-                continue
-            preview = build_preview(row["content"], query_tokens, width=240)
+        for hit in rag_hits:
+            kb = kb_lookup.get(hit.source or "")
+            metadata = dict(hit.metadata or {})
+            reference_path = str(metadata.get("file_path") or "").strip()
+            reference_doc = (
+                doc_by_reference.get(reference_path)
+                or doc_by_reference.get(Path(reference_path).name if reference_path else "")
+            )
+            title = (
+                reference_doc.title
+                if reference_doc is not None
+                else (Path(reference_path).name if reference_path else (kb.name if kb else hit.source))
+            )
             hits.append(
                 {
-                    "chunkId": row["chunk_id"],
-                    "kbId": row["kb_id"],
-                    "kbName": kb.name if kb else row["kb_id"],
-                    "docId": row["doc_id"],
-                    "title": row["title"],
-                    "content": row["content"],
-                    "preview": preview,
-                    "score": score,
+                    "kbId": hit.source,
+                    "kbName": kb.name if kb else hit.source,
+                    "docId": reference_doc.doc_id if reference_doc is not None else None,
+                    "title": title,
+                    "content": hit.content,
+                    "score": hit.score,
                     "metadata": metadata,
                     "citation": {
-                        "kbId": row["kb_id"],
-                        "kbName": kb.name if kb else row["kb_id"],
-                        "docId": row["doc_id"],
-                        "title": row["title"],
-                        "sourceType": row["source_type"],
-                        "sourceUri": row["source_uri"],
-                        "fileName": row["file_name"],
-                        "mimeType": row["mime_type"],
-                        "chunkOrdinal": row["ordinal"],
+                        "kbId": hit.source,
+                        "kbName": kb.name if kb else hit.source,
+                        "docId": reference_doc.doc_id if reference_doc is not None else None,
+                        "title": title,
+                        "sourceType": reference_doc.source_type if reference_doc is not None else None,
+                        "sourceUri": reference_doc.source_uri if reference_doc is not None else reference_path or None,
+                        "fileName": reference_doc.file_name if reference_doc is not None else None,
+                        "mimeType": reference_doc.mime_type if reference_doc is not None else None,
+                        "chunkOrdinal": None,
                     },
                 }
             )
-        hits.sort(key=lambda item: (item["score"], item["title"]), reverse=True)
+
         return {
             "hits": hits[:effective_limit],
             "requestedMode": requested,

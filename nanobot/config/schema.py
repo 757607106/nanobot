@@ -175,6 +175,7 @@ class ModelBindingConfig(ProviderConfig):
     provider: str = ""
     label: str = ""
     model: str | None = None
+    capability_type: Literal["text_chat", "embedding", "multimodal"] = "text_chat"
 
 
 class ProvidersConfig(Base):
@@ -266,6 +267,23 @@ class ToolsConfig(Base):
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
+class RAGConfig(Base):
+    """RAG engine configuration for LightRAG / RAG-Anything."""
+
+    llm_binding: str | None = None  # Named model binding for RAG LLM / VLM calls; None follows the default agent binding
+    llm_model: str = ""  # Optional LLM model override for RAG queries and extraction
+    embedding_binding: str | None = None  # Named model binding for embedding requests; None follows the RAG/default binding
+    embedding_model: str = "text-embedding-3-large"  # Embedding model name
+    embedding_dim: int = 3072  # Embedding dimensions
+    embedding_max_tokens: int = 8192  # Max token size for embedding
+    parser: str = "auto"  # Document parser: auto, mineru, docling, paddleocr
+    mineru_api_base: str = ""  # MinerU API endpoint (remote/API mode, no GPU needed)
+    parse_method: str = "auto"  # Parse method: auto, ocr, txt
+    enable_image_processing: bool = True  # Process images in documents
+    enable_table_processing: bool = True  # Process tables in documents
+    enable_equation_processing: bool = True  # Process equations in documents
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
 
@@ -275,6 +293,7 @@ class Config(BaseSettings):
     model_bindings: dict[str, ModelBindingConfig] = Field(default_factory=dict)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    rag: RAGConfig = Field(default_factory=RAGConfig)
 
     @property
     def workspace_path(self) -> Path:
@@ -555,6 +574,10 @@ class Config(BaseSettings):
 
         if self.agents.defaults.binding and self.agents.defaults.binding not in self.model_bindings:
             self.agents.defaults.binding = None
+        if self.rag.llm_binding and self.rag.llm_binding not in self.model_bindings:
+            self.rag.llm_binding = None
+        if self.rag.embedding_binding and self.rag.embedding_binding not in self.model_bindings:
+            self.rag.embedding_binding = None
 
         if not self.agents.defaults.binding:
             preferred_provider = str(self.agents.defaults.provider or "").strip()

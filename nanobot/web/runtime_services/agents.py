@@ -74,10 +74,10 @@ class WebAgentRuntimeService:
 
     def _retrieve_bound_knowledge(self, agent: dict[str, Any], task: str) -> dict[str, Any]:
         if not self.state.app_knowledge:
-            return {"hits": [], "requestedMode": "keyword", "effectiveMode": "keyword"}
+            return {"hits": [], "requestedMode": "hybrid", "effectiveMode": "hybrid"}
         kb_ids = list(agent.get("knowledgeBindingIds") or [])
         if not kb_ids:
-            return {"hits": [], "requestedMode": "keyword", "effectiveMode": "keyword"}
+            return {"hits": [], "requestedMode": "hybrid", "effectiveMode": "hybrid"}
         return self.state.app_knowledge.retrieve(kb_ids=kb_ids, query=task, limit=6)
 
     def _validate_agent_bindings(

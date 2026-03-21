@@ -21,6 +21,7 @@ from nanobot.platform.agents import AgentDefinitionStore
 from nanobot.platform.runs import RunControlScope, RunKind
 from nanobot.providers.base import LLMResponse, ToolCallRequest
 from nanobot.session.manager import SessionManager
+from tests.knowledge_test_utils import FakeRAGEngine
 from nanobot.web.api import create_app, run_server
 from nanobot.web import operations as web_operations
 
@@ -94,7 +95,7 @@ def _wait_for_knowledge_ingest(
         if (
             last_document
             and last_job
-            and last_document["docStatus"] in {"indexed", "error_parsing", "error_indexing"}
+            and last_document["docStatus"] in {"indexed", "error_parsing", "error_indexing", "error_kg"}
             and last_job["status"] in {"succeeded", "failed"}
         ):
             return last_document, last_job
@@ -108,6 +109,11 @@ def _wait_for_knowledge_ingest(
 @pytest.fixture
 def anonymous_web_client(tmp_path, monkeypatch):
     config = _make_test_config(tmp_path, monkeypatch)
+    monkeypatch.setattr("nanobot.web.app.create_rag_engine_from_config", lambda config, instance_dir: FakeRAGEngine())
+    monkeypatch.setattr(
+        "nanobot.web.runtime_services.config.create_rag_engine_from_config",
+        lambda config, instance_dir: FakeRAGEngine(),
+    )
 
     app = create_app(config, static_dir=tmp_path / "missing-static")
     with TestClient(app) as client:
@@ -2633,6 +2639,78 @@ def test_web_api_config_meta_uses_provider_registry(web_client: TestClient) -> N
     assert any(item["name"] == "ollama" and item["category"] == "local" for item in providers)
     assert any(item["name"] == "openai_codex" and item["category"] == "oauth" for item in providers)
     assert payload["resolvedProvider"] == "auto"
+
+
+def test_web_api_config_update_rebuilds_knowledge_rag_engine(
+    web_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _HotSwapEngine:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        async def shutdown_async(self) -> None:
+            return None
+
+    created: list[_HotSwapEngine] = []
+
+    def _build_engine(config: Config, instance_dir: Path) -> _HotSwapEngine:
+        engine = _HotSwapEngine(f"engine-{len(created) + 1}")
+        created.append(engine)
+        assert config.rag.llm_binding == "rag-llm"
+        assert config.rag.embedding_binding == "rag-embedding"
+        assert config.rag.mineru_api_base == "http://127.0.0.1:30000"
+        return engine
+
+    monkeypatch.setattr(
+        "nanobot.web.runtime_services.config.create_rag_engine_from_config",
+        _build_engine,
+    )
+
+    old_engine = web_client.app.state.web.app_knowledge.rag_engine
+    payload = web_client.get("/api/v1/config").json()["data"]
+    payload["modelBindings"] = {
+        "rag-llm": {
+            "provider": "moonshot",
+            "label": "Kimi",
+            "model": "moonshot/kimi-k2.5",
+            "apiKey": "sk-rag-llm",
+            "apiBase": "https://api.moonshot.cn/v1",
+            "extraHeaders": {},
+        },
+        "rag-embedding": {
+            "provider": "openai",
+            "label": "OpenAI Embedding",
+            "model": "text-embedding-3-large",
+            "apiKey": "sk-rag-embed",
+            "apiBase": "https://api.openai.com/v1",
+            "extraHeaders": {},
+        },
+    }
+    payload["rag"] = {
+        "llmBinding": "rag-llm",
+        "llmModel": "moonshot/kimi-k2.5",
+        "embeddingBinding": "rag-embedding",
+        "embeddingModel": "text-embedding-3-large",
+        "embeddingDim": 3072,
+        "embeddingMaxTokens": 8192,
+        "parser": "mineru",
+        "mineruApiBase": "http://127.0.0.1:30000",
+        "parseMethod": "auto",
+        "enableImageProcessing": True,
+        "enableTableProcessing": True,
+        "enableEquationProcessing": True,
+    }
+
+    response = web_client.put("/api/v1/config", json=payload)
+
+    assert response.status_code == 200
+    assert len(created) == 1
+    assert web_client.app.state.web.app_knowledge.rag_engine is created[0]
+    assert old_engine in web_client.app.state.web.app_knowledge._retired_rag_engines
+    assert response.json()["data"]["rag"]["llmBinding"] == "rag-llm"
+    assert response.json()["data"]["rag"]["embeddingBinding"] == "rag-embedding"
+    assert response.json()["data"]["rag"]["mineruApiBase"] == "http://127.0.0.1:30000"
 
 
 def test_web_api_model_binding_test_endpoint_uses_current_payload(web_client: TestClient) -> None:
