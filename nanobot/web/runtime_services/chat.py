@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from nanobot.agent.loop import AgentLoop
+from nanobot.chat_payload import normalize_chat_attachments
 from nanobot.session.manager import Session
 
 if TYPE_CHECKING:
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
 
 class WebChatRuntimeService:
     """Encapsulates chat sessions, uploads, and MCP test chat helpers."""
+
+    SESSION_FILES_METADATA_KEY = "chatFiles"
 
     def __init__(self, state: WebAppState):
         self.state = state
@@ -43,6 +46,10 @@ class WebChatRuntimeService:
         key = item["key"]
         session_id = key.split(":", 1)[1] if ":" in key else key
         title = item.get("title") or cls.default_title()
+        metadata = item.get("metadata", {}) or {}
+        file_count = item.get("file_count")
+        if file_count is None:
+            file_count = len(normalize_chat_attachments(metadata.get(cls.SESSION_FILES_METADATA_KEY) or []))
         return {
             "id": session_id,
             "sessionId": session_id,
@@ -50,6 +57,7 @@ class WebChatRuntimeService:
             "createdAt": item.get("created_at"),
             "updatedAt": item.get("updated_at"),
             "messageCount": item.get("message_count", 0),
+            "fileCount": file_count,
         }
 
     @staticmethod
@@ -68,6 +76,9 @@ class WebChatRuntimeService:
             payload["toolCallId"] = message["tool_call_id"]
         if message.get("name"):
             payload["name"] = message["name"]
+        attachments = normalize_chat_attachments(message.get("attachments") or [])
+        if attachments:
+            payload["attachments"] = attachments
         return payload
 
     @staticmethod
@@ -81,6 +92,59 @@ class WebChatRuntimeService:
             "sizeBytes": stat.st_size,
             "uploadedAt": uploaded_at,
         }
+
+    def resolve_workspace_file(self, relative_path: str) -> dict[str, Any]:
+        raw_relative_path = str(relative_path or "").strip()
+        if not raw_relative_path:
+            raise ValueError("File path is required.")
+
+        candidate = Path(raw_relative_path)
+        if candidate.is_absolute():
+            try:
+                candidate = candidate.relative_to(self.state.config.workspace_path)
+            except ValueError as exc:
+                raise ValueError("File must stay inside the workspace.") from exc
+
+        workspace_root = self.state.config.workspace_path.resolve()
+        resolved = (workspace_root / candidate).resolve()
+        try:
+            resolved.relative_to(workspace_root)
+        except ValueError as exc:
+            raise ValueError("File must stay inside the workspace.") from exc
+
+        if not resolved.exists() or not resolved.is_file():
+            raise ValueError("Referenced file does not exist.")
+
+        return self.format_upload_item(resolved, workspace_root)
+
+    @staticmethod
+    def collect_message_attachment_refs(session: Session) -> list[dict[str, Any]]:
+        attachments: list[dict[str, Any]] = []
+        for message in session.messages:
+            attachments.extend(normalize_chat_attachments(message.get("attachments") or []))
+        return normalize_chat_attachments(attachments)
+
+    def get_session_file_refs(self, session: Session) -> list[dict[str, Any]]:
+        session_files = normalize_chat_attachments(session.metadata.get(self.SESSION_FILES_METADATA_KEY) or [])
+        if session_files:
+            return session_files
+
+        migrated_files = self.collect_message_attachment_refs(session)
+        if migrated_files:
+            session.metadata[self.SESSION_FILES_METADATA_KEY] = migrated_files
+            self.state.sessions.save(session)
+        return migrated_files
+
+    def set_session_file_refs(self, session: Session, attachments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized = normalize_chat_attachments(attachments)
+        session.metadata[self.SESSION_FILES_METADATA_KEY] = normalized
+        self.state.sessions.save(session)
+        return normalized
+
+    def add_session_file_refs(self, session: Session, attachments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        current = self.get_session_file_refs(session)
+        merged = normalize_chat_attachments([*current, *attachments])
+        return self.set_session_file_refs(session, merged)
 
     def list_sessions(self, page: int = 1, page_size: int = 20) -> dict[str, Any]:
         items = [
@@ -165,6 +229,40 @@ class WebChatRuntimeService:
         destination.write_bytes(content)
         return self.format_upload_item(destination, self.state.config.workspace_path)
 
+    def get_session_files(self, session_id: str) -> list[dict[str, Any]]:
+        session = self.state.sessions.get_or_create(self.session_key(session_id))
+        return self.get_session_file_refs(session)
+
+    def upload_chat_file_to_session(self, session_id: str, file_name: str, content: bytes) -> dict[str, Any]:
+        uploaded = self.upload_chat_file(file_name, content)
+        session = self.require_session(session_id)
+        self.add_session_file_refs(session, [uploaded])
+        return uploaded
+
+    def import_session_files(
+        self,
+        session_id: str,
+        attachments: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        session = self.require_session(session_id)
+        resolved = [
+            self.resolve_workspace_file(str(item.get("relativePath") or item.get("path") or ""))
+            for item in normalize_chat_attachments(attachments)
+        ]
+        return self.add_session_file_refs(session, resolved)
+
+    def remove_session_file(self, session_id: str, relative_path: str) -> list[dict[str, Any]]:
+        session = self.require_session(session_id)
+        target = str(relative_path or "").strip()
+        if not target:
+            raise ValueError("File path is required.")
+        remaining = [
+            item
+            for item in self.get_session_file_refs(session)
+            if str(item.get("relativePath") or item.get("path") or "") != target
+        ]
+        return self.set_session_file_refs(session, remaining)
+
     def list_chat_uploads(self, limit: int = 6) -> list[dict[str, Any]]:
         upload_dir = self.state.config.workspace_path / "uploads"
         if not upload_dir.exists():
@@ -206,6 +304,7 @@ class WebChatRuntimeService:
             "createdAt": session.created_at.isoformat(),
             "updatedAt": session.updated_at.isoformat(),
             "messageCount": len(session.messages),
+            "fileCount": len(self.get_session_file_refs(session)),
         }
 
     def format_recent_tool_activity(
@@ -309,12 +408,22 @@ class WebChatRuntimeService:
 
     def get_chat_workspace(self) -> dict[str, Any]:
         active_mcp = self.list_active_mcp()
+        defaults = self.state.config.agents.defaults
+        resolved_provider = self.state.config.get_provider_name(defaults.model) or defaults.provider
+        resolved_binding = self.state.config.get_binding_name(defaults.model) or defaults.binding
         return {
             "generatedAt": datetime.now().isoformat(),
             "runtime": {
                 "workspace": str(self.state.config.workspace_path),
-                "provider": self.state.config.agents.defaults.provider,
-                "model": self.state.config.agents.defaults.model,
+                "provider": defaults.provider,
+                "resolvedProvider": resolved_provider,
+                "resolvedBinding": resolved_binding,
+                "model": defaults.model,
+                "reasoningEffort": defaults.reasoning_effort,
+                "maxToolIterations": defaults.max_tool_iterations,
+                "restrictToWorkspace": self.state.config.tools.restrict_to_workspace,
+                "sendProgress": self.state.config.channels.send_progress,
+                "sendToolHints": self.state.config.channels.send_tool_hints,
                 "status": "ready",
                 "enabledChannels": self.list_enabled_channels(),
                 "activeMcpCount": len(active_mcp),
@@ -420,18 +529,30 @@ class WebChatRuntimeService:
         session_id: str,
         content: str,
         on_progress,
+        *,
+        display_content: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         key = self.session_key(session_id)
         session = self.state.sessions.get_or_create(key)
         if not session.metadata.get("title"):
-            session.metadata["title"] = self.default_title(content)
+            session.metadata["title"] = self.default_title(display_content or content)
             self.state.sessions.save(session)
+        normalized_attachments = normalize_chat_attachments(attachments)
+        if normalized_attachments:
+            self.add_session_file_refs(session, normalized_attachments)
         response = await self.state.agent.process_direct(
             content=content,
             session_key=key,
             channel="web",
             chat_id=session_id,
             on_progress=on_progress,
+            run_context={
+                "chat_message": {
+                    "display_content": display_content or content,
+                    "attachments": normalized_attachments,
+                },
+            },
         )
         return {
             "content": response,

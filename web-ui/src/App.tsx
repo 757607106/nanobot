@@ -193,6 +193,16 @@ function SetupOnly({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+function LegacyKnowledgeRedirect() {
+  const location = useLocation()
+  return (
+    <Navigate
+      to={`${location.pathname.replace('/studio/knowledge', '/knowledge')}${location.search}${location.hash}`}
+      replace
+    />
+  )
+}
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -232,6 +242,9 @@ export function AppRoutes() {
         </Route>
         <Route path="channels/:channelName" element={withRouteSuspense(<ChannelDetailPage />)} />
         <Route path="models" element={withRouteSuspense(<ModelsPage />)} />
+        <Route path="knowledge" element={withRouteSuspense(<KnowledgePage />)} />
+        <Route path="knowledge/new" element={withRouteSuspense(<KnowledgePage />)} />
+        <Route path="knowledge/:kbId" element={withRouteSuspense(<KnowledgePage />)} />
         <Route path="studio" element={withRouteSuspense(<StudioLayoutPage />)}>
           <Route index element={<Navigate to="agents" replace />} />
           <Route path="agents" element={withRouteSuspense(<AgentsPage />)} />
@@ -247,12 +260,9 @@ export function AppRoutes() {
             element={withRouteSuspense(<RunsPage />)}
           />
           <Route path="runs/:runId" element={withRouteSuspense(<RunsPage />)} />
-          <Route
-            path="knowledge"
-            element={withRouteSuspense(<KnowledgePage />)}
-          />
-          <Route path="knowledge/new" element={withRouteSuspense(<KnowledgePage />)} />
-          <Route path="knowledge/:kbId" element={withRouteSuspense(<KnowledgePage />)} />
+          <Route path="knowledge" element={<LegacyKnowledgeRedirect />} />
+          <Route path="knowledge/new" element={<LegacyKnowledgeRedirect />} />
+          <Route path="knowledge/:kbId" element={<LegacyKnowledgeRedirect />} />
         </Route>
         <Route path="mcp" element={withRouteSuspense(<McpPage />)} />
         <Route path="mcp/:serverName" element={withRouteSuspense(<McpServerDetailPage />)} />

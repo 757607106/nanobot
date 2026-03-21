@@ -6,6 +6,7 @@ import {
   ApartmentOutlined,
   BookOutlined,
   ClusterOutlined,
+  DatabaseOutlined,
   DashboardOutlined,
   DesktopOutlined,
   LogoutOutlined,
@@ -51,7 +52,7 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
         {
           key: '/dashboard',
           icon: <DashboardOutlined />,
-          label: '仪表板',
+          label: '看板',
           sectionLabel: '工作区',
           testId: testIds.app.navDashboard,
         },
@@ -100,6 +101,13 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
           label: devMode ? 'MCP 扩展' : '连接',
           sectionLabel: '构建',
           testId: testIds.app.navMcp,
+        },
+        {
+          key: '/knowledge',
+          icon: <DatabaseOutlined />,
+          label: '知识库',
+          sectionLabel: '构建',
+          testId: testIds.app.navKnowledge,
         },
         // 暂时隐藏“行为引导”页面入口，保留实现便于后续恢复。
         // {

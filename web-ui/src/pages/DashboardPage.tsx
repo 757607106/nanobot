@@ -135,7 +135,7 @@ export default function DashboardPage() {
       setCron(cronData)
       setSessions(sessionsData)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载仪表板概览失败')
+      message.error(error instanceof Error ? error.message : '加载看板概览失败')
     } finally {
       setLoading(false)
     }
@@ -145,6 +145,7 @@ export default function DashboardPage() {
     <div className="page-stack">
       <section className="chat-dashboard-shell">
         <div className="chat-dashboard-topbar">
+          <div className="chat-dashboard-title-chip">看板</div>
         </div>
 
         <div className="chat-dashboard-stats-grid">

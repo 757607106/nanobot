@@ -20,6 +20,7 @@ from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.platform.agents import AgentDefinitionStore
 from nanobot.platform.runs import RunControlScope, RunKind
 from nanobot.providers.base import LLMResponse, ToolCallRequest
+from nanobot.session.manager import SessionManager
 from nanobot.web.api import create_app, run_server
 from nanobot.web import operations as web_operations
 
@@ -1209,9 +1210,26 @@ def test_web_api_chat_upload_and_dispatch(web_client: TestClient, monkeypatch) -
     assert upload_data["relativePath"].startswith("uploads/")
     assert Path(upload_data["path"]).exists()
 
-    async def fake_chat(session_id_arg: str, content: str, on_progress):
+    async def fake_chat(
+        session_id_arg: str,
+        content: str,
+        on_progress,
+        *,
+        display_content: str | None = None,
+        attachments: list[dict[str, object]] | None = None,
+    ):
         assert session_id_arg == session_id
-        assert content == "review the uploaded file"
+        assert content == "[附加文件]\n- uploads/brief.txt\n\n[用户问题]\nreview the uploaded file"
+        assert display_content == "review the uploaded file"
+        assert attachments == [
+            {
+                "name": upload_data["name"],
+                "path": upload_data["path"],
+                "relativePath": upload_data["relativePath"],
+                "sizeBytes": upload_data["sizeBytes"],
+                "uploadedAt": upload_data["uploadedAt"],
+            }
+        ]
         await on_progress("checking uploads")
         return {
             "content": "Saw the uploaded file.",
@@ -1222,10 +1240,69 @@ def test_web_api_chat_upload_and_dispatch(web_client: TestClient, monkeypatch) -
 
     dispatched = web_client.post(
         f"/api/v1/chat/sessions/{session_id}/messages",
-        json={"content": "review the uploaded file"},
+        json={
+            "content": "[附加文件]\n- uploads/brief.txt\n\n[用户问题]\nreview the uploaded file",
+            "displayContent": "review the uploaded file",
+            "attachments": [
+                {
+                    "name": upload_data["name"],
+                    "path": upload_data["path"],
+                    "relativePath": upload_data["relativePath"],
+                    "sizeBytes": upload_data["sizeBytes"],
+                    "uploadedAt": upload_data["uploadedAt"],
+                }
+            ],
+        },
     )
     assert dispatched.status_code == 200
     assert dispatched.json()["data"]["content"] == "Saw the uploaded file."
+
+
+def test_web_api_session_files_are_scoped_to_session(web_client: TestClient) -> None:
+    created = web_client.post("/api/v1/chat/sessions", json={"title": "Scoped Files"})
+    assert created.status_code == 201
+    session_id = created.json()["data"]["id"]
+
+    uploaded = web_client.post(
+        f"/api/v1/chat/sessions/{session_id}/uploads",
+        files={"file": ("brief.txt", b"conversation file", "text/plain")},
+    )
+    assert uploaded.status_code == 201
+    uploaded_data = uploaded.json()["data"]
+    assert uploaded_data["uploadedFile"]["relativePath"].startswith("uploads/")
+    assert len(uploaded_data["sessionFiles"]) == 1
+
+    listed = web_client.get(f"/api/v1/chat/sessions/{session_id}/files")
+    assert listed.status_code == 200
+    assert listed.json()["data"][0]["relativePath"] == uploaded_data["uploadedFile"]["relativePath"]
+
+    library_upload = web_client.post(
+        "/api/v1/chat/uploads",
+        files={"file": ("logs.txt", b"older library file", "text/plain")},
+    )
+    assert library_upload.status_code == 201
+    library_item = library_upload.json()["data"]
+
+    imported = web_client.post(
+        f"/api/v1/chat/sessions/{session_id}/files/import",
+        json={"attachments": [library_item]},
+    )
+    assert imported.status_code == 200
+    assert len(imported.json()["data"]["sessionFiles"]) == 2
+
+    removed = web_client.request(
+        "DELETE",
+        f"/api/v1/chat/sessions/{session_id}/files",
+        json={"relativePath": uploaded_data["uploadedFile"]["relativePath"]},
+    )
+    assert removed.status_code == 200
+    remaining_files = removed.json()["data"]["sessionFiles"]
+    assert len(remaining_files) == 1
+    assert remaining_files[0]["relativePath"] == library_item["relativePath"]
+
+    sessions = web_client.get("/api/v1/chat/sessions")
+    assert sessions.status_code == 200
+    assert sessions.json()["data"]["items"][0]["fileCount"] == 1
 
 
 def test_web_api_chat_workspace_snapshot(web_client: TestClient) -> None:
@@ -1269,11 +1346,36 @@ def test_web_api_chat_workspace_snapshot(web_client: TestClient) -> None:
     data = snapshot.json()["data"]
     assert data["runtime"]["workspace"].endswith("workspace")
     assert data["runtime"]["provider"] == web_client.app.state.web.config.agents.defaults.provider
+    assert data["runtime"]["resolvedProvider"] == (
+        web_client.app.state.web.config.get_provider_name(web_client.app.state.web.config.agents.defaults.model)
+        or web_client.app.state.web.config.agents.defaults.provider
+    )
     assert data["runtime"]["activeMcpCount"] == 1
     assert data["recentUploads"][0]["relativePath"].startswith("uploads/")
     assert data["recentToolActivity"][0]["toolName"] == "read_file"
     assert data["activeMcp"][0]["name"] == "filesystem"
     assert len(data["quickPrompts"]) >= 1
+
+
+def test_session_history_rebuilds_attachment_prompt_from_structured_fields(tmp_path) -> None:
+    manager = SessionManager(tmp_path)
+    session = manager.get_or_create("web:test")
+    session.add_message(
+        "user",
+        "请检查附件里的报错",
+        attachments=[
+            {
+                "name": "brief.txt",
+                "relativePath": "uploads/brief.txt",
+                "path": str(tmp_path / "uploads" / "brief.txt"),
+            }
+        ],
+    )
+
+    history = session.get_history(max_messages=20)
+
+    assert history[0]["role"] == "user"
+    assert history[0]["content"] == "[附加文件]\n- uploads/brief.txt\n\n[用户问题]\n请检查附件里的报错"
 
 
 def test_web_api_health_and_session_crud(web_client: TestClient) -> None:

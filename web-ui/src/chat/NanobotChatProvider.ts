@@ -41,7 +41,11 @@ async function fetchChatStream(
     },
     credentials: 'include',
     signal: options.signal,
-    body: JSON.stringify({ content: query }),
+    body: JSON.stringify({
+      content: query,
+      displayContent: requestParams.displayContent,
+      attachments: requestParams.attachments || [],
+    }),
   })
 
   if (!response.ok) {

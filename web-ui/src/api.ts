@@ -24,6 +24,7 @@ import type {
   ChannelProbeResult,
   ChatMessage,
   ChatResponse,
+  ChatSessionFilesMutationResult,
   ChatUploadItem,
   ChatWorkspaceData,
   ConfigMeta,
@@ -295,6 +296,23 @@ export const api = {
       method: 'POST',
       body: formData,
       skipJsonContentType: true,
+    }),
+  getSessionFiles: (sessionId: string) => request<ChatUploadItem[]>(`/chat/sessions/${sessionId}/files`),
+  uploadSessionChatFile: (sessionId: string, formData: FormData) =>
+    request<ChatSessionFilesMutationResult>(`/chat/sessions/${sessionId}/uploads`, {
+      method: 'POST',
+      body: formData,
+      skipJsonContentType: true,
+    }),
+  importSessionFiles: (sessionId: string, attachments: ChatUploadItem[]) =>
+    request<ChatSessionFilesMutationResult>(`/chat/sessions/${sessionId}/files/import`, {
+      method: 'POST',
+      body: JSON.stringify({ attachments }),
+    }),
+  removeSessionFile: (sessionId: string, relativePath: string) =>
+    request<ChatSessionFilesMutationResult>(`/chat/sessions/${sessionId}/files`, {
+      method: 'DELETE',
+      body: JSON.stringify({ relativePath }),
     }),
   createSession: (title?: string) =>
     request<SessionSummary>('/chat/sessions', {

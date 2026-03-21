@@ -80,6 +80,11 @@ type BindingEntry = {
   suggestions: string[]
 }
 
+type ProviderIconAsset = {
+  src?: string
+  fallback: string
+}
+
 const bindingPresets: BindingPreset[] = [
   {
     key: 'deepseek-official',
@@ -140,26 +145,39 @@ const bindingPresets: BindingPreset[] = [
   },
 ]
 
-const providerIcons: Record<string, string> = {
-  anthropic: '🟠',
-  openai: '🟢',
-  openrouter: '🔵',
-  deepseek: '🐋',
-  volcengine: '🌋',
-  groq: '⚡',
-  zhipu: '🧠',
-  dashscope: '☁️',
-  vllm: '🖥️',
-  gemini: '💎',
-  moonshot: '🌙',
-  minimax: '🔮',
-  aihubmix: '🎛️',
-  azure_openai: '🪟',
-  custom: '⚙️',
+const providerIcons: Record<string, ProviderIconAsset> = {
+  anthropic: { src: '/provider-logos/Anthropic.png', fallback: '🟠' },
+  openai: { src: '/provider-logos/openai.png', fallback: '🟢' },
+  openrouter: { fallback: '🔵' },
+  deepseek: { src: '/provider-logos/DeepSeek.png', fallback: '🐋' },
+  volcengine: { src: '/provider-logos/volcengine-color.png', fallback: '🌋' },
+  volcengine_coding_plan: { src: '/provider-logos/volcengine-color.png', fallback: '🌋' },
+  groq: { fallback: '⚡' },
+  zhipu: { src: '/provider-logos/qingyan-color.png', fallback: '🧠' },
+  dashscope: { src: encodeURI('/provider-logos/百炼.png'), fallback: '☁️' },
+  vllm: { fallback: '🖥️' },
+  ollama: { src: '/provider-logos/ollama.png', fallback: '🦙' },
+  gemini: { src: '/provider-logos/Gemini.png', fallback: '💎' },
+  moonshot: { fallback: '🌙' },
+  minimax: { fallback: '🔮' },
+  aihubmix: { fallback: '🎛️' },
+  azure_openai: { src: '/provider-logos/openai.png', fallback: '🪟' },
+  siliconflow: { src: '/provider-logos/stability-color.png', fallback: '🫧' },
+  openai_codex: { src: '/provider-logos/codex-color.png', fallback: '⌘' },
+  custom: { fallback: '⚙️' },
 }
 
-function getProviderIcon(providerName: string) {
-  return providerIcons[providerName] ?? '🤖'
+function renderProviderIcon(providerName: string, className?: string) {
+  const icon = providerIcons[providerName] ?? { fallback: '🤖' }
+  const nextClassName = ['models-provider-emoji', className, icon.src ? 'has-image' : '']
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <span className={nextClassName} aria-hidden="true">
+      {icon.src ? <img className="models-provider-icon-image" src={icon.src} alt="" /> : icon.fallback}
+    </span>
+  )
 }
 
 function isBindingConfigured(providerMeta: ProviderMeta, binding: ModelBinding) {
@@ -891,9 +909,7 @@ export default function ModelsPage() {
 
               <div className="models-provider-preview-shell">
                 <div className="models-provider-preview-brand">
-                  <span className="models-provider-emoji models-provider-emoji-large">
-                    {getProviderIcon(defaultBindingMeta?.name || defaultBinding?.provider || '')}
-                  </span>
+                  {renderProviderIcon(defaultBindingMeta?.name || defaultBinding?.provider || '', 'models-provider-emoji-large')}
                   <div className="models-provider-preview-copy">
                     <strong>{defaultBinding?.label || '尚未设置默认 binding'}</strong>
                     <span>{defaultBindingMeta ? defaultBindingMeta.label : '未设置默认 binding'}</span>
@@ -1059,9 +1075,7 @@ export default function ModelsPage() {
                         onClick={() => toggleProvider(providerRow.meta.name)}
                       >
                         <div className="models-provider-row-main">
-                          <span className="models-provider-emoji models-provider-row-emoji">
-                            {getProviderIcon(providerRow.meta.name)}
-                          </span>
+                          {renderProviderIcon(providerRow.meta.name, 'models-provider-row-emoji')}
                           <span className="models-provider-row-name">{providerRow.meta.label}</span>
                         </div>
                         <div className="models-provider-row-side">

@@ -91,11 +91,18 @@ def _resolve_static_dir() -> Path:
 def _patch_runtime(app) -> None:
     state = app.state.web
 
-    async def fake_chat(session_id: str, content: str, on_progress) -> dict[str, Any]:
+    async def fake_chat(
+        session_id: str,
+        content: str,
+        on_progress,
+        *,
+        display_content: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         session = state.sessions.get_or_create(state._session_key(session_id))
         if not session.metadata.get("title"):
-            session.metadata["title"] = state._default_title(content)
-        session.add_message("user", content)
+            session.metadata["title"] = state._default_title(display_content or content)
+        session.add_message("user", display_content or content, attachments=attachments or [])
         await on_progress("正在读取 E2E 固定回复")
         reply = f"E2E mock 已收到：{content}"
         session.add_message("assistant", reply)

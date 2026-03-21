@@ -9,6 +9,7 @@ from typing import Any
 
 from loguru import logger
 
+from nanobot.chat_payload import build_chat_request_content, normalize_chat_attachments
 from nanobot.config.paths import get_legacy_sessions_dir
 from nanobot.utils.helpers import ensure_dir, safe_filename
 
@@ -85,7 +86,10 @@ class Session:
 
         out: list[dict[str, Any]] = []
         for message in sliced:
-            entry: dict[str, Any] = {"role": message["role"], "content": message.get("content", "")}
+            content = message.get("content", "")
+            if message.get("role") == "user" and isinstance(content, str):
+                content = build_chat_request_content(content, normalize_chat_attachments(message.get("attachments") or []))
+            entry: dict[str, Any] = {"role": message["role"], "content": content}
             for key in ("tool_calls", "tool_call_id", "name"):
                 if key in message:
                     entry[key] = message[key]
@@ -265,6 +269,7 @@ class SessionManager:
 
                     key = data.get("key") or path.stem.replace("_", ":", 1)
                     metadata = data.get("metadata", {}) or {}
+                    file_count = len(normalize_chat_attachments(metadata.get("chatFiles") or []))
                     sessions.append({
                         "key": key,
                         "created_at": data.get("created_at"),
@@ -273,6 +278,7 @@ class SessionManager:
                         "metadata": metadata,
                         "title": metadata.get("title"),
                         "message_count": message_count,
+                        "file_count": file_count,
                     })
             except Exception:
                 continue

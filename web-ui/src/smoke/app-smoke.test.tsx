@@ -26,6 +26,7 @@ const mockApi = vi.hoisted(() => ({
   getAuthStatus: vi.fn(),
   bootstrapAuth: vi.fn(),
   getChatWorkspace: vi.fn(),
+  getSessionFiles: vi.fn(),
   getCalendarEvents: vi.fn(),
   getCalendarJobs: vi.fn(),
   getCalendarSettings: vi.fn(),
@@ -69,6 +70,7 @@ const mockApi = vi.hoisted(() => ({
   rotateProfilePassword: vi.fn(),
   triggerOpsAction: vi.fn(),
   uploadChatFile: vi.fn(),
+  uploadSessionChatFile: vi.fn(),
   uploadProfileAvatar: vi.fn(),
   deleteProfileAvatar: vi.fn(),
   updateProfile: vi.fn(),
@@ -97,11 +99,13 @@ const mockApi = vi.hoisted(() => ({
   reloadAgentTemplates: vi.fn(),
   resetDocument: vi.fn(),
   renameSession: vi.fn(),
+  removeSessionFile: vi.fn(),
   retryTeamRun: vi.fn(),
   retrieveKnowledgeBase: vi.fn(),
   reindexKnowledgeBase: vi.fn(),
   syncKnowledgeSource: vi.fn(),
   installMarketplaceSkill: vi.fn(),
+  importSessionFiles: vi.fn(),
   setAgentEnabled: vi.fn(),
   setTeamEnabled: vi.fn(),
   testRunAgent: vi.fn(),
@@ -1683,7 +1687,14 @@ function makeChatWorkspace() {
     runtime: {
       workspace: '/tmp/workspace',
       provider: 'deepseek',
+      resolvedProvider: 'deepseek',
+      resolvedBinding: 'deepseek-default',
       model: 'deepseek/deepseek-chat',
+      reasoningEffort: 'medium',
+      maxToolIterations: 24,
+      restrictToWorkspace: true,
+      sendProgress: true,
+      sendToolHints: false,
       status: 'ready' as const,
       enabledChannels: ['telegram'],
       activeMcpCount: 1,
@@ -2594,6 +2605,17 @@ describe('web app smoke pages', () => {
     mockApi.updateCalendarEvent.mockResolvedValue(makeCalendarEvents()[0])
     mockApi.deleteCalendarEvent.mockResolvedValue({ deleted: true })
     mockApi.uploadChatFile.mockResolvedValue(makeChatUpload())
+    mockApi.getSessionFiles.mockResolvedValue([makeChatUpload()])
+    mockApi.uploadSessionChatFile.mockResolvedValue({
+      uploadedFile: makeChatUpload(),
+      sessionFiles: [makeChatUpload()],
+    })
+    mockApi.importSessionFiles.mockResolvedValue({
+      sessionFiles: [makeChatUpload()],
+    })
+    mockApi.removeSessionFile.mockResolvedValue({
+      sessionFiles: [],
+    })
     mockApi.triggerOpsAction.mockResolvedValue({
       item: {
         ...makeOpsActions().items[0],
@@ -2822,13 +2844,14 @@ describe('web app smoke pages', () => {
     renderShell()
 
     expect((await screen.findAllByText('工作区')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('仪表板', { selector: '.nav-item-title' })).toBeInTheDocument()
+    expect(await screen.findByText('看板', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(await screen.findByText('对话', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('协作', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('模型', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('渠道', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('技能', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('连接', { selector: '.nav-item-title' })).toBeInTheDocument()
+    expect(screen.getByText('知识库', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.getByText('系统', { selector: '.nav-item-title' })).toBeInTheDocument()
     expect(screen.queryByText('日程', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('定时任务', { selector: '.nav-item-title' })).not.toBeInTheDocument()
@@ -2864,7 +2887,7 @@ describe('web app smoke pages', () => {
     expect(screen.queryByText('渠道绑定')).not.toBeInTheDocument()
     expect(screen.queryByText('记忆')).not.toBeInTheDocument()
     expect(screen.getByText('执行记录')).toBeInTheDocument()
-    expect(screen.getByText('知识库')).toBeInTheDocument()
+    expect(screen.queryByText('知识库')).not.toBeInTheDocument()
     expect(screen.queryByText('模板')).not.toBeInTheDocument()
   })
 
@@ -2901,14 +2924,14 @@ describe('web app smoke pages', () => {
 
     renderWithProviders(
       <MemoryRouter
-        initialEntries={['/studio/knowledge/support-kb']}
+        initialEntries={['/knowledge/support-kb']}
         future={{
           v7_startTransition: true,
           v7_relativeSplatPath: true,
         }}
       >
         <Routes>
-          <Route path="/studio/knowledge/:kbId" element={<KnowledgePage />} />
+          <Route path="/knowledge/:kbId" element={<KnowledgePage />} />
         </Routes>
       </MemoryRouter>,
     )

@@ -26,6 +26,7 @@ from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
+from nanobot.chat_payload import normalize_chat_attachments
 from nanobot.providers.base import LLMProvider
 from nanobot.session.manager import Session, SessionManager
 
@@ -513,7 +514,8 @@ class AgentLoop:
         if final_content is None:
             final_content = "I've completed processing but have no response to give."
 
-        self._save_turn(session, all_msgs, 1 + len(history))
+        chat_context = (run_context or {}).get("chat_message") if isinstance(run_context, dict) else None
+        self._save_turn(session, all_msgs, 1 + len(history), user_message_overrides=chat_context)
         self.sessions.save(session)
         self._schedule_background(self.memory_consolidator.maybe_consolidate_by_tokens(session))
 
@@ -527,9 +529,17 @@ class AgentLoop:
             metadata=msg.metadata or {},
         )
 
-    def _save_turn(self, session: Session, messages: list[dict], skip: int) -> None:
+    def _save_turn(
+        self,
+        session: Session,
+        messages: list[dict],
+        skip: int,
+        user_message_overrides: dict[str, Any] | None = None,
+    ) -> None:
         """Save new-turn messages into session, truncating large tool results."""
         from datetime import datetime
+
+        applied_user_overrides = False
         for m in messages[skip:]:
             entry = dict(m)
             role, content = entry.get("role"), entry.get("content")
@@ -560,6 +570,18 @@ class AgentLoop:
                     if not filtered:
                         continue
                     entry["content"] = filtered
+                if not applied_user_overrides and user_message_overrides:
+                    display_content = str(
+                        user_message_overrides.get("display_content")
+                        or user_message_overrides.get("displayContent")
+                        or entry.get("content")
+                        or ""
+                    ).strip()
+                    attachments = normalize_chat_attachments(user_message_overrides.get("attachments"))
+                    entry["content"] = display_content
+                    if attachments:
+                        entry["attachments"] = attachments
+                    applied_user_overrides = True
             entry.setdefault("timestamp", datetime.now().isoformat())
             session.messages.append(entry)
         session.updated_at = datetime.now()

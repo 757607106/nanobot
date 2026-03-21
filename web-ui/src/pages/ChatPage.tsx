@@ -2,7 +2,6 @@ import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import {
   App,
   Button,
-  Card,
   Empty,
   Input,
   Modal,
@@ -11,8 +10,8 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { Attachments, Bubble, Conversations, Prompts, Sender, ThoughtChain, Welcome } from '@ant-design/x'
-import type { Conversation, PromptProps, ThoughtChainItem } from '@ant-design/x'
+import { Attachments, Bubble, Conversations, Sender, ThoughtChain } from '@ant-design/x'
+import type { Conversation, ThoughtChainItem } from '@ant-design/x'
 import { useXChat, type MessageInfo, type SSEOutput } from '@ant-design/x-sdk'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -48,6 +47,7 @@ import type {
   ChatMessage,
   ChatRequestInput,
   ChatToolCall,
+  ChatUploadItem,
   ChatWorkspaceData,
   SessionSummary,
 } from '../types'
@@ -102,18 +102,70 @@ function getAttachmentName(item: ChatAttachmentRef) {
   return item.name || item.relativePath.split('/').filter(Boolean).pop() || item.relativePath
 }
 
-function appendComposerValue(value: string, next: string) {
-  if (!value.trim()) {
-    return next
-  }
-  return `${value.trim()}\n${next}`
-}
-
 function truncateContent(content: string, limit = TOOL_RESULT_PREVIEW_LIMIT) {
   if (content.length <= limit) {
     return content
   }
   return `${content.slice(0, limit)}\n\n...`
+}
+
+function safeJsonParse(value?: string) {
+  if (!value) {
+    return null
+  }
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return null
+  }
+}
+
+function summarizeValue(value: unknown, limit = 64): string {
+  if (typeof value === 'string') {
+    const compact = value.replace(/\s+/g, ' ').trim()
+    return compact.length > limit ? `${compact.slice(0, limit)}...` : compact
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) {
+    return `${value.length} 项`
+  }
+  if (value && typeof value === 'object') {
+    return '对象'
+  }
+  return '空'
+}
+
+function getToolArgumentsPreview(toolCall: ChatToolCall) {
+  const args = toolCall.function?.arguments
+  if (!args) {
+    return '无参数'
+  }
+
+  const parsed = safeJsonParse(args)
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const preview = Object.entries(parsed as Record<string, unknown>)
+      .slice(0, 3)
+      .map(([key, value]) => `${key}: ${summarizeValue(value)}`)
+      .join(' · ')
+    return preview || '查看参数'
+  }
+
+  const compact = args.replace(/\s+/g, ' ').trim()
+  return compact.length > 120 ? `${compact.slice(0, 120)}...` : compact
+}
+
+function formatToolArgumentsBlock(toolCall: ChatToolCall) {
+  const args = toolCall.function?.arguments
+  if (!args) {
+    return '无参数'
+  }
+  const parsed = safeJsonParse(args)
+  if (parsed) {
+    return JSON.stringify(parsed, null, 2)
+  }
+  return args
 }
 
 function createPendingAttachment(file: File): ComposerAttachment {
@@ -173,66 +225,28 @@ function AttachmentTags({
   )
 }
 
-function RecentUploadActions({
-  uploads,
-  variant = 'inline',
-  onReference,
-  onInsertPath,
-}: {
-  uploads: ChatWorkspaceData['recentUploads']
-  variant?: 'inline' | 'welcome'
-  onReference: (attachment: ChatAttachmentRef) => void
-  onInsertPath: (relativePath: string) => void
-}) {
-  if (!uploads.length) {
-    return null
-  }
-
-  const visibleUploads = uploads.slice(0, variant === 'welcome' ? 4 : 3)
-
-  return (
-    <div className={['chat-recent-uploads', variant === 'welcome' ? 'is-welcome' : 'is-inline'].join(' ')}>
-      <div className="chat-inline-section-head">
-        <span>{variant === 'welcome' ? '从最近文件开始' : '最近文件'}</span>
-      </div>
-      <div className="chat-recent-upload-list">
-        {visibleUploads.map((item) => {
-          const attachment = toChatAttachmentRef(item)
-          return (
-            <Tooltip key={item.relativePath} title={`${item.relativePath} · ${formatFileSize(item.sizeBytes)}`}>
-              <div className="chat-recent-upload-item">
-                <Button size="small" icon={<PaperClipOutlined />} onClick={() => onReference(attachment)}>
-                  {item.name}
-                </Button>
-                <Button size="small" type="text" icon={<LinkOutlined />} onClick={() => onInsertPath(item.relativePath)}>
-                  路径
-                </Button>
-              </div>
-            </Tooltip>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function ToolCallSummary({ toolCalls }: { toolCalls: ChatToolCall[] }) {
+function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
   if (!toolCalls.length) {
     return null
   }
 
   return (
     <div className="chat-message-meta-block">
-      <div className="chat-tool-chip-list">
+      <div className="chat-message-meta-label">工具调用</div>
+      <div className="chat-tool-call-list">
         {toolCalls.map((toolCall, index) => {
           const name = getToolCallName(toolCall)
-          const args = toolCall.function?.arguments
           return (
-            <Tooltip key={`${name}-${index}`} title={args || name}>
-              <Tag icon={<ToolOutlined />} className="chat-tool-chip">
-                {name}
-              </Tag>
-            </Tooltip>
+            <details key={`${name}-${index}`} className="chat-tool-call-card">
+              <summary className="chat-tool-call-summary">
+                <span className="chat-tool-call-title">
+                  <ToolOutlined />
+                  <span>{name}</span>
+                </span>
+                <span className="chat-tool-call-preview">{getToolArgumentsPreview(toolCall)}</span>
+              </summary>
+              <pre className="chat-tool-call-pre">{formatToolArgumentsBlock(toolCall)}</pre>
+            </details>
           )
         })}
       </div>
@@ -264,13 +278,23 @@ function buildThoughtChainItems(
 }
 
 function ToolResultCard({ message }: { message: ChatMessage }) {
+  const fullContent = String(message.content || '')
+  const previewContent = truncateContent(fullContent)
+  const isTruncated = previewContent !== fullContent
+
   return (
     <div className="chat-tool-result-card">
       <div className="chat-tool-result-head">
         <span>{message.name || 'tool'}</span>
         <span>{message.createdAt ? formatDateTimeZh(message.createdAt) : '刚刚'}</span>
       </div>
-      <pre className="chat-tool-result-pre">{truncateContent(String(message.content || ''))}</pre>
+      <pre className="chat-tool-result-pre">{previewContent}</pre>
+      {isTruncated ? (
+        <details className="chat-tool-result-details">
+          <summary className="chat-tool-result-summary">展开完整工具结果</summary>
+          <pre className="chat-tool-result-pre is-expanded">{fullContent}</pre>
+        </details>
+      ) : null}
     </div>
   )
 }
@@ -306,7 +330,7 @@ function MessageBody({ info }: { info: MessageInfo<ChatMessage> }) {
         <div className="chat-loading-copy">正在组织回复与工具执行结果...</div>
       ) : null}
 
-      {message.role === 'assistant' ? <ToolCallSummary toolCalls={message.toolCalls || []} /> : null}
+      {message.role === 'assistant' ? <ToolCallCards toolCalls={message.toolCalls || []} /> : null}
     </div>
   )
 }
@@ -349,12 +373,16 @@ export default function ChatPage() {
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [renameTarget, setRenameTarget] = useState<SessionSummary | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [composerValue, setComposerValue] = useState('')
   const [pendingAttachments, setPendingAttachments] = useState<ComposerAttachment[]>([])
   const [draftAttachmentRefs, setDraftAttachmentRefs] = useState<ChatAttachmentRef[]>([])
+  const [sessionFiles, setSessionFiles] = useState<ChatUploadItem[]>([])
+  const [mutatingSessionFiles, setMutatingSessionFiles] = useState(false)
   const historyRef = useRef<HTMLDivElement | null>(null)
   const chatPanelRef = useRef<HTMLDivElement | null>(null)
   const senderRef = useRef<React.ComponentRef<typeof Sender> | null>(null)
+  const sessionFileInputRef = useRef<HTMLInputElement | null>(null)
   const currentSessionIdRef = useRef<string | null>(null)
   const pendingSyncSessionIdRef = useRef<string | null>(null)
   const shouldSyncSessionRef = useRef(false)
@@ -439,7 +467,10 @@ export default function ChatPage() {
   const selectedSessionUpdatedAt = selectedSession?.updatedAt || selectedSession?.createdAt
   const selectedSessionTitle = selectedSession
     ? getDisplaySessionTitle(selectedSession.title)
-    : '开始一个新的工作区会话'
+    : '开始新对话'
+  const selectedSessionSubtitle = selectedSessionUpdatedAt
+    ? `最近更新 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}`
+    : '发送一条消息，或先上传文件作为对话起点。'
 
   const filteredSessions = useMemo(() => {
     const query = sessionQuery.trim().toLowerCase()
@@ -462,7 +493,10 @@ export default function ChatPage() {
         <div className="conversation-copy">
           <span className="conversation-title">{getDisplaySessionTitle(session.title)}</span>
           <span className="conversation-summary">
-            {session.messageCount} 条消息 · {formatRelativeTimeZh(session.updatedAt || session.createdAt)}
+            {session.messageCount} 条消息
+            {session.fileCount ? ` · ${session.fileCount} 个文件` : ''}
+            {' · '}
+            {formatRelativeTimeZh(session.updatedAt || session.createdAt)}
           </span>
         </div>
       ),
@@ -470,15 +504,8 @@ export default function ChatPage() {
     })) as Conversation[]
   }, [filteredSessions])
 
-  const quickPromptItems = useMemo(() => {
-    return (workspaceData?.quickPrompts || []).map((prompt: string, index: number) => ({
-      key: `prompt-${index}`,
-      icon: <MessageOutlined />,
-      label: prompt,
-      description: '一键填入输入框，作为下一步协作起点。',
-    })) as PromptProps[]
-  }, [workspaceData])
   const recentUploads = workspaceData?.recentUploads || []
+  const showSenderHeader = pendingAttachments.length > 0 || draftAttachmentRefs.length > 0
 
   function buildReloadRequest(messageId: string | number) {
     if (!currentSessionId) {
@@ -596,6 +623,16 @@ export default function ChatPage() {
   }, [currentSessionId])
 
   useEffect(() => {
+    setDraftAttachmentRefs([])
+    setPendingAttachments([])
+    if (!currentSessionId) {
+      setSessionFiles([])
+      return
+    }
+    void loadSessionFiles(currentSessionId)
+  }, [currentSessionId])
+
+  useEffect(() => {
     void loadSessions()
     void refreshWorkspaceData()
   }, [])
@@ -671,19 +708,48 @@ export default function ChatPage() {
           })),
         )
       }
-      await Promise.all([loadSessions(sessionId), refreshWorkspaceData({ quiet: true })])
+      await Promise.all([loadSessions(sessionId), loadSessionFiles(sessionId), refreshWorkspaceData({ quiet: true })])
     } catch (error) {
       message.error(error instanceof Error ? error.message : '同步会话内容失败')
     }
   }
 
+  async function loadSessionFiles(sessionId: string) {
+    try {
+      const files = await api.getSessionFiles(sessionId)
+      setSessionFiles(files)
+      setDraftAttachmentRefs((prev) => prev.filter((item) => files.some((file) => file.relativePath === item.relativePath)))
+    } catch (error) {
+      if (typeof error === 'object' && error && 'status' in error && error.status === 404) {
+        setSessionFiles([])
+        return
+      }
+      message.error(error instanceof Error ? error.message : '加载会话文件失败')
+    }
+  }
+
+  async function createAndSelectSession() {
+    const session = await api.createSession()
+    setSessions((prev) => [session, ...prev])
+    currentSessionIdRef.current = session.id
+    setSessionFiles([])
+    startTransition(() => {
+      setCurrentSessionId(session.id)
+    })
+    return session
+  }
+
+  async function ensureActiveSession() {
+    if (currentSessionIdRef.current) {
+      return currentSessionIdRef.current
+    }
+    const session = await createAndSelectSession()
+    return session.id
+  }
+
   async function handleCreateSession() {
     try {
-      const session = await api.createSession()
-      setSessions((prev) => [session, ...prev])
-      startTransition(() => {
-        setCurrentSessionId(session.id)
-      })
+      await createAndSelectSession()
     } catch (error) {
       message.error(error instanceof Error ? error.message : '创建会话失败')
     }
@@ -740,8 +806,12 @@ export default function ChatPage() {
     })
   }
 
-  async function uploadPendingAttachments() {
-    if (!pendingAttachments.length) {
+  async function uploadAttachmentsToSession(
+    sessionId: string,
+    attachmentsToUpload: ComposerAttachment[],
+    options?: { selectAfterUpload?: boolean; successMessage?: boolean },
+  ) {
+    if (!attachmentsToUpload.length) {
       return [] as ChatAttachmentRef[]
     }
 
@@ -750,8 +820,8 @@ export default function ChatPage() {
     let uploadError: Error | null = null
 
     try {
-      for (let index = 0; index < pendingAttachments.length; index += 1) {
-        const attachment = pendingAttachments[index]
+      for (let index = 0; index < attachmentsToUpload.length; index += 1) {
+        const attachment = attachmentsToUpload[index]
         const originFile = attachment.originFileObj
         if (!(originFile instanceof File)) {
           continue
@@ -760,8 +830,11 @@ export default function ChatPage() {
         try {
           const formData = new FormData()
           formData.append('file', originFile)
-          const uploaded = await api.uploadChatFile(formData)
-          uploadedRefs.push(toChatAttachmentRef(uploaded))
+          const result = await api.uploadSessionChatFile(sessionId, formData)
+          if (result.uploadedFile) {
+            uploadedRefs.push(toChatAttachmentRef(result.uploadedFile))
+          }
+          setSessionFiles(result.sessionFiles)
           setPendingAttachments((prev) => prev.filter((item) => item.uid !== attachment.uid))
         } catch (error) {
           uploadError = error instanceof Error ? error : new Error('上传文件失败')
@@ -770,11 +843,15 @@ export default function ChatPage() {
       }
 
       if (uploadedRefs.length) {
-        setDraftAttachmentRefs((prev) => dedupeAttachmentRefs([...prev, ...uploadedRefs]))
-        await refreshWorkspaceData({ quiet: true })
-        message.success(
-          uploadedRefs.length === 1 ? `已上传 ${uploadedRefs[0].name}` : `已上传 ${uploadedRefs.length} 个附件`,
-        )
+        if (options?.selectAfterUpload !== false) {
+          setDraftAttachmentRefs((prev) => dedupeAttachmentRefs([...prev, ...uploadedRefs]))
+        }
+        await Promise.all([loadSessions(sessionId), refreshWorkspaceData({ quiet: true })])
+        if (options?.successMessage !== false) {
+          message.success(
+            uploadedRefs.length === 1 ? `已上传 ${uploadedRefs[0].name}` : `已上传 ${uploadedRefs.length} 个附件`,
+          )
+        }
       }
 
       if (uploadError) {
@@ -787,19 +864,51 @@ export default function ChatPage() {
     }
   }
 
-  function handleInsertPrompt(prompt: string) {
-    setComposerValue((prev) => appendComposerValue(prev, prompt))
+  function toggleSessionFileReference(item: ChatUploadItem) {
+    const attachment = toChatAttachmentRef(item)
+    setDraftAttachmentRefs((prev) => {
+      if (prev.some((entry) => entry.relativePath === attachment.relativePath)) {
+        return prev.filter((entry) => entry.relativePath !== attachment.relativePath)
+      }
+      return dedupeAttachmentRefs([...prev, attachment])
+    })
     senderRef.current?.focus()
   }
 
-  function handleReferenceUpload(item: ChatAttachmentRef) {
-    setDraftAttachmentRefs((prev) => dedupeAttachmentRefs([...prev, item]))
-    senderRef.current?.focus()
+  async function handleUploadFilesToSession(files: FileList | File[]) {
+    const selectedFiles = Array.from(files)
+    if (!selectedFiles.length) {
+      return
+    }
+
+    try {
+      const sessionId = await ensureActiveSession()
+      await uploadAttachmentsToSession(
+        sessionId,
+        selectedFiles.map((file) => createPendingAttachment(file)),
+      )
+      senderRef.current?.focus()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '上传文件失败')
+    }
   }
 
-  function handleInsertUploadPath(relativePath: string) {
-    setComposerValue((prev) => appendComposerValue(prev, relativePath))
-    senderRef.current?.focus()
+  async function handleImportSessionFile(item: ChatUploadItem) {
+    try {
+      const sessionId = await ensureActiveSession()
+      setMutatingSessionFiles(true)
+      const result = await api.importSessionFiles(sessionId, [item])
+      setSessionFiles(result.sessionFiles)
+      setDraftAttachmentRefs((prev) => dedupeAttachmentRefs([...prev, toChatAttachmentRef(item)]))
+      setLibraryOpen(false)
+      await loadSessions(sessionId)
+      senderRef.current?.focus()
+      message.success(`已将 ${item.name} 导入当前对话`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '导入文件失败')
+    } finally {
+      setMutatingSessionFiles(false)
+    }
   }
 
   async function handleSubmit(content: string) {
@@ -809,31 +918,40 @@ export default function ChatPage() {
     }
 
     try {
-      const uploadedRefs = pendingAttachments.length > 0 ? await uploadPendingAttachments() : []
+      let sessionId = currentSessionIdRef.current
+      let createdSessionId: string | null = null
+      if (!sessionId) {
+        const createdSession = await createAndSelectSession()
+        sessionId = createdSession.id
+        createdSessionId = createdSession.id
+      }
+
+      const uploadedRefs =
+        pendingAttachments.length > 0
+          ? await uploadAttachmentsToSession(sessionId, pendingAttachments, {
+              selectAfterUpload: false,
+              successMessage: false,
+            })
+          : []
       const attachments = dedupeAttachmentRefs([...draftAttachmentRefs, ...uploadedRefs])
 
-      if (currentSessionId) {
+      if (!createdSessionId) {
         shouldSyncSessionRef.current = true
-        pendingSyncSessionIdRef.current = currentSessionId
+        pendingSyncSessionIdRef.current = sessionId
         onRequest({
-          sessionId: currentSessionId,
+          sessionId,
           displayContent: trimmed,
           query: buildChatRequestQuery(trimmed, attachments),
           attachments,
         })
       } else {
-        const session = await api.createSession()
-        setSessions((prev) => [session, ...prev])
         shouldSyncSessionRef.current = true
-        pendingSyncSessionIdRef.current = session.id
-        queueRequest(session.id, {
-          sessionId: session.id,
+        pendingSyncSessionIdRef.current = createdSessionId
+        queueRequest(createdSessionId, {
+          sessionId: createdSessionId,
           displayContent: trimmed,
           query: buildChatRequestQuery(trimmed, attachments),
           attachments,
-        })
-        startTransition(() => {
-          setCurrentSessionId(session.id)
         })
       }
 
@@ -847,12 +965,14 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="page-stack chat-page-shell">
-      <div className="page-grid chat-grid">
-        <Card className="sidebar-card sidebar-surface chat-rail-card" styles={{ body: { padding: 0 } }}>
+    <div className="chat-page-shell chat-independent-shell">
+      <div className="chat-grid chat-independent-grid">
+        <aside className="chat-shell-side">
           <div className="chat-rail-head">
-            <div>
+            <div className="chat-rail-brand">
+              <span className="chat-rail-brand-mark">nanobot</span>
               <span className="section-kicker">会话中心</span>
+              <Text type="secondary">独立聊天工作台</Text>
             </div>
             <Button
               type="primary"
@@ -918,21 +1038,39 @@ export default function ChatPage() {
               />
             </div>
           )}
-        </Card>
+        </aside>
 
-        <Card className="chat-card surface-card chat-session-card" styles={{ body: { padding: 0, height: '100%' } }}>
-          <div className="chat-panel" ref={chatPanelRef}>
+        <section className="chat-shell-main">
+          <div className="chat-panel chat-panel-independent" ref={chatPanelRef}>
+            <input
+              ref={sessionFileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                const files = event.target.files
+                if (files?.length) {
+                  void handleUploadFilesToSession(files)
+                }
+                event.target.value = ''
+              }}
+            />
+
             <div className="chat-stage-header">
               <div className="chat-stage-copy">
-                <span className="section-kicker">当前会话</span>
+                <span className="section-kicker">会话</span>
                 <Title level={4}>{selectedSessionTitle}</Title>
+                <Text type="secondary">{selectedSessionSubtitle}</Text>
               </div>
               <div className="chat-stage-actions">
-                {workspaceData?.runtime.model ? (
-                  <div className="chat-stage-tags">
+                <div className="chat-stage-tags">
+                  {workspaceData?.runtime.resolvedProvider ? (
+                    <Tag className="chat-stage-tag">{workspaceData.runtime.resolvedProvider}</Tag>
+                  ) : null}
+                  {workspaceData?.runtime.model ? (
                     <Tag className="chat-stage-tag">{workspaceData.runtime.model}</Tag>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
                 <Button
                   type="text"
                   icon={<ReloadOutlined />}
@@ -948,33 +1086,7 @@ export default function ChatPage() {
                   <Spin />
                 </div>
               ) : messageInfos.length === 0 ? (
-                <div className="chat-empty-state chat-empty-state-compact">
-                    <Welcome
-                      variant="borderless"
-                      icon={<RobotOutlined />}
-                      title={selectedSession ? '继续这个对话' : '开始新对话'}
-                    extra={
-                      <div className="chat-empty-extra">
-                        {quickPromptItems.length > 0 ? (
-                          <Prompts
-                            items={quickPromptItems}
-                            wrap
-                            className="chat-welcome-prompts"
-                            onItemClick={({ data }) => handleInsertPrompt(String(data.label || ''))}
-                          />
-                        ) : null}
-                        {recentUploads.length > 0 ? (
-                          <RecentUploadActions
-                            uploads={recentUploads}
-                            variant="welcome"
-                            onReference={handleReferenceUpload}
-                            onInsertPath={handleInsertUploadPath}
-                          />
-                        ) : null}
-                      </div>
-                    }
-                  />
-                </div>
+                <div className="chat-history-empty" />
               ) : (
                 <div className="chat-history-canvas" data-testid={testIds.chat.bubbleList}>
                   <Bubble.List items={bubbleItems} className="bubble-list" autoScroll />
@@ -982,25 +1094,7 @@ export default function ChatPage() {
               )}
             </div>
 
-            <div className="chat-composer-panel">
-              {pendingAttachments.length > 0 ? (
-                <div className="composer-pending-attachments">
-                  <div className="chat-inline-section-head">
-                    <span>待发送附件</span>
-                  </div>
-                  <div>
-                    <Attachments
-                      items={pendingAttachments}
-                      multiple
-                      disabled={uploadingFiles}
-                      overflow="scrollX"
-                      beforeUpload={() => false}
-                      onChange={({ fileList }) => setPendingAttachments(fileList)}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
+            <div className="chat-composer-panel chat-composer-panel-independent">
               <div className="sender-shell" data-testid={testIds.chat.composer}>
                 <Sender
                   ref={senderRef}
@@ -1016,65 +1110,155 @@ export default function ChatPage() {
                     setPendingAttachments((prev) => [...prev, createPendingAttachment(firstFile)])
                   }}
                   autoSize={{ minRows: 1, maxRows: 5 }}
-                  placeholder={`输入你的问题，或让${PLATFORM_ASSISTANT_NAME}协调多Agent检查、规划、评审当前工作区...`}
+                  placeholder={`给${PLATFORM_ASSISTANT_NAME}发送消息，或粘贴文件开始对话...`}
                   className="chat-sender"
-                  prefix={
-                    <span data-testid={testIds.chat.fileInput}>
-                      <Attachments
-                        items={pendingAttachments}
-                        multiple
-                        disabled={uploadingFiles}
-                        beforeUpload={() => false}
-                        onChange={({ fileList }) => setPendingAttachments(fileList)}
-                        getDropContainer={() => chatPanelRef.current}
-                        placeholder={{
-                          icon: <CloudUploadOutlined />,
-                          title: '拖拽文件到这里',
-                          description: '发送时自动上传。',
+                  header={
+                    showSenderHeader ? (
+                      <Sender.Header
+                        open
+                        title="本轮引用"
+                        closable={false}
+                        className="chat-sender-header"
+                        classNames={{
+                          header: 'chat-sender-header-head',
+                          content: 'chat-sender-header-body',
                         }}
                       >
-                        <Button
-                          type="text"
-                          icon={<LinkOutlined />}
-                          className="chat-attach-trigger"
+                        {draftAttachmentRefs.length ? (
+                          <div className="chat-sender-section">
+                            <div className="chat-inline-section-head">
+                              <span>本轮引用</span>
+                            </div>
+                            <AttachmentTags
+                              attachments={draftAttachmentRefs}
+                              removable
+                              onRemove={(relativePath) => {
+                                setDraftAttachmentRefs((prev) =>
+                                  prev.filter((item) => item.relativePath !== relativePath),
+                                )
+                              }}
+                            />
+                          </div>
+                        ) : null}
+                        {pendingAttachments.length > 0 ? (
+                          <div className="chat-sender-section">
+                            <div className="chat-inline-section-head">
+                              <span>待上传文件</span>
+                            </div>
+                            <Attachments
+                              items={pendingAttachments}
+                              multiple
+                              disabled={uploadingFiles}
+                              overflow="scrollX"
+                              beforeUpload={() => false}
+                              onChange={({ fileList }) => setPendingAttachments(fileList)}
+                            />
+                          </div>
+                        ) : null}
+                      </Sender.Header>
+                    ) : null
+                  }
+                  prefix={
+                    <span className="chat-sender-prefix-actions">
+                      <span data-testid={testIds.chat.fileInput}>
+                        <Attachments
+                          items={pendingAttachments}
+                          multiple
                           disabled={uploadingFiles}
-                          data-testid={testIds.chat.uploadFile}
-                        />
-                      </Attachments>
+                          beforeUpload={() => false}
+                          onChange={({ fileList }) => setPendingAttachments(fileList)}
+                          getDropContainer={() => chatPanelRef.current}
+                          placeholder={{
+                            icon: <CloudUploadOutlined />,
+                            title: '拖拽文件到这里',
+                            description: '发送时自动上传。',
+                          }}
+                        >
+                          <Button
+                            type="text"
+                            icon={<LinkOutlined />}
+                            className="chat-attach-trigger"
+                            disabled={uploadingFiles}
+                            data-testid={testIds.chat.uploadFile}
+                          />
+                        </Attachments>
+                      </span>
+                      <Button
+                        type="text"
+                        className="chat-import-trigger"
+                        icon={<PaperClipOutlined />}
+                        onClick={() => setLibraryOpen(true)}
+                        disabled={mutatingSessionFiles || recentUploads.length === 0}
+                      >
+                        导入文件
+                      </Button>
                     </span>
                   }
                   footer={
-                      <div className="composer-footer">
-                        <div className="composer-footer-copy">
-                          <Text type="secondary">
-                            {uploadingFiles
-                              ? '附件上传中...'
-                              : pendingAttachments.length
-                            ? `发送时上传 ${pendingAttachments.length} 个附件。Enter 发送。`
-                            : 'Enter 发送。'}
-                          </Text>
-                        </div>
-                      <div className="composer-footer-actions">
-                        {draftAttachmentRefs.length ? (
-                          <AttachmentTags
-                            attachments={draftAttachmentRefs}
-                            removable
-                            onRemove={(relativePath) => {
-                              setDraftAttachmentRefs((prev) =>
-                                prev.filter((item) => item.relativePath !== relativePath),
-                              )
-                            }}
-                          />
-                        ) : null}
+                    <div className="composer-footer">
+                      <div className="composer-footer-copy">
+                        <Text type="secondary">
+                          {uploadingFiles
+                            ? '附件上传中...'
+                            : pendingAttachments.length
+                              ? `按 Enter 发送，${pendingAttachments.length} 个附件会随消息一并上传。`
+                              : 'Enter 发送，Shift + Enter 换行。'}
+                        </Text>
                       </div>
+                      <div className="composer-footer-actions" />
                     </div>
                   }
                 />
               </div>
             </div>
           </div>
-        </Card>
+        </section>
       </div>
+
+      <Modal
+        title="从文件库导入"
+        open={libraryOpen}
+        footer={null}
+        onCancel={() => setLibraryOpen(false)}
+      >
+        {recentUploads.length === 0 ? (
+          <Empty description="文件库里还没有可导入的最近文件" className="empty-block" />
+        ) : (
+          <div className="chat-library-list">
+            {recentUploads.map((item) => {
+              const alreadyInSession = sessionFiles.some((entry) => entry.relativePath === item.relativePath)
+              return (
+                <div key={item.relativePath} className="chat-library-item">
+                  <div className="chat-library-item-copy">
+                    <strong>{item.name}</strong>
+                    <span>
+                      {item.relativePath} · {formatFileSize(item.sizeBytes)}
+                    </span>
+                  </div>
+                  <div className="chat-library-item-actions">
+                    {alreadyInSession ? (
+                      <Button size="small" onClick={() => toggleSessionFileReference(item)}>
+                        加入本轮引用
+                      </Button>
+                    ) : (
+                      <Button
+                        size="small"
+                        type="primary"
+                        loading={mutatingSessionFiles}
+                        onClick={() => {
+                          void handleImportSessionFile(item)
+                        }}
+                      >
+                        导入到对话
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         title="重命名会话"

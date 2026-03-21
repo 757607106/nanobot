@@ -5,6 +5,7 @@ export interface SessionSummary {
   createdAt?: string
   updatedAt?: string
   messageCount: number
+  fileCount?: number
 }
 
 export interface SessionListResponse {
@@ -73,12 +74,24 @@ export interface ChatUploadItem {
   uploadedAt?: string
 }
 
+export interface ChatSessionFilesMutationResult {
+  sessionFiles: ChatUploadItem[]
+  uploadedFile?: ChatUploadItem
+}
+
 export interface ChatWorkspaceData {
   generatedAt: string
   runtime: {
     workspace: string
     provider: string
+    resolvedProvider?: string | null
+    resolvedBinding?: string | null
     model: string
+    reasoningEffort?: string | null
+    maxToolIterations?: number
+    restrictToWorkspace?: boolean
+    sendProgress?: boolean
+    sendToolHints?: boolean
     status: 'ready' | 'busy'
     enabledChannels: string[]
     activeMcpCount: number

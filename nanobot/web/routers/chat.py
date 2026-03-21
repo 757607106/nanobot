@@ -26,6 +26,16 @@ class SessionRenameRequest(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     content: str | None = None
+    displayContent: str | None = None
+    attachments: list[dict[str, Any]] | None = None
+
+
+class ChatSessionFilesRequest(BaseModel):
+    attachments: list[dict[str, Any]] | None = None
+
+
+class ChatSessionFileDeleteRequest(BaseModel):
+    relativePath: str | None = None
 
 
 @router.post("/api/v1/chat/uploads")
@@ -40,6 +50,66 @@ async def upload_chat_file(request: Request) -> JSONResponse:
     except ValueError as exc:
         raise APIError(400, "CHAT_UPLOAD_INVALID", str(exc)) from exc
     return _json_response(201, _ok(data))
+
+
+@router.get("/api/v1/chat/sessions/{session_id}/files")
+def get_session_files(request: Request, session_id: str) -> JSONResponse:
+    try:
+        data = request.app.state.web.get_session_files(session_id)
+    except KeyError as exc:
+        raise APIError(404, "CHAT_SESSION_NOT_FOUND", "Session not found.") from exc
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/chat/sessions/{session_id}/uploads")
+async def upload_chat_file_to_session(request: Request, session_id: str) -> JSONResponse:
+    form = await request.form()
+    raw_file = form.get("file")
+    if raw_file is None:
+        raise APIError(400, "CHAT_UPLOAD_INVALID", "Chat upload requires a file field.")
+    file_bytes = await raw_file.read()
+    try:
+        uploaded = request.app.state.web.upload_chat_file_to_session(
+            session_id,
+            getattr(raw_file, "filename", ""),
+            file_bytes,
+        )
+        session_files = request.app.state.web.get_session_files(session_id)
+    except KeyError as exc:
+        raise APIError(404, "CHAT_SESSION_NOT_FOUND", "Session not found.") from exc
+    except ValueError as exc:
+        raise APIError(400, "CHAT_UPLOAD_INVALID", str(exc)) from exc
+    return _json_response(201, _ok({"uploadedFile": uploaded, "sessionFiles": session_files}))
+
+
+@router.post("/api/v1/chat/sessions/{session_id}/files/import")
+def import_session_files(
+    request: Request,
+    session_id: str,
+    payload: ChatSessionFilesRequest,
+) -> JSONResponse:
+    try:
+        session_files = request.app.state.web.import_session_files(session_id, payload.attachments or [])
+    except KeyError as exc:
+        raise APIError(404, "CHAT_SESSION_NOT_FOUND", "Session not found.") from exc
+    except ValueError as exc:
+        raise APIError(400, "CHAT_FILE_INVALID", str(exc)) from exc
+    return _json_response(200, _ok({"sessionFiles": session_files}))
+
+
+@router.delete("/api/v1/chat/sessions/{session_id}/files")
+def remove_session_file(
+    request: Request,
+    session_id: str,
+    payload: ChatSessionFileDeleteRequest,
+) -> JSONResponse:
+    try:
+        session_files = request.app.state.web.remove_session_file(session_id, payload.relativePath or "")
+    except KeyError as exc:
+        raise APIError(404, "CHAT_SESSION_NOT_FOUND", "Session not found.") from exc
+    except ValueError as exc:
+        raise APIError(400, "CHAT_FILE_INVALID", str(exc)) from exc
+    return _json_response(200, _ok({"sessionFiles": session_files}))
 
 
 @router.get("/api/v1/chat/workspace")
@@ -110,10 +180,12 @@ async def create_chat_message(
     stream: bool = Query(False),
 ):
     content = (payload.content or "").strip()
+    display_content = (payload.displayContent or content).strip()
     if not content:
         raise APIError(400, "VALIDATION_ERROR", "content is required.")
 
     state = request.app.state.web
+    attachments = payload.attachments or []
 
     if stream:
 
@@ -132,7 +204,13 @@ async def create_chat_message(
             async def run_chat() -> None:
                 try:
                     await queue.put({"type": "start", "sessionId": session_id})
-                    data = await state.chat(session_id, content, on_progress)
+                    data = await state.chat(
+                        session_id,
+                        content,
+                        on_progress,
+                        display_content=display_content,
+                        attachments=attachments,
+                    )
                     await queue.put({"type": "done", **data})
                 except KeyError:
                     await queue.put({"type": "error", "message": "Session not found."})
@@ -172,7 +250,13 @@ async def create_chat_message(
         _ = tool_hint
 
     try:
-        data = await state.chat(session_id, content, on_progress)
+        data = await state.chat(
+            session_id,
+            content,
+            on_progress,
+            display_content=display_content,
+            attachments=attachments,
+        )
     except KeyError as exc:
         raise APIError(404, "CHAT_SESSION_NOT_FOUND", "Session not found.") from exc
     except Exception as exc:  # noqa: BLE001

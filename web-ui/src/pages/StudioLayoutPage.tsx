@@ -6,7 +6,6 @@ const studioRoutes = [
   { key: '/studio/agents', label: 'AI 员工', shortLabel: '员工' },
   { key: '/studio/teams', label: '团队', shortLabel: '团队' },
   { key: '/studio/runs', label: '执行记录', shortLabel: '记录' },
-  { key: '/studio/knowledge', label: '知识库', shortLabel: '知识' },
 ]
 
 function resolveActiveKey(pathname: string) {

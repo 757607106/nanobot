@@ -143,6 +143,22 @@ class WebAppState:
     def upload_chat_file(self, file_name: str, content: bytes) -> dict[str, Any]:
         return self.chat_runtime.upload_chat_file(file_name, content)
 
+    def upload_chat_file_to_session(self, session_id: str, file_name: str, content: bytes) -> dict[str, Any]:
+        return self.chat_runtime.upload_chat_file_to_session(session_id, file_name, content)
+
+    def get_session_files(self, session_id: str) -> list[dict[str, Any]]:
+        return self.chat_runtime.get_session_files(session_id)
+
+    def import_session_files(
+        self,
+        session_id: str,
+        attachments: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        return self.chat_runtime.import_session_files(session_id, attachments)
+
+    def remove_session_file(self, session_id: str, relative_path: str) -> list[dict[str, Any]]:
+        return self.chat_runtime.remove_session_file(session_id, relative_path)
+
     def get_chat_workspace(self) -> dict[str, Any]:
         return self.chat_runtime.get_chat_workspace()
 
@@ -165,8 +181,17 @@ class WebAppState:
         session_id: str,
         content: str,
         on_progress,
+        *,
+        display_content: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        return await self.chat_runtime.chat(session_id, content, on_progress)
+        return await self.chat_runtime.chat(
+            session_id,
+            content,
+            on_progress,
+            display_content=display_content,
+            attachments=attachments,
+        )
 
     def get_config(self) -> dict[str, Any]:
         return self.config_runtime.get_config()

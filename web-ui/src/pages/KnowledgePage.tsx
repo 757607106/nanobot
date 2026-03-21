@@ -48,7 +48,7 @@ import {
   RobotOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import PageHero from '../components/PageHero'
 import DevOnly from '../components/DevOnly'
@@ -207,10 +207,11 @@ function isFailedDocumentStatus(status: string) {
 
 export default function KnowledgePage() {
   const { message, modal } = App.useApp()
+  const location = useLocation()
   const navigate = useNavigate()
   const { kbId } = useParams()
   const selectedKbId = kbId && kbId !== 'new' ? kbId : null
-  const isCreatingKb = kbId === 'new'
+  const isCreatingKb = kbId === 'new' || location.pathname.endsWith('/knowledge/new')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
@@ -255,8 +256,8 @@ export default function KnowledgePage() {
     if (loadingWorkspace) {
       return
     }
-    if (!kbId && knowledgeBases[0]) {
-      navigate(`/studio/knowledge/${knowledgeBases[0].kbId}`, { replace: true })
+    if (!kbId && !isCreatingKb && knowledgeBases[0]) {
+      navigate(`/knowledge/${knowledgeBases[0].kbId}`, { replace: true })
       return
     }
     if (!selectedKbId) {
@@ -272,7 +273,7 @@ export default function KnowledgePage() {
       return
     }
     void loadKnowledgeDetail(selectedKbId)
-  }, [kbId, knowledgeBases, loadingWorkspace, navigate, selectedKbId])
+  }, [isCreatingKb, kbId, knowledgeBases, loadingWorkspace, navigate, selectedKbId])
 
   const hasActiveIngest = useMemo(
     () =>
@@ -344,7 +345,7 @@ export default function KnowledgePage() {
         : await api.createKnowledgeBase(payload)
       message.success(currentKb ? '知识库已更新' : '知识库已创建')
       await loadWorkspace()
-      navigate(`/studio/knowledge/${saved.kbId}`, { replace: true })
+      navigate(`/knowledge/${saved.kbId}`, { replace: true })
       await loadKnowledgeDetail(saved.kbId)
     } catch (saveError) {
       setError(getErrorMessage(saveError, '保存知识库失败'))
@@ -364,9 +365,9 @@ export default function KnowledgePage() {
       const remaining = knowledgeBases.filter((item) => item.kbId !== currentKb.kbId)
       await loadWorkspace()
       if (remaining[0]) {
-        navigate(`/studio/knowledge/${remaining[0].kbId}`, { replace: true })
+        navigate(`/knowledge/${remaining[0].kbId}`, { replace: true })
       } else {
-        navigate('/studio/knowledge/new', { replace: true })
+        navigate('/knowledge/new', { replace: true })
       }
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, '删除知识库失败'))
@@ -718,7 +719,7 @@ export default function KnowledgePage() {
             <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()} loading={loadingWorkspace}>
               刷新
             </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/knowledge/new')}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/knowledge/new')}>
               新建
             </Button>
           </Space>
@@ -739,7 +740,7 @@ export default function KnowledgePage() {
                   renderItem={(item) => (
                     <List.Item
                       className={`studio-knowledge-list-item ${selectedKbId === item.kbId ? 'is-active' : ''}`}
-                      onClick={() => navigate(`/studio/knowledge/${item.kbId}`)}
+                      onClick={() => navigate(`/knowledge/${item.kbId}`)}
                       style={{ 
                         cursor: 'pointer', 
                         padding: '12px 16px',

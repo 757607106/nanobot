@@ -4,6 +4,7 @@ export const testIds = {
     navChat: 'nav-chat',
     navStudio: 'nav-studio',
     navChannels: 'nav-channels',
+    navKnowledge: 'nav-knowledge',
     navMcp: 'nav-mcp',
     logout: 'app-logout',
     authStateRetry: 'app-auth-state-retry',
