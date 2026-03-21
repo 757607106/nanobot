@@ -661,7 +661,7 @@ export default function RunsPage() {
           className="page-hero-compact studio-hero"
           title={selectedRun.label}
           actions={(
-            <Space>
+            <Space wrap>
               <Tooltip title="刷新状态">
                 <Button onClick={() => void loadRunDetail(selectedRun.runId)} loading={loadingDetail} icon={<ReloadOutlined />} shape="circle" />
               </Tooltip>
@@ -702,12 +702,11 @@ export default function RunsPage() {
 
       <div className="page-content-wrapper" style={{ padding: '0 var(--nb-layout-gutter)' }}>
         <Card className="page-card" bordered={false} styles={{ body: { padding: 0 } }}>
-          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--nb-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Space>
+          <div className="studio-runs-toolbar">
+            <Space className="studio-runs-toolbar-filters">
               <Select
                 value={statusFilter}
                 onChange={setStatusFilter}
-                style={{ width: 140 }}
                 options={[
                   { value: 'all', label: '全部状态' },
                   { value: 'running', label: '运行中' },
@@ -718,7 +717,6 @@ export default function RunsPage() {
               <Select
                 value={kindFilter}
                 onChange={setKindFilter}
-                style={{ width: 140 }}
                 options={[
                   { value: 'all', label: '全部类型' },
                   { value: 'agent', label: 'Agent' },
@@ -727,7 +725,7 @@ export default function RunsPage() {
               />
             </Space>
             {threadFilter && (
-              <Tag closable onClose={() => {
+              <Tag className="studio-runs-toolbar-thread-tag" closable onClose={() => {
                 const next = new URLSearchParams(searchParams)
                 next.delete('threadId')
                 setSearchParams(next)
@@ -742,6 +740,7 @@ export default function RunsPage() {
             columns={columns}
             rowKey="runId"
             loading={loadingRuns}
+            scroll={{ x: 'max-content' }}
             pagination={{ 
               pageSize: 15,
               showTotal: (total) => `共 ${total} 条记录`,

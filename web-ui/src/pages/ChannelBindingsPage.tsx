@@ -309,15 +309,15 @@ export default function ChannelBindingsPage() {
         title="消息路由"
         actions={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={loadWorkspace}>
-              刷新
-            </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => navigate('/channels/bindings/new')}
             >
               新建绑定
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={loadWorkspace}>
+              刷新
             </Button>
           </Space>
         }

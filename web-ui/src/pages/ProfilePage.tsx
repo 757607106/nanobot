@@ -278,6 +278,7 @@ export default function ProfilePage() {
         <Table
           pagination={false}
           rowKey="username"
+          scroll={{ x: 'max-content' }}
           dataSource={accountRows}
           locale={{ emptyText: '暂无账号数据' }}
           columns={[

@@ -145,7 +145,6 @@ export default function DashboardPage() {
     <div className="page-stack">
       <section className="chat-dashboard-shell">
         <div className="chat-dashboard-topbar">
-          <div className="chat-dashboard-title-chip">仪表板</div>
         </div>
 
         <div className="chat-dashboard-stats-grid">
@@ -206,95 +205,65 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="dashboard-insights-stack">
-            <div className="chat-dashboard-channel-card dashboard-data-card">
-              <div className="chat-dashboard-channel-head">
-                <div>
-                  <strong>技能概览</strong>
-                </div>
+          <div className="chat-dashboard-channel-card dashboard-data-card">
+            <div className="chat-dashboard-channel-head">
+              <div>
+                <strong>技能概览</strong>
               </div>
-
-              {loading ? (
-                <div className="center-box">
-                  <Spin />
-                </div>
-              ) : highlightedSkills.length === 0 ? (
-                <Empty description="暂无技能数据" className="empty-block" />
-              ) : (
-                <div className="dashboard-data-list">
-                  {highlightedSkills.map((item) => (
-                    <div key={item.id} className="dashboard-data-item">
-                      <div>
-                        <strong>{item.name}</strong>
-                      </div>
-                      <Tag color={item.enabled !== false ? 'green' : 'default'}>
-                        {item.enabled !== false ? '已启用' : '未启用'}
-                      </Tag>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
-            <div className="chat-dashboard-channel-card dashboard-data-card">
-              <div className="chat-dashboard-channel-head">
-                <div>
-                  <strong>自动化状态</strong>
-                </div>
+            {loading ? (
+              <div className="center-box">
+                <Spin />
               </div>
-
+            ) : highlightedSkills.length === 0 ? (
+              <Empty description="暂无技能数据" className="empty-block" />
+            ) : (
               <div className="dashboard-data-list">
-                <div className="dashboard-data-item">
-                  <div>
-                    <strong>任务引擎</strong>
-                    <span>{cron?.enabled ? '正在运行' : '已停止'}</span>
+                {highlightedSkills.map((item) => (
+                  <div key={item.id} className="dashboard-data-item">
+                    <div>
+                      <strong>{item.name}</strong>
+                    </div>
+                    <Tag color={item.enabled !== false ? 'green' : 'default'}>
+                      {item.enabled !== false ? '已启用' : '未启用'}
+                    </Tag>
                   </div>
-                  <Tag color={cron?.enabled ? 'green' : 'default'}>
-                    {cron?.enabled ? '已启用' : '未启用'}
-                  </Tag>
-                </div>
-                <div className="dashboard-data-item">
-                  <div>
-                    <strong>任务数量</strong>
-                  </div>
-                  <Tag>{cron?.jobs ?? 0}</Tag>
-                </div>
-                <div className="dashboard-data-item">
-                  <div>
-                    <strong>下一次唤醒</strong>
-                    <span>{formatNextWake(cron?.nextWakeAtMs)}</span>
-                  </div>
-                  <Tag>{cron?.deliveryMode === 'agent_only' ? 'Agent Only' : cron?.deliveryMode || '--'}</Tag>
-                </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="chat-dashboard-channel-card dashboard-data-card">
+            <div className="chat-dashboard-channel-head">
+              <div>
+                <strong>自动化状态</strong>
               </div>
             </div>
 
-            <div className="chat-dashboard-channel-card dashboard-data-card">
-              <div className="chat-dashboard-channel-head">
+            <div className="dashboard-data-list">
+              <div className="dashboard-data-item">
                 <div>
-                  <strong>最近会话</strong>
+                  <strong>任务引擎</strong>
+                  <span>{cron?.enabled ? '正在运行' : '已停止'}</span>
                 </div>
+                <Tag color={cron?.enabled ? 'green' : 'default'}>
+                  {cron?.enabled ? '已启用' : '未启用'}
+                </Tag>
               </div>
-
-              {loading ? (
-                <div className="center-box">
-                  <Spin />
+              <div className="dashboard-data-item">
+                <div>
+                  <strong>任务数量</strong>
                 </div>
-              ) : recentSessions.length === 0 ? (
-                <Empty description="暂无会话数据" className="empty-block" />
-              ) : (
-                <div className="dashboard-data-list">
-                  {recentSessions.map((item) => (
-                    <div key={item.id} className="dashboard-data-item">
-                      <div>
-                        <strong>{getSessionTitle(item.title)}</strong>
-                        <span>{item.messageCount} 条消息</span>
-                      </div>
-                      <Tag>{item.id}</Tag>
-                    </div>
-                  ))}
+                <Tag>{cron?.jobs ?? 0}</Tag>
+              </div>
+              <div className="dashboard-data-item">
+                <div>
+                  <strong>下一次唤醒</strong>
+                  <span>{formatNextWake(cron?.nextWakeAtMs)}</span>
                 </div>
-              )}
+                <Tag>{cron?.deliveryMode === 'agent_only' ? 'Agent Only' : cron?.deliveryMode || '--'}</Tag>
+              </div>
             </div>
           </div>
         </div>

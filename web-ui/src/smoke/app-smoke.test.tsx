@@ -3049,7 +3049,8 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('登录 Nanobot')).toBeInTheDocument()
+    expect(await screen.findByText('登录并继续')).toBeInTheDocument()
+    expect(screen.getByText('账号')).toBeInTheDocument()
   })
 
   it('sends first-time users to the bootstrap page', async () => {
@@ -3072,7 +3073,8 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('创建 Nanobot 管理员')).toBeInTheDocument()
+    expect(await screen.findByText('创建管理员并进入工作台')).toBeInTheDocument()
+    expect(screen.getByText('设置密码')).toBeInTheDocument()
   })
 
   it('renders the setup wizard page', async () => {
@@ -3118,7 +3120,8 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('仪表板', { selector: '.chat-dashboard-title-chip' })).toBeInTheDocument()
+    expect(await screen.findByText('渠道概览')).toBeInTheDocument()
+    expect(screen.getByText('自动化状态')).toBeInTheDocument()
   })
 
   it('falls back to the dashboard landing page when a hidden route is requested', async () => {
@@ -3148,7 +3151,7 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.queryByText('登录到工作台')).not.toBeInTheDocument()
+    expect(screen.queryByText('登录并继续')).not.toBeInTheDocument()
 
     resolveAuthStatus({
       initialized: true,
@@ -3156,17 +3159,16 @@ describe('web app smoke pages', () => {
       username: 'admin',
     })
 
-    expect(await screen.findByText('仪表板', { selector: '.chat-dashboard-title-chip' })).toBeInTheDocument()
-    expect(screen.queryByText('登录到工作台')).not.toBeInTheDocument()
+    expect(await screen.findByText('渠道概览')).toBeInTheDocument()
+    expect(screen.queryByText('登录并继续')).not.toBeInTheDocument()
   })
 
   it('renders the dashboard page', async () => {
     renderPage(<DashboardPage />)
-    expect(await screen.findByText('仪表板')).toBeInTheDocument()
-    expect(screen.getByText('渠道概览')).toBeInTheDocument()
+    expect(await screen.findByText('渠道概览')).toBeInTheDocument()
     expect(screen.getByText('技能概览')).toBeInTheDocument()
     expect(screen.getByText('自动化状态')).toBeInTheDocument()
-    expect(screen.getByText('最近会话')).toBeInTheDocument()
+    expect(screen.getByText('会话')).toBeInTheDocument()
   })
 
   it('renders the chat page', async () => {
@@ -3248,7 +3250,7 @@ describe('web app smoke pages', () => {
 
   it('renders the channels page', async () => {
     renderPage(<ChannelsPage />)
-    expect(await screen.findByText('渠道管理')).toBeInTheDocument()
+    expect(await screen.findByText('消息投递设置')).toBeInTheDocument()
     expect(screen.getByText('保存投递设置')).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
   })

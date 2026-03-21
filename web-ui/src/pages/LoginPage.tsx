@@ -63,12 +63,6 @@ export default function LoginPage() {
     navigate(nextPath, { replace: true })
   }
 
-  const statusLabel = initializing ? '首次初始化' : '账号登录'
-  const title = initializing ? `创建 ${PLATFORM_BRAND_NAME} 管理员` : `登录 ${PLATFORM_BRAND_NAME}`
-  const description = initializing
-    ? '当前实例还没有管理员账号。先完成创建，再继续初始化流程。'
-    : '登录后即可回到仪表板、对话、协作和系统管理页面。'
-
   return (
     <div className={`auth-screen theme-${resolvedTheme}`}>
       <div className="auth-shell auth-shell-compact">
@@ -80,22 +74,14 @@ export default function LoginPage() {
               </div>
               <div className="auth-card-head auth-card-head-centered">
                 <Typography.Title level={2}>{PLATFORM_BRAND_NAME}</Typography.Title>
-                <Typography.Text className="auth-brand-subtitle">{PLATFORM_SUBTITLE}</Typography.Text>
-                <Typography.Paragraph>{statusLabel}</Typography.Paragraph>
               </div>
-            </div>
-
-            <div className="auth-inline-note">
-              <strong>{title}</strong>
-              <span>{description}</span>
             </div>
 
             <form className="auth-form" onSubmit={handleSubmit}>
               <label className="auth-field">
-                <span>管理员名称</span>
+                <span>账号</span>
                 <Input
                   autoComplete="username"
-                  placeholder="例如 admin、owner 或 teamlead"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   data-testid={testIds.auth.username}
@@ -103,10 +89,9 @@ export default function LoginPage() {
               </label>
 
               <label className="auth-field">
-                <span>{initializing ? '设置密码' : '登录密码'}</span>
+                <span>{initializing ? '设置密码' : '密码'}</span>
                 <Input.Password
                   autoComplete={initializing ? 'new-password' : 'current-password'}
-                  placeholder="至少 8 个字符"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   data-testid={testIds.auth.password}
@@ -118,7 +103,6 @@ export default function LoginPage() {
                   <span>确认密码</span>
                   <Input.Password
                     autoComplete="new-password"
-                    placeholder="再次输入密码"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     data-testid={testIds.auth.confirmPassword}
@@ -146,13 +130,6 @@ export default function LoginPage() {
                 {initializing ? '创建管理员并进入工作台' : '登录并继续'}
               </Button>
             </form>
-
-            <div className="auth-helper-grid auth-helper-grid-compact">
-              <div className="auth-helper-card">
-                <strong>{initializing ? '首次启动实例' : '受保护访问'}</strong>
-                <span>{initializing ? '创建管理员后会继续初始化向导。' : '登录后会优先返回你刚才准备访问的页面。'}</span>
-              </div>
-            </div>
           </Card>
         </MotionPanel>
       </div>

@@ -187,12 +187,8 @@ export default function AppShell() {
       transition={shellSpring}
     >
       <div className="brand-block">
-        <div className="brand-chip">{PLATFORM_BADGE_LABEL}</div>
         <div className="brand-head">
           <img className="brand-logo" src={PLATFORM_BRAND_LOGO_SRC} alt={PLATFORM_BRAND_NAME} />
-          <div className="brand-copy">
-            <Typography.Text className="brand-subtitle">{PLATFORM_SUBTITLE}</Typography.Text>
-          </div>
         </div>
       </div>
 
@@ -247,7 +243,7 @@ export default function AppShell() {
           open={mobileNavOpen}
           onClose={() => setMobileNavOpen(false)}
           placement="left"
-          width={navWidth}
+          width={`min(${navWidth}px, calc(100vw - 16px))`}
           closable={false}
           rootClassName="mobile-nav-drawer"
         >
@@ -256,46 +252,6 @@ export default function AppShell() {
       ) : null}
 
       <Layout className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''}`}>
-        <Header className={`app-header ${isChatRoute ? 'app-header-chat' : ''}`}>
-          <motion.div
-            className="app-header-shell"
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={shellSpring}
-          >
-            <div className="header-copy">
-              <div className="header-title-row">
-                {!isDesktop ? (
-                  <Button
-                    type="text"
-                    icon={<MenuOutlined />}
-                    className="header-icon-button"
-                    onClick={() => setMobileNavOpen(true)}
-                  />
-                ) : null}
-                <div className="header-title-block">
-                  <div className="header-title-meta">
-                    <span className="header-context-chip">{activeRoute.sectionLabel}</span>
-                  </div>
-                  <Typography.Title level={5}>{activeRoute.label}</Typography.Title>
-                </div>
-              </div>
-            </div>
-
-            <div className="header-actions">
-              <Button
-                icon={<LogoutOutlined />}
-                loading={submitting}
-                className={`header-logout-button ${isChatRoute ? 'is-compact' : ''}`}
-                onClick={() => void handleLogout()}
-                data-testid={testIds.app.logout}
-                style={{ display: isDesktop ? 'none' : 'flex' }}
-              >
-                {isChatRoute ? null : '退出'}
-              </Button>
-            </div>
-          </motion.div>
-        </Header>
         <Content className={`app-content ${isChatRoute ? 'app-content-chat' : ''}`}>
           <AnimatePresence initial={false} mode="wait">
             <motion.div

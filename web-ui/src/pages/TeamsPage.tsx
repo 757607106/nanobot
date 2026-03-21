@@ -613,7 +613,7 @@ export default function TeamsPage() {
     <div className="page-stack">
       <div className="stat-card-row">
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'var(--ant-color-primary-bg)', color: 'var(--ant-color-primary)' }}>
+          <div className="stat-card-icon is-primary">
             <TeamOutlined />
           </div>
           <div className="stat-card-copy">
@@ -622,7 +622,7 @@ export default function TeamsPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'var(--ant-color-success-bg)', color: 'var(--ant-color-success)' }}>
+          <div className="stat-card-icon is-success">
             <CheckCircleOutlined />
           </div>
           <div className="stat-card-copy">
@@ -631,7 +631,7 @@ export default function TeamsPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'var(--ant-color-warning-bg)', color: 'var(--ant-color-warning)' }}>
+          <div className="stat-card-icon is-warning">
             <ClockCircleOutlined />
           </div>
           <div className="stat-card-copy">
@@ -640,7 +640,7 @@ export default function TeamsPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'var(--ant-color-info-bg)', color: 'var(--ant-color-info)' }}>
+          <div className="stat-card-icon is-info">
             <AppstoreOutlined />
           </div>
           <div className="stat-card-copy">
@@ -698,7 +698,7 @@ export default function TeamsPage() {
                 >
                   {item.enabled ? '在线' : '离线'}
                 </div>
-                <div className="id-badge-avatar" style={{ background: 'var(--ant-color-primary-bg)', color: 'var(--ant-color-primary)' }}>
+                <div className="id-badge-avatar is-team">
                   <TeamOutlined />
                 </div>
                 <div className="id-badge-info">
@@ -726,7 +726,7 @@ export default function TeamsPage() {
 
       <Drawer
         title={currentTeam ? '团队设置' : '新建团队'}
-        width={680}
+        width="min(680px, calc(100vw - 16px))"
         onClose={() => navigate('/studio/teams')}
         open={!!selectedTeamId || teamId === 'new'}
         styles={{ body: { padding: 0 } }}

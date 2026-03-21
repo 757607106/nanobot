@@ -414,13 +414,9 @@ export default function ChannelsPage() {
   return (
     <section className="channels-registry-shell">
       <div className="channels-registry-topbar">
-        <div className="channels-registry-title-chip">渠道管理</div>
         <div className="channels-registry-topbar-actions">
           <Button icon={<ReloadOutlined />} onClick={() => void loadChannels()}>
             刷新
-          </Button>
-          <Button icon={<LinkOutlined />} onClick={() => navigate('/channels/bindings')}>
-            消息路由
           </Button>
         </div>
       </div>

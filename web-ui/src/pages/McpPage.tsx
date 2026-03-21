@@ -769,7 +769,7 @@ export default function McpPage() {
           </div>
         }
         destroyOnHidden
-        width={860}
+        width="min(860px, calc(100vw - 24px))"
         className="mcp-dialog"
       >
         {!editingEntry ? (

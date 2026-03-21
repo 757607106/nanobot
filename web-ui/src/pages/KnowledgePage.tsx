@@ -576,6 +576,7 @@ export default function KnowledgePage() {
               dataSource={documents}
               columns={documentColumns}
               rowKey="docId"
+              scroll={{ x: 'max-content' }}
               pagination={{ pageSize: 10 }}
               loading={loadingDetail}
             />
@@ -584,9 +585,9 @@ export default function KnowledgePage() {
       case 'testing':
         return (
           <Card className="page-card" bordered={false} title="检索验证">
-            <div style={{ maxWidth: 800, margin: '0 auto' }}>
+            <div className="knowledge-testing-shell">
               <Space direction="vertical" style={{ width: '100%' }} size={24}>
-                <Space.Compact style={{ width: '100%' }}>
+                <Space.Compact className="knowledge-search-compact">
                   <Input 
                     size="large"
                     placeholder="输入问题测试检索效果..." 
@@ -628,7 +629,7 @@ export default function KnowledgePage() {
       case 'settings':
         return (
           <Card className="page-card" bordered={false} title="知识库配置">
-             <div className="studio-form-grid" style={{ maxWidth: 800 }}>
+             <div className="studio-form-grid knowledge-settings-shell">
               <Row gutter={[24, 24]}>
                 <Col span={24}>
                   <div className="studio-form-field">
@@ -642,7 +643,7 @@ export default function KnowledgePage() {
                     <TextArea value={form.description} onChange={(e) => updateForm('description', e.target.value)} rows={3} />
                   </div>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <div className="studio-form-field">
                     <Text type="secondary">检索模式</Text>
                     <Select
@@ -657,7 +658,7 @@ export default function KnowledgePage() {
                     />
                   </div>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <div className="studio-form-field">
                     <Text type="secondary">Chunk Size</Text>
                     <InputNumber 
@@ -667,7 +668,7 @@ export default function KnowledgePage() {
                     />
                   </div>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <div className="studio-form-field">
                     <Text type="secondary">Top K</Text>
                     <InputNumber 
@@ -793,7 +794,7 @@ export default function KnowledgePage() {
         title="添加文档"
         open={uploadDrawerOpen}
         onClose={() => setUploadDrawerOpen(false)}
-        width={500}
+        width="min(500px, calc(100vw - 16px))"
       >
         <Tabs items={[
           {

@@ -501,7 +501,7 @@ export default function CronPage() {
         onOk={() => void handleSave()}
         confirmLoading={saving}
         okText={editingJob ? '保存更改' : '创建任务'}
-        width={760}
+        width="min(760px, calc(100vw - 24px))"
       >
         <Form form={form} layout="vertical">
           <div className="cron-dialog-grid cron-dialog-grid-2">

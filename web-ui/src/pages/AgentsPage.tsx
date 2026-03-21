@@ -551,7 +551,7 @@ export default function AgentsPage() {
     <div className="page-stack">
       <div className="stat-card-row">
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'var(--ant-color-primary-bg)', color: 'var(--ant-color-primary)' }}>
+          <div className="stat-card-icon is-primary">
             <TeamOutlined />
           </div>
           <div className="stat-card-copy">
@@ -560,7 +560,7 @@ export default function AgentsPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'var(--ant-color-success-bg)', color: 'var(--ant-color-success)' }}>
+          <div className="stat-card-icon is-success">
             <CheckCircleOutlined />
           </div>
           <div className="stat-card-copy">
@@ -569,7 +569,7 @@ export default function AgentsPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'var(--ant-color-warning-bg)', color: 'var(--ant-color-warning)' }}>
+          <div className="stat-card-icon is-warning">
             <ClockCircleOutlined />
           </div>
           <div className="stat-card-copy">
@@ -578,7 +578,7 @@ export default function AgentsPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'var(--ant-color-info-bg)', color: 'var(--ant-color-info)' }}>
+          <div className="stat-card-icon is-info">
             <AppstoreOutlined />
           </div>
           <div className="stat-card-copy">
@@ -672,7 +672,7 @@ export default function AgentsPage() {
 
       <Drawer
         title={currentAgent ? '员工设置' : '新建员工'}
-        width={680}
+        width="min(680px, calc(100vw - 16px))"
         onClose={handleCloseDrawer}
         open={isDrawerOpen}
         styles={{ body: { padding: 0 } }}
