@@ -380,7 +380,7 @@ export function KnowledgeUploadModal({
       <div className="knowledge-upload-workbench">
         <div className="knowledge-upload-header">
           <div>
-            <Title level={4} style={{ margin: 0 }}>添加文件工作台</Title>
+            <Title level={4} style={{ margin: 0 }}>添加文件</Title>
             <Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
               支持文件、URL 和 FAQ 三种来源，提交后会写入当前知识库 {kb?.name ? `「${kb.name}」` : ''}。
             </Paragraph>

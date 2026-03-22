@@ -10,6 +10,7 @@ import {
   List,
   Modal,
   Select,
+  Skeleton,
   Space,
   Spin,
   Statistic,
@@ -20,12 +21,14 @@ import {
   Typography,
 } from 'antd'
 import {
-  ApartmentOutlined,
   BranchesOutlined,
+  DatabaseOutlined,
   DeleteOutlined,
   EditOutlined,
   FileSearchOutlined,
+  FileTextOutlined,
   FolderAddOutlined,
+  FolderOpenOutlined,
   PlusOutlined,
   ReloadOutlined,
   RetweetOutlined,
@@ -76,7 +79,6 @@ import {
   createIndexConfigState,
   createKnowledgeFormState,
   formatScorePercent,
-  formatStats,
   getDefaultQueryParams,
   getErrorMessage,
   parseTags,
@@ -112,7 +114,6 @@ export default function KnowledgePage() {
   const selectedKbId = kbId && kbId !== 'new' ? kbId : null
   const shouldOpenCreateModal = location.pathname.endsWith('/knowledge/new')
   const benchmarkUploadInputRef = useRef<HTMLInputElement | null>(null)
-  const detailGridRef = useRef<HTMLDivElement | null>(null)
 
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
   const [modelConfig, setModelConfig] = useState<ConfigData | null>(null)
@@ -138,7 +139,7 @@ export default function KnowledgePage() {
   const [graphLabel, setGraphLabel] = useState('*')
   const [graphDepth, setGraphDepth] = useState(2)
   const [graphMaxNodes, setGraphMaxNodes] = useState(50)
-  const [activeTab, setActiveTab] = useState('query')
+  const [activeTab, setActiveTab] = useState('files')
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([])
   const [fileSearch, setFileSearch] = useState('')
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
@@ -168,9 +169,6 @@ export default function KnowledgePage() {
   const [evaluationResultOpen, setEvaluationResultOpen] = useState(false)
   const [fileDetailOpen, setFileDetailOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [rightPanelVisible, setRightPanelVisible] = useState(true)
-  const [leftPanelWidth, setLeftPanelWidth] = useState(52)
-  const [isResizingPanels, setIsResizingPanels] = useState(false)
   const [formState, setFormState] = useState<KnowledgeFormState>(() => createKnowledgeFormState())
   const [indexConfig, setIndexConfig] = useState<KnowledgeIndexConfigState>(() => createIndexConfigState())
   const [folderName, setFolderName] = useState('')
@@ -284,36 +282,12 @@ export default function KnowledgePage() {
       setFileDetail(null)
       setFileDetailOpen(false)
       setSettingsModalOpen(false)
-      setRightPanelVisible(true)
-      setLeftPanelWidth(52)
+      setActiveTab('files')
       return
     }
+    setActiveTab('files')
     void loadKnowledgeDetail(selectedKbId)
   }, [selectedKbId, defaultEmbeddingBindingName, defaultLlmBindingName])
-
-  useEffect(() => {
-    if (!isResizingPanels) {
-      return undefined
-    }
-    const handleMove = (event: MouseEvent) => {
-      const rect = detailGridRef.current?.getBoundingClientRect()
-      if (!rect || rect.width <= 0) {
-        return
-      }
-      const nextWidth = ((event.clientX - rect.left) / rect.width) * 100
-      setLeftPanelWidth(Math.max(28, Math.min(72, nextWidth)))
-      if (!rightPanelVisible) {
-        setRightPanelVisible(true)
-      }
-    }
-    const handleUp = () => setIsResizingPanels(false)
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-  }, [isResizingPanels, rightPanelVisible])
 
   useEffect(() => {
     if (activeTab === 'graph' && currentKb) {
@@ -492,16 +466,15 @@ export default function KnowledgePage() {
       setActiveTab((previous) => {
         const isSwitchingKb = currentKb?.kbId !== kb.kbId
         if (isSwitchingKb) {
-          return 'graph'
+          return 'files'
         }
-        return previous || 'graph'
+        return previous || 'files'
       })
       await loadBenchmarkState(nextKbId)
       setError(null)
       setSelectedFileIds([])
       setExpandedFileIds([])
       setSettingsModalOpen(false)
-      setRightPanelVisible(true)
     } catch (loadError) {
       setError(getErrorMessage(loadError, '加载知识库详情失败'))
     } finally {
@@ -763,10 +736,6 @@ export default function KnowledgePage() {
     setMoveTargetParentId(selectedFiles[0].parentId || null)
     setMoveTargetName(selectedFiles[0].filename)
     setMoveModalOpen(true)
-  }
-
-  function toggleRightPanel() {
-    setRightPanelVisible((previous) => !previous)
   }
 
   async function handleOpenFileDetail(target: KnowledgeDocument) {
@@ -1089,6 +1058,102 @@ export default function KnowledgePage() {
 
   const tabItems = [
     {
+      key: 'files',
+      label: '文件',
+      children: (
+        <div className="knowledge-tab-panel knowledge-files-tab">
+          <div className="knowledge-files-toolbar">
+            <Input
+              prefix={<SearchOutlined />}
+              placeholder="搜索文件名或路径"
+              value={fileSearch}
+              onChange={(event) => setFileSearch(event.target.value)}
+            />
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<UploadOutlined />}
+                onClick={() => {
+                  setUrlParentId(hasSingleSelection && selectedFiles[0].isFolder ? selectedFiles[0].fileId : null)
+                  setUrlModalOpen(true)
+                }}
+              >
+                添加文件
+              </Button>
+              <Button icon={<FolderAddOutlined />} onClick={() => setFolderModalOpen(true)}>新建文件夹</Button>
+              <Button
+                icon={<RetweetOutlined />}
+                loading={parsingFiles}
+                disabled={!canParseSelectedDocuments}
+                onClick={() => void handleParseSelected()}
+              >
+                解析
+              </Button>
+              <Button onClick={() => setIndexConfigOpen(true)}>索引配置</Button>
+              <Button
+                icon={<BranchesOutlined />}
+                loading={indexingFiles}
+                type="primary"
+                disabled={!canIndexSelectedDocuments}
+                onClick={() => void handleIndexSelected()}
+              >
+                建索引
+              </Button>
+              <Button disabled={!hasSingleSelection} onClick={openMoveModal}>移动</Button>
+              <Button danger disabled={!hasSelectedFiles} onClick={() => void handleDeleteSelectedFiles()}>
+                删除
+              </Button>
+            </Space>
+          </div>
+
+          <Table<KnowledgeTreeNode>
+            rowKey="fileId"
+            size="small"
+            pagination={{ pageSize: 12, hideOnSinglePage: true }}
+            scroll={{ x: 'max-content' }}
+            rowSelection={{
+              selectedRowKeys: selectedFileIds,
+              onChange: (keys) => setSelectedFileIds(keys as string[]),
+              getCheckboxProps: (record) => ({
+                disabled: !record.isFolder && !canDeleteKnowledgeFile(record.status),
+              }),
+            }}
+            expandable={{
+              expandedRowKeys: deferredFileSearch ? searchExpandedFileIds : expandedFileIds,
+              expandRowByClick: true,
+              rowExpandable: (record) => record.isFolder && (record.children || []).length > 0,
+              onExpandedRowsChange: (keys) => {
+                if (!deferredFileSearch) {
+                  setExpandedFileIds(keys as string[])
+                }
+              },
+            }}
+            dataSource={fileTreeData}
+            columns={fileColumns}
+          />
+
+          <div className="knowledge-job-strip">
+            <Text strong>最近任务</Text>
+            <List
+              size="small"
+              dataSource={jobs.slice(0, 6)}
+              locale={{ emptyText: '暂无后台任务' }}
+              renderItem={(item) => (
+                <List.Item>
+                  <Space size={8}>
+                    <Tag color={statusColor(item.status)}>{statusLabel(item.status)}</Tag>
+                    <Text>{item.jobKind}</Text>
+                    <Text type="secondary">{item.targetFileIds.length} 个文件</Text>
+                    <Text type="secondary">{item.updatedAt ? formatDateTimeZh(item.updatedAt) : '--'}</Text>
+                  </Space>
+                </List.Item>
+              )}
+            />
+          </div>
+        </div>
+      ),
+    },
+    {
       key: 'query',
       label: '检索测试',
       children: (
@@ -1198,9 +1263,6 @@ export default function KnowledgePage() {
             <div className="knowledge-page-hero">
               <div>
                 <Title level={3} style={{ margin: 0 }}>文档知识库</Title>
-                <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
-                  参考 Yuxi-Know 的知识库列表页，先选库，再进入详情工作台处理文件、检索、图谱和评测。
-                </Paragraph>
               </div>
               <Space>
                 <Button icon={<ReloadOutlined />} onClick={() => void loadKnowledgeBases()} />
@@ -1226,10 +1288,31 @@ export default function KnowledgePage() {
                 <Tag>{knowledgeBases.length}</Tag>
               </div>
               {workspaceLoading ? (
-                <div className="knowledge-loading-panel"><Spin /></div>
+                <div className="knowledge-card-grid">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="knowledge-sidebar-item" style={{ height: 160, padding: 18 }}>
+                      <Skeleton active title={{ width: '60%' }} paragraph={{ rows: 2, width: ['100%', '80%'] }} />
+                    </div>
+                  ))}
+                </div>
               ) : knowledgeBases.length === 0 ? (
-                <div className="knowledge-loading-panel">
-                  <Empty description="还没有知识库" />
+                <div className="knowledge-card-grid">
+                  <motion.button
+                    type="button"
+                    className="knowledge-sidebar-item knowledge-create-card"
+                    whileHover={{ y: -2 }}
+                    onClick={() => {
+                      setFormState(createKnowledgeForm())
+                      setIndexConfig(createIndexConfigState())
+                      startTransition(() => navigate('/knowledge/new'))
+                    }}
+                  >
+                    <div className="knowledge-create-card-content">
+                      <PlusOutlined style={{ fontSize: 24, marginBottom: 12, color: 'var(--ant-color-primary)' }} />
+                      <Text strong style={{ fontSize: 16 }}>新建知识库</Text>
+                      <Text type="secondary" style={{ marginTop: 8 }}>创建一个新的文档知识库并上传文件</Text>
+                    </div>
+                  </motion.button>
                 </div>
               ) : (
                 <div className="knowledge-card-grid">
@@ -1241,14 +1324,23 @@ export default function KnowledgePage() {
                       whileHover={{ y: -2 }}
                       onClick={() => startTransition(() => navigate(`/knowledge/${item.kbId}`))}
                     >
-                      <div className="knowledge-sidebar-item-top">
-                        <Text strong>{item.name}</Text>
-                        <Tag color={item.enabled ? 'green' : 'default'}>{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
+                      <div className="knowledge-card-body">
+                        <div className="knowledge-sidebar-item-top">
+                          <Text strong>{item.name}</Text>
+                        </div>
+                        {item.description ? (
+                          <Paragraph ellipsis={{ rows: 2 }} type="secondary" style={{ marginBottom: 0 }}>
+                            {item.description}
+                          </Paragraph>
+                        ) : null}
                       </div>
-                      <Paragraph ellipsis={{ rows: 2 }} type="secondary" style={{ marginBottom: 8 }}>
-                        {item.description || '暂无描述'}
-                      </Paragraph>
-                      <Text type="secondary">{formatStats(item.stats)}</Text>
+                      <div className="knowledge-card-footer">
+                        <div className="knowledge-card-stats">
+                          <span title="文件数"><FileTextOutlined /> {item.stats?.fileCount || 0}</span>
+                          <span title="已索引"><DatabaseOutlined /> {item.stats?.indexedCount || 0}</span>
+                          <span title="文件夹"><FolderOpenOutlined /> {item.stats?.folderCount || 0}</span>
+                        </div>
+                      </div>
                     </motion.button>
                   ))}
                 </div>
@@ -1318,120 +1410,13 @@ export default function KnowledgePage() {
                   </Card>
                 ) : null}
 
-                <div ref={detailGridRef} className={`knowledge-detail-grid ${rightPanelVisible ? '' : 'is-single-panel'}`}>
-                  <Card className="knowledge-files-card knowledge-detail-pane" style={{ width: rightPanelVisible ? `${leftPanelWidth}%` : '100%' }} title="文件树">
-                    <div className="knowledge-files-toolbar">
-                      <Input
-                        prefix={<SearchOutlined />}
-                        placeholder="搜索文件名或路径"
-                        value={fileSearch}
-                        onChange={(event) => setFileSearch(event.target.value)}
-                      />
-                      <Space wrap>
-                        <Button type="primary" icon={<UploadOutlined />} onClick={() => {
-                          setUrlParentId(hasSingleSelection && selectedFiles[0].isFolder ? selectedFiles[0].fileId : null)
-                          setUrlModalOpen(true)
-                        }}>添加文件</Button>
-                        <Button icon={<FolderAddOutlined />} onClick={() => setFolderModalOpen(true)}>新建文件夹</Button>
-                      </Space>
-                      <Space wrap>
-                        <Button icon={<ApartmentOutlined />} onClick={toggleRightPanel}>
-                          {rightPanelVisible ? '收起工作台' : '展开工作台'}
-                        </Button>
-                        <Button
-                          icon={<RetweetOutlined />}
-                          loading={parsingFiles}
-                          disabled={!canParseSelectedDocuments}
-                          onClick={() => void handleParseSelected()}
-                        >
-                          解析
-                        </Button>
-                        <Button onClick={() => setIndexConfigOpen(true)}>索引配置</Button>
-                        <Button
-                          icon={<BranchesOutlined />}
-                          loading={indexingFiles}
-                          type="primary"
-                          disabled={!canIndexSelectedDocuments}
-                          onClick={() => void handleIndexSelected()}
-                        >
-                          建索引
-                        </Button>
-                        <Button disabled={!hasSingleSelection} onClick={openMoveModal}>移动</Button>
-                        <Button danger disabled={!hasSelectedFiles} onClick={() => void handleDeleteSelectedFiles()}>
-                          删除
-                        </Button>
-                      </Space>
-                    </div>
-
-                    <Table<KnowledgeTreeNode>
-                      rowKey="fileId"
-                      size="small"
-                      pagination={{ pageSize: 12, hideOnSinglePage: true }}
-                      scroll={{ x: 'max-content' }}
-                      rowSelection={{
-                        selectedRowKeys: selectedFileIds,
-                        onChange: (keys) => setSelectedFileIds(keys as string[]),
-                        getCheckboxProps: (record) => ({
-                          disabled: !record.isFolder && !canDeleteKnowledgeFile(record.status),
-                        }),
-                      }}
-                      expandable={{
-                        expandedRowKeys: deferredFileSearch ? searchExpandedFileIds : expandedFileIds,
-                        expandRowByClick: true,
-                        rowExpandable: (record) => record.isFolder && (record.children || []).length > 0,
-                        onExpandedRowsChange: (keys) => {
-                          if (!deferredFileSearch) {
-                            setExpandedFileIds(keys as string[])
-                          }
-                        },
-                      }}
-                      dataSource={fileTreeData}
-                      columns={fileColumns}
-                    />
-
-                    <div className="knowledge-job-strip">
-                      <Text strong>最近任务</Text>
-                      <List
-                        size="small"
-                        dataSource={jobs.slice(0, 6)}
-                        locale={{ emptyText: '暂无后台任务' }}
-                        renderItem={(item) => (
-                          <List.Item>
-                            <Space size={8}>
-                              <Tag color={statusColor(item.status)}>{statusLabel(item.status)}</Tag>
-                              <Text>{item.jobKind}</Text>
-                              <Text type="secondary">{item.targetFileIds.length} 个文件</Text>
-                              <Text type="secondary">{item.updatedAt ? formatDateTimeZh(item.updatedAt) : '--'}</Text>
-                            </Space>
-                          </List.Item>
-                        )}
-                      />
-                    </div>
-                  </Card>
-
-                  {rightPanelVisible ? (
-                    <>
-                      <div
-                        className="knowledge-resize-handle"
-                        onMouseDown={() => setIsResizingPanels(true)}
-                        role="separator"
-                        aria-orientation="vertical"
-                      />
-                      <Card className="knowledge-tabs-card knowledge-detail-pane" style={{ width: `${100 - leftPanelWidth}%` }}>
-                        <Tabs
-                          activeKey={activeTab}
-                          onChange={setActiveTab}
-                          items={tabItems}
-                          tabBarExtraContent={
-                            <Button size="small" onClick={() => setQueryConfigOpen(true)}>
-                              检索配置
-                            </Button>
-                          }
-                        />
-                      </Card>
-                    </>
-                  ) : null}
-                </div>
+                <Card className="knowledge-tabs-card knowledge-main-tabs-card">
+                  <Tabs
+                    activeKey={activeTab}
+                    onChange={setActiveTab}
+                    items={tabItems}
+                  />
+                </Card>
               </>
             )}
           </div>

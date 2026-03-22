@@ -714,6 +714,18 @@ vi.mock('antd', async () => {
     { PRESENTED_IMAGE_SIMPLE: null },
   )
 
+  const Skeleton = ({
+    title,
+    paragraph,
+  }: Props & {
+    title?: { width?: React.CSSProperties['width'] } | boolean
+    paragraph?: { rows?: number } | boolean
+  }) => (
+    <div>
+      {title ? <div data-skeleton-title>{typeof title === 'object' ? String(title.width ?? '') : 'title'}</div> : null}
+      {paragraph ? <div data-skeleton-paragraph>{typeof paragraph === 'object' ? paragraph.rows ?? 0 : 0}</div> : null}
+    </div>
+  )
   const Spin = () => <div>loading</div>
   const Statistic = ({ title, value }: Props & { title?: React.ReactNode; value?: React.ReactNode }) => (
     <div>
@@ -908,6 +920,7 @@ vi.mock('antd', async () => {
     QRCode,
     Segmented,
     Select,
+    Skeleton,
     Space,
     Spin,
     Statistic,
@@ -2883,7 +2896,7 @@ describe('web app smoke pages', () => {
     fireEvent.click(screen.getByText('Support KB'))
     expect(await screen.findByText('返回列表')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
-    expect(screen.getByText('文件树')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '文件' })).toBeInTheDocument()
     expect(screen.getByText('检索测试')).toBeInTheDocument()
     expect(screen.getByText('知识导图')).toBeInTheDocument()
 

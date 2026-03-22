@@ -102,7 +102,7 @@ export function KnowledgeMindmapTab({ mindmapLoading, mindmap, onRegenerate }: K
           <div className="knowledge-mindmap-canvas">
             <svg ref={svgRef} className="knowledge-mindmap-svg" />
           </div>
-          <Text type="secondary">当前导图已切到可缩放的可视化视图，交互方向与 Yuxi-Know 的 Markmap 工作台保持一致。</Text>
+          <Text type="secondary">支持缩放和适应视图，方便快速浏览知识结构。</Text>
         </div>
       ) : (
         <div className="knowledge-loading-panel">
