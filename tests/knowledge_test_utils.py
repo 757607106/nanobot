@@ -30,6 +30,7 @@ class FakeRAGEngine:
 
     def __init__(self) -> None:
         self._docs: dict[str, dict[str, dict[str, str]]] = {}
+        self.prepare_calls: list[tuple[str, str]] = []
 
     async def parse_and_index(
         self,
@@ -70,6 +71,7 @@ class FakeRAGEngine:
             "content": content,
             "file_path": str(file_path or f"{kb_id}.txt"),
             "doc_id": stored_doc_id,
+            "chunks": [content],
         }
         return ParseResult(
             success=True,
@@ -98,6 +100,7 @@ class FakeRAGEngine:
             "content": "\n\n".join(normalized_chunks),
             "file_path": str(file_path or f"{kb_id}.txt"),
             "doc_id": stored_doc_id,
+            "chunks": list(normalized_chunks),
         }
         return ParseResult(
             success=True,
@@ -123,26 +126,28 @@ class FakeRAGEngine:
 
         for kb_id in kb_ids:
             for document in self._docs.get(kb_id, {}).values():
-                content = document["content"]
-                content_tokens = _tokenize(content)
-                overlap = len(query_tokens & content_tokens)
-                if overlap == 0 and query_text.strip().lower() not in content.lower():
-                    continue
-                score = float(overlap or 1)
-                results.append(
-                    RetrievalHit(
-                        content=content,
-                        score=score,
-                        source=kb_id,
-                        metadata={
-                            "mode": mode,
-                            "kb_id": kb_id,
-                            "file_path": document["file_path"],
-                            "doc_id": document["doc_id"],
-                            "vlm_enhanced": bool(vlm_enhanced),
-                        },
+                for index, content in enumerate(document.get("chunks") or [document["content"]], start=1):
+                    content_tokens = _tokenize(content)
+                    overlap = len(query_tokens & content_tokens)
+                    if overlap == 0 and query_text.strip().lower() not in content.lower():
+                        continue
+                    score = float(overlap or 1)
+                    results.append(
+                        RetrievalHit(
+                            content=content,
+                            score=score,
+                            source=kb_id,
+                            metadata={
+                                "mode": mode,
+                                "kb_id": kb_id,
+                                "file_path": document["file_path"],
+                                "doc_id": document["doc_id"],
+                                "chunk_id": f"{document['doc_id']}::chunk::{index:04d}",
+                                "chunk_index": index,
+                                "vlm_enhanced": bool(vlm_enhanced),
+                            },
+                        )
                     )
-                )
 
         results.sort(key=lambda item: item.score, reverse=True)
         return results[: max(1, int(top_k))]
@@ -175,10 +180,11 @@ class FakeRAGEngine:
             )
             chunks.append(
                 {
-                    "chunk_id": f"{reference_id}::chunk::{index:04d}",
+                    "chunk_id": str(hit.metadata.get("chunk_id") or f"{reference_id}::chunk::{index:04d}"),
                     "content": hit.content,
                     "reference_id": reference_id,
                     "file_path": file_path,
+                    "chunk_index": hit.metadata.get("chunk_index"),
                 }
             )
         return {
@@ -244,6 +250,14 @@ class FakeRAGEngine:
 
     async def delete_document(self, kb_id: str, doc_id: str) -> bool:
         return self._docs.get(kb_id, {}).pop(doc_id, None) is not None
+
+    async def prepare_document_ingest(self, kb_id: str, doc_id: str) -> dict[str, list[str]]:
+        self.prepare_calls.append((kb_id, doc_id))
+        await self.delete_document(kb_id, doc_id)
+        return {
+            "deletedDocIds": [doc_id],
+            "prunedDocIds": [],
+        }
 
     async def delete_kb(self, kb_id: str) -> bool:
         self._docs.pop(kb_id, None)

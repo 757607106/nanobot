@@ -29,13 +29,6 @@ def _bootstrap_admin(client: TestClient) -> None:
     )
     assert response.status_code == 201
 
-
-def _fake_embed(texts: list[str], kb=None) -> list[list[float]]:
-    del kb
-    vocabulary = ("restart", "worker", "token", "cache", "queue", "incident")
-    return [[float(str(text or "").lower().count(token)) for token in vocabulary] for text in texts]
-
-
 def _wait_for_job(client: TestClient, kb_id: str, job_id: str) -> dict:
     deadline = time.time() + 5.0
     while time.time() < deadline:
@@ -60,7 +53,7 @@ def _wait_for_evaluation(client: TestClient, kb_id: str, task_id: str) -> dict:
     raise AssertionError(f"Timed out waiting for evaluation {task_id}")
 
 
-def test_web_api_milvus_workspace_flow(tmp_path, monkeypatch) -> None:
+def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
     config = _make_test_config(tmp_path, monkeypatch)
     monkeypatch.setattr("nanobot.web.app.create_rag_engine_from_config", lambda config, instance_dir: FakeRAGEngine())
     monkeypatch.setattr(
@@ -70,7 +63,6 @@ def test_web_api_milvus_workspace_flow(tmp_path, monkeypatch) -> None:
 
     with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
         _bootstrap_admin(client)
-        client.app.state.knowledge._embed_texts = _fake_embed  # type: ignore[method-assign]
         client.app.state.knowledge._generate_with_llm = lambda **kwargs: None  # type: ignore[method-assign]
 
         created = client.post(
@@ -83,8 +75,8 @@ def test_web_api_milvus_workspace_flow(tmp_path, monkeypatch) -> None:
         )
         assert created.status_code == 201
         kb_id = created.json()["data"]["kbId"]
-        assert created.json()["data"]["queryParams"]["mode"] == "vector"
-        assert created.json()["data"]["queryParams"]["options"]["search_mode"] == "vector"
+        assert created.json()["data"]["kbType"] == "lightrag"
+        assert created.json()["data"]["queryParams"]["mode"] == "mix"
 
         unsupported = client.post(
             "/api/v1/knowledge-bases",
@@ -98,7 +90,7 @@ def test_web_api_milvus_workspace_flow(tmp_path, monkeypatch) -> None:
 
         schema = client.get(f"/api/v1/knowledge-bases/{kb_id}/query-params/schema")
         assert schema.status_code == 200
-        assert schema.json()["data"]["type"] == "milvus"
+        assert schema.json()["data"]["type"] == "lightrag"
 
         description = client.post(
             "/api/v1/knowledge-bases/generate-description",
@@ -138,14 +130,14 @@ def test_web_api_milvus_workspace_flow(tmp_path, monkeypatch) -> None:
             f"/api/v1/knowledge-bases/{kb_id}/query",
             json={
                 "query": "How do we restart the worker?",
-                "mode": "vector",
-                "search_mode": "vector",
+                "mode": "mix",
                 "topK": 4,
+                "onlyNeedContext": False,
             },
         )
         assert queried.status_code == 200
         query_payload = queried.json()["data"]
-        assert query_payload["metadata"]["kbType"] == "milvus"
+        assert query_payload["metadata"]["kbType"] == "lightrag"
         assert query_payload["data"]["chunks"]
 
         faq_source = client.post(
@@ -222,15 +214,15 @@ def test_web_api_milvus_workspace_flow(tmp_path, monkeypatch) -> None:
         updated_query_params = client.put(
             f"/api/v1/knowledge-bases/{kb_id}/query-params",
             json={
-                "keyword_top_k": 33,
-                "similarity_threshold": 0.25,
+                "chunkTopK": 8,
+                "enableRerank": True,
             },
         )
         assert updated_query_params.status_code == 200
         query_params_payload = updated_query_params.json()["data"]
-        assert query_params_payload["mode"] == "vector"
-        assert query_params_payload["options"]["keyword_top_k"] == 33
-        assert query_params_payload["options"]["similarity_threshold"] == 0.25
+        assert query_params_payload["mode"] == "mix"
+        assert query_params_payload["chunkTopK"] == 8
+        assert query_params_payload["enableRerank"] is True
 
         query_test = client.post(
             f"/api/v1/knowledge-bases/{kb_id}/query-test",
@@ -238,7 +230,7 @@ def test_web_api_milvus_workspace_flow(tmp_path, monkeypatch) -> None:
                 "query": "How do we clear the cache?",
                 "meta": {
                     "file_ids": [qa_file_id],
-                    "search_mode": "vector",
+                    "mode": "mix",
                     "top_k": 2,
                 },
             },
@@ -281,7 +273,6 @@ def test_web_api_legacy_knowledge_routes_match_yuxi_shape(tmp_path, monkeypatch)
 
     with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
         _bootstrap_admin(client)
-        client.app.state.knowledge._embed_texts = _fake_embed  # type: ignore[method-assign]
         client.app.state.knowledge._generate_with_llm = lambda **kwargs: None  # type: ignore[method-assign]
 
         created = client.post(
@@ -343,8 +334,8 @@ def test_web_api_legacy_knowledge_routes_match_yuxi_shape(tmp_path, monkeypatch)
         updated_query_params = client.put(
             f"/api/knowledge/databases/{kb_id}/query-params",
             json={
-                "keyword_top_k": 21,
-                "similarity_threshold": 0.1,
+                "chunkTopK": 21,
+                "enableRerank": True,
             },
         )
         assert updated_query_params.status_code == 200
@@ -352,24 +343,24 @@ def test_web_api_legacy_knowledge_routes_match_yuxi_shape(tmp_path, monkeypatch)
         query_params = client.get(f"/api/knowledge/databases/{kb_id}/query-params")
         assert query_params.status_code == 200
         params_payload = query_params.json()["data"]["params"]
-        similarity_option = next(item for item in params_payload["options"] if item["key"] == "similarity_threshold")
-        keyword_option = next(item for item in params_payload["options"] if item["key"] == "keyword_top_k")
-        assert similarity_option["default"] == 0.1
-        assert keyword_option["default"] == 21
+        chunk_top_k_option = next(item for item in params_payload["options"] if item["key"] == "chunkTopK")
+        rerank_option = next(item for item in params_payload["options"] if item["key"] == "enableRerank")
+        assert chunk_top_k_option["default"] == 21
+        assert rerank_option["default"] is True
 
         query_test = client.post(
             f"/api/knowledge/databases/{kb_id}/query-test",
             json={
                 "query": "How do we restart the worker?",
                 "meta": {
-                    "search_mode": "vector",
+                    "mode": "mix",
                     "top_k": 2,
                 },
             },
         )
         assert query_test.status_code == 200
         query_payload = query_test.json()["data"]
-        assert query_payload["metadata"]["kbType"] == "milvus"
+        assert query_payload["metadata"]["kbType"] == "lightrag"
         assert any("restart the worker" in str(item.get("content") or "").lower() for item in query_payload["data"]["chunks"])
 
 

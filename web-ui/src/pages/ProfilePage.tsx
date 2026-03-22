@@ -344,7 +344,7 @@ export default function ProfilePage() {
                   <Button size="small" onClick={openPasswordDialog}>
                     修改密码
                   </Button>
-                  <Button size="small" type="primary" ghost onClick={openAvatarDialog}>
+                  <Button size="small" type="default" onClick={openAvatarDialog}>
                     头像
                   </Button>
                 </Space>

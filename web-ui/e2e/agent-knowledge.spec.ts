@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { bootstrapAndSetup } from './helpers'
+import { bootstrapAndSetup, uniqueE2EName } from './helpers'
 
 async function waitForKnowledgeJob(page: import('@playwright/test').Page, kbId: string, jobId: string) {
   const deadline = Date.now() + 10000
@@ -21,10 +21,12 @@ test.describe.serial('agent knowledge binding e2e', () => {
 
   test('agent test run answers from bound knowledge base', async ({ page }) => {
     await bootstrapAndSetup(page)
+    const kbName = uniqueE2EName('Ops E2E KB')
+    const agentName = uniqueE2EName('Ops E2E Agent')
 
     const kbCreated = await page.request.post('/api/v1/knowledge-bases', {
       data: {
-        name: 'Ops E2E KB',
+        name: kbName,
         description: 'Knowledge used by the agent test run.',
         kbType: 'milvus',
       },
@@ -67,7 +69,7 @@ test.describe.serial('agent knowledge binding e2e', () => {
 
     const agentCreated = await page.request.post('/api/v1/agents', {
       data: {
-        name: 'Ops E2E Agent',
+        name: agentName,
         description: 'Answers with bound knowledge.',
         systemPrompt: 'You are an operations agent. Use the bound knowledge when relevant.',
         rules: ['Use the bound knowledge when relevant.', 'Answer clearly and briefly.'],

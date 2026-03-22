@@ -2,16 +2,13 @@ import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState
 import {
   Alert,
   App,
-  Checkbox,
   Button,
   Card,
-  Descriptions,
   Empty,
   Input,
   InputNumber,
   List,
   Modal,
-  Segmented,
   Select,
   Space,
   Spin,
@@ -20,19 +17,15 @@ import {
   Table,
   Tabs,
   Tag,
-  Tooltip,
   Typography,
 } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
 import {
   ApartmentOutlined,
   BranchesOutlined,
   DeleteOutlined,
-  DownloadOutlined,
   EditOutlined,
   FileSearchOutlined,
   FolderAddOutlined,
-  InfoCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
   RetweetOutlined,
@@ -42,13 +35,12 @@ import {
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ApiError, api } from '../api'
+import { api } from '../api'
 import { formatDateTimeZh } from '../locale'
 import type {
   KnowledgeBaseDefinition,
   KnowledgeBenchmark,
   KnowledgeBenchmarkDetail,
-  KnowledgeDatabaseStats,
   KnowledgeDocument,
   KnowledgeFileDetail,
   KnowledgeEvaluationResult,
@@ -62,6 +54,32 @@ import type {
   KnowledgeRetrieveResult,
   KnowledgeIngestJob,
 } from '../types'
+import {
+  CHUNK_PRESET_OPTIONS,
+  LANGUAGE_OPTIONS,
+  KNOWLEDGE_ARCHITECTURE_LABEL,
+  buildKnowledgeAdditionalParams,
+  buildKnowledgeTree,
+  canDeleteKnowledgeFile,
+  canIndexKnowledgeFile,
+  canParseKnowledgeFile,
+  collectExpandedFolderKeys,
+  createEmptyListState,
+  createIndexConfigState,
+  createKnowledgeFormState,
+  formatScorePercent,
+  formatStats,
+  getDefaultQueryParams,
+  getErrorMessage,
+  parseTags,
+  statusColor,
+  statusLabel,
+  type KnowledgeFormState,
+  type KnowledgeIndexConfigState,
+  type KnowledgeTreeNode,
+} from './knowledge/shared'
+import { KnowledgeBenchmarkPreviewModal } from './knowledge/KnowledgeBenchmarkPreviewModal'
+import { KnowledgeEvaluationResultModal } from './knowledge/KnowledgeEvaluationResultModal'
 import { KnowledgeQueryTab } from './knowledge/KnowledgeQueryTab'
 import { KnowledgeGraphTab } from './knowledge/KnowledgeGraphTab'
 import { KnowledgeMindmapTab } from './knowledge/KnowledgeMindmapTab'
@@ -70,304 +88,13 @@ import { KnowledgeBenchmarksTab } from './knowledge/KnowledgeBenchmarksTab'
 import { KnowledgeSettingsTab } from './knowledge/KnowledgeSettingsTab'
 import { KnowledgeFileDetailModal } from './knowledge/KnowledgeFileDetailModal'
 import { KnowledgeUploadModal } from './knowledge/KnowledgeUploadModal'
+import {
+  buildKnowledgeBenchmarkColumns,
+  buildKnowledgeEvaluationColumns,
+  buildKnowledgeFileColumns,
+} from './knowledge/columns'
 
 const { Paragraph, Text, Title } = Typography
-const LIGHTRAG_DEFAULT_QUERY_PARAMS: KnowledgeQueryParams = {
-  mode: 'mix',
-  topK: 10,
-  chunkTopK: 12,
-  responseType: 'Multiple Paragraphs',
-  onlyNeedContext: true,
-  onlyNeedPrompt: false,
-  enableRerank: false,
-  rerankModel: null,
-  options: {},
-}
-
-const MILVUS_DEFAULT_QUERY_PARAMS: KnowledgeQueryParams = {
-  mode: 'vector',
-  topK: 10,
-  chunkTopK: 12,
-  responseType: 'Multiple Paragraphs',
-  onlyNeedContext: false,
-  onlyNeedPrompt: false,
-  enableRerank: false,
-  rerankModel: null,
-  options: {
-    search_mode: 'vector',
-    similarity_threshold: 0,
-    keyword_top_k: 50,
-  },
-}
-
-function getDefaultQueryParams(kbType?: string): KnowledgeQueryParams {
-  const source = kbType === 'milvus' ? MILVUS_DEFAULT_QUERY_PARAMS : LIGHTRAG_DEFAULT_QUERY_PARAMS
-  return {
-    ...source,
-    options: { ...(source.options || {}) },
-  }
-}
-
-const CHUNK_PRESET_OPTIONS = [
-  { value: 'general', label: 'General', description: '通用分块，适合大多数普通文档。' },
-  { value: 'qa', label: 'QA', description: '问答分块，适合 FAQ、题库、问答手册。' },
-  { value: 'book', label: 'Book', description: '强化章节结构，适合教材、长手册。' },
-  { value: 'laws', label: 'Laws', description: '法条层级分块，适合法规制度文本。' },
-]
-
-const LANGUAGE_OPTIONS = [
-  { value: 'Chinese', label: '中文 Chinese' },
-  { value: 'English', label: '英语 English' },
-  { value: 'Japanese', label: '日语 Japanese' },
-  { value: 'Korean', label: '韩语 Korean' },
-  { value: 'German', label: '德语 German' },
-  { value: 'French', label: '法语 French' },
-  { value: 'Spanish', label: '西班牙语 Spanish' },
-  { value: 'Portuguese', label: '葡萄牙语 Portuguese' },
-  { value: 'Russian', label: '俄语 Russian' },
-  { value: 'Arabic', label: '阿拉伯语 Arabic' },
-  { value: 'Hindi', label: '印地语 Hindi' },
-]
-
-interface KnowledgeFormState {
-  name: string
-  description: string
-  enabled: boolean
-  kbType: string
-  embedModelName: string
-  llmModelName: string
-  language: string
-  chunkPresetId: string
-  autoGenerateQuestions: boolean
-  qaSeparator: string
-  tagsText: string
-}
-
-interface KnowledgeIndexConfigState {
-  chunkSize: number
-  chunkOverlap: number
-  chunkPresetId: string
-  qaSeparator: string
-}
-
-interface KnowledgeTreeNode extends KnowledgeDocument {
-  children?: KnowledgeTreeNode[]
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) {
-    return error.message
-  }
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
-
-function createKnowledgeFormState(kb?: KnowledgeBaseDefinition | null): KnowledgeFormState {
-  return {
-    name: kb?.name || '',
-    description: kb?.description || '',
-    enabled: kb?.enabled ?? true,
-    kbType: kb?.kbType || 'lightrag',
-    embedModelName: String(kb?.embedInfo?.modelName || kb?.embedInfo?.model || ''),
-    llmModelName: String(kb?.llmInfo?.modelName || kb?.llmInfo?.model || ''),
-    language: String(kb?.additionalParams?.language || 'Chinese'),
-    chunkPresetId: String(kb?.additionalParams?.chunk_preset_id || 'general'),
-    autoGenerateQuestions: Boolean(kb?.additionalParams?.auto_generate_questions || false),
-    qaSeparator: String(kb?.additionalParams?.qa_separator || ''),
-    tagsText: (kb?.tags || []).join(', '),
-  }
-}
-
-function createIndexConfigState(kb?: KnowledgeBaseDefinition | null): KnowledgeIndexConfigState {
-  return {
-    chunkSize: Number(kb?.additionalParams?.chunk_size || 1000),
-    chunkOverlap: Number(kb?.additionalParams?.chunk_overlap || 200),
-    chunkPresetId: String(kb?.additionalParams?.chunk_preset_id || 'general'),
-    qaSeparator: String(kb?.additionalParams?.qa_separator || ''),
-  }
-}
-
-function parseTags(value: string) {
-  return Array.from(
-    new Set(
-      value
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  )
-}
-
-function statusColor(status: string) {
-  switch (status) {
-    case 'indexed':
-    case 'completed':
-    case 'succeeded':
-      return 'success'
-    case 'parsed':
-    case 'running':
-    case 'indexing':
-    case 'parsing':
-      return 'processing'
-    case 'error_parsing':
-    case 'error_indexing':
-    case 'failed':
-      return 'error'
-    case 'uploaded':
-      return 'warning'
-    default:
-      return 'default'
-  }
-}
-
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    uploaded: '待解析',
-    parsing: '解析中',
-    parsed: '已解析',
-    indexing: '索引中',
-    indexed: '已索引',
-    folder: '文件夹',
-    error_parsing: '解析失败',
-    error_indexing: '索引失败',
-    queued: '排队中',
-    running: '运行中',
-    completed: '已完成',
-    succeeded: '已完成',
-    failed: '失败',
-  }
-  return labels[status] || status
-}
-
-function canParseKnowledgeFile(status: string) {
-  return status === 'uploaded' || status === 'error_parsing'
-}
-
-function canIndexKnowledgeFile(status: string, allowReindex: boolean) {
-  return status === 'parsed' || status === 'error_indexing' || (allowReindex && status === 'indexed')
-}
-
-function canDeleteKnowledgeFile(status: string) {
-  return !['parsing', 'indexing', 'running', 'waiting', 'processing'].includes(status)
-}
-
-function formatStats(stats?: KnowledgeDatabaseStats | null) {
-  if (!stats) {
-    return '暂无文件'
-  }
-  return `${stats.fileCount} 文件 · ${stats.indexedCount} 已索引 · ${stats.folderCount} 文件夹`
-}
-
-function fileDepth(path: string) {
-  return Math.max(0, path.split('/').filter(Boolean).length - 1)
-}
-
-function matchFile(file: KnowledgeDocument, query: string) {
-  if (!query) return true
-  const lower = query.toLowerCase()
-  return (
-    file.filename.toLowerCase().includes(lower)
-    || file.path.toLowerCase().includes(lower)
-    || String(file.fileType || '').toLowerCase().includes(lower)
-  )
-}
-
-function createEmptyListState(): KnowledgeFileListResponse {
-  return {
-    items: [],
-    stats: {
-      totalCount: 0,
-      folderCount: 0,
-      fileCount: 0,
-      indexedCount: 0,
-      parsedCount: 0,
-      errorCount: 0,
-    },
-  }
-}
-
-function sortKnowledgeNodes(left: KnowledgeDocument, right: KnowledgeDocument) {
-  if (left.isFolder !== right.isFolder) {
-    return left.isFolder ? -1 : 1
-  }
-  return left.filename.localeCompare(right.filename, 'zh-Hans-CN')
-}
-
-function buildKnowledgeTree(items: KnowledgeDocument[], query: string): KnowledgeTreeNode[] {
-  const nodes = new Map<string, KnowledgeTreeNode>(
-    items
-      .slice()
-      .sort(sortKnowledgeNodes)
-      .map((item) => [item.fileId, { ...item, children: [] }]),
-  )
-
-  const roots: KnowledgeTreeNode[] = []
-  for (const item of items.slice().sort(sortKnowledgeNodes)) {
-    const node = nodes.get(item.fileId)
-    if (!node) continue
-    if (item.parentId && nodes.has(item.parentId)) {
-      nodes.get(item.parentId)?.children?.push(node)
-    } else {
-      roots.push(node)
-    }
-  }
-
-  if (!query) {
-    return roots
-  }
-
-  const visit = (node: KnowledgeTreeNode): KnowledgeTreeNode | null => {
-    const children = (node.children || [])
-      .map(visit)
-      .filter((item): item is KnowledgeTreeNode => item !== null)
-    if (!matchFile(node, query) && children.length === 0) {
-      return null
-    }
-    return {
-      ...node,
-      children,
-    }
-  }
-
-  return roots
-    .map(visit)
-    .filter((item): item is KnowledgeTreeNode => item !== null)
-}
-
-function collectExpandedFolderKeys(nodes: KnowledgeTreeNode[]): string[] {
-  const result: string[] = []
-  const walk = (items: KnowledgeTreeNode[]) => {
-    for (const item of items) {
-      if (item.isFolder && (item.children || []).length > 0) {
-        result.push(item.fileId)
-        walk(item.children || [])
-      }
-    }
-  }
-  walk(nodes)
-  return result
-}
-
-function isLightRagKnowledgeBase(kb?: KnowledgeBaseDefinition | null) {
-  return (kb?.kbType || '').toLowerCase() === 'lightrag'
-}
-
-function isMilvusKnowledgeBase(kb?: KnowledgeBaseDefinition | null) {
-  return (kb?.kbType || '').toLowerCase() === 'milvus'
-}
-
-function formatScorePercent(value?: number | null) {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return '--'
-  }
-  return `${(value * 100).toFixed(0)}%`
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
 
 export default function KnowledgePage() {
   const { message } = App.useApp()
@@ -376,7 +103,6 @@ export default function KnowledgePage() {
   const { kbId } = useParams()
   const selectedKbId = kbId && kbId !== 'new' ? kbId : null
   const shouldOpenCreateModal = location.pathname.endsWith('/knowledge/new')
-  const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const benchmarkUploadInputRef = useRef<HTMLInputElement | null>(null)
   const detailGridRef = useRef<HTMLDivElement | null>(null)
 
@@ -417,7 +143,6 @@ export default function KnowledgePage() {
   const [generatingDescription, setGeneratingDescription] = useState(false)
   const [parsingFiles, setParsingFiles] = useState(false)
   const [indexingFiles, setIndexingFiles] = useState(false)
-  const [uploadingFiles, setUploadingFiles] = useState(false)
   const [uploadingBenchmark, setUploadingBenchmark] = useState(false)
   const [generatingBenchmark, setGeneratingBenchmark] = useState(false)
   const [runningEvaluation, setRunningEvaluation] = useState(false)
@@ -440,13 +165,7 @@ export default function KnowledgePage() {
   const [indexConfig, setIndexConfig] = useState<KnowledgeIndexConfigState>(() => createIndexConfigState())
   const [folderName, setFolderName] = useState('')
   const [folderParentId, setFolderParentId] = useState<string | null>(null)
-  const [urlValue, setUrlValue] = useState('')
   const [urlParentId, setUrlParentId] = useState<string | null>(null)
-  const [sourceMode, setSourceMode] = useState<'file' | 'web_url' | 'faq_table'>('file')
-  const [sourceTitle, setSourceTitle] = useState('')
-  const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([])
-  const [autoIndexAfterAdd, setAutoIndexAfterAdd] = useState(false)
-  const [faqItems, setFaqItems] = useState<Array<{ question: string; answer: string }>>([{ question: '', answer: '' }])
   const [moveTargetParentId, setMoveTargetParentId] = useState<string | null>(null)
   const [moveTargetName, setMoveTargetName] = useState('')
   const [benchmarkUploadFile, setBenchmarkUploadFile] = useState<File | null>(null)
@@ -529,6 +248,12 @@ export default function KnowledgePage() {
     }
   }, [activeTab, currentKb, graphDepth, graphMaxNodes])
 
+  useEffect(() => {
+    if (activeTab === 'mindmap' && currentKb && !mindmap && !mindmapLoading) {
+      void loadMindmap(currentKb.kbId)
+    }
+  }, [activeTab, currentKb, mindmap, mindmapLoading])
+
   const fileTreeData = useMemo(
     () => buildKnowledgeTree(filesState.items, deferredFileSearch),
     [deferredFileSearch, filesState.items],
@@ -560,32 +285,27 @@ export default function KnowledgePage() {
   )
   const indexableSelectedFileIds = useMemo(
     () => selectedFiles
-      .filter((item) => !item.isFolder && canIndexKnowledgeFile(item.status, !isLightRagKnowledgeBase(currentKb)))
+      .filter((item) => !item.isFolder && canIndexKnowledgeFile(item.status, true))
       .map((item) => item.fileId),
-    [currentKb, selectedFiles],
+    [selectedFiles],
   )
   const pendingParseFileIds = useMemo(
     () => filesState.items.filter((item) => !item.isFolder && item.status === 'uploaded').map((item) => item.fileId),
     [filesState.items],
   )
   const pendingIndexFileIds = useMemo(() => {
-    const isLightRag = isLightRagKnowledgeBase(currentKb)
     return filesState.items
       .filter((item) => {
         if (item.isFolder) return false
-        if (isLightRag) {
-          return item.status === 'parsed'
-        }
         return item.status === 'parsed' || item.status === 'error_indexing'
       })
       .map((item) => item.fileId)
-  }, [currentKb, filesState.items])
+  }, [filesState.items])
 
   const hasSelectedFiles = selectedFiles.length > 0
   const canParseSelectedDocuments = parseableSelectedFileIds.length > 0
   const canIndexSelectedDocuments = indexableSelectedFileIds.length > 0
   const hasSingleSelection = selectedFiles.length === 1
-  const supportsChunkConfig = isMilvusKnowledgeBase(currentKb)
   const supportsDescriptionGeneration = Boolean(formState.name.trim())
   const pendingParseCount = pendingParseFileIds.length
   const pendingIndexCount = pendingIndexFileIds.length
@@ -620,7 +340,7 @@ export default function KnowledgePage() {
       setIndexConfig(createIndexConfigState(kb))
       setFilesState(filePayload)
       setJobs(jobPayload)
-      const defaultQueryParams = getDefaultQueryParams(kb.kbType)
+      const defaultQueryParams = getDefaultQueryParams()
       setQueryParams({
         ...defaultQueryParams,
         ...(kb.queryParams || {}),
@@ -631,37 +351,16 @@ export default function KnowledgePage() {
       })
       setQueryParamSchema(querySchemaPayload)
       setSampleQuestions(questionPayload.questions || [])
+      setMindmap(null)
       setGraphStats(graphStatsPayload)
-      try {
-        const mapPayload = await api.getKnowledgeMindmap(nextKbId)
-        setMindmap(mapPayload.mindmap)
-      } catch {
-        setMindmap(null)
-      }
       setActiveTab((previous) => {
         const isSwitchingKb = currentKb?.kbId !== kb.kbId
-        if (isLightRagKnowledgeBase(kb)) {
-          if (isSwitchingKb) {
-            return 'graph'
-          }
-          return previous === 'evaluation' || previous === 'benchmarks' ? 'graph' : previous || 'graph'
+        if (isSwitchingKb) {
+          return 'graph'
         }
-        if (previous === 'graph') {
-          return 'query'
-        }
-        return previous || 'query'
+        return previous || 'graph'
       })
-      if (isMilvusKnowledgeBase(kb)) {
-        await loadBenchmarkState(nextKbId)
-      } else {
-        setBenchmarks([])
-        setBenchmarkPreview(null)
-        setEvaluationHistory([])
-        setEvaluationResult(null)
-        if (activeTab === 'evaluation' || activeTab === 'benchmarks') {
-          setActiveTab('query')
-        }
-      }
+      await loadBenchmarkState(nextKbId)
       setError(null)
       setSelectedFileIds([])
       setExpandedFileIds([])
@@ -671,6 +370,18 @@ export default function KnowledgePage() {
       setError(getErrorMessage(loadError, '加载知识库详情失败'))
     } finally {
       setDetailLoading(false)
+    }
+  }
+
+  async function loadMindmap(targetKbId: string) {
+    try {
+      setMindmapLoading(true)
+      const payload = await api.getKnowledgeMindmap(targetKbId)
+      setMindmap(payload.mindmap)
+    } catch {
+      setMindmap(null)
+    } finally {
+      setMindmapLoading(false)
     }
   }
 
@@ -705,15 +416,9 @@ export default function KnowledgePage() {
         name: formState.name.trim(),
         description: formState.description.trim(),
         enabled: formState.enabled,
-        kbType: formState.kbType,
         embedInfo: { modelName: formState.embedModelName.trim() || null },
         llmInfo: { modelName: formState.llmModelName.trim() || null },
-        additionalParams: {
-          language: formState.language,
-          chunk_preset_id: formState.chunkPresetId,
-          auto_generate_questions: formState.autoGenerateQuestions,
-          qa_separator: formState.qaSeparator.trim(),
-        },
+        additionalParams: buildKnowledgeAdditionalParams(null, formState, indexConfig),
         tags: parseTags(formState.tagsText),
       })
       message.success('知识库已创建')
@@ -737,18 +442,14 @@ export default function KnowledgePage() {
         name: formState.name.trim(),
         description: formState.description.trim(),
         enabled: formState.enabled,
-        kbType: formState.kbType,
         embedInfo: { modelName: formState.embedModelName.trim() || null },
         llmInfo: { modelName: formState.llmModelName.trim() || null },
-        additionalParams: {
-          language: formState.language,
-          chunk_preset_id: formState.chunkPresetId,
-          auto_generate_questions: formState.autoGenerateQuestions,
-          qa_separator: formState.qaSeparator.trim(),
-        },
+        additionalParams: buildKnowledgeAdditionalParams(currentKb.additionalParams, formState, indexConfig),
         tags: parseTags(formState.tagsText),
       })
       setCurrentKb(updated)
+      setFormState(createKnowledgeFormState(updated))
+      setIndexConfig(createIndexConfigState(updated))
       message.success('知识库设置已保存')
       await loadKnowledgeBases()
     } catch (saveError) {
@@ -794,134 +495,6 @@ export default function KnowledgePage() {
       message.error(getErrorMessage(descriptionError, '生成知识库描述失败'))
     } finally {
       setGeneratingDescription(false)
-    }
-  }
-
-  function resetAddFilesModal() {
-    setUrlModalOpen(false)
-    setSourceMode('file')
-    setUrlValue('')
-    setUrlParentId(null)
-    setSourceTitle('')
-    setSelectedUploadFiles([])
-    setAutoIndexAfterAdd(false)
-    setFaqItems([{ question: '', answer: '' }])
-    if (uploadInputRef.current) {
-      uploadInputRef.current.value = ''
-    }
-  }
-
-  function triggerUpload() {
-    uploadInputRef.current?.click()
-  }
-
-  function handleUploadChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const { files } = event.target
-    setSelectedUploadFiles(files ? Array.from(files) : [])
-  }
-
-  async function waitForJobCompletion(kbIdValue: string, jobId: string, label: string) {
-    for (let attempt = 0; attempt < 900; attempt += 1) {
-      const items = await api.getKnowledgeJobs(kbIdValue)
-      const current = items.find((item) => item.jobId === jobId)
-      if (current?.status === 'succeeded') {
-        return current
-      }
-      if (current?.status === 'failed') {
-        throw new Error(`${label}任务失败`)
-      }
-      await sleep(500)
-    }
-    throw new Error(`${label}任务超时`)
-  }
-
-  async function maybeAutoIndexFiles(kbIdValue: string, fileIds: string[]) {
-    if (!autoIndexAfterAdd || fileIds.length === 0) {
-      return
-    }
-    const parsePayload = await api.parseKnowledgeFiles(kbIdValue, { fileIds })
-    await waitForJobCompletion(kbIdValue, parsePayload.job.jobId, '解析')
-    const indexPayload = await api.indexKnowledgeFiles(kbIdValue, {
-      fileIds,
-      params: supportsChunkConfig
-        ? {
-            chunkSize: indexConfig.chunkSize,
-            chunkOverlap: indexConfig.chunkOverlap,
-            chunkPresetId: indexConfig.chunkPresetId,
-            qaSeparator: indexConfig.qaSeparator.trim() || undefined,
-          }
-        : {
-            chunkPresetId: indexConfig.chunkPresetId,
-          },
-    })
-    await waitForJobCompletion(kbIdValue, indexPayload.job.jobId, '入库')
-  }
-
-  async function handleSubmitAddFiles() {
-    if (!currentKb) return
-    const targetParentId = urlParentId || (hasSingleSelection && selectedFiles[0].isFolder ? selectedFiles[0].fileId : null)
-    try {
-      setUploadingFiles(true)
-      let fileIds: string[] = []
-      if (sourceMode === 'file') {
-        if (selectedUploadFiles.length === 0) {
-          message.warning('请先选择要上传的文件')
-          return
-        }
-        const formData = new FormData()
-        for (const file of selectedUploadFiles) {
-          formData.append('file', file)
-        }
-        if (targetParentId) {
-          formData.append('parentId', targetParentId)
-        }
-        const uploaded = await api.uploadKnowledgeFiles(currentKb.kbId, formData)
-        fileIds = uploaded.items.filter((item) => !item.isFolder).map((item) => item.fileId)
-      } else if (sourceMode === 'web_url') {
-        if (!urlValue.trim()) {
-          message.warning('请先输入 URL')
-          return
-        }
-        const created = await api.addKnowledgeSource(currentKb.kbId, {
-          sourceType: 'web_url',
-          url: urlValue.trim(),
-          title: sourceTitle.trim() || undefined,
-          parentId: targetParentId,
-        })
-        fileIds = created.isFolder ? [] : [created.fileId]
-      } else {
-        const items = faqItems
-          .map((item) => ({
-            question: item.question.trim(),
-            answer: item.answer.trim(),
-          }))
-          .filter((item) => item.question && item.answer)
-        if (items.length === 0) {
-          message.warning('请至少填写一条 FAQ 问答')
-          return
-        }
-        const created = await api.addKnowledgeSource(currentKb.kbId, {
-          sourceType: 'faq_table',
-          title: sourceTitle.trim() || 'faq-table',
-          parentId: targetParentId,
-          items,
-        })
-        fileIds = created.isFolder ? [] : [created.fileId]
-      }
-
-      if (autoIndexAfterAdd && fileIds.length > 0) {
-        await maybeAutoIndexFiles(currentKb.kbId, fileIds)
-        message.success('内容已添加并自动入库')
-      } else {
-        message.success(sourceMode === 'file' ? '文件已添加' : '知识源已添加')
-      }
-      resetAddFilesModal()
-      await loadKnowledgeDetail(currentKb.kbId)
-      await loadKnowledgeBases()
-    } catch (uploadError) {
-      message.error(getErrorMessage(uploadError, '添加内容失败'))
-    } finally {
-      setUploadingFiles(false)
     }
   }
 
@@ -977,16 +550,12 @@ export default function KnowledgePage() {
       setIndexingFiles(true)
       await api.indexKnowledgeFiles(currentKb.kbId, {
         fileIds: targetFileIds,
-        params: supportsChunkConfig
-          ? {
-              chunkSize: indexConfig.chunkSize,
-              chunkOverlap: indexConfig.chunkOverlap,
-              chunkPresetId: indexConfig.chunkPresetId,
-              qaSeparator: indexConfig.qaSeparator.trim() || undefined,
-            }
-          : {
-              chunkPresetId: indexConfig.chunkPresetId,
-            },
+        params: {
+          chunkSize: indexConfig.chunkSize,
+          chunkOverlap: indexConfig.chunkOverlap,
+          chunkPresetId: indexConfig.chunkPresetId,
+          qaSeparator: indexConfig.qaSeparator.trim() || undefined,
+        },
       })
       message.success('索引任务已提交')
       await loadKnowledgeDetail(currentKb.kbId)
@@ -1132,6 +701,8 @@ export default function KnowledgePage() {
         topK: queryParams.topK,
         chunkTopK: queryParams.chunkTopK,
         enableRerank: queryParams.enableRerank,
+        onlyNeedContext: false,
+        onlyNeedPrompt: false,
         ...queryParams.options,
       })
       setQueryResult(result)
@@ -1328,242 +899,39 @@ export default function KnowledgePage() {
     })
   }
 
-  const fileColumns: ColumnsType<KnowledgeTreeNode> = [
-    {
-      title: '名称',
-      dataIndex: 'filename',
-      key: 'filename',
-      render: (_value, record) => (
-        <div className="knowledge-file-cell">
-          <span className={`knowledge-file-kind ${record.isFolder ? 'is-folder' : 'is-file'}`}>
-            {record.isFolder ? 'DIR' : 'DOC'}
-          </span>
-          {record.isFolder ? (
-            <Text>{record.filename}</Text>
-          ) : (
-            <button
-              type="button"
-              className="knowledge-file-link"
-              onClick={() => void handleOpenFileDetail(record)}
-            >
-              {record.filename}
-            </button>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 120,
-      render: (value: string) => <Tag color={statusColor(value)}>{statusLabel(value)}</Tag>,
-    },
-    {
-      title: '类型',
-      dataIndex: 'fileType',
-      key: 'fileType',
-      width: 120,
-    },
-    {
-      title: '路径',
-      dataIndex: 'path',
-      key: 'path',
-      ellipsis: true,
-      render: (value: string) => <Text type="secondary">{value}</Text>,
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
-      width: 160,
-      render: (value?: string) => (value ? formatDateTimeZh(value) : '--'),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 180,
-      render: (_value, record) => (
-        <Space size={4}>
-          {!record.isFolder ? (
-            <>
-              <Button
-                size="small"
-                icon={<FileSearchOutlined />}
-                onClick={() => void handleOpenFileDetail(record)}
-              />
-              <Button
-                size="small"
-                icon={<DownloadOutlined />}
-                onClick={() => window.open(api.downloadKnowledgeFileUrl(currentKb?.kbId || '', record.fileId, 'raw'), '_blank', 'noopener')}
-              />
-              {record.markdownFile ? (
-                <Button
-                  size="small"
-                  icon={<FileSearchOutlined />}
-                  onClick={() => window.open(api.downloadKnowledgeFileUrl(currentKb?.kbId || '', record.fileId, 'parsed'), '_blank', 'noopener')}
-                />
-              ) : null}
-            </>
-          ) : null}
-          <Button
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            disabled={!record.isFolder && !canDeleteKnowledgeFile(record.status)}
-            onClick={() => void handleDeleteSelectedFiles([record])}
-          />
-        </Space>
-      ),
-    },
-  ]
-
-  const supportsGraph = isLightRagKnowledgeBase(currentKb)
-  const supportsEvaluation = isMilvusKnowledgeBase(currentKb)
-
-  const benchmarkColumns: ColumnsType<KnowledgeBenchmark> = [
-    {
-      title: '名称',
-      dataIndex: 'name',
-      key: 'name',
-      render: (value: string, record) => (
-        <div>
-          <Text strong>{value}</Text>
-          <div>
-            <Text type="secondary">{record.description || '暂无描述'}</Text>
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: '问题数',
-      key: 'questionCount',
-      width: 100,
-      render: (_value, record) => record.questionCount || record.question_count || 0,
-    },
-    {
-      title: '类型',
-      key: 'flags',
-      width: 180,
-      render: (_value, record) => (
-        <Space wrap size={4}>
-          <Tag color={(record.hasGoldChunks || record.has_gold_chunks) ? 'blue' : 'default'}>检索黄金集</Tag>
-          <Tag color={(record.hasGoldAnswers || record.has_gold_answers) ? 'green' : 'default'}>标准答案</Tag>
-        </Space>
-      ),
-    },
-    {
-      title: '更新时间',
-      key: 'updatedAt',
-      width: 160,
-      render: (_value, record) => {
-        const value = record.updatedAt || record.updated_at || record.createdAt || record.created_at
-        return value ? formatDateTimeZh(value) : '--'
+  const fileColumns = useMemo(
+    () => buildKnowledgeFileColumns({
+      currentKbId: currentKb?.kbId || '',
+      onOpenFileDetail: (record) => {
+        void handleOpenFileDetail(record)
       },
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 220,
-      render: (_value, record) => (
-        <Space size={4}>
-          <Button size="small" onClick={() => void handlePreviewBenchmark(record)}>预览</Button>
-          <Button
-            size="small"
-            icon={<DownloadOutlined />}
-            onClick={() => currentKb && window.open(api.downloadKnowledgeBenchmarkUrl(currentKb.kbId, record.benchmarkId), '_blank', 'noopener')}
-          />
-          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteBenchmark(record)} />
-        </Space>
-      ),
-    },
-  ]
-
-  const evaluationColumns: ColumnsType<KnowledgeEvaluationSummary> = [
-    {
-      title: '任务 ID',
-      key: 'taskId',
-      render: (_value, record) => <Text code>{record.taskId}</Text>,
-    },
-    {
-      title: '基准',
-      key: 'benchmarkId',
-      render: (_value, record) => record.benchmarkId,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 120,
-      render: (value: string) => <Tag color={statusColor(value)}>{statusLabel(value)}</Tag>,
-    },
-    {
-      title: '总体评分',
-      key: 'overallScore',
-      width: 120,
-      render: (_value, record) => formatScorePercent(record.overallScore ?? record.overall_score),
-    },
-    {
-      title: '进度',
-      key: 'progress',
-      width: 120,
-      render: (_value, record) => `${record.completedQuestions || record.completed_questions || 0}/${record.totalQuestions || record.total_questions || 0}`,
-    },
-    {
-      title: '更新时间',
-      key: 'updatedAt',
-      width: 160,
-      render: (_value, record) => {
-        const value = record.updatedAt || record.updated_at || record.createdAt || record.created_at
-        return value ? formatDateTimeZh(value) : '--'
+      onDeleteFiles: (targets) => {
+        void handleDeleteSelectedFiles(targets)
       },
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 180,
-      render: (_value, record) => (
-        <Space size={4}>
-          <Button size="small" onClick={() => void handleViewEvaluationResult(record.taskId)}>
-            查看
-          </Button>
-          <Button size="small" danger onClick={() => handleDeleteEvaluationResult(record.taskId)}>
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ]
+    }),
+    [currentKb?.kbId],
+  )
 
-  const evaluationDetailColumns: ColumnsType<KnowledgeEvaluationResult['details'][number]> = [
-    {
-      title: '问题',
-      dataIndex: 'query',
-      key: 'query',
-      render: (value: string) => <Paragraph style={{ marginBottom: 0 }}>{value}</Paragraph>,
-    },
-    {
-      title: '答案评分',
-      key: 'score',
-      width: 120,
-      render: (_value, record) => formatScorePercent(Number(record.metrics?.score ?? 0)),
-    },
-    {
-      title: 'Recall@1',
-      key: 'recall1',
-      width: 120,
-      render: (_value, record) => formatScorePercent(Number(record.metrics?.['recall@1'] ?? 0)),
-    },
-    {
-      title: '生成答案',
-      key: 'generatedAnswer',
-      render: (_value, record) => (
-        <Paragraph ellipsis={{ rows: 3 }} style={{ marginBottom: 0 }}>
-          {record.generatedAnswer || record.generated_answer || '--'}
-        </Paragraph>
-      ),
-    },
-  ]
+  const benchmarkColumns = useMemo(
+    () => buildKnowledgeBenchmarkColumns({
+      currentKbId: currentKb?.kbId || '',
+      onPreviewBenchmark: (benchmark) => {
+        void handlePreviewBenchmark(benchmark)
+      },
+      onDeleteBenchmark: handleDeleteBenchmark,
+    }),
+    [currentKb?.kbId],
+  )
+
+  const evaluationColumns = useMemo(
+    () => buildKnowledgeEvaluationColumns({
+      onViewEvaluationResult: (taskId) => {
+        void handleViewEvaluationResult(taskId)
+      },
+      onDeleteEvaluationResult: handleDeleteEvaluationResult,
+    }),
+    [currentKb?.kbId, evaluationResult?.taskId],
+  )
 
   const tabItems = [
     {
@@ -1571,7 +939,6 @@ export default function KnowledgePage() {
       label: '检索测试',
       children: (
         <KnowledgeQueryTab
-          supportsEvaluation={supportsEvaluation}
           queryParams={queryParams}
           queryText={queryText}
           queryLoading={queryLoading}
@@ -1582,18 +949,11 @@ export default function KnowledgePage() {
             setQueryParams((prev) => ({
               ...prev,
               mode: value,
-              options: supportsEvaluation
-                ? {
-                    ...(prev.options || {}),
-                    search_mode: value,
-                  }
-                : prev.options,
+              options: prev.options,
             }))
           }
           onTopKChange={(value) => setQueryParams((prev) => ({ ...prev, topK: value }))}
           onChunkTopKChange={(value) => setQueryParams((prev) => ({ ...prev, chunkTopK: value }))}
-          onSearchModeChange={(value) => updateQueryOption('search_mode', value)}
-          onSimilarityThresholdChange={(value) => updateQueryOption('similarity_threshold', value)}
           onEnableRerankChange={(checked) => setQueryParams((prev) => ({ ...prev, enableRerank: checked }))}
           onSaveQueryDefaults={() => void handleSaveQueryDefaults()}
           onGenerateQuestions={() => void handleGenerateQuestions()}
@@ -1604,28 +964,24 @@ export default function KnowledgePage() {
         />
       ),
     },
-    ...(supportsGraph
-      ? [
-          {
-            key: 'graph',
-            label: '知识图谱',
-            children: (
-              <KnowledgeGraphTab
-                graphLabel={graphLabel}
-                graphDepth={graphDepth}
-                graphMaxNodes={graphMaxNodes}
-                graphLoading={graphLoading}
-                graphData={graphData}
-                graphStats={graphStats}
-                onGraphLabelChange={setGraphLabel}
-                onGraphDepthChange={setGraphDepth}
-                onGraphMaxNodesChange={setGraphMaxNodes}
-                onReload={() => currentKb && void loadGraph(currentKb.kbId)}
-              />
-            ),
-          },
-        ]
-      : []),
+    {
+      key: 'graph',
+      label: '知识图谱',
+      children: (
+        <KnowledgeGraphTab
+          graphLabel={graphLabel}
+          graphDepth={graphDepth}
+          graphMaxNodes={graphMaxNodes}
+          graphLoading={graphLoading}
+          graphData={graphData}
+          graphStats={graphStats}
+          onGraphLabelChange={setGraphLabel}
+          onGraphDepthChange={setGraphDepth}
+          onGraphMaxNodesChange={setGraphMaxNodes}
+          onReload={() => currentKb && void loadGraph(currentKb.kbId)}
+        />
+      ),
+    },
     {
       key: 'mindmap',
       label: '知识导图',
@@ -1639,17 +995,7 @@ export default function KnowledgePage() {
     },
     {
       key: 'evaluation',
-      label: supportsEvaluation ? (
-        'RAG 评测'
-      ) : (
-        <Tooltip title="仅支持 Milvus 类型的知识库">
-          <Space size={4}>
-            <span>RAG 评测</span>
-            <InfoCircleOutlined />
-          </Space>
-        </Tooltip>
-      ),
-      disabled: !supportsEvaluation,
+      label: 'RAG 评测',
       children: (
         <KnowledgeEvaluationTab
           selectedBenchmarkId={selectedBenchmarkId}
@@ -1666,17 +1012,7 @@ export default function KnowledgePage() {
     },
     {
       key: 'benchmarks',
-      label: supportsEvaluation ? (
-        '评估基准'
-      ) : (
-        <Tooltip title="仅支持 Milvus 类型的知识库">
-          <Space size={4}>
-            <span>评估基准</span>
-            <InfoCircleOutlined />
-          </Space>
-        </Tooltip>
-      ),
-      disabled: !supportsEvaluation,
+      label: '评估基准',
       children: (
         <KnowledgeBenchmarksTab
           benchmarkLoading={benchmarkLoading}
@@ -1753,7 +1089,7 @@ export default function KnowledgePage() {
                     >
                       <div className="knowledge-sidebar-item-top">
                         <Text strong>{item.name}</Text>
-                        <Tag color={item.enabled ? 'green' : 'default'}>{item.kbType}</Tag>
+                        <Tag color={item.enabled ? 'green' : 'default'}>{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
                       </div>
                       <Paragraph ellipsis={{ rows: 2 }} type="secondary" style={{ marginBottom: 8 }}>
                         {item.description || '暂无描述'}
@@ -1788,7 +1124,7 @@ export default function KnowledgePage() {
                         <Button size="small" onClick={() => startTransition(() => navigate('/knowledge'))}>
                           返回列表
                         </Button>
-                        <Tag color={currentKb.enabled ? 'green' : 'default'}>{currentKb.kbType}</Tag>
+                        <Tag color={currentKb.enabled ? 'green' : 'default'}>{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
                       </Space>
                       <div className="knowledge-summary-title">
                         <Title level={3} style={{ margin: 0 }}>{currentKb.name}</Title>
@@ -1838,7 +1174,7 @@ export default function KnowledgePage() {
                         onChange={(event) => setFileSearch(event.target.value)}
                       />
                       <Space wrap>
-                        <Button type="primary" icon={<UploadOutlined />} loading={uploadingFiles} onClick={() => {
+                        <Button type="primary" icon={<UploadOutlined />} onClick={() => {
                           setUrlParentId(hasSingleSelection && selectedFiles[0].isFolder ? selectedFiles[0].fileId : null)
                           setUrlModalOpen(true)
                         }}>添加文件</Button>
@@ -1856,9 +1192,7 @@ export default function KnowledgePage() {
                         >
                           解析
                         </Button>
-                        {supportsChunkConfig ? (
-                          <Button onClick={() => setIndexConfigOpen(true)}>索引配置</Button>
-                        ) : null}
+                        <Button onClick={() => setIndexConfigOpen(true)}>索引配置</Button>
                         <Button
                           icon={<BranchesOutlined />}
                           loading={indexingFiles}
@@ -1879,6 +1213,7 @@ export default function KnowledgePage() {
                       rowKey="fileId"
                       size="small"
                       pagination={{ pageSize: 12, hideOnSinglePage: true }}
+                      scroll={{ x: 'max-content' }}
                       rowSelection={{
                         selectedRowKeys: selectedFileIds,
                         onChange: (keys) => setSelectedFileIds(keys as string[]),
@@ -1964,15 +1299,8 @@ export default function KnowledgePage() {
       >
         <div className="knowledge-settings-grid">
           <div className="studio-form-field">
-            <Text type="secondary">知识库类型</Text>
-            <Select
-              value={formState.kbType}
-              options={[
-                { value: 'lightrag', label: 'LightRAG' },
-                { value: 'milvus', label: 'Milvus' },
-              ]}
-              onChange={(value) => setFormState((prev) => ({ ...prev, kbType: value }))}
-            />
+            <Text type="secondary">知识库架构</Text>
+            <Input value={KNOWLEDGE_ARCHITECTURE_LABEL} disabled />
           </div>
           <div className="studio-form-field studio-form-field-span-2">
             <Text type="secondary">名称</Text>
@@ -1995,16 +1323,14 @@ export default function KnowledgePage() {
             <Text type="secondary">LLM 模型</Text>
             <Input value={formState.llmModelName} onChange={(event) => setFormState((prev) => ({ ...prev, llmModelName: event.target.value }))} />
           </div>
-          {formState.kbType === 'lightrag' ? (
-            <div className="studio-form-field">
-              <Text type="secondary">语言</Text>
-              <Select
-                value={formState.language}
-                options={LANGUAGE_OPTIONS}
-                onChange={(value) => setFormState((prev) => ({ ...prev, language: value }))}
-              />
-            </div>
-          ) : null}
+          <div className="studio-form-field">
+            <Text type="secondary">语言</Text>
+            <Select
+              value={formState.language}
+              options={[...LANGUAGE_OPTIONS]}
+              onChange={(value) => setFormState((prev) => ({ ...prev, language: value }))}
+            />
+          </div>
           <div className="studio-form-field">
             <Text type="secondary">分块策略</Text>
             <Select
@@ -2020,16 +1346,14 @@ export default function KnowledgePage() {
               onChange={(checked) => setFormState((prev) => ({ ...prev, autoGenerateQuestions: checked }))}
             />
           </div>
-          {formState.kbType === 'milvus' ? (
-            <div className="studio-form-field studio-form-field-span-2">
-              <Text type="secondary">QA 分隔符</Text>
-              <Input
-                placeholder="例如：---FAQ---"
-                value={formState.qaSeparator}
-                onChange={(event) => setFormState((prev) => ({ ...prev, qaSeparator: event.target.value }))}
-              />
-            </div>
-          ) : null}
+          <div className="studio-form-field studio-form-field-span-2">
+            <Text type="secondary">QA 分隔符</Text>
+            <Input
+              placeholder="例如：---FAQ---"
+              value={formState.qaSeparator}
+              onChange={(event) => setFormState((prev) => ({ ...prev, qaSeparator: event.target.value }))}
+            />
+          </div>
         </div>
       </Modal>
 
@@ -2056,7 +1380,6 @@ export default function KnowledgePage() {
         open={urlModalOpen}
         kb={currentKb}
         folderOptions={folderOptions}
-        supportsChunkConfig={supportsChunkConfig}
         defaultParentId={urlParentId}
         onClose={() => setUrlModalOpen(false)}
         onSuccess={() => refreshDetail()}
@@ -2097,38 +1420,34 @@ export default function KnowledgePage() {
               onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkPresetId: value }))}
             />
           </div>
-          {supportsChunkConfig ? (
-            <>
-              <div className="studio-form-field">
-                <Text type="secondary">Chunk Size</Text>
-                <InputNumber
-                  min={200}
-                  max={8000}
-                  style={{ width: '100%' }}
-                  value={indexConfig.chunkSize}
-                  onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkSize: Number(value || 1000) }))}
-                />
-              </div>
-              <div className="studio-form-field">
-                <Text type="secondary">Chunk Overlap</Text>
-                <InputNumber
-                  min={0}
-                  max={4000}
-                  style={{ width: '100%' }}
-                  value={indexConfig.chunkOverlap}
-                  onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkOverlap: Number(value || 0) }))}
-                />
-              </div>
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">QA 分隔符</Text>
-                <Input
-                  placeholder="例如：---FAQ---"
-                  value={indexConfig.qaSeparator}
-                  onChange={(event) => setIndexConfig((prev) => ({ ...prev, qaSeparator: event.target.value }))}
-                />
-              </div>
-            </>
-          ) : null}
+          <div className="studio-form-field">
+            <Text type="secondary">Chunk Size</Text>
+            <InputNumber
+              min={200}
+              max={8000}
+              style={{ width: '100%' }}
+              value={indexConfig.chunkSize}
+              onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkSize: Number(value || 1000) }))}
+            />
+          </div>
+          <div className="studio-form-field">
+            <Text type="secondary">Chunk Overlap</Text>
+            <InputNumber
+              min={0}
+              max={4000}
+              style={{ width: '100%' }}
+              value={indexConfig.chunkOverlap}
+              onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkOverlap: Number(value || 0) }))}
+            />
+          </div>
+          <div className="studio-form-field studio-form-field-span-2">
+            <Text type="secondary">QA 分隔符</Text>
+            <Input
+              placeholder="例如：---FAQ---"
+              value={indexConfig.qaSeparator}
+              onChange={(event) => setIndexConfig((prev) => ({ ...prev, qaSeparator: event.target.value }))}
+            />
+          </div>
         </div>
       </Modal>
 
@@ -2190,15 +1509,15 @@ export default function KnowledgePage() {
         width={860}
       >
         <KnowledgeSettingsTab
-          isLightRag={isLightRagKnowledgeBase(currentKb)}
-          isMilvus={isMilvusKnowledgeBase(currentKb)}
           formState={formState}
+          indexConfig={indexConfig}
           chunkPresetOptions={CHUNK_PRESET_OPTIONS.map((item) => ({ label: item.label, value: item.value }))}
-          languageOptions={LANGUAGE_OPTIONS}
+          languageOptions={[...LANGUAGE_OPTIONS]}
           generatingDescription={generatingDescription}
           supportsDescriptionGeneration={supportsDescriptionGeneration}
           savingKb={savingKb}
           onFormStateChange={setFormState}
+          onIndexConfigChange={setIndexConfig}
           onGenerateDescription={() => void handleGenerateDescription()}
           onSave={() => void handleSaveKnowledgeBase()}
         />
@@ -2273,132 +1592,32 @@ export default function KnowledgePage() {
         </Space>
       </Modal>
 
-      <Modal
+      <KnowledgeBenchmarkPreviewModal
         open={!!benchmarkPreview}
-        title={benchmarkPreview ? `评估基准预览 · ${benchmarkPreview.name}` : '评估基准预览'}
-        onCancel={() => {
+        loading={benchmarkPreviewLoading}
+        benchmark={benchmarkPreview}
+        page={benchmarkPreviewPage}
+        pageSize={benchmarkPreviewPageSize}
+        onClose={() => {
           setBenchmarkPreview(null)
           setBenchmarkPreviewPage(1)
           setBenchmarkPreviewPageSize(20)
         }}
-        footer={null}
-        width={960}
-      >
-        {benchmarkPreview ? (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Descriptions size="small" bordered column={3}>
-              <Descriptions.Item label="问题数">{benchmarkPreview.questionCount || benchmarkPreview.question_count || 0}</Descriptions.Item>
-              <Descriptions.Item label="黄金检索集">
-                {(benchmarkPreview.hasGoldChunks || benchmarkPreview.has_gold_chunks) ? '有' : '无'}
-              </Descriptions.Item>
-              <Descriptions.Item label="标准答案">
-                {(benchmarkPreview.hasGoldAnswers || benchmarkPreview.has_gold_answers) ? '有' : '无'}
-              </Descriptions.Item>
-            </Descriptions>
-            <Table
-              rowKey={(_record, index) => `benchmark-preview-${index}`}
-              size="small"
-              loading={benchmarkPreviewLoading}
-              dataSource={benchmarkPreview.questions}
-              pagination={{
-                current: benchmarkPreviewPage,
-                pageSize: benchmarkPreviewPageSize,
-                total:
-                  benchmarkPreview.pagination?.total
-                  || benchmarkPreview.pagination?.totalQuestions
-                  || benchmarkPreview.pagination?.total_questions
-                  || benchmarkPreview.questionCount
-                  || benchmarkPreview.question_count
-                  || 0,
-                onChange: (page, pageSize) => {
-                  if (benchmarkPreview) {
-                    void handlePreviewBenchmark(benchmarkPreview, page, pageSize)
-                  }
-                },
-              }}
-              columns={[
-                {
-                  title: '问题',
-                  dataIndex: 'query',
-                  key: 'query',
-                  render: (value: string) => <Paragraph style={{ marginBottom: 0 }}>{value}</Paragraph>,
-                },
-                {
-                  title: '标准答案',
-                  key: 'goldAnswer',
-                  render: (_value, record) => (
-                    <Paragraph ellipsis={{ rows: 3 }} style={{ marginBottom: 0 }}>
-                      {record.goldAnswer || record.gold_answer || '--'}
-                    </Paragraph>
-                  ),
-                },
-                {
-                  title: '黄金 Chunk',
-                  key: 'goldChunkIds',
-                  render: (_value, record) =>
-                    (record.goldChunkIds || record.gold_chunk_ids || []).join(', ') || '--',
-                },
-              ]}
-            />
-          </Space>
-        ) : null}
-      </Modal>
+        onPageChange={(page, pageSize) => {
+          if (benchmarkPreview) {
+            void handlePreviewBenchmark(benchmarkPreview, page, pageSize)
+          }
+        }}
+      />
 
-      <Modal
+      <KnowledgeEvaluationResultModal
         open={evaluationResultOpen}
-        title={evaluationResult ? `评测结果 · ${evaluationResult.taskId}` : '评测结果'}
-        onCancel={() => setEvaluationResultOpen(false)}
-        footer={null}
-        width={1200}
-      >
-        {evaluationLoading ? (
-          <div className="knowledge-loading-panel"><Spin /></div>
-        ) : evaluationResult ? (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Descriptions size="small" bordered column={4}>
-              <Descriptions.Item label="状态">
-                <Tag color={statusColor(evaluationResult.status)}>{statusLabel(evaluationResult.status)}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="总体评分">{formatScorePercent(evaluationResult.overallScore ?? evaluationResult.overall_score)}</Descriptions.Item>
-              <Descriptions.Item label="进度">
-                {evaluationResult.completedQuestions || evaluationResult.completed_questions || 0}/
-                {evaluationResult.totalQuestions || evaluationResult.total_questions || 0}
-              </Descriptions.Item>
-              <Descriptions.Item label="更新时间">
-                {(evaluationResult.updatedAt || evaluationResult.updated_at)
-                  ? formatDateTimeZh(evaluationResult.updatedAt || evaluationResult.updated_at || '')
-                  : '--'}
-              </Descriptions.Item>
-            </Descriptions>
-            <Card size="small" title="聚合指标">
-              <div className="knowledge-metadata-list">
-                {Object.entries(evaluationResult.metrics || {}).map(([key, value]) => (
-                  <div key={key} className="knowledge-metadata-item">
-                    <Text type="secondary">{key}</Text>
-                    <span>{typeof value === 'number' ? formatScorePercent(value) : String(value)}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-            <div className="knowledge-query-topbar">
-              <Space wrap>
-                <Button onClick={() => evaluationResult && void handleViewEvaluationResult(evaluationResult.taskId, !evaluationErrorOnly)}>
-                  {evaluationErrorOnly ? '查看全部' : '仅查看异常'}
-                </Button>
-              </Space>
-            </div>
-            <Table
-              rowKey="rowId"
-              size="small"
-              pagination={false}
-              dataSource={evaluationResult.details}
-              columns={evaluationDetailColumns}
-            />
-          </Space>
-        ) : (
-          <Empty description="还没有评测结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        )}
-      </Modal>
+        loading={evaluationLoading}
+        result={evaluationResult}
+        errorOnly={evaluationErrorOnly}
+        onClose={() => setEvaluationResultOpen(false)}
+        onToggleErrorOnly={() => evaluationResult && void handleViewEvaluationResult(evaluationResult.taskId, !evaluationErrorOnly)}
+      />
 
       <KnowledgeFileDetailModal
         kbId={currentKb?.kbId || null}

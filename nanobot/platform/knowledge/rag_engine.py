@@ -12,9 +12,13 @@ import asyncio
 import io
 import json
 import os
+import re
 import shutil
+import time
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -102,9 +106,13 @@ class RAGEngine:
         embedding_model: str = "text-embedding-3-large",
         embedding_dim: int = 3072,
         embedding_max_tokens: int = 8192,
+        llm_timeout: float = 60.0,
+        embedding_timeout: float = 30.0,
         mineru_api_base: str = "",
         mineru_api_token: str = "",
         mineru_model_version: str = "pipeline",
+        lightrag_base_kwargs: dict[str, Any] | None = None,
+        storage_env: dict[str, str] | None = None,
     ) -> None:
         self._storage_root = storage_root
         self._storage_root.mkdir(parents=True, exist_ok=True)
@@ -128,15 +136,27 @@ class RAGEngine:
         self._embedding_model = embedding_model
         self._embedding_dim = embedding_dim
         self._embedding_max_tokens = embedding_max_tokens
+        self._llm_timeout = max(float(llm_timeout or 0), 0.001)
+        self._embedding_timeout = max(float(embedding_timeout or 0), 0.001)
 
         # Document parsing config
         self._mineru_api_base = mineru_api_base
         self._mineru_api_token = mineru_api_token
         self._mineru_model_version = mineru_model_version or "pipeline"
+        self._lightrag_base_kwargs = dict(lightrag_base_kwargs or {})
+        self._storage_env = {key: value for key, value in dict(storage_env or {}).items() if str(value or "").strip()}
 
         # Per-KB instances (lazy loaded)
         self._instances: dict[str, Any] = {}  # kb_id -> RAGAnything
         self._locks: dict[str, asyncio.Lock] = {}
+
+    @staticmethod
+    async def _await_request(coro: Any, *, timeout: float, operation: str) -> Any:
+        """Apply a hard timeout to external LiteLLM requests."""
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(f"{operation} timed out after {timeout:.0f}s") from exc
 
     @staticmethod
     def _normalize_status(value: Any) -> str:
@@ -167,6 +187,174 @@ class RAGEngine:
         except Exception:
             pass
         return candidate
+
+    @staticmethod
+    def _sanitize_workspace_id(value: str) -> str:
+        normalized = re.sub(r"[^a-zA-Z0-9_]+", "_", str(value or "").strip()).strip("_")
+        return normalized or "knowledge"
+
+    def _kb_storage_workspace(self, kb_id: str) -> str:
+        return f"kb_{self._sanitize_workspace_id(kb_id)}"
+
+    @staticmethod
+    def _normalize_query_mode(mode: str | None) -> str:
+        return {
+            "keyword": "naive",
+            "semantic": "local",
+            "hybrid": "hybrid",
+            "local": "local",
+            "global": "global",
+            "naive": "naive",
+            "mix": "mix",
+        }.get(str(mode or "").strip().lower(), "hybrid")
+
+    @staticmethod
+    def _is_timeout_like_error(exc: Exception | str) -> bool:
+        message = str(exc or "").strip().lower()
+        return any(
+            token in message
+            for token in (
+                "timed out",
+                "timeout",
+                "worker execution timeout",
+                "worker timeout",
+            )
+        )
+
+    async def _insert_chunks_without_graph_extraction(
+        self,
+        rag: Any,
+        chunks: list[str],
+        *,
+        doc_id: str | None = None,
+        file_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist chunk vectors/text when graph extraction times out."""
+        from lightrag.base import DocStatus
+        from lightrag.utils import compute_mdhash_id, sanitize_text_for_encoding
+
+        lightrag = getattr(rag, "lightrag", None)
+        if lightrag is None:
+            raise RuntimeError("LightRAG instance is not initialized.")
+
+        normalized_chunks = [
+            sanitize_text_for_encoding(str(item or "").strip())
+            for item in chunks
+            if str(item or "").strip()
+        ]
+        if not normalized_chunks:
+            raise ValueError("chunks are required for chunk-only fallback.")
+
+        doc_key = str(doc_id or compute_mdhash_id("\n\n".join(normalized_chunks), prefix="doc-")).strip()
+        resolved_file_path = (
+            self._resolve_file_reference(rag, file_path)
+            or str(file_path or f"{doc_key}.txt").strip()
+            or f"{doc_key}.txt"
+        )
+
+        delete_by_doc_id = getattr(lightrag, "adelete_by_doc_id", None)
+        if callable(delete_by_doc_id):
+            try:
+                await delete_by_doc_id(doc_key)
+            except Exception:
+                logger.warning(
+                    "RAGEngine: chunk-only fallback cleanup failed for doc_id={} file_path={}",
+                    doc_key,
+                    resolved_file_path,
+                )
+
+        full_text = "\n\n".join(normalized_chunks)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        started_at = int(time.time())
+        tokenizer = getattr(lightrag, "tokenizer", None)
+        encode = getattr(tokenizer, "encode", None)
+
+        chunk_payloads: dict[str, dict[str, Any]] = {}
+        for index, chunk_text in enumerate(normalized_chunks):
+            chunk_key = compute_mdhash_id(f"{doc_key}:{index}:{chunk_text}", prefix="chunk-")
+            tokens = len(encode(chunk_text)) if callable(encode) else len(chunk_text)
+            chunk_payloads[chunk_key] = {
+                "content": chunk_text,
+                "full_doc_id": doc_key,
+                "tokens": tokens,
+                "chunk_order_index": index,
+                "file_path": resolved_file_path,
+                "status": DocStatus.PROCESSED,
+                "llm_cache_list": [],
+            }
+
+        await asyncio.gather(
+            lightrag.chunks_vdb.upsert(chunk_payloads),
+            lightrag.full_docs.upsert(
+                {
+                    doc_key: {
+                        "content": full_text,
+                        "file_path": resolved_file_path,
+                        "create_time": started_at,
+                        "update_time": started_at,
+                    }
+                }
+            ),
+            lightrag.text_chunks.upsert(chunk_payloads),
+        )
+
+        finished_at = int(time.time())
+        await lightrag.doc_status.upsert(
+            {
+                doc_key: {
+                    "status": DocStatus.PROCESSED,
+                    "chunks_count": len(chunk_payloads),
+                    "chunks_list": list(chunk_payloads.keys()),
+                    "content_summary": full_text,
+                    "content_length": len(full_text),
+                    "created_at": now_iso,
+                    "updated_at": now_iso,
+                    "file_path": resolved_file_path,
+                    "track_id": "",
+                    "multimodal_processed": True,
+                    "metadata": {
+                        "processing_start_time": started_at,
+                        "processing_end_time": finished_at,
+                        "fallback_mode": "chunk_only",
+                    },
+                }
+            }
+        )
+
+        insert_done = getattr(lightrag, "_insert_done", None)
+        if callable(insert_done):
+            await insert_done()
+
+        return {
+            "doc_id": doc_key,
+            "file_path": resolved_file_path,
+            "chunks_count": len(chunk_payloads),
+            "fallback_mode": "chunk_only",
+        }
+
+    def _build_lightrag_kwargs(self, kb_id: str) -> dict[str, Any]:
+        return {
+            **self._lightrag_base_kwargs,
+            "workspace": self._kb_storage_workspace(kb_id),
+        }
+
+    @contextmanager
+    def _storage_env_scope(self):
+        if not self._storage_env:
+            yield
+            return
+        original: dict[str, str | None] = {}
+        try:
+            for key, value in self._storage_env.items():
+                original[key] = os.environ.get(key)
+                os.environ[key] = value
+            yield
+        finally:
+            for key, previous in original.items():
+                if previous is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = previous
 
     async def _lookup_doc_status(
         self,
@@ -266,6 +454,7 @@ class RAGEngine:
                 llm_model_func=self._build_llm_func(),
                 vision_model_func=self._build_vision_func(),
                 embedding_func=self._build_embedding_func(),
+                lightrag_kwargs=self._build_lightrag_kwargs(kb_id),
             )
 
             self._instances[kb_id] = rag
@@ -278,7 +467,8 @@ class RAGEngine:
         if getattr(rag, "lightrag", None) is not None:
             return rag
 
-        init = await rag._ensure_lightrag_initialized()
+        with self._storage_env_scope():
+            init = await rag._ensure_lightrag_initialized()
         if not isinstance(init, dict) or not init.get("success"):
             self._instances.pop(kb_id, None)
             detail = init.get("error") if isinstance(init, dict) else "Unknown initialization error."
@@ -390,13 +580,18 @@ class RAGEngine:
                 kw["custom_llm_provider"] = custom_llm_provider
             if extra_headers:
                 kw["extra_headers"] = extra_headers
+            kw["timeout"] = self._llm_timeout
 
             # Forward supported kwargs
             for passthrough in ("temperature", "max_tokens"):
                 if passthrough in kwargs:
                     kw[passthrough] = kwargs[passthrough]
 
-            response = await acompletion(**kw)
+            response = await self._await_request(
+                acompletion(**kw),
+                timeout=self._llm_timeout,
+                operation="LightRAG LLM request",
+            )
             return response.choices[0].message.content or ""
 
         return llm_model_func
@@ -432,8 +627,13 @@ class RAGEngine:
                 kw["encoding_format"] = "float"
             if extra_headers:
                 kw["extra_headers"] = extra_headers
+            kw["timeout"] = self._embedding_timeout
 
-            response = await aembedding(**kw)
+            response = await self._await_request(
+                aembedding(**kw),
+                timeout=self._embedding_timeout,
+                operation="LightRAG embedding request",
+            )
             return np.asarray([item["embedding"] for item in response.data], dtype=float)
 
         return EmbeddingFunc(
@@ -475,11 +675,16 @@ class RAGEngine:
                 kw["custom_llm_provider"] = custom_llm_provider
             if extra_headers:
                 kw["extra_headers"] = extra_headers
+            kw["timeout"] = self._llm_timeout
 
             # VLM enhanced query: pre-built messages
             if messages:
                 kw["messages"] = messages
-                response = await acompletion(**kw)
+                response = await self._await_request(
+                    acompletion(**kw),
+                    timeout=self._llm_timeout,
+                    operation="LightRAG VLM request",
+                )
                 return response.choices[0].message.content or ""
 
             # Single image analysis
@@ -497,7 +702,11 @@ class RAGEngine:
                         ],
                     },
                 ]
-                response = await acompletion(**kw)
+                response = await self._await_request(
+                    acompletion(**kw),
+                    timeout=self._llm_timeout,
+                    operation="LightRAG VLM request",
+                )
                 return response.choices[0].message.content or ""
 
             # Pure text fallback
@@ -508,7 +717,11 @@ class RAGEngine:
                 text_msgs.extend(history_messages)
             text_msgs.append({"role": "user", "content": prompt})
             kw["messages"] = text_msgs
-            response = await acompletion(**kw)
+            response = await self._await_request(
+                acompletion(**kw),
+                timeout=self._llm_timeout,
+                operation="LightRAG VLM request",
+            )
             return response.choices[0].message.content or ""
 
         return vision_model_func
@@ -878,11 +1091,11 @@ class RAGEngine:
         Returns:
             ParseResult indicating success or failure.
         """
+        rag = await self._ensure_ready(kb_id)
+        content = str(text or "").strip()
+        if not content:
+            raise ValueError("text is required.")
         try:
-            rag = await self._ensure_ready(kb_id)
-            content = str(text or "").strip()
-            if not content:
-                raise ValueError("text is required.")
             await rag.insert_content_list(
                 [{"type": "text", "text": content, "page_idx": 0}],
                 file_path=file_path or f"{kb_id}.txt",
@@ -910,6 +1123,32 @@ class RAGEngine:
                 ),
             )
         except Exception as exc:
+            if self._is_timeout_like_error(exc):
+                try:
+                    metadata = await self._insert_chunks_without_graph_extraction(
+                        rag,
+                        [content],
+                        doc_id=doc_id,
+                        file_path=file_path or f"{kb_id}.txt",
+                    )
+                    logger.warning(
+                        "RAGEngine: insert_text used chunk-only fallback for kb_id={} doc_id={} file_path={}",
+                        kb_id,
+                        doc_id,
+                        file_path,
+                    )
+                    return ParseResult(
+                        success=True,
+                        parser_name="text_insert_fallback",
+                        metadata=metadata,
+                    )
+                except Exception as fallback_exc:
+                    logger.error(
+                        "RAGEngine: insert_text fallback failed for kb_id={}: {}",
+                        kb_id,
+                        fallback_exc,
+                    )
+                    exc = fallback_exc
             logger.error("RAGEngine: insert_text failed for kb_id={}: {}", kb_id, exc)
             return ParseResult(
                 success=False,
@@ -926,11 +1165,11 @@ class RAGEngine:
         file_path: str | None = None,
     ) -> ParseResult:
         """Insert pre-split chunks for cases where the caller controls chunking."""
+        rag = await self._ensure_ready(kb_id)
+        normalized_chunks = [str(item or "").strip() for item in chunks if str(item or "").strip()]
+        if not normalized_chunks:
+            raise ValueError("chunks are required.")
         try:
-            rag = await self._ensure_ready(kb_id)
-            normalized_chunks = [str(item or "").strip() for item in chunks if str(item or "").strip()]
-            if not normalized_chunks:
-                raise ValueError("chunks are required.")
             await rag.insert_content_list(
                 [
                     {"type": "text", "text": item, "page_idx": index}
@@ -956,6 +1195,42 @@ class RAGEngine:
                 },
             )
         except Exception as exc:
+            if self._is_timeout_like_error(exc):
+                try:
+                    metadata = await self._insert_chunks_without_graph_extraction(
+                        rag,
+                        normalized_chunks,
+                        doc_id=doc_id,
+                        file_path=file_path or f"{kb_id}.txt",
+                    )
+                    logger.warning(
+                        "RAGEngine: insert_chunks used chunk-only fallback for kb_id={} doc_id={} file_path={}",
+                        kb_id,
+                        doc_id,
+                        file_path,
+                    )
+                    return ParseResult(
+                        success=True,
+                        parser_name="chunk_insert_fallback",
+                        metadata=metadata,
+                    )
+                except Exception as fallback_exc:
+                    logger.error(
+                        "RAGEngine: insert_chunks fallback failed for kb_id={}: {}",
+                        kb_id,
+                        fallback_exc,
+                    )
+                    exc = fallback_exc
+            cleanup_doc_id = str(doc_id or "").strip()
+            if cleanup_doc_id:
+                try:
+                    await self.delete_document(kb_id, cleanup_doc_id)
+                except Exception:
+                    logger.warning(
+                        "RAGEngine: failed to clean partial chunk data for kb_id={} doc_id={}",
+                        kb_id,
+                        cleanup_doc_id,
+                    )
             logger.error("RAGEngine: insert_chunks failed for kb_id={}: {}", kb_id, exc)
             return ParseResult(
                 success=False,
@@ -989,15 +1264,7 @@ class RAGEngine:
 
         from lightrag import QueryParam
 
-        mode = {
-            "keyword": "naive",
-            "semantic": "local",
-            "hybrid": "hybrid",
-            "local": "local",
-            "global": "global",
-            "naive": "naive",
-            "mix": "mix",
-        }.get(str(mode or "").strip().lower(), "hybrid")
+        mode = self._normalize_query_mode(mode)
 
         all_hits: list[RetrievalHit] = []
         failures: list[tuple[str, str]] = []
@@ -1005,14 +1272,30 @@ class RAGEngine:
         for kb_id in kb_ids:
             try:
                 rag = await self._ensure_ready(kb_id)
-                result = await rag.lightrag.aquery_data(
-                    query_text,
-                    QueryParam(
-                        mode=mode,
-                        top_k=max(1, int(top_k)),
-                        include_references=True,
-                    ),
+                query_param = QueryParam(
+                    mode=mode,
+                    top_k=max(1, int(top_k)),
+                    include_references=True,
                 )
+                try:
+                    result = await rag.lightrag.aquery_data(query_text, query_param)
+                except Exception as exc:
+                    if mode != "naive" and self._is_timeout_like_error(exc):
+                        logger.warning(
+                            "RAGEngine: query timeout for kb_id={} mode={}, retrying with naive mode",
+                            kb_id,
+                            mode,
+                        )
+                        result = await rag.lightrag.aquery_data(
+                            query_text,
+                            QueryParam(
+                                mode="naive",
+                                top_k=max(1, int(top_k)),
+                                include_references=True,
+                            ),
+                        )
+                    else:
+                        raise
                 data = result.get("data") or {}
                 references = {
                     str(item.get("reference_id")): str(item.get("file_path") or "")
@@ -1070,15 +1353,7 @@ class RAGEngine:
         rag = await self._ensure_ready(kb_id)
         param_fields = getattr(QueryParam, "__annotations__", {})
         query_kwargs: dict[str, Any] = {
-            "mode": {
-                "keyword": "naive",
-                "semantic": "local",
-                "hybrid": "hybrid",
-                "local": "local",
-                "global": "global",
-                "naive": "naive",
-                "mix": "mix",
-            }.get(str(mode or "").strip().lower(), "hybrid"),
+            "mode": self._normalize_query_mode(mode),
             "top_k": max(1, int(top_k)),
             "chunk_top_k": max(1, int(chunk_top_k)),
             "response_type": response_type,
@@ -1088,7 +1363,19 @@ class RAGEngine:
             "include_references": True,
         }
         filtered_kwargs = {key: value for key, value in query_kwargs.items() if key in param_fields}
-        return await rag.lightrag.aquery_data(query_text, QueryParam(**filtered_kwargs))
+        try:
+            return await rag.lightrag.aquery_data(query_text, QueryParam(**filtered_kwargs))
+        except Exception as exc:
+            if filtered_kwargs.get("mode") != "naive" and self._is_timeout_like_error(exc):
+                fallback_kwargs = dict(filtered_kwargs)
+                fallback_kwargs["mode"] = "naive"
+                logger.warning(
+                    "RAGEngine: structured query timeout for kb_id={} mode={}, retrying with naive mode",
+                    kb_id,
+                    filtered_kwargs.get("mode"),
+                )
+                return await rag.lightrag.aquery_data(query_text, QueryParam(**fallback_kwargs))
+            raise
 
     async def get_graph_labels(self, kb_id: str) -> list[str]:
         """Return graph labels for a knowledge base."""
@@ -1151,6 +1438,76 @@ class RAGEngine:
         )
         return self._normalize_graph(graph, labels=labels)
 
+    @staticmethod
+    async def _drop_storage_data(storage: Any) -> None:
+        if storage is None:
+            return
+        drop = getattr(storage, "drop", None)
+        if callable(drop):
+            await drop()
+
+    @staticmethod
+    async def _drop_vector_storage_data(storage: Any) -> None:
+        if storage is None:
+            return
+
+        client = getattr(storage, "_client", None)
+        namespace = str(
+            getattr(storage, "final_namespace", None)
+            or getattr(storage, "namespace", None)
+            or ""
+        ).strip()
+        has_collection = getattr(client, "has_collection", None)
+        drop_collection = getattr(client, "drop_collection", None)
+        if namespace and callable(has_collection) and callable(drop_collection):
+            if has_collection(namespace):
+                drop_collection(namespace)
+            return
+
+        await RAGEngine._drop_storage_data(storage)
+
+    async def _drop_kb_storage_data(self, rag: Any) -> None:
+        lightrag = getattr(rag, "lightrag", None)
+        if lightrag is None:
+            return
+
+        failures: list[str] = []
+
+        async def _run(label: str, storage: Any, *, vector: bool = False) -> None:
+            if storage is None:
+                return
+            try:
+                if vector:
+                    await self._drop_vector_storage_data(storage)
+                else:
+                    await self._drop_storage_data(storage)
+            except Exception as exc:
+                logger.warning("RAGEngine: failed to drop {} for kb cleanup: {}", label, exc)
+                failures.append(label)
+
+        for label, storage in (
+            ("full_docs", getattr(lightrag, "full_docs", None)),
+            ("text_chunks", getattr(lightrag, "text_chunks", None)),
+            ("full_entities", getattr(lightrag, "full_entities", None)),
+            ("full_relations", getattr(lightrag, "full_relations", None)),
+            ("entity_chunks", getattr(lightrag, "entity_chunks", None)),
+            ("relation_chunks", getattr(lightrag, "relation_chunks", None)),
+            ("chunk_entity_relation_graph", getattr(lightrag, "chunk_entity_relation_graph", None)),
+            ("llm_response_cache", getattr(lightrag, "llm_response_cache", None)),
+            ("doc_status", getattr(lightrag, "doc_status", None)),
+        ):
+            await _run(label, storage)
+
+        for label, storage in (
+            ("entities_vdb", getattr(lightrag, "entities_vdb", None)),
+            ("relationships_vdb", getattr(lightrag, "relationships_vdb", None)),
+            ("chunks_vdb", getattr(lightrag, "chunks_vdb", None)),
+        ):
+            await _run(label, storage, vector=True)
+
+        if failures:
+            raise RuntimeError(f"failed to drop storages: {', '.join(failures)}")
+
     async def delete_kb(self, kb_id: str) -> bool:
         """Delete all LightRAG data for a knowledge base.
 
@@ -1161,6 +1518,27 @@ class RAGEngine:
             True if deleted successfully.
         """
         try:
+            rag = self._instances.get(kb_id)
+            if rag is None:
+                try:
+                    rag = await self._ensure_ready(kb_id)
+                except Exception as exc:
+                    logger.warning(
+                        "RAGEngine: failed to initialize kb_id={} during delete, continuing with workspace cleanup only: {}",
+                        kb_id,
+                        exc,
+                    )
+                    rag = None
+
+            if rag is not None:
+                try:
+                    await self._drop_kb_storage_data(rag)
+                finally:
+                    try:
+                        await rag.finalize_storages()
+                    except Exception as exc:
+                        logger.warning("RAGEngine: finalize failed during delete for kb_id={}: {}", kb_id, exc)
+
             # Remove from instances cache
             self._instances.pop(kb_id, None)
             self._locks.pop(kb_id, None)
@@ -1203,6 +1581,69 @@ class RAGEngine:
         except Exception as exc:
             logger.warning("RAGEngine: delete_document failed: {}", exc)
             return False
+
+    async def prepare_document_ingest(self, kb_id: str, doc_id: str) -> dict[str, list[str]]:
+        """Clean the target doc and any retryable leftovers before a scoped ingest.
+
+        LightRAG re-queues all FAILED/PENDING/PROCESSING docs when enqueueing a new
+        document. We keep Nanobot's file selection deterministic by removing stale
+        retryable docs from LightRAG first; the SQLite knowledge-file metadata
+        remains the source of truth and can explicitly re-index those docs later.
+        """
+        rag = await self._ensure_ready(kb_id)
+        lightrag = getattr(rag, "lightrag", None)
+        if lightrag is None:
+            return {"deletedDocIds": [], "prunedDocIds": []}
+
+        retryable_doc_ids: set[str] = set()
+        doc_status_store = getattr(lightrag, "doc_status", None)
+        get_docs_by_status = getattr(doc_status_store, "get_docs_by_status", None)
+        if callable(get_docs_by_status):
+            try:
+                from lightrag.base import DocStatus
+
+                processing_docs, failed_docs, pending_docs = await asyncio.gather(
+                    get_docs_by_status(DocStatus.PROCESSING),
+                    get_docs_by_status(DocStatus.FAILED),
+                    get_docs_by_status(DocStatus.PENDING),
+                )
+                for payload in (processing_docs, failed_docs, pending_docs):
+                    retryable_doc_ids.update(str(item).strip() for item in payload.keys() if str(item).strip())
+            except Exception as exc:
+                logger.warning(
+                    "RAGEngine: failed to inspect retryable doc queue for kb_id={}: {}",
+                    kb_id,
+                    exc,
+                )
+
+        normalized_doc_id = str(doc_id or "").strip()
+        cleanup_doc_ids: list[str] = []
+        if normalized_doc_id:
+            cleanup_doc_ids.append(normalized_doc_id)
+        pruned_doc_ids = sorted(
+            item
+            for item in retryable_doc_ids
+            if item and item != normalized_doc_id
+        )
+        cleanup_doc_ids.extend(pruned_doc_ids)
+
+        deleted_doc_ids: list[str] = []
+        for candidate in cleanup_doc_ids:
+            if await self.delete_document(kb_id, candidate):
+                deleted_doc_ids.append(candidate)
+
+        if pruned_doc_ids:
+            logger.warning(
+                "RAGEngine: pruned retryable LightRAG docs before ingest for kb_id={} keep_doc_id={} pruned={}",
+                kb_id,
+                normalized_doc_id,
+                pruned_doc_ids,
+            )
+
+        return {
+            "deletedDocIds": deleted_doc_ids,
+            "prunedDocIds": pruned_doc_ids,
+        }
 
     async def shutdown_async(self) -> None:
         """Finalize all initialized RAG-Anything storages."""
@@ -1343,6 +1784,49 @@ def create_rag_engine_from_config(
         or "text-embedding-3-large"
     )
     embedding_dim = _infer_embedding_dim(embedding_model, embedding_runtime["provider_name"])
+    rag_graph_store = getattr(rag_config, "graph_store", None)
+    use_neo4j_graph = bool(
+        rag_graph_store
+        and getattr(rag_graph_store, "enabled", False)
+        and str(getattr(rag_graph_store, "provider", "") or "").strip().lower() == "neo4j"
+        and str(getattr(rag_graph_store, "uri", "") or "").strip()
+    )
+    lightrag_base_kwargs: dict[str, Any] = {
+        "kv_storage": "JsonKVStorage",
+        "vector_storage": "MilvusVectorDBStorage",
+        "graph_storage": "Neo4JStorage" if use_neo4j_graph else "NetworkXStorage",
+        "doc_status_storage": "JsonDocStatusStorage",
+        "default_llm_timeout": int(getattr(rag_config, "llm_timeout", 60) or 60),
+        "default_embedding_timeout": int(getattr(rag_config, "embedding_timeout", 30) or 30),
+        "llm_model_max_async": max(1, int(getattr(rag_config, "max_async", 4) or 4)),
+        "max_parallel_insert": max(1, int(getattr(rag_config, "max_parallel_insert", 2) or 2)),
+        "embedding_func_max_async": max(
+            1,
+            int(getattr(rag_config, "embedding_func_max_async", 8) or 8),
+        ),
+        "vector_db_storage_cls_kwargs": {
+            "index_type": str(getattr(rag_config.milvus, "index_type", "AUTOINDEX") or "AUTOINDEX").strip()
+            or "AUTOINDEX",
+            "metric_type": str(getattr(rag_config.milvus, "metric_type", "COSINE") or "COSINE").strip()
+            or "COSINE",
+        },
+    }
+    storage_env = {
+        "MILVUS_URI": str(getattr(rag_config.milvus, "uri", "") or "").strip(),
+        "MILVUS_DB_NAME": str(getattr(rag_config.milvus, "db_name", "") or "").strip(),
+        "MILVUS_USER": str(getattr(rag_config.milvus, "user", "") or "").strip(),
+        "MILVUS_PASSWORD": str(getattr(rag_config.milvus, "password", "") or "").strip(),
+        "MILVUS_TOKEN": str(getattr(rag_config.milvus, "token", "") or "").strip(),
+    }
+    if use_neo4j_graph and rag_graph_store is not None:
+        storage_env.update(
+            {
+                "NEO4J_URI": str(getattr(rag_graph_store, "uri", "") or "").strip(),
+                "NEO4J_USERNAME": str(getattr(rag_graph_store, "username", "") or "").strip(),
+                "NEO4J_PASSWORD": str(getattr(rag_graph_store, "password", "") or "").strip(),
+                "NEO4J_DATABASE": str(getattr(rag_graph_store, "database", "") or "").strip(),
+            }
+        )
 
     return RAGEngine(
         storage_root=instance_dir / "knowledge" / "lightrag",
@@ -1357,7 +1841,11 @@ def create_rag_engine_from_config(
         embedding_extra_headers=embedding_runtime["extra_headers"],
         embedding_model=embedding_model,
         embedding_dim=embedding_dim,
+        llm_timeout=float(getattr(rag_config, "llm_timeout", 60) or 60),
+        embedding_timeout=float(getattr(rag_config, "embedding_timeout", 30) or 30),
         mineru_api_base=rag_config.mineru_api_base,
         mineru_api_token=rag_config.mineru_api_token,
         mineru_model_version=rag_config.mineru_model_version,
+        lightrag_base_kwargs=lightrag_base_kwargs,
+        storage_env=storage_env,
     )

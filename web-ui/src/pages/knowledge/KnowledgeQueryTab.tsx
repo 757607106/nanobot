@@ -19,7 +19,6 @@ import type { KnowledgeQueryChunk, KnowledgeQueryParams, KnowledgeRetrieveResult
 const { Paragraph, Text } = Typography
 
 interface KnowledgeQueryTabProps {
-  supportsEvaluation: boolean
   queryParams: KnowledgeQueryParams
   queryText: string
   queryLoading: boolean
@@ -29,8 +28,6 @@ interface KnowledgeQueryTabProps {
   onModeChange: (value: string) => void
   onTopKChange: (value: number) => void
   onChunkTopKChange: (value: number) => void
-  onSearchModeChange: (value: string) => void
-  onSimilarityThresholdChange: (value: number) => void
   onEnableRerankChange: (checked: boolean) => void
   onSaveQueryDefaults: () => void
   onGenerateQuestions: () => void
@@ -44,18 +41,42 @@ function getChunkSource(chunk: KnowledgeQueryChunk) {
   return String(chunk.file_path || chunk.filename || chunk.metadata?.source || chunk.reference_id || '未知来源')
 }
 
-function getChunkKey(chunk: KnowledgeQueryChunk, index: number) {
-  return String(chunk.chunk_id || chunk.chunkId || chunk.reference_id || `chunk-${index}`)
-}
-
 function getChunkPreview(content?: string, limit = 120) {
   const text = String(content || '').trim()
   if (!text) return '暂无内容'
   return text.length <= limit ? text : `${text.slice(0, limit)}...`
 }
 
+function hasMeaningfulMessage(message: string | undefined) {
+  const text = String(message || '').trim()
+  if (!text) return false
+  const normalized = text.toLowerCase()
+  if (normalized === 'query processed successfully') {
+    return false
+  }
+  return ![
+    'error calling llm',
+    'llm error',
+    'litellm.',
+    'authentication fails',
+    'invalid api key',
+    'invalid_request_error',
+    'deepseekexception',
+    'openaierror',
+    'badrequesterror',
+  ].some((marker) => normalized.includes(marker))
+}
+
+function deriveAnswerMessage(result: KnowledgeRetrieveResult | null) {
+  const direct = String(result?.message || '').trim()
+  if (hasMeaningfulMessage(direct)) {
+    return direct
+  }
+  const chunkFallback = String(result?.data?.chunks?.[0]?.content || '').trim()
+  return chunkFallback || null
+}
+
 export function KnowledgeQueryTab({
-  supportsEvaluation,
   queryParams,
   queryText,
   queryLoading,
@@ -65,8 +86,6 @@ export function KnowledgeQueryTab({
   onModeChange,
   onTopKChange,
   onChunkTopKChange,
-  onSearchModeChange,
-  onSimilarityThresholdChange,
   onEnableRerankChange,
   onSaveQueryDefaults,
   onGenerateQuestions,
@@ -89,6 +108,7 @@ export function KnowledgeQueryTab({
       .map(([source, chunks]) => ({ source, chunks }))
       .sort((left, right) => left.source.localeCompare(right.source))
   }, [queryResult])
+  const answerMessage = deriveAnswerMessage(queryResult)
 
   return (
     <div className="knowledge-tab-panel">
@@ -97,52 +117,21 @@ export function KnowledgeQueryTab({
           <Select
             value={queryParams.mode}
             onChange={onModeChange}
-            options={
-              supportsEvaluation
-                ? [
-                    { value: 'vector', label: 'Vector' },
-                    { value: 'keyword', label: 'Keyword' },
-                    { value: 'hybrid', label: 'Hybrid' },
-                  ]
-                : [
-                    { value: 'hybrid', label: 'Hybrid' },
-                    { value: 'local', label: 'Local' },
-                    { value: 'global', label: 'Global' },
-                    { value: 'naive', label: 'Naive' },
-                    { value: 'mix', label: 'Mix' },
-                  ]
-            }
+            options={[
+              { value: 'mix', label: 'Mix' },
+              { value: 'hybrid', label: 'Hybrid' },
+              { value: 'local', label: 'Local' },
+              { value: 'global', label: 'Global' },
+              { value: 'naive', label: 'Naive' },
+            ]}
             style={{ width: 140 }}
           />
           <InputNumber min={1} max={100} value={queryParams.topK} onChange={(value) => onTopKChange(Number(value || 10))} addonBefore="TopK" />
           <InputNumber min={1} max={100} value={queryParams.chunkTopK} onChange={(value) => onChunkTopKChange(Number(value || 12))} addonBefore="ChunkK" />
-          {supportsEvaluation ? (
-            <>
-              <Select
-                value={String(queryParams.options?.search_mode || queryParams.options?.searchMode || 'vector')}
-                onChange={onSearchModeChange}
-                options={[
-                  { value: 'vector', label: '向量检索' },
-                  { value: 'keyword', label: '关键词检索' },
-                  { value: 'hybrid', label: '混合检索' },
-                ]}
-                style={{ width: 140 }}
-              />
-              <InputNumber
-                min={0}
-                max={1}
-                step={0.05}
-                value={Number(queryParams.options?.similarity_threshold || queryParams.options?.similarityThreshold || 0)}
-                onChange={(value) => onSimilarityThresholdChange(Number(value || 0))}
-                addonBefore="阈值"
-              />
-            </>
-          ) : (
-            <>
-              <Switch checked={queryParams.enableRerank} onChange={onEnableRerankChange} />
-              <Text type="secondary">重排</Text>
-            </>
-          )}
+          <>
+            <Switch checked={queryParams.enableRerank} onChange={onEnableRerankChange} />
+            <Text type="secondary">重排</Text>
+          </>
           <Button icon={<SaveOutlined />} onClick={onSaveQueryDefaults}>
             保存默认检索参数
           </Button>
@@ -199,6 +188,13 @@ export function KnowledgeQueryTab({
           <pre className="knowledge-result-raw">{JSON.stringify(queryResult, null, 2)}</pre>
         ) : (
           <div className="knowledge-result-grid">
+            {answerMessage ? (
+              <Card size="small" title="回答">
+                <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+                  {answerMessage}
+                </Paragraph>
+              </Card>
+            ) : null}
             <Card size="small" title="元数据">
               <div className="knowledge-metadata-list">
                 {Object.entries(queryResult.metadata || {}).map(([key, value]) => (

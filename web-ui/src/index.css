@@ -371,6 +371,10 @@
   min-width: 0;
 }
 
+.knowledge-file-name-cell {
+  cursor: pointer;
+}
+
 .knowledge-file-kind {
   display: inline-flex;
   align-items: center;
@@ -393,13 +397,21 @@
 
 .knowledge-file-link {
   appearance: none;
+  display: block;
+  width: 100%;
   border: 0;
   background: transparent;
   padding: 0;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
   color: var(--nb-ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .knowledge-file-link:hover {

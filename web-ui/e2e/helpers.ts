@@ -6,6 +6,11 @@ export const E2E_USERNAME = 'owner'
 export const E2E_PASSWORD = 'bootstrap-pass-123'
 export const BRIEF_FIXTURE_PATH = path.resolve(process.cwd(), 'e2e/fixtures/brief.txt')
 
+export function uniqueE2EName(prefix: string) {
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return `${prefix} ${token}`
+}
+
 function pathPattern(pathname: string) {
   const escaped = pathname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(`${escaped}$`)
@@ -21,7 +26,16 @@ export async function bootstrapAndSetup(page: Page) {
       password: E2E_PASSWORD,
     },
   })
-  expect(bootstrap.ok()).toBeTruthy()
+  if (!bootstrap.ok()) {
+    expect(bootstrap.status()).toBe(409)
+    const loginResponse = await page.request.post('/api/v1/auth/login', {
+      data: {
+        username: E2E_USERNAME,
+        password: E2E_PASSWORD,
+      },
+    })
+    expect(loginResponse.ok()).toBeTruthy()
+  }
 
   const provider = await page.request.put('/api/v1/setup/provider', {
     data: {

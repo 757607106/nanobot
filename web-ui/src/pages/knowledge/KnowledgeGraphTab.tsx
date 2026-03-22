@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Descriptions, Empty, Input, InputNumber, Space, Spin, Statistic, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Descriptions, Empty, Input, InputNumber, Space, Spin, Statistic, Tag, Typography } from 'antd'
 import { CloseOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import type { KnowledgeGraphData, KnowledgeGraphEdge, KnowledgeGraphNode, KnowledgeGraphStats } from '../../types'
 
@@ -49,6 +49,7 @@ export function KnowledgeGraphTab({
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [selectedNode, setSelectedNode] = useState<KnowledgeGraphNode | null>(null)
   const [selectedEdge, setSelectedEdge] = useState<KnowledgeGraphEdge | null>(null)
+  const [renderError, setRenderError] = useState<string | null>(null)
   const hasGraph = Boolean(graphData && graphData.nodes.length > 0)
 
   const graphPayload = useMemo(() => {
@@ -96,99 +97,118 @@ export function KnowledgeGraphTab({
           graphRef.current.destroy()
           graphRef.current = null
         }
+        setRenderError(null)
         return
       }
 
-      const { Graph } = await import('@antv/g6')
-      if (disposed || !containerRef.current) return
+      try {
+        const { Graph } = await import('@antv/g6')
+        if (disposed || !containerRef.current) return
 
-      const width = Math.max(containerRef.current.clientWidth, 480)
-      const height = Math.max(containerRef.current.clientHeight, 420)
+        const width = Math.max(containerRef.current.clientWidth, 480)
+        const height = Math.max(containerRef.current.clientHeight, 420)
 
-      if (graphRef.current) {
-        graphRef.current.destroy()
-        graphRef.current = null
+        if (graphRef.current) {
+          graphRef.current.destroy()
+          graphRef.current = null
+        }
+
+        const instance = new Graph({
+          container: containerRef.current,
+          width,
+          height,
+          data: graphPayload,
+          autoFit: 'view',
+          layout: {
+            type: 'd3-force',
+            preventOverlap: true,
+            alphaDecay: 0.08,
+            alphaMin: 0.01,
+            velocityDecay: 0.45,
+            force: {
+              link: { distance: 120, strength: 0.8 },
+              charge: { strength: -320, distanceMax: 640 },
+            },
+          },
+          node: {
+            type: 'circle',
+            style: {
+              size: (datum: any) => Math.min(18 + (datum.data?.degree || 0) * 4, 56),
+              fill: (datum: any) => datum.data?.color || GRAPH_COLORS[0],
+              stroke: '#f7f4ef',
+              lineWidth: 2,
+              labelText: (datum: any) => datum.data?.label || '',
+              labelFill: '#25312d',
+              labelWordWrap: true,
+              labelMaxWidth: '280%',
+              shadowColor: 'rgba(37, 49, 45, 0.18)',
+              shadowBlur: 6,
+            },
+          },
+          edge: {
+            type: 'quadratic',
+            style: {
+              stroke: 'rgba(95, 117, 107, 0.5)',
+              lineWidth: 1.4,
+              endArrow: true,
+              labelText: (datum: any) => datum.data?.label || '',
+              labelFill: '#34413d',
+              labelBackground: true,
+              labelBackgroundFill: 'rgba(255, 255, 255, 0.85)',
+            },
+          },
+          behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas', 'hover-activate'],
+        })
+
+        instance.on('node:click', (event: any) => {
+          const nodeId = event.target?.id
+          const nodeData = nodeId ? instance.getNodeData(nodeId) : null
+          setSelectedEdge(null)
+          setSelectedNode((nodeData?.data?.original as KnowledgeGraphNode | undefined) || null)
+        })
+
+        instance.on('edge:click', (event: any) => {
+          const edgeId = event.target?.id
+          const edgeData = edgeId ? instance.getEdgeData(edgeId) : null
+          setSelectedNode(null)
+          setSelectedEdge((edgeData?.data?.original as KnowledgeGraphEdge | undefined) || null)
+        })
+
+        instance.on('canvas:click', () => {
+          setSelectedNode(null)
+          setSelectedEdge(null)
+        })
+
+        await instance.render()
+        await instance.fitView()
+        if (disposed) {
+          instance.destroy()
+          return
+        }
+
+        setRenderError(null)
+        graphRef.current = instance
+
+        resizeObserverRef.current?.disconnect()
+        resizeObserverRef.current = new ResizeObserver((entries) => {
+          const entry = entries[0]
+          if (!entry || !graphRef.current) return
+          const nextWidth = Math.max(entry.contentRect.width, 480)
+          const nextHeight = Math.max(entry.contentRect.height, 420)
+          graphRef.current.setSize(nextWidth, nextHeight)
+          void graphRef.current.fitView?.()
+        })
+        resizeObserverRef.current.observe(containerRef.current)
+      } catch (error) {
+        if (graphRef.current) {
+          graphRef.current.destroy()
+          graphRef.current = null
+        }
+        if (!disposed) {
+          const message = error instanceof Error ? error.message : String(error || '知识图谱渲染失败')
+          setRenderError(message)
+        }
       }
-
-      const instance = new Graph({
-        container: containerRef.current,
-        width,
-        height,
-        autoFit: 'view',
-        layout: {
-          type: 'd3-force',
-          preventOverlap: true,
-          alphaDecay: 0.08,
-          alphaMin: 0.01,
-          velocityDecay: 0.45,
-          force: {
-            link: { distance: 120, strength: 0.8 },
-            charge: { strength: -320, distanceMax: 640 },
-          },
-        },
-        node: {
-          type: 'circle',
-          style: {
-            size: (datum: any) => Math.min(18 + (datum.data?.degree || 0) * 4, 56),
-            fill: (datum: any) => datum.data?.color || GRAPH_COLORS[0],
-            stroke: '#f7f4ef',
-            lineWidth: 2,
-            labelText: (datum: any) => datum.data?.label || '',
-            labelFill: '#25312d',
-            labelWordWrap: true,
-            labelMaxWidth: '280%',
-            shadowColor: 'rgba(37, 49, 45, 0.18)',
-            shadowBlur: 6,
-          },
-        },
-        edge: {
-          type: 'quadratic',
-          style: {
-            stroke: 'rgba(95, 117, 107, 0.5)',
-            lineWidth: 1.4,
-            endArrow: true,
-            labelText: (datum: any) => datum.data?.label || '',
-            labelFill: '#34413d',
-            labelBackground: true,
-            labelBackgroundFill: 'rgba(255, 255, 255, 0.85)',
-          },
-        },
-        behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas', 'hover-activate'],
-      })
-
-      instance.on('node:click', (event: any) => {
-        const nodeId = event.target?.id
-        const nodeData = nodeId ? instance.getNodeData(nodeId) : null
-        setSelectedEdge(null)
-        setSelectedNode((nodeData?.data?.original as KnowledgeGraphNode | undefined) || null)
-      })
-
-      instance.on('edge:click', (event: any) => {
-        const edgeId = event.target?.id
-        const edgeData = edgeId ? instance.getEdgeData(edgeId) : null
-        setSelectedNode(null)
-        setSelectedEdge((edgeData?.data?.original as KnowledgeGraphEdge | undefined) || null)
-      })
-
-      instance.on('canvas:click', () => {
-        setSelectedNode(null)
-        setSelectedEdge(null)
-      })
-
-      instance.setData(graphPayload)
-      instance.render()
-      graphRef.current = instance
-
-      resizeObserverRef.current?.disconnect()
-      resizeObserverRef.current = new ResizeObserver((entries) => {
-        const entry = entries[0]
-        if (!entry || !graphRef.current) return
-        const nextWidth = Math.max(entry.contentRect.width, 480)
-        const nextHeight = Math.max(entry.contentRect.height, 420)
-        graphRef.current.setSize([nextWidth, nextHeight])
-        graphRef.current.fitView?.()
-      })
-      resizeObserverRef.current.observe(containerRef.current)
     }
 
     void renderGraph()
@@ -231,6 +251,15 @@ export function KnowledgeGraphTab({
         <div className="knowledge-loading-panel"><Spin /></div>
       ) : hasGraph ? (
         <div className="knowledge-graph-canvas-shell">
+          {renderError ? (
+            <Alert
+              type="error"
+              showIcon
+              message="知识图谱渲染失败"
+              description={renderError}
+              style={{ margin: 12 }}
+            />
+          ) : null}
           <div ref={containerRef} className="knowledge-graph-canvas" />
           {selectedNode ? (
             <Card

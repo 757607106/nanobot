@@ -7,6 +7,24 @@ import pytest
 
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore, KnowledgeBaseValidationError
+from tests.knowledge_test_utils import FakeRAGEngine
+
+
+class _GenericMessageRAGEngine(FakeRAGEngine):
+    async def query_structured(self, kb_id: str, query_text: str, **kwargs) -> dict:
+        result = await super().query_structured(kb_id, query_text, **kwargs)
+        result["message"] = "Query processed successfully"
+        return result
+
+
+class _LlmErrorMessageRAGEngine(FakeRAGEngine):
+    async def query_structured(self, kb_id: str, query_text: str, **kwargs) -> dict:
+        result = await super().query_structured(kb_id, query_text, **kwargs)
+        result["message"] = (
+            "Error calling LLM: litellm.BadRequestError: DeepseekException - "
+            '{"error":{"message":"Authentication Fails","code":"invalid_request_error"}}'
+        )
+        return result
 
 
 def _make_instance(tmp_path: Path) -> PlatformInstance:
@@ -15,16 +33,6 @@ def _make_instance(tmp_path: Path) -> PlatformInstance:
         label="Test Instance",
         config_path=tmp_path / "instance" / "config.json",
     )
-
-
-def _fake_embed(texts: list[str], kb=None) -> list[list[float]]:
-    del kb
-    vocabulary = ("restart", "worker", "token", "cache", "queue", "incident")
-    vectors: list[list[float]] = []
-    for text in texts:
-        lowered = str(text or "").lower()
-        vectors.append([float(lowered.count(token)) for token in vocabulary])
-    return vectors
 
 
 def _wait_for_job(service: KnowledgeBaseService, kb_id: str, job_id: str) -> dict[str, object]:
@@ -53,10 +61,9 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
         KnowledgeBaseStore(instance.knowledge_db_path()),
         instance=instance,
         instance_id=instance.id,
-        rag_engine=None,
+        rag_engine=FakeRAGEngine(),
         config=None,
     )
-    service._embed_texts = _fake_embed  # type: ignore[method-assign]
     service._generate_with_llm = lambda **kwargs: None  # type: ignore[method-assign]
 
     created = service.create_knowledge_base(
@@ -64,20 +71,14 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
             "name": "Ops Milvus KB",
             "description": "Incident and runbook knowledge",
             "kbType": "milvus",
-            "queryParams": {
-                "mode": "vector",
-                "topK": 4,
-                "options": {
-                    "search_mode": "vector",
-                    "similarity_threshold": 0.0,
-                },
-            },
         }
     )
     kb_id = created["kbId"]
     schema = service.get_query_param_schema(kb_id)
-    assert schema["type"] == "milvus"
-    assert any(item["key"] == "similarity_threshold" for item in schema["options"])
+    assert schema["type"] == "lightrag"
+    assert any(item["key"] == "chunkTopK" for item in schema["options"])
+    assert created["kbType"] == "lightrag"
+    assert created["queryParams"]["mode"] == "mix"
 
     uploaded = service.upload_files(
         kb_id,
@@ -108,25 +109,25 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
     index_job = _wait_for_job(service, kb_id, index_result["job"]["jobId"])
     assert index_job["status"] == "succeeded"
     indexed_file = next(item for item in service.list_files(kb_id)["items"] if item["fileId"] == file_id)
-    assert indexed_file["processingParams"]["indexBackend"] == "pymilvus-lite"
+    assert indexed_file["processingParams"]["indexBackend"] == "lightrag-milvus"
     vector_dir = instance.runtime_dir("knowledge-vectors") / kb_id
-    assert (vector_dir / "milvus.db").exists()
-    assert not (vector_dir / "chunks.json").exists()
+    assert (vector_dir / "chunk-manifest.json").exists()
+    assert not (vector_dir / "milvus.db").exists()
 
     queried = service.query_database(
         kb_id,
         {
             "query": "How do we restart the worker and handle the token cache?",
-            "mode": "vector",
+            "mode": "mix",
             "topK": 4,
-            "search_mode": "vector",
+            "onlyNeedContext": False,
         },
     )
-    assert queried["metadata"]["kbType"] == "milvus"
+    assert queried["metadata"]["kbType"] == "lightrag"
     assert queried["data"]["chunks"]
     assert "Restart the worker" in (queried["message"] or "")
 
-    retrieved = service.retrieve([kb_id], "restart worker token cache", limit=4, requested_mode="vector")
+    retrieved = service.retrieve([kb_id], "restart worker token cache", limit=4, requested_mode="mix")
     assert retrieved["hits"]
     assert any("token cache" in hit["content"].lower() for hit in retrieved["hits"])
 
@@ -196,13 +197,13 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
     updated_query_params = service.update_query_params(
         kb_id,
         {
-            "keyword_top_k": 33,
-            "similarity_threshold": 0.25,
+            "chunkTopK": 8,
+            "enableRerank": True,
         },
     )
-    assert updated_query_params["mode"] == "vector"
-    assert updated_query_params["options"]["keyword_top_k"] == 33
-    assert updated_query_params["options"]["similarity_threshold"] == 0.25
+    assert updated_query_params["mode"] == "mix"
+    assert updated_query_params["chunkTopK"] == 8
+    assert updated_query_params["enableRerank"] is True
 
     description = service.generate_description({"name": "Ops Milvus KB", "fileList": ["/runbook.md", "/faq.md"]})
     assert description["description"]
@@ -227,7 +228,7 @@ def test_evaluation_uses_saved_retrieval_config_snapshot(tmp_path: Path) -> None
         KnowledgeBaseStore(instance.knowledge_db_path()),
         instance=instance,
         instance_id=instance.id,
-        rag_engine=None,
+        rag_engine=FakeRAGEngine(),
         config=None,
     )
 
@@ -285,16 +286,14 @@ def test_evaluation_uses_saved_retrieval_config_snapshot(tmp_path: Path) -> None
                 "mode": "keyword",
                 "topK": 2,
                 "options": {
-                    "search_mode": "keyword",
-                    "similarity_threshold": 0.15,
+                    "legacy_search_mode": "keyword",
                 },
             },
             "retrieval_config": {
                 "mode": "keyword",
                 "topK": 2,
                 "options": {
-                    "search_mode": "keyword",
-                    "similarity_threshold": 0.15,
+                    "legacy_search_mode": "keyword",
                 },
             },
             "modelConfig": {},
@@ -314,3 +313,91 @@ def test_evaluation_uses_saved_retrieval_config_snapshot(tmp_path: Path) -> None
     assert captured_payloads[0]["query"] == "How do we restart the worker?"
     assert captured_payloads[0]["mode"] == "keyword"
     assert captured_payloads[0]["topK"] == 2
+
+
+def test_query_database_replaces_generic_success_message_with_grounded_answer(tmp_path: Path) -> None:
+    instance = _make_instance(tmp_path)
+    service = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        rag_engine=_GenericMessageRAGEngine(),
+        config=None,
+    )
+    service._generate_with_llm = lambda **kwargs: None  # type: ignore[method-assign]
+
+    kb = service.create_knowledge_base({"name": "Answer Quality KB"})
+    kb_id = kb["kbId"]
+
+    uploaded = service.upload_files(
+        kb_id,
+        [
+            {
+                "file_name": "answer.md",
+                "mime_type": "text/markdown",
+                "content": b"Restart nanobot with supervisorctl restart nanobot after checking health.",
+            }
+        ],
+    )
+    file_id = uploaded["items"][0]["fileId"]
+
+    parse_job_id = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, parse_job_id)["status"] == "succeeded"
+    index_job_id = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, index_job_id)["status"] == "succeeded"
+
+    result = service.query_database(
+        kb_id,
+        {
+            "query": "How do we restart nanobot?",
+            "onlyNeedContext": False,
+            "onlyNeedPrompt": False,
+        },
+    )
+
+    assert result["message"] != "Query processed successfully"
+    assert "supervisorctl restart nanobot" in str(result["message"] or "")
+
+
+def test_query_database_replaces_llm_error_message_with_grounded_answer(tmp_path: Path) -> None:
+    instance = _make_instance(tmp_path)
+    service = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        rag_engine=_LlmErrorMessageRAGEngine(),
+        config=None,
+    )
+    service._generate_with_llm = lambda **kwargs: None  # type: ignore[method-assign]
+
+    kb = service.create_knowledge_base({"name": "LLM Error Answer KB"})
+    kb_id = kb["kbId"]
+
+    uploaded = service.upload_files(
+        kb_id,
+        [
+            {
+                "file_name": "answer.md",
+                "mime_type": "text/markdown",
+                "content": b"Run cache warmup first, then trigger the cache reset task.",
+            }
+        ],
+    )
+    file_id = uploaded["items"][0]["fileId"]
+
+    parse_job_id = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, parse_job_id)["status"] == "succeeded"
+    index_job_id = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, index_job_id)["status"] == "succeeded"
+
+    result = service.query_database(
+        kb_id,
+        {
+            "query": "How do we clear the cache?",
+            "onlyNeedContext": False,
+            "onlyNeedPrompt": False,
+        },
+    )
+
+    assert "Error calling LLM" not in str(result["message"] or "")
+    assert "cache reset task" in str(result["message"] or "")

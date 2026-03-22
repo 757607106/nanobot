@@ -12,7 +12,6 @@ import {
   Segmented,
   Select,
   Space,
-  Spin,
   Switch,
   Tag,
   Typography,
@@ -23,8 +22,14 @@ import {
   ReloadOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
-import { api, ApiError } from '../../api'
-import type { KnowledgeBaseDefinition, KnowledgeDocument, KnowledgeIngestJob } from '../../types'
+import { api } from '../../api'
+import type { KnowledgeBaseDefinition, KnowledgeDocument } from '../../types'
+import {
+  CHUNK_PRESET_OPTIONS,
+  KNOWLEDGE_ARCHITECTURE_LABEL,
+  buildIndexParams,
+  getErrorMessage,
+} from './shared'
 
 const { Paragraph, Text, Title } = Typography
 
@@ -39,7 +44,6 @@ interface KnowledgeUploadModalProps {
   open: boolean
   kb: KnowledgeBaseDefinition | null
   folderOptions: FolderOption[]
-  supportsChunkConfig: boolean
   defaultParentId?: string | null
   onClose: () => void
   onSuccess: () => Promise<void> | void
@@ -50,28 +54,6 @@ interface UrlLoadItem {
   status: 'pending' | 'loading' | 'success' | 'error'
   file?: KnowledgeDocument
   error?: string
-}
-
-interface FileJobResult {
-  fileId: string
-  filename: string
-}
-
-const CHUNK_PRESET_OPTIONS = [
-  { value: 'general', label: 'General', description: '通用分块，适合大多数普通文档。' },
-  { value: 'qa', label: 'QA', description: '问答分块，适合 FAQ、题库、问答手册。' },
-  { value: 'book', label: 'Book', description: '强化章节结构，适合教材、长手册。' },
-  { value: 'laws', label: 'Laws', description: '法条层级分块，适合法规制度文本。' },
-]
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) {
-    return error.message
-  }
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
 }
 
 function splitUrls(text: string) {
@@ -100,24 +82,10 @@ function normalizeModeLabel(mode: UploadMode) {
   }
 }
 
-function buildIndexParams(chunkPresetId: string, chunkSize: number, chunkOverlap: number, qaSeparator: string, supportsChunkConfig: boolean) {
-  return supportsChunkConfig
-    ? {
-        chunkPresetId,
-        chunkSize,
-        chunkOverlap,
-        qaSeparator: qaSeparator.trim() || undefined,
-      }
-    : {
-        chunkPresetId,
-      }
-}
-
 export function KnowledgeUploadModal({
   open,
   kb,
   folderOptions,
-  supportsChunkConfig,
   defaultParentId = null,
   onClose,
   onSuccess,
@@ -295,7 +263,7 @@ export function KnowledgeUploadModal({
     }
     const indexPayload = {
       fileIds,
-      params: buildIndexParams(chunkPresetId, chunkSize, chunkOverlap, qaSeparator, supportsChunkConfig),
+      params: buildIndexParams(chunkPresetId, chunkSize, chunkOverlap, qaSeparator),
     }
     const parsePayload = await api.parseKnowledgeFiles(kb.kbId, { fileIds })
     await waitForJobCompletion(kb.kbId, parsePayload.job.jobId, '解析')
@@ -398,7 +366,7 @@ export function KnowledgeUploadModal({
   })()
 
   return (
-      <Modal
+    <Modal
       open={open}
       width={980}
       title="添加文件"
@@ -417,7 +385,7 @@ export function KnowledgeUploadModal({
               支持文件、URL 和 FAQ 三种来源，提交后会写入当前知识库 {kb?.name ? `「${kb.name}」` : ''}。
             </Paragraph>
           </div>
-          <Tag color={kb?.kbType === 'milvus' ? 'blue' : 'green'}>{kb?.kbType || 'lightrag'}</Tag>
+          <Tag color="green">{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
         </div>
 
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -472,46 +440,34 @@ export function KnowledgeUploadModal({
                     onChange={(value) => setChunkPresetId(value)}
                   />
                 </div>
-                {supportsChunkConfig ? (
-                  <>
-                    <div className="knowledge-upload-setting">
-                      <Text type="secondary">Chunk Size</Text>
-                      <InputNumber
-                        min={200}
-                        max={8000}
-                        value={chunkSize}
-                        style={{ width: '100%' }}
-                        onChange={(value) => setChunkSize(Number(value || 1000))}
-                      />
-                    </div>
-                    <div className="knowledge-upload-setting">
-                      <Text type="secondary">Chunk Overlap</Text>
-                      <InputNumber
-                        min={0}
-                        max={4000}
-                        value={chunkOverlap}
-                        style={{ width: '100%' }}
-                        onChange={(value) => setChunkOverlap(Number(value || 0))}
-                      />
-                    </div>
-                    <div className="knowledge-upload-setting knowledge-upload-setting-span-2">
-                      <Text type="secondary">QA 分隔符</Text>
-                      <Input
-                        value={qaSeparator}
-                        onChange={(event) => setQaSeparator(event.target.value)}
-                        placeholder="例如：---FAQ---"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="knowledge-upload-setting knowledge-upload-setting-span-2">
-                    <Alert
-                      type="info"
-                      showIcon
-                      message="当前知识库类型只使用分块策略，不显示 chunk size / overlap。"
-                    />
-                  </div>
-                )}
+                <div className="knowledge-upload-setting">
+                  <Text type="secondary">Chunk Size</Text>
+                  <InputNumber
+                    min={200}
+                    max={8000}
+                    value={chunkSize}
+                    style={{ width: '100%' }}
+                    onChange={(value) => setChunkSize(Number(value || 1000))}
+                  />
+                </div>
+                <div className="knowledge-upload-setting">
+                  <Text type="secondary">Chunk Overlap</Text>
+                  <InputNumber
+                    min={0}
+                    max={4000}
+                    value={chunkOverlap}
+                    style={{ width: '100%' }}
+                    onChange={(value) => setChunkOverlap(Number(value || 0))}
+                  />
+                </div>
+                <div className="knowledge-upload-setting knowledge-upload-setting-span-2">
+                  <Text type="secondary">QA 分隔符</Text>
+                  <Input
+                    value={qaSeparator}
+                    onChange={(event) => setQaSeparator(event.target.value)}
+                    placeholder="例如：---FAQ---"
+                  />
+                </div>
               </div>
             </Card>
           ) : null}

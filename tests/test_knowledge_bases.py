@@ -144,3 +144,35 @@ def test_knowledge_base_store_initializes_current_schema(tmp_path: Path) -> None
     assert "knowledge_jobs" in tables
     assert "idx_knowledge_files_kb" in indexes
     assert "idx_knowledge_jobs_kb" in indexes
+
+
+def test_knowledge_base_service_uses_smaller_default_chunks(tmp_path: Path) -> None:
+    instance = _make_instance(tmp_path)
+    service = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        rag_engine=FakeRAGEngine(),
+    )
+
+    kb_payload = service.create_knowledge_base({"name": "Chunk Defaults"})
+    kb = service.store.get_kb(str(kb_payload["kbId"]))
+    assert kb is not None
+
+    uploaded = service.upload_files(
+        str(kb_payload["kbId"]),
+        [
+            {
+                "file_name": "long.md",
+                "mime_type": "text/markdown",
+                "content": b"placeholder",
+            }
+        ],
+    )
+    file_record = service.store.get_file(str(uploaded["items"][0]["fileId"]))
+    assert file_record is not None
+
+    chunk_texts = service._build_chunk_texts(kb, file_record, "A" * 900)
+
+    assert len(chunk_texts) > 1
+    assert max(len(item) for item in chunk_texts) <= 500

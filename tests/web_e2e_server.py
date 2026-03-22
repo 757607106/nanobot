@@ -7,6 +7,7 @@ import subprocess
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import uvicorn
@@ -17,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from nanobot.config.loader import save_config, set_config_path
 from nanobot.config.schema import Config, MCPServerConfig
+from nanobot.providers.base import LLMProvider, LLMResponse
 from nanobot.web.api import create_app
 
 
@@ -88,8 +90,109 @@ def _resolve_static_dir() -> Path:
     return web_ui_dir / "dist"
 
 
+def _fake_embed(texts: list[str], kb=None) -> list[list[float]]:
+    del kb
+    vocabulary = ("restart", "nanobot", "service", "health", "queue", "cache", "warmup", "reset")
+    vectors: list[list[float]] = []
+    for text in texts:
+        normalized = str(text or "").lower()
+        vector = [0.0] * 3072
+        for index, token in enumerate(vocabulary):
+            vector[index] = float(normalized.count(token))
+        vectors.append(vector)
+    return vectors
+
+
+class DeterministicKnowledgeProvider(LLMProvider):
+    async def chat(
+        self,
+        messages,
+        tools=None,
+        model=None,
+        max_tokens=4096,
+        temperature=0.7,
+        reasoning_effort=None,
+        tool_choice=None,
+    ) -> LLMResponse:
+        del tools, model, max_tokens, temperature, reasoning_effort, tool_choice
+        full_prompt = "\n\n".join(str(item.get("content") or "") for item in messages if item.get("content") is not None)
+        if "Use supervisorctl restart nanobot after checking service health." in full_prompt:
+            return LLMResponse(content="根据绑定知识库，应先检查 service health，再执行 supervisorctl restart nanobot。")
+        if "Run cache warmup first, then trigger the cache reset task." in full_prompt:
+            return LLMResponse(content="先运行 cache warmup，再触发 cache reset 任务。")
+        return LLMResponse(content="NO_KNOWLEDGE")
+
+    def get_default_model(self) -> str:
+        return "deepseek/deepseek-chat"
+
+
+def _patch_rag_engine(service, provider: DeterministicKnowledgeProvider) -> None:
+    rag_engine = getattr(service, "rag_engine", None)
+    if rag_engine is None:
+        return
+
+    def _build_embedding_func():
+        import numpy as np
+        from lightrag.utils import EmbeddingFunc
+
+        async def _embed(texts: list[str]) -> list[list[float]]:
+            return np.asarray(_fake_embed(texts), dtype=float)
+
+        return EmbeddingFunc(
+            embedding_dim=len(_fake_embed([""])[0]),
+            max_token_size=getattr(rag_engine, "_embedding_max_tokens", 8192),
+            func=_embed,
+        )
+
+    def _build_llm_func():
+        async def _llm(prompt: str, system_prompt: str | None = None, history_messages: list | None = None, **kwargs):
+            del kwargs
+            messages: list[dict[str, str]] = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            if history_messages:
+                messages.extend(history_messages)
+            messages.append({"role": "user", "content": prompt})
+            response = await provider.chat(messages)
+            return response.content or ""
+
+        return _llm
+
+    rag_engine._build_embedding_func = _build_embedding_func  # type: ignore[method-assign]
+    rag_engine._build_llm_func = _build_llm_func  # type: ignore[method-assign]
+
+
 def _patch_runtime(app) -> None:
+    import litellm
+
     state = app.state.web
+    provider = DeterministicKnowledgeProvider()
+
+    async def fake_aembedding(**kwargs):
+        texts = list(kwargs.get("input") or [])
+        return SimpleNamespace(
+            data=[{"embedding": vector} for vector in _fake_embed(texts)],
+        )
+
+    async def fake_acompletion(**kwargs):
+        messages = list(kwargs.get("messages") or [])
+        response = await provider.chat(messages)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content=response.content or ""),
+                )
+            ],
+        )
+
+    litellm.aembedding = fake_aembedding  # type: ignore[assignment]
+    litellm.acompletion = fake_acompletion  # type: ignore[assignment]
+
+    app.state.knowledge._embed_texts = _fake_embed  # type: ignore[method-assign]
+    state.app_knowledge._embed_texts = _fake_embed  # type: ignore[attr-defined]
+    state.config_runtime.make_provider = lambda config: provider
+    _patch_rag_engine(app.state.knowledge, provider)
+    _patch_rag_engine(state.app_knowledge, provider)
 
     async def fake_chat(
         session_id: str,

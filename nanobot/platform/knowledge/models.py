@@ -83,8 +83,14 @@ class KnowledgeQueryParams:
             **dict(data.get("options") or {}),
         }
         options.update(extra_options)
+        raw_mode = str(data.get("mode") or "mix").strip() or "mix"
+        normalized_mode = {
+            "vector": "mix",
+            "keyword": "naive",
+            "semantic": "local",
+        }.get(raw_mode.lower(), raw_mode)
         return cls(
-            mode=str(data.get("mode") or "mix").strip() or "mix",
+            mode=normalized_mode,
             top_k=max(1, int(data.get("top_k") or data.get("topK") or 10)),
             chunk_top_k=max(1, int(data.get("chunk_top_k") or data.get("chunkTopK") or 12)),
             response_type=str(data.get("response_type") or data.get("responseType") or "Multiple Paragraphs").strip()
@@ -125,23 +131,10 @@ class KnowledgeQueryParams:
 KnowledgeRetrievalProfile = KnowledgeQueryParams
 
 
-def default_query_params_payload(kb_type: str | None) -> dict[str, Any]:
-    normalized = str(kb_type or "lightrag").strip().lower()
-    if normalized == "milvus":
-        return {
-            "mode": "vector",
-            "topK": 10,
-            "chunkTopK": 12,
-            "responseType": "Multiple Paragraphs",
-            "onlyNeedContext": False,
-            "onlyNeedPrompt": False,
-            "enableRerank": False,
-            "options": {
-                "search_mode": "vector",
-                "similarity_threshold": 0.0,
-                "keyword_top_k": 50,
-            },
-        }
+KNOWLEDGE_ARCHITECTURE_TYPE = "lightrag"
+
+
+def default_query_params_payload() -> dict[str, Any]:
     return {
         "mode": "mix",
         "topK": 10,
@@ -152,12 +145,6 @@ def default_query_params_payload(kb_type: str | None) -> dict[str, Any]:
         "enableRerank": False,
         "options": {},
     }
-
-
-def default_query_params_for_kb_type(kb_type: str | None) -> KnowledgeQueryParams:
-    return KnowledgeQueryParams.from_dict({}, defaults=default_query_params_payload(kb_type))
-
-
 @dataclass(slots=True)
 class KnowledgeBaseDefinition:
     kb_id: str
@@ -166,7 +153,7 @@ class KnowledgeBaseDefinition:
     name: str
     description: str = ""
     enabled: bool = True
-    kb_type: str = "lightrag"
+    kb_type: str = KNOWLEDGE_ARCHITECTURE_TYPE
     embed_info: dict[str, Any] = field(default_factory=dict)
     llm_info: dict[str, Any] = field(default_factory=dict)
     query_params: KnowledgeQueryParams = field(default_factory=KnowledgeQueryParams)
@@ -182,7 +169,7 @@ class KnowledgeBaseDefinition:
         return json.dumps(
             {
                 "description": self.description,
-                "kb_type": self.kb_type,
+                "kb_type": KNOWLEDGE_ARCHITECTURE_TYPE,
                 "embed_info": self.embed_info,
                 "llm_info": self.llm_info,
                 "query_params": self.query_params.to_dict(),
@@ -198,7 +185,7 @@ class KnowledgeBaseDefinition:
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> "KnowledgeBaseDefinition":
         stored = json.loads(record.get("config_json") or "{}")
-        kb_type = str(stored.get("kb_type") or stored.get("kbType") or "lightrag")
+        kb_type = KNOWLEDGE_ARCHITECTURE_TYPE
         return cls(
             kb_id=record["kb_id"],
             tenant_id=record["tenant_id"],
@@ -214,7 +201,7 @@ class KnowledgeBaseDefinition:
                 or stored.get("queryParams")
                 or stored.get("retrieval_profile")
                 or stored.get("retrievalProfile"),
-                defaults=default_query_params_payload(kb_type),
+                defaults=default_query_params_payload(),
             ),
             additional_params=dict(
                 stored.get("additional_params") or stored.get("additionalParams") or {}
@@ -236,7 +223,7 @@ class KnowledgeBaseDefinition:
             "name": self.name,
             "description": self.description,
             "enabled": self.enabled,
-            "kbType": self.kb_type,
+            "kbType": KNOWLEDGE_ARCHITECTURE_TYPE,
             "embedInfo": dict(self.embed_info),
             "llmInfo": dict(self.llm_info),
             "queryParams": self.query_params.to_dict(),

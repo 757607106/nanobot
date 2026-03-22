@@ -52,6 +52,7 @@ from nanobot.web.routers import (
     channels_router,
     chat_router,
     knowledge_router,
+    knowledge_legacy_router,
     mcp_router,
     memory_router,
     operations_router,
@@ -257,6 +258,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.include_router(channels_router)
     app.include_router(channel_bindings_router)
     app.include_router(knowledge_router)
+    app.include_router(knowledge_legacy_router)
     app.include_router(memory_router)
     app.include_router(operations_router)
     app.include_router(runs_router)

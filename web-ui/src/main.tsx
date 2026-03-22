@@ -22,6 +22,7 @@ function buildThemeConfig(mode: ResolvedTheme): ThemeConfig {
       colorBgLayout: isDark ? '#1d1614' : '#F3EEE8',
       colorBgContainer: isDark ? '#2c211e' : '#faf7f3',
       colorTextBase: isDark ? '#f3e8e1' : '#5D4037',
+      colorTextLightSolid: isDark ? '#1d1614' : '#5D4037',
       colorBorderSecondary: isDark ? '#5f4840' : '#d9cec3',
       borderRadius: 10,
       borderRadiusLG: 18,

@@ -645,7 +645,7 @@ export interface KnowledgeBaseDefinition {
   name: string
   description: string
   enabled: boolean
-  kbType: string
+  kbType: 'lightrag'
   embedInfo: Record<string, unknown>
   llmInfo: Record<string, unknown>
   queryParams: KnowledgeQueryParams
@@ -664,7 +664,7 @@ export interface KnowledgeBaseMutationInput {
   name: string
   description?: string
   enabled?: boolean
-  kbType?: string
+  kbType?: 'lightrag'
   embedInfo?: Record<string, unknown>
   llmInfo?: Record<string, unknown>
   queryParams?: Partial<KnowledgeQueryParams>

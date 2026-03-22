@@ -223,8 +223,8 @@ export default function SkillsPage() {
   }
 
   const renderInstalledView = () => (
-    <div className="tab-content-shell">
-      <div className="toolbar-row" style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+    <div className="tab-content-shell" style={{ padding: '20px 0' }}>
+      <div className="toolbar-row" style={{ marginBottom: 24, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <Input
           allowClear
           prefix={<SearchOutlined />}
@@ -232,19 +232,21 @@ export default function SkillsPage() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           style={{ maxWidth: 400, flex: 1 }}
+          size="large"
         />
-        <Space>
+        <Space size="middle">
           <Button
+            size="large"
             icon={<FolderOpenOutlined />}
             loading={uploading}
             onClick={() => folderInputRef.current?.click()}
           >
             上传文件夹
           </Button>
-          <Button icon={<UploadOutlined />} loading={uploading} onClick={() => zipInputRef.current?.click()}>
+          <Button size="large" icon={<UploadOutlined />} loading={uploading} onClick={() => zipInputRef.current?.click()}>
             上传 ZIP
           </Button>
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadSkills()} />
+          <Button size="large" icon={<ReloadOutlined />} loading={loading} onClick={() => void loadSkills()} />
         </Space>
       </div>
 
@@ -334,8 +336,8 @@ export default function SkillsPage() {
   )
 
   const renderMarketView = () => (
-    <div className="tab-content-shell">
-      <div className="toolbar-row" style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+    <div className="tab-content-shell" style={{ padding: '20px 0' }}>
+      <div className="toolbar-row" style={{ marginBottom: 24, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <Input.Search
           allowClear
           enterButton="搜索市场"
@@ -345,12 +347,13 @@ export default function SkillsPage() {
           onChange={(event) => setMarketQuery(event.target.value)}
           onSearch={(value) => void handleMarketplaceSearch(value)}
           style={{ maxWidth: 400, flex: 1 }}
+          size="large"
         />
-        <Space>
-          <Button icon={<ReloadOutlined />} loading={marketLoading} onClick={() => void handleMarketplaceSearch(marketQuery)}>
+        <Space size="middle">
+          <Button size="large" icon={<ReloadOutlined />} loading={marketLoading} onClick={() => void handleMarketplaceSearch(marketQuery)}>
             刷新
           </Button>
-          <Button href="https://skillhub.tencent.com/" target="_blank" rel="noreferrer">
+          <Button size="large" href="https://skillhub.tencent.com/" target="_blank" rel="noreferrer">
             SkillHub 官网
           </Button>
         </Space>
@@ -394,7 +397,6 @@ export default function SkillsPage() {
                                 <Button
                                   key="install"
                                   type="primary"
-                                  ghost
                                   icon={<CloudDownloadOutlined />}
                                   loading={installingId === skill.slug}
                                   onClick={() => void handleInstallMarketplaceSkill(skill)}

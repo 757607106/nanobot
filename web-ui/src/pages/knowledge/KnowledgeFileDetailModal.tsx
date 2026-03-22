@@ -42,6 +42,9 @@ export function KnowledgeFileDetailModal({
       onCancel={onClose}
       footer={null}
       width={1080}
+      keyboard
+      maskClosable
+      destroyOnHidden
     >
       {loading ? (
         <div className="knowledge-loading-panel is-large">

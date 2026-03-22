@@ -267,14 +267,44 @@ class ToolsConfig(Base):
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
+class RagMilvusConfig(Base):
+    """Milvus vector storage for the LightRAG workflow."""
+
+    uri: str = "http://127.0.0.1:19530"
+    db_name: str = "nanobot"
+    user: str = ""
+    password: str = ""
+    token: str = "root:Milvus"
+    index_type: str = "AUTOINDEX"
+    metric_type: str = "COSINE"
+
+
+class RagGraphStoreConfig(Base):
+    """Optional graph storage backend for the LightRAG workflow."""
+
+    enabled: bool = False
+    provider: Literal["networkx", "neo4j"] = "networkx"
+    uri: str = ""
+    username: str = ""
+    password: str = ""
+    database: str = "neo4j"
+
+
 class RAGConfig(Base):
     """RAG engine configuration for LightRAG / RAG-Anything."""
 
     llm_binding: str | None = None  # Named model binding for RAG LLM / VLM calls; None follows the default agent binding
     embedding_binding: str | None = None  # Named model binding for embedding requests
+    llm_timeout: int = 180  # seconds for each LightRAG LLM / VLM request
+    embedding_timeout: int = 60  # seconds for each LightRAG embedding request
+    max_async: int = 4  # Official LightRAG MAX_ASYNC for LLM concurrency during query/index
+    max_parallel_insert: int = 2  # Official LightRAG MAX_PARALLEL_INSERT for document ingest workers
+    embedding_func_max_async: int = 8  # Official LightRAG EMBEDDING_FUNC_MAX_ASYNC for embedding concurrency
     mineru_api_base: str = ""  # MinerU official API base URL, defaulting to https://mineru.net when empty
     mineru_api_token: str = ""  # MinerU official API token
     mineru_model_version: Literal["pipeline", "vlm", "MinerU-HTML"] = "pipeline"  # Official MinerU model version
+    milvus: RagMilvusConfig = Field(default_factory=RagMilvusConfig)
+    graph_store: RagGraphStoreConfig = Field(default_factory=RagGraphStoreConfig)
 
 
 class Config(BaseSettings):

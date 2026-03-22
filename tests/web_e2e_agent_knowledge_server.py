@@ -7,6 +7,7 @@ import subprocess
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import uvicorn
 
@@ -63,7 +64,14 @@ def _resolve_static_dir() -> Path:
 def _fake_embed(texts: list[str], kb=None) -> list[list[float]]:
     del kb
     vocabulary = ("restart", "nanobot", "service", "health", "queue", "cache")
-    return [[float(str(text or "").lower().count(token)) for token in vocabulary] for text in texts]
+    vectors: list[list[float]] = []
+    for text in texts:
+        normalized = str(text or "").lower()
+        vector = [0.0] * 3072
+        for index, token in enumerate(vocabulary):
+            vector[index] = float(normalized.count(token))
+        vectors.append(vector)
+    return vectors
 
 
 class DeterministicKnowledgeProvider(LLMProvider):
@@ -89,11 +97,72 @@ class DeterministicKnowledgeProvider(LLMProvider):
         return "deepseek/deepseek-chat"
 
 
+def _patch_rag_engine(service, provider: DeterministicKnowledgeProvider) -> None:
+    rag_engine = getattr(service, "rag_engine", None)
+    if rag_engine is None:
+        return
+
+    def _build_embedding_func():
+        import numpy as np
+        from lightrag.utils import EmbeddingFunc
+
+        async def _embed(texts: list[str]) -> list[list[float]]:
+            return np.asarray(_fake_embed(texts), dtype=float)
+
+        return EmbeddingFunc(
+            embedding_dim=len(_fake_embed([""])[0]),
+            max_token_size=getattr(rag_engine, "_embedding_max_tokens", 8192),
+            func=_embed,
+        )
+
+    def _build_llm_func():
+        async def _llm(prompt: str, system_prompt: str | None = None, history_messages: list | None = None, **kwargs):
+            del kwargs
+            messages: list[dict[str, str]] = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            if history_messages:
+                messages.extend(history_messages)
+            messages.append({"role": "user", "content": prompt})
+            response = await provider.chat(messages)
+            return response.content or ""
+
+        return _llm
+
+    rag_engine._build_embedding_func = _build_embedding_func  # type: ignore[method-assign]
+    rag_engine._build_llm_func = _build_llm_func  # type: ignore[method-assign]
+
+
 def _patch_runtime(app) -> None:
+    import litellm
+
     provider = DeterministicKnowledgeProvider()
+
+    async def fake_aembedding(**kwargs):
+        texts = list(kwargs.get("input") or [])
+        return SimpleNamespace(
+            data=[{"embedding": vector} for vector in _fake_embed(texts)],
+        )
+
+    async def fake_acompletion(**kwargs):
+        messages = list(kwargs.get("messages") or [])
+        response = await provider.chat(messages)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content=response.content or ""),
+                )
+            ],
+        )
+
+    litellm.aembedding = fake_aembedding  # type: ignore[assignment]
+    litellm.acompletion = fake_acompletion  # type: ignore[assignment]
+
     app.state.knowledge._embed_texts = _fake_embed  # type: ignore[method-assign]
     app.state.web.app_knowledge._embed_texts = _fake_embed  # type: ignore[attr-defined]
     app.state.web.config_runtime.make_provider = lambda config: provider
+    _patch_rag_engine(app.state.knowledge, provider)
+    _patch_rag_engine(app.state.web.app_knowledge, provider)
 
 
 def build_app():
