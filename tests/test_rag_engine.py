@@ -832,3 +832,35 @@ async def test_rag_engine_parse_and_index_rejects_office_without_mineru_api_toke
     assert result.success is False
     assert "official MinerU API path" in str(result.error)
     assert fake_rag.process_calls == []
+
+
+def test_rag_engine_runtime_config_applies_per_kb_overrides(tmp_path: Path) -> None:
+    engine = RAGEngine(
+        storage_root=tmp_path / "rag",
+        default_model="deepseek-chat",
+        provider_name="deepseek",
+        api_key="sk-default",
+        api_base="https://api.deepseek.com",
+        embedding_provider_name="dashscope",
+        embedding_api_key="sk-embed",
+        embedding_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        embedding_model="text-embedding-v4",
+        embedding_dim=1024,
+    )
+    engine.set_kb_runtime_resolver(
+        lambda kb_id: {
+            "llm_model": "qwen-max",
+            "llm_provider_name": "dashscope",
+            "embedding_model": "bge-m3",
+            "embedding_provider_name": "custom",
+            "embedding_dim": 2048,
+        } if kb_id == "kb-1" else {}
+    )
+
+    runtime = engine._kb_runtime_config("kb-1")
+
+    assert runtime["llm_model"] == "qwen-max"
+    assert runtime["llm_provider_name"] == "dashscope"
+    assert runtime["embedding_model"] == "bge-m3"
+    assert runtime["embedding_provider_name"] == "custom"
+    assert runtime["embedding_dim"] == 2048

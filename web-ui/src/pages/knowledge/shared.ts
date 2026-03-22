@@ -48,13 +48,35 @@ export interface KnowledgeFormState {
   name: string
   description: string
   enabled: boolean
+  embedBindingName: string
   embedModelName: string
+  llmBindingName: string
   llmModelName: string
   language: string
   chunkPresetId: string
   autoGenerateQuestions: boolean
   qaSeparator: string
   tagsText: string
+}
+
+interface KnowledgeModelDefaults {
+  embedBindingName?: string
+  embedModelName?: string
+  llmBindingName?: string
+  llmModelName?: string
+}
+
+function readKnowledgeModelValue(
+  info: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+) {
+  for (const key of keys) {
+    const value = info?.[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return ''
 }
 
 export interface KnowledgeIndexConfigState {
@@ -85,13 +107,20 @@ export function getErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-export function createKnowledgeFormState(kb?: KnowledgeBaseDefinition | null): KnowledgeFormState {
+export function createKnowledgeFormState(
+  kb?: KnowledgeBaseDefinition | null,
+  defaults?: KnowledgeModelDefaults,
+): KnowledgeFormState {
+  const embedInfo = (kb?.embedInfo || null) as Record<string, unknown> | null
+  const llmInfo = (kb?.llmInfo || null) as Record<string, unknown> | null
   return {
     name: kb?.name || '',
     description: kb?.description || '',
     enabled: kb?.enabled ?? true,
-    embedModelName: String(kb?.embedInfo?.modelName || kb?.embedInfo?.model || ''),
-    llmModelName: String(kb?.llmInfo?.modelName || kb?.llmInfo?.model || ''),
+    embedBindingName: readKnowledgeModelValue(embedInfo, 'bindingName', 'binding_name') || String(defaults?.embedBindingName || ''),
+    embedModelName: readKnowledgeModelValue(embedInfo, 'modelName', 'model_name', 'model') || String(defaults?.embedModelName || ''),
+    llmBindingName: readKnowledgeModelValue(llmInfo, 'bindingName', 'binding_name') || String(defaults?.llmBindingName || ''),
+    llmModelName: readKnowledgeModelValue(llmInfo, 'modelName', 'model_name', 'model') || String(defaults?.llmModelName || ''),
     language: String(kb?.additionalParams?.language || 'Chinese'),
     chunkPresetId: String(kb?.additionalParams?.chunk_preset_id || 'general'),
     autoGenerateQuestions: Boolean(kb?.additionalParams?.auto_generate_questions || false),

@@ -38,11 +38,11 @@ import { useDevMode } from '../devMode'
 import { getModelSuggestions } from '../modelCatalog'
 import {
   getAllModelBindings,
-  getBindingOptions,
   getPreferredProvider,
   getProviderOptions,
   inferProviderFromModel,
   modelMatchesProvider,
+  resolveBindingCapabilityType,
 } from '../modelConfig'
 import { interactiveLift, interactiveTap, shellSpring } from '../motionTokens'
 import { formatDateTimeZh } from '../locale'
@@ -246,13 +246,22 @@ export default function AgentsPage() {
     () => getProviderOptions(globalConfigMeta),
     [globalConfigMeta],
   )
-  const agentBindingOptions = useMemo(
-    () => (globalConfig && globalConfigMeta ? getBindingOptions(globalConfig, globalConfigMeta) : []),
-    [globalConfig, globalConfigMeta],
-  )
   const availableBindings = useMemo(
     () => (globalConfig ? getAllModelBindings(globalConfig, globalConfigMeta) : {}),
     [globalConfig, globalConfigMeta],
+  )
+  const agentBindingOptions = useMemo(
+    () => Object.entries(availableBindings)
+      .filter(([, binding]) => {
+        const capabilityType = resolveBindingCapabilityType(binding)
+        return capabilityType === 'text_chat' || capabilityType === 'multimodal'
+      })
+      .map(([bindingName, binding]) => ({
+        value: bindingName,
+        label: String(binding.model || bindingName).trim() || bindingName,
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label)),
+    [availableBindings],
   )
 
   const modelSuggestions = useMemo(() => {

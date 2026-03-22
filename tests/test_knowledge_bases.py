@@ -4,8 +4,15 @@ import sqlite3
 import time
 from pathlib import Path
 
+import pytest
+
+from nanobot.config.schema import Config
 from nanobot.platform.instances import PlatformInstance
-from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
+from nanobot.platform.knowledge import (
+    KnowledgeBaseService,
+    KnowledgeBaseStore,
+    KnowledgeBaseValidationError,
+)
 from tests.knowledge_test_utils import FakeRAGEngine
 
 
@@ -25,6 +32,19 @@ def _wait_for_job(service: KnowledgeBaseService, kb_id: str, job_id: str) -> dic
             return job
         time.sleep(0.05)
     raise AssertionError(f"Timed out waiting for job {job_id}")
+
+
+class _RuntimeAwareFakeRAGEngine(FakeRAGEngine):
+    def __init__(self) -> None:
+        super().__init__()
+        self.runtime_resolver = None
+        self.reset_calls: list[str] = []
+
+    def set_kb_runtime_resolver(self, resolver) -> None:
+        self.runtime_resolver = resolver
+
+    async def reset_kb(self, kb_id: str) -> None:
+        self.reset_calls.append(kb_id)
 
 
 def test_knowledge_base_service_file_and_source_flow(tmp_path: Path) -> None:
@@ -163,6 +183,117 @@ def test_query_kb_for_agent_uses_fast_context_only_mode(tmp_path: Path) -> None:
     assert result["metadata"]["mode"] == "naive"
     assert result["queryParams"]["onlyNeedContext"] is True
     assert result["queryParams"]["topK"] == 4
+
+
+def test_knowledge_base_service_resolves_kb_model_bindings_for_rag_runtime(tmp_path: Path) -> None:
+    instance = _make_instance(tmp_path)
+    rag_engine = _RuntimeAwareFakeRAGEngine()
+    config = Config.model_validate(
+        {
+            "providers": {
+                "deepseek": {
+                    "apiKey": "sk-llm",
+                    "apiBase": "https://api.deepseek.com",
+                },
+                "dashscope": {
+                    "apiKey": "sk-embed",
+                    "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                },
+            },
+            "modelBindings": {
+                "deepseek": {
+                    "provider": "deepseek",
+                    "label": "DeepSeek Chat",
+                    "model": "deepseek-chat",
+                    "apiKey": "sk-llm",
+                    "apiBase": "https://api.deepseek.com",
+                    "capabilityType": "text_chat",
+                },
+                "text-embedding-v4-2": {
+                    "provider": "dashscope",
+                    "label": "text-embedding-v4",
+                    "model": "text-embedding-v4",
+                    "apiKey": "sk-embed",
+                    "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    "capabilityType": "embedding",
+                },
+            },
+            "rag": {
+                "llmBinding": "deepseek",
+                "embeddingBinding": "text-embedding-v4-2",
+            },
+        }
+    )
+    service = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        rag_engine=rag_engine,
+        config=config,
+    )
+
+    created = service.create_knowledge_base(
+        {
+            "name": "Binding KB",
+            "embedInfo": {
+                "bindingName": "text-embedding-v4-2",
+                "modelName": "text-embedding-v4",
+            },
+            "llmInfo": {
+                "bindingName": "deepseek",
+                "modelName": "deepseek-chat",
+            },
+        }
+    )
+
+    assert rag_engine.runtime_resolver is not None
+    runtime = rag_engine.runtime_resolver(str(created["kbId"]))
+    assert runtime["llm_model"] == "deepseek-chat"
+    assert runtime["llm_provider_name"] == "deepseek"
+    assert runtime["embedding_model"] == "text-embedding-v4"
+    assert runtime["embedding_provider_name"] == "dashscope"
+    assert runtime["embedding_dim"] == 1024
+
+
+def test_knowledge_base_service_blocks_embedding_change_when_indexed(tmp_path: Path) -> None:
+    instance = _make_instance(tmp_path)
+    rag_engine = _RuntimeAwareFakeRAGEngine()
+    service = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        rag_engine=rag_engine,
+    )
+
+    created = service.create_knowledge_base({"name": "Immutable Embed KB"})
+    kb_id = str(created["kbId"])
+
+    uploaded = service.upload_files(
+        kb_id,
+        [
+            {
+                "file_name": "faq.md",
+                "mime_type": "text/markdown",
+                "content": b"Restart nanobot with supervisorctl restart nanobot.\n",
+            }
+        ],
+    )
+    file_id = uploaded["items"][0]["fileId"]
+    parse_job = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, parse_job)["status"] == "succeeded"
+    index_job = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, index_job)["status"] == "succeeded"
+
+    with pytest.raises(KnowledgeBaseValidationError):
+        service.update_knowledge_base(
+            kb_id,
+            {
+                "embedInfo": {
+                    "bindingName": "text-embedding-v4-2",
+                    "modelName": "text-embedding-v4",
+                },
+            },
+        )
 
 
 def test_knowledge_base_store_initializes_current_schema(tmp_path: Path) -> None:

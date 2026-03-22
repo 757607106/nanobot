@@ -9,6 +9,7 @@ import io
 import json
 import math
 import mimetypes
+import os
 import re
 import shutil
 import textwrap
@@ -95,7 +96,7 @@ class KnowledgeBaseService:
         self.instance = instance
         self.instance_id = instance_id
         self.tenant_id = tenant_id
-        self.rag_engine = rag_engine
+        self.rag_engine = None
         self.config = config
         self._executor = ThreadPoolExecutor(
             max_workers=max(1, max_background_jobs),
@@ -120,6 +121,7 @@ class KnowledgeBaseService:
             daemon=True,
         )
         self._loop_thread.start()
+        self.set_rag_engine(rag_engine)
 
     def _execute_loop(self) -> None:
         asyncio.set_event_loop(self._loop)
@@ -144,9 +146,168 @@ class KnowledgeBaseService:
     def set_rag_engine(self, rag_engine: RAGEngine | None) -> None:
         with self._rag_engine_lock:
             self.rag_engine = rag_engine
+            if rag_engine is not None and hasattr(rag_engine, "set_kb_runtime_resolver"):
+                rag_engine.set_kb_runtime_resolver(self._resolve_kb_runtime_overrides)
 
     def set_config(self, config: Config | None) -> None:
         self.config = config
+
+    @staticmethod
+    def _knowledge_model_value(info: dict[str, Any] | None, *keys: str) -> str:
+        for key in keys:
+            value = str((info or {}).get(key) or "").strip()
+            if value:
+                return value
+        return ""
+
+    def _resolve_binding_runtime(
+        self,
+        *,
+        binding_name: str | None,
+        model_name: str | None,
+        capability_type: str,
+    ) -> dict[str, Any]:
+        if self.config is None:
+            return {}
+
+        from nanobot.platform.knowledge.rag_engine import _infer_embedding_dim
+        from nanobot.providers.registry import find_by_name
+
+        requested_binding_name = str(binding_name or "").strip()
+        requested_model_name = str(model_name or "").strip()
+        binding = None
+        matched_binding_name: str | None = None
+
+        if requested_binding_name:
+            binding = self.config.model_bindings.get(requested_binding_name)
+            if binding is not None:
+                matched_binding_name = requested_binding_name
+
+        if binding is None and requested_model_name:
+            binding = self.config.get_binding(requested_model_name)
+            matched_binding_name = self.config.get_binding_name(requested_model_name)
+
+        if binding is None:
+            return {}
+
+        provider_name = str(getattr(binding, "provider", "") or "").strip()
+        provider_cfg = getattr(self.config.providers, provider_name, None) if provider_name else None
+        provider_spec = find_by_name(provider_name) if provider_name else None
+        api_key = str(
+            getattr(binding, "api_key", None)
+            or getattr(provider_cfg, "api_key", None)
+            or (os.getenv(provider_spec.env_key) if provider_spec and provider_spec.env_key else None)
+            or ""
+        )
+        api_base = str(
+            getattr(binding, "api_base", None)
+            or getattr(provider_cfg, "api_base", None)
+            or ""
+        )
+        extra_headers = dict(
+            getattr(binding, "extra_headers", None)
+            or getattr(provider_cfg, "extra_headers", None)
+            or {}
+        )
+        resolved_model_name = str(
+            requested_model_name
+            or getattr(binding, "model", None)
+            or ""
+        ).strip()
+        if not resolved_model_name:
+            return {}
+
+        payload: dict[str, Any] = {
+            "binding_name": matched_binding_name or requested_binding_name or None,
+            "provider_name": provider_name or None,
+            "model": resolved_model_name,
+            "api_key": api_key,
+            "api_base": api_base,
+            "extra_headers": extra_headers,
+        }
+        if capability_type == "embedding":
+            payload["embedding_dim"] = _infer_embedding_dim(resolved_model_name, provider_name)
+        return payload
+
+    def _resolve_kb_runtime_overrides(self, kb_id: str) -> dict[str, Any]:
+        kb = self.store.get_kb(kb_id)
+        if kb is None or kb.instance_id != self.instance_id or kb.tenant_id != self.tenant_id:
+            return {}
+
+        llm_runtime = self._resolve_binding_runtime(
+            binding_name=self._knowledge_model_value(kb.llm_info, "bindingName", "binding_name"),
+            model_name=self._knowledge_model_value(kb.llm_info, "modelName", "model_name", "model"),
+            capability_type="text_chat",
+        )
+        embedding_runtime = self._resolve_binding_runtime(
+            binding_name=self._knowledge_model_value(kb.embed_info, "bindingName", "binding_name"),
+            model_name=self._knowledge_model_value(kb.embed_info, "modelName", "model_name", "model"),
+            capability_type="embedding",
+        )
+
+        overrides: dict[str, Any] = {}
+        if llm_runtime:
+            overrides.update({
+                "llm_model": llm_runtime["model"],
+                "llm_provider_name": llm_runtime["provider_name"],
+                "llm_api_key": llm_runtime["api_key"],
+                "llm_api_base": llm_runtime["api_base"],
+                "llm_extra_headers": llm_runtime["extra_headers"],
+            })
+        if embedding_runtime:
+            overrides.update({
+                "embedding_model": embedding_runtime["model"],
+                "embedding_provider_name": embedding_runtime["provider_name"],
+                "embedding_api_key": embedding_runtime["api_key"],
+                "embedding_api_base": embedding_runtime["api_base"],
+                "embedding_extra_headers": embedding_runtime["extra_headers"],
+                "embedding_dim": embedding_runtime["embedding_dim"],
+            })
+        return overrides
+
+    @staticmethod
+    def _knowledge_model_signature(info: dict[str, Any] | None) -> tuple[str, str]:
+        return (
+            KnowledgeBaseService._knowledge_model_value(info, "bindingName", "binding_name"),
+            KnowledgeBaseService._knowledge_model_value(info, "modelName", "model_name", "model"),
+        )
+
+    def _effective_model_signature(
+        self,
+        info: dict[str, Any] | None,
+        *,
+        capability_type: str,
+    ) -> tuple[str, str]:
+        binding_name = self._knowledge_model_value(info, "bindingName", "binding_name")
+        model_name = self._knowledge_model_value(info, "modelName", "model_name", "model")
+        runtime = self._resolve_binding_runtime(
+            binding_name=binding_name,
+            model_name=model_name,
+            capability_type=capability_type,
+        )
+        if runtime:
+            return (
+                str(runtime.get("binding_name") or binding_name or "").strip(),
+                str(runtime.get("model") or model_name or "").strip(),
+            )
+        if self.config is None:
+            return binding_name, model_name
+
+        fallback_binding_name = str(
+            getattr(self.config.rag, "embedding_binding" if capability_type == "embedding" else "llm_binding", "")
+            or ""
+        ).strip()
+        fallback_runtime = self._resolve_binding_runtime(
+            binding_name=fallback_binding_name or None,
+            model_name=None,
+            capability_type=capability_type,
+        )
+        if fallback_runtime:
+            return (
+                str(fallback_runtime.get("binding_name") or fallback_binding_name or "").strip(),
+                str(fallback_runtime.get("model") or "").strip(),
+            )
+        return binding_name, model_name
 
     def _track_future(self, future: Future[Any]) -> None:
         with self._futures_lock:
@@ -465,6 +626,27 @@ class KnowledgeBaseService:
             field_name="name",
         )
         self._ensure_unique_name(name, exclude_kb_id=kb_id)
+        next_embed_info = (
+            self._normalize_object(self._get_value(payload, "embedInfo", "embed_info"), field_name="embedInfo")
+        ) if ("embedInfo" in payload or "embed_info" in payload) else existing.embed_info
+        next_llm_info = (
+            self._normalize_object(self._get_value(payload, "llmInfo", "llm_info"), field_name="llmInfo")
+        ) if ("llmInfo" in payload or "llm_info" in payload) else existing.llm_info
+        embed_changed = (
+            self._effective_model_signature(next_embed_info, capability_type="embedding")
+            != self._effective_model_signature(existing.embed_info, capability_type="embedding")
+        )
+        llm_changed = (
+            self._effective_model_signature(next_llm_info, capability_type="text_chat")
+            != self._effective_model_signature(existing.llm_info, capability_type="text_chat")
+        )
+        if embed_changed:
+            stats = self.store.get_kb_stats(kb_id)
+            if int(stats.get("indexedCount") or 0) > 0:
+                raise KnowledgeBaseValidationError(
+                    "Embedding 模型在已有索引数据时不能直接修改。请先删除知识库索引数据后重建，"
+                    "因为 LightRAG 要求索引和查询阶段使用同一套 embedding 维度。"
+                )
         next_kb_type = KNOWLEDGE_ARCHITECTURE_TYPE
         has_query_params_update = (
             "queryParams" in payload
@@ -482,12 +664,8 @@ class KnowledgeBaseService:
             ),
             enabled=bool(self._get_value(payload, "enabled")) if "enabled" in payload else existing.enabled,
             kb_type=next_kb_type,
-            embed_info=(
-                self._normalize_object(self._get_value(payload, "embedInfo", "embed_info"), field_name="embedInfo")
-            ) if ("embedInfo" in payload or "embed_info" in payload) else existing.embed_info,
-            llm_info=(
-                self._normalize_object(self._get_value(payload, "llmInfo", "llm_info"), field_name="llmInfo")
-            ) if ("llmInfo" in payload or "llm_info" in payload) else existing.llm_info,
+            embed_info=next_embed_info,
+            llm_info=next_llm_info,
             query_params=(
                 KnowledgeQueryParams.from_dict(
                     self._get_value(payload, "queryParams", "query_params", "retrievalProfile", "retrieval_profile"),
@@ -514,6 +692,8 @@ class KnowledgeBaseService:
         persisted = self.store.update_kb(updated)
         if persisted is None:
             raise KnowledgeBaseNotFoundError(kb_id)
+        if (embed_changed or llm_changed) and self.rag_engine is not None and hasattr(self.rag_engine, "reset_kb"):
+            self._run_async(self.rag_engine.reset_kb(kb_id))
         return self._serialize_kb(persisted)
 
     def delete_knowledge_base(self, kb_id: str) -> bool:

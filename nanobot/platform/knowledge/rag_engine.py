@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from loguru import logger
 
@@ -149,6 +149,8 @@ class RAGEngine:
         # Per-KB instances (lazy loaded)
         self._instances: dict[str, Any] = {}  # kb_id -> RAGAnything
         self._locks: dict[str, asyncio.Lock] = {}
+        self._instance_runtime_keys: dict[str, str] = {}
+        self._kb_runtime_resolver: Callable[[str], dict[str, Any] | None] | None = None
 
     @staticmethod
     async def _await_request(coro: Any, *, timeout: float, operation: str) -> Any:
@@ -338,6 +340,46 @@ class RAGEngine:
             "workspace": self._kb_storage_workspace(kb_id),
         }
 
+    def set_kb_runtime_resolver(
+        self,
+        resolver: Callable[[str], dict[str, Any] | None] | None,
+    ) -> None:
+        self._kb_runtime_resolver = resolver
+
+    def _default_runtime_config(self) -> dict[str, Any]:
+        return {
+            "llm_model": self._default_model,
+            "llm_provider_name": self._provider_name,
+            "llm_api_key": self._api_key,
+            "llm_api_base": self._api_base,
+            "llm_extra_headers": dict(self._extra_headers),
+            "embedding_model": self._embedding_model,
+            "embedding_provider_name": self._embedding_provider_name,
+            "embedding_api_key": self._embedding_api_key,
+            "embedding_api_base": self._embedding_api_base,
+            "embedding_extra_headers": dict(self._embedding_extra_headers),
+            "embedding_dim": self._embedding_dim,
+            "embedding_max_tokens": self._embedding_max_tokens,
+        }
+
+    def _kb_runtime_config(self, kb_id: str) -> dict[str, Any]:
+        runtime = self._default_runtime_config()
+        if self._kb_runtime_resolver is None:
+            return runtime
+        try:
+            overrides = dict(self._kb_runtime_resolver(kb_id) or {})
+        except Exception as exc:
+            logger.warning("RAGEngine: failed to resolve kb runtime for kb_id={}: {}", kb_id, exc)
+            return runtime
+        for key, value in overrides.items():
+            if value is not None:
+                runtime[key] = value
+        return runtime
+
+    @staticmethod
+    def _runtime_cache_key(runtime: dict[str, Any]) -> str:
+        return json.dumps(runtime, ensure_ascii=False, sort_keys=True, default=str)
+
     @contextmanager
     def _storage_env_scope(self):
         if not self._storage_env:
@@ -422,12 +464,19 @@ class RAGEngine:
 
     async def _get_or_create_instance(self, kb_id: str):
         """Get or create the RAGAnything instance for a knowledge base."""
-        if kb_id in self._instances:
+        runtime = self._kb_runtime_config(kb_id)
+        runtime_key = self._runtime_cache_key(runtime)
+
+        if kb_id in self._instances and self._instance_runtime_keys.get(kb_id) == runtime_key:
             return self._instances[kb_id]
 
         async with self._get_lock(kb_id):
-            if kb_id in self._instances:
+            runtime = self._kb_runtime_config(kb_id)
+            runtime_key = self._runtime_cache_key(runtime)
+            if kb_id in self._instances and self._instance_runtime_keys.get(kb_id) == runtime_key:
                 return self._instances[kb_id]
+            if kb_id in self._instances:
+                await self.reset_kb(kb_id)
 
             if not _check_rag_anything():
                 raise RuntimeError(
@@ -451,13 +500,17 @@ class RAGEngine:
 
             rag = RAGAnything(
                 config=config,
-                llm_model_func=self._build_llm_func(),
-                vision_model_func=self._build_vision_func(),
-                embedding_func=self._build_embedding_func(),
-                lightrag_kwargs=self._build_lightrag_kwargs(kb_id),
+                llm_model_func=self._build_llm_func(runtime),
+                vision_model_func=self._build_vision_func(runtime),
+                embedding_func=self._build_embedding_func(runtime),
+                lightrag_kwargs={
+                    **self._build_lightrag_kwargs(kb_id),
+                    "llm_model_name": str(runtime.get("llm_model") or self._default_model or "").strip(),
+                },
             )
 
             self._instances[kb_id] = rag
+            self._instance_runtime_keys[kb_id] = runtime_key
             logger.info("RAGEngine: created RAGAnything instance for kb_id={}", kb_id)
             return rag
 
@@ -542,15 +595,16 @@ class RAGEngine:
 
         return resolved_model, custom_llm_provider, resolved_api_base or None
 
-    def _build_llm_func(self):
+    def _build_llm_func(self, runtime: dict[str, Any] | None = None):
         """Build the async LLM function for RAG-Anything / LightRAG."""
         from litellm import acompletion
 
-        api_key = self._api_key
-        api_base = self._api_base or None
-        model = self._default_model
-        provider_name = self._provider_name
-        extra_headers = self._extra_headers or None
+        resolved_runtime = dict(runtime or {})
+        api_key = str(resolved_runtime.get("llm_api_key") or self._api_key or "")
+        api_base = str(resolved_runtime.get("llm_api_base") or self._api_base or "").strip() or None
+        model = str(resolved_runtime.get("llm_model") or self._default_model or "").strip()
+        provider_name = str(resolved_runtime.get("llm_provider_name") or self._provider_name or "").strip()
+        extra_headers = dict(resolved_runtime.get("llm_extra_headers") or self._extra_headers or {}) or None
 
         async def llm_model_func(
             prompt: str,
@@ -596,17 +650,27 @@ class RAGEngine:
 
         return llm_model_func
 
-    def _build_embedding_func(self):
+    def _build_embedding_func(self, runtime: dict[str, Any] | None = None):
         """Build the embedding function for LightRAG."""
         from litellm import aembedding
         import numpy as np
         from lightrag.utils import EmbeddingFunc
 
-        api_key = self._embedding_api_key
-        api_base = self._embedding_api_base or None
-        model = self._embedding_model
-        provider_name = self._embedding_provider_name
-        extra_headers = self._embedding_extra_headers or None
+        resolved_runtime = dict(runtime or {})
+        api_key = str(resolved_runtime.get("embedding_api_key") or self._embedding_api_key or "")
+        api_base = str(resolved_runtime.get("embedding_api_base") or self._embedding_api_base or "").strip() or None
+        model = str(resolved_runtime.get("embedding_model") or self._embedding_model or "").strip()
+        provider_name = str(
+            resolved_runtime.get("embedding_provider_name")
+            or self._embedding_provider_name
+            or self._provider_name
+            or ""
+        ).strip()
+        extra_headers = dict(
+            resolved_runtime.get("embedding_extra_headers")
+            or self._embedding_extra_headers
+            or {}
+        ) or None
 
         async def _embed(texts: list[str]) -> list[list[float]]:
             resolved_model, custom_llm_provider, resolved_api_base = self._resolve_litellm_runtime(
@@ -637,20 +701,21 @@ class RAGEngine:
             return np.asarray([item["embedding"] for item in response.data], dtype=float)
 
         return EmbeddingFunc(
-            embedding_dim=self._embedding_dim,
-            max_token_size=self._embedding_max_tokens,
+            embedding_dim=int(resolved_runtime.get("embedding_dim") or self._embedding_dim),
+            max_token_size=int(resolved_runtime.get("embedding_max_tokens") or self._embedding_max_tokens),
             func=_embed,
         )
 
-    def _build_vision_func(self):
+    def _build_vision_func(self, runtime: dict[str, Any] | None = None):
         """Build the vision model function for multimodal processing."""
         from litellm import acompletion
 
-        api_key = self._api_key
-        api_base = self._api_base or None
-        model = self._default_model
-        provider_name = self._provider_name
-        extra_headers = self._extra_headers or None
+        resolved_runtime = dict(runtime or {})
+        api_key = str(resolved_runtime.get("llm_api_key") or self._api_key or "")
+        api_base = str(resolved_runtime.get("llm_api_base") or self._api_base or "").strip() or None
+        model = str(resolved_runtime.get("llm_model") or self._default_model or "").strip()
+        provider_name = str(resolved_runtime.get("llm_provider_name") or self._provider_name or "").strip()
+        extra_headers = dict(resolved_runtime.get("llm_extra_headers") or self._extra_headers or {}) or None
 
         async def vision_model_func(
             prompt: str,
@@ -961,6 +1026,17 @@ class RAGEngine:
     async def ensure_instance(self, kb_id: str):
         """Get or create the ready-to-use RAGAnything instance for a knowledge base."""
         return await self._ensure_ready(kb_id)
+
+    async def reset_kb(self, kb_id: str) -> None:
+        """Finalize and evict a cached per-KB RAG instance."""
+        rag = self._instances.pop(kb_id, None)
+        self._instance_runtime_keys.pop(kb_id, None)
+        if rag is None:
+            return
+        try:
+            await rag.finalize_storages()
+        except Exception as exc:
+            logger.warning("RAGEngine: finalize failed during reset for kb_id={}: {}", kb_id, exc)
 
     # ------------------------------------------------------------------
     # Public API
@@ -1562,6 +1638,7 @@ class RAGEngine:
 
             # Remove from instances cache
             self._instances.pop(kb_id, None)
+            self._instance_runtime_keys.pop(kb_id, None)
             self._locks.pop(kb_id, None)
 
             # Remove working directory
@@ -1673,6 +1750,8 @@ class RAGEngine:
                 await rag.finalize_storages()
             except Exception as exc:
                 logger.warning("RAGEngine: finalize failed for kb_id={}: {}", kb_id, exc)
+        self._instances.clear()
+        self._instance_runtime_keys.clear()
 
 
 # ---------------------------------------------------------------------------

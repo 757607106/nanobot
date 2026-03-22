@@ -37,7 +37,14 @@ import { motion } from 'framer-motion'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { formatDateTimeZh } from '../locale'
+import {
+  getAllModelBindings,
+  normalizeModelConfig,
+  resolveBindingCapabilityType,
+} from '../modelConfig'
 import type {
+  ConfigData,
+  ConfigMeta,
   KnowledgeBaseDefinition,
   KnowledgeBenchmark,
   KnowledgeBenchmarkDetail,
@@ -53,6 +60,7 @@ import type {
   KnowledgeQueryParamSchema,
   KnowledgeRetrieveResult,
   KnowledgeIngestJob,
+  ModelBinding,
 } from '../types'
 import {
   CHUNK_PRESET_OPTIONS,
@@ -107,6 +115,8 @@ export default function KnowledgePage() {
   const detailGridRef = useRef<HTMLDivElement | null>(null)
 
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
+  const [modelConfig, setModelConfig] = useState<ConfigData | null>(null)
+  const [configMeta, setConfigMeta] = useState<ConfigMeta | null>(null)
   const [currentKb, setCurrentKb] = useState<KnowledgeBaseDefinition | null>(null)
   const [filesState, setFilesState] = useState<KnowledgeFileListResponse>(createEmptyListState)
   const [jobs, setJobs] = useState<KnowledgeIngestJob[]>([])
@@ -180,9 +190,72 @@ export default function KnowledgePage() {
   const [expandedFileIds, setExpandedFileIds] = useState<string[]>([])
 
   const deferredFileSearch = useDeferredValue(fileSearch)
+  const modelBindings = useMemo(
+    () => (modelConfig && configMeta ? getAllModelBindings(modelConfig, configMeta) : {}),
+    [modelConfig, configMeta],
+  )
+
+  function getBindingModel(bindingName: string) {
+    return String(modelBindings[bindingName]?.model || '').trim()
+  }
+
+  function buildKnowledgeBindingOptions(capability: 'embedding' | 'llm') {
+    return Object.entries(modelBindings)
+      .filter(([, binding]) => {
+        const resolved = resolveBindingCapabilityType(binding)
+        if (capability === 'embedding') {
+          return resolved === 'embedding'
+        }
+        return resolved === 'text_chat' || resolved === 'multimodal'
+      })
+      .map(([bindingName, binding]) => ({
+        value: bindingName,
+        label: String(binding.model || bindingName).trim() || bindingName,
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label))
+  }
+
+  const embeddingBindingOptions = useMemo(
+    () => buildKnowledgeBindingOptions('embedding'),
+    [modelBindings],
+  )
+  const llmBindingOptions = useMemo(
+    () => buildKnowledgeBindingOptions('llm'),
+    [modelBindings],
+  )
+  const defaultEmbeddingBindingName = useMemo(
+    () => String(modelConfig?.rag?.embeddingBinding || '').trim() || embeddingBindingOptions[0]?.value || '',
+    [modelConfig, embeddingBindingOptions],
+  )
+  const defaultLlmBindingName = useMemo(
+    () => String(modelConfig?.rag?.llmBinding || '').trim() || llmBindingOptions[0]?.value || '',
+    [modelConfig, llmBindingOptions],
+  )
+
+  function findBindingNameByModel(modelName: string, capability: 'embedding' | 'text_chat' | 'multimodal') {
+    const target = String(modelName || '').trim()
+    if (!target) {
+      return ''
+    }
+    const matched = Object.entries(modelBindings).find(([, binding]) => (
+      String(binding.model || '').trim() === target
+      && resolveBindingCapabilityType(binding) === capability
+    ))
+    return matched?.[0] || ''
+  }
+
+  function createKnowledgeForm(kb?: KnowledgeBaseDefinition | null) {
+    return createKnowledgeFormState(kb, {
+      embedBindingName: defaultEmbeddingBindingName,
+      embedModelName: getBindingModel(defaultEmbeddingBindingName),
+      llmBindingName: defaultLlmBindingName,
+      llmModelName: getBindingModel(defaultLlmBindingName),
+    })
+  }
 
   useEffect(() => {
     void loadKnowledgeBases()
+    void loadModelConfig()
   }, [])
 
   useEffect(() => {
@@ -192,7 +265,7 @@ export default function KnowledgePage() {
   useEffect(() => {
     if (!selectedKbId) {
       setCurrentKb(null)
-      setFormState(createKnowledgeFormState())
+      setFormState(createKnowledgeForm())
       setIndexConfig(createIndexConfigState())
       setFilesState(createEmptyListState())
       setJobs([])
@@ -216,7 +289,7 @@ export default function KnowledgePage() {
       return
     }
     void loadKnowledgeDetail(selectedKbId)
-  }, [selectedKbId])
+  }, [selectedKbId, defaultEmbeddingBindingName, defaultLlmBindingName])
 
   useEffect(() => {
     if (!isResizingPanels) {
@@ -253,6 +326,56 @@ export default function KnowledgePage() {
       void loadMindmap(currentKb.kbId)
     }
   }, [activeTab, currentKb, mindmap, mindmapLoading])
+
+  useEffect(() => {
+    if (Object.keys(modelBindings).length === 0) {
+      return
+    }
+    setFormState((prev) => {
+      let nextEmbedBindingName = prev.embedBindingName
+      let nextLlmBindingName = prev.llmBindingName
+
+      if (!nextEmbedBindingName && prev.embedModelName) {
+        nextEmbedBindingName = findBindingNameByModel(prev.embedModelName, 'embedding')
+      }
+      if (!nextLlmBindingName && prev.llmModelName) {
+        nextLlmBindingName = findBindingNameByModel(prev.llmModelName, 'text_chat')
+          || findBindingNameByModel(prev.llmModelName, 'multimodal')
+      }
+      if (!nextEmbedBindingName) {
+        nextEmbedBindingName = defaultEmbeddingBindingName
+      }
+      if (!nextLlmBindingName) {
+        nextLlmBindingName = defaultLlmBindingName
+      }
+
+      const nextEmbedModelName = getBindingModel(nextEmbedBindingName) || prev.embedModelName
+      const nextLlmModelName = getBindingModel(nextLlmBindingName) || prev.llmModelName
+      if (
+        nextEmbedBindingName === prev.embedBindingName
+        && nextEmbedModelName === prev.embedModelName
+        && nextLlmBindingName === prev.llmBindingName
+        && nextLlmModelName === prev.llmModelName
+      ) {
+        return prev
+      }
+      return {
+        ...prev,
+        embedBindingName: nextEmbedBindingName,
+        embedModelName: nextEmbedModelName,
+        llmBindingName: nextLlmBindingName,
+        llmModelName: nextLlmModelName,
+      }
+    })
+  }, [
+    defaultEmbeddingBindingName,
+    defaultLlmBindingName,
+    formState.embedBindingName,
+    formState.embedModelName,
+    formState.llmBindingName,
+    formState.llmModelName,
+    modelBindings,
+  ])
 
   const fileTreeData = useMemo(
     () => buildKnowledgeTree(filesState.items, deferredFileSearch),
@@ -311,6 +434,19 @@ export default function KnowledgePage() {
   const pendingIndexCount = pendingIndexFileIds.length
   const showListPage = !selectedKbId
 
+  async function loadModelConfig() {
+    try {
+      const [configResult, metaResult] = await Promise.all([
+        api.getConfig(),
+        api.getConfigMeta(),
+      ])
+      setModelConfig(normalizeModelConfig(configResult, metaResult))
+      setConfigMeta(metaResult)
+    } catch (loadError) {
+      message.error(getErrorMessage(loadError, '加载知识库模型配置失败'))
+    }
+  }
+
   async function loadKnowledgeBases() {
     try {
       setWorkspaceLoading(true)
@@ -336,7 +472,7 @@ export default function KnowledgePage() {
         api.getKnowledgeGraphStats(nextKbId).catch(() => null),
       ])
       setCurrentKb(kb)
-      setFormState(createKnowledgeFormState(kb))
+      setFormState(createKnowledgeForm(kb))
       setIndexConfig(createIndexConfigState(kb))
       setFilesState(filePayload)
       setJobs(jobPayload)
@@ -409,6 +545,24 @@ export default function KnowledgePage() {
     }
   }
 
+  function buildKnowledgeModelInfo(kind: 'embedding' | 'llm') {
+    const bindingName = kind === 'embedding' ? formState.embedBindingName : formState.llmBindingName
+    const fallbackModelName = kind === 'embedding' ? formState.embedModelName : formState.llmModelName
+    const binding = modelBindings[bindingName] as ModelBinding | undefined
+    const modelName = String(binding?.model || fallbackModelName || '').trim()
+    if (!bindingName && !modelName) {
+      return {}
+    }
+    return {
+      bindingName: bindingName || null,
+      modelName: modelName || null,
+      model: modelName || null,
+      provider: binding?.provider || null,
+      label: binding?.label || bindingName || null,
+      capabilityType: binding ? resolveBindingCapabilityType(binding) : (kind === 'embedding' ? 'embedding' : 'text_chat'),
+    }
+  }
+
   async function handleCreateKnowledgeBase() {
     try {
       setCreatingKb(true)
@@ -416,14 +570,14 @@ export default function KnowledgePage() {
         name: formState.name.trim(),
         description: formState.description.trim(),
         enabled: formState.enabled,
-        embedInfo: { modelName: formState.embedModelName.trim() || null },
-        llmInfo: { modelName: formState.llmModelName.trim() || null },
+        embedInfo: buildKnowledgeModelInfo('embedding'),
+        llmInfo: buildKnowledgeModelInfo('llm'),
         additionalParams: buildKnowledgeAdditionalParams(null, formState, indexConfig),
         tags: parseTags(formState.tagsText),
       })
       message.success('知识库已创建')
       setCreateModalOpen(false)
-      setFormState(createKnowledgeFormState())
+      setFormState(createKnowledgeForm())
       setIndexConfig(createIndexConfigState())
       await loadKnowledgeBases()
       startTransition(() => navigate(`/knowledge/${created.kbId}`))
@@ -442,13 +596,13 @@ export default function KnowledgePage() {
         name: formState.name.trim(),
         description: formState.description.trim(),
         enabled: formState.enabled,
-        embedInfo: { modelName: formState.embedModelName.trim() || null },
-        llmInfo: { modelName: formState.llmModelName.trim() || null },
+        embedInfo: buildKnowledgeModelInfo('embedding'),
+        llmInfo: buildKnowledgeModelInfo('llm'),
         additionalParams: buildKnowledgeAdditionalParams(currentKb.additionalParams, formState, indexConfig),
         tags: parseTags(formState.tagsText),
       })
       setCurrentKb(updated)
-      setFormState(createKnowledgeFormState(updated))
+      setFormState(createKnowledgeForm(updated))
       setIndexConfig(createIndexConfigState(updated))
       message.success('知识库设置已保存')
       await loadKnowledgeBases()
@@ -1054,7 +1208,7 @@ export default function KnowledgePage() {
                   type="primary"
                   icon={<PlusOutlined />}
                   onClick={() => {
-                    setFormState(createKnowledgeFormState())
+                    setFormState(createKnowledgeForm())
                     setIndexConfig(createIndexConfigState())
                     startTransition(() => navigate('/knowledge/new'))
                   }}
@@ -1317,11 +1471,27 @@ export default function KnowledgePage() {
           </div>
           <div className="studio-form-field">
             <Text type="secondary">Embedding 模型</Text>
-            <Input value={formState.embedModelName} onChange={(event) => setFormState((prev) => ({ ...prev, embedModelName: event.target.value }))} />
+            <Select
+              showSearch
+              value={formState.embedBindingName || undefined}
+              options={embeddingBindingOptions}
+              placeholder={embeddingBindingOptions.length > 0 ? '选择模型' : '请先到模型页配置模型'}
+              disabled={embeddingBindingOptions.length === 0}
+              onChange={(value) => setFormState((prev) => ({ ...prev, embedBindingName: value }))}
+              optionFilterProp="label"
+            />
           </div>
           <div className="studio-form-field">
             <Text type="secondary">LLM 模型</Text>
-            <Input value={formState.llmModelName} onChange={(event) => setFormState((prev) => ({ ...prev, llmModelName: event.target.value }))} />
+            <Select
+              showSearch
+              value={formState.llmBindingName || undefined}
+              options={llmBindingOptions}
+              placeholder={llmBindingOptions.length > 0 ? '选择模型' : '请先到模型页配置模型'}
+              disabled={llmBindingOptions.length === 0}
+              onChange={(value) => setFormState((prev) => ({ ...prev, llmBindingName: value }))}
+              optionFilterProp="label"
+            />
           </div>
           <div className="studio-form-field">
             <Text type="secondary">语言</Text>
@@ -1511,6 +1681,8 @@ export default function KnowledgePage() {
         <KnowledgeSettingsTab
           formState={formState}
           indexConfig={indexConfig}
+          embeddingBindingOptions={embeddingBindingOptions}
+          llmBindingOptions={llmBindingOptions}
           chunkPresetOptions={CHUNK_PRESET_OPTIONS.map((item) => ({ label: item.label, value: item.value }))}
           languageOptions={[...LANGUAGE_OPTIONS]}
           generatingDescription={generatingDescription}

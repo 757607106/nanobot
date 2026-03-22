@@ -19,6 +19,8 @@ interface OptionItem {
 interface KnowledgeSettingsTabProps {
   formState: KnowledgeFormState
   indexConfig: KnowledgeIndexConfigState
+  embeddingBindingOptions: OptionItem[]
+  llmBindingOptions: OptionItem[]
   chunkPresetOptions: OptionItem[]
   languageOptions: OptionItem[]
   generatingDescription: boolean
@@ -33,6 +35,8 @@ interface KnowledgeSettingsTabProps {
 export function KnowledgeSettingsTab({
   formState,
   indexConfig,
+  embeddingBindingOptions,
+  llmBindingOptions,
   chunkPresetOptions,
   languageOptions,
   generatingDescription,
@@ -56,11 +60,27 @@ export function KnowledgeSettingsTab({
         </div>
         <div className="studio-form-field">
           <Text type="secondary">Embedding 模型</Text>
-          <Input value={formState.embedModelName} onChange={(event) => onFormStateChange((prev) => ({ ...prev, embedModelName: event.target.value }))} />
+          <Select
+            showSearch
+            value={formState.embedBindingName || undefined}
+            options={embeddingBindingOptions}
+            placeholder={embeddingBindingOptions.length > 0 ? '选择模型' : '请先到模型页配置模型'}
+            disabled={embeddingBindingOptions.length === 0}
+            onChange={(value) => onFormStateChange((prev) => ({ ...prev, embedBindingName: value }))}
+            optionFilterProp="label"
+          />
         </div>
         <div className="studio-form-field">
           <Text type="secondary">LLM 模型</Text>
-          <Input value={formState.llmModelName} onChange={(event) => onFormStateChange((prev) => ({ ...prev, llmModelName: event.target.value }))} />
+          <Select
+            showSearch
+            value={formState.llmBindingName || undefined}
+            options={llmBindingOptions}
+            placeholder={llmBindingOptions.length > 0 ? '选择模型' : '请先到模型页配置模型'}
+            disabled={llmBindingOptions.length === 0}
+            onChange={(value) => onFormStateChange((prev) => ({ ...prev, llmBindingName: value }))}
+            optionFilterProp="label"
+          />
         </div>
         <div className="studio-form-field">
           <Text type="secondary">语言</Text>
