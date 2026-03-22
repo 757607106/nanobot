@@ -612,6 +612,16 @@ vi.mock('antd', async () => {
     </select>
   )
 
+  const AutoComplete = ({ className, disabled, onChange, placeholder, value }: Props) => (
+    <input
+      className={className}
+      disabled={Boolean(disabled)}
+      placeholder={typeof placeholder === 'string' ? placeholder : undefined}
+      value={typeof value === 'string' || typeof value === 'number' ? value : undefined}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
+  )
+
   const Switch = ({ checked, className, disabled, onChange }: Props) => (
     <input
       type="checkbox"
@@ -910,6 +920,7 @@ vi.mock('antd', async () => {
     Grid,
     Input,
     InputNumber,
+    AutoComplete,
     Layout,
     List,
     Menu,
@@ -950,6 +961,7 @@ import McpServerDetailPage from '../pages/McpServerDetailPage'
 import ModelsPage from '../pages/ModelsPage'
 import OperationsPage from '../pages/OperationsPage'
 import ProfilePage from '../pages/ProfilePage'
+import AgentsPage from '../pages/AgentsPage'
 import KnowledgePage from '../pages/KnowledgePage'
 import MemoryAuditPage from '../pages/MemoryAuditPage'
 import RunsPage from '../pages/RunsPage'
@@ -2842,6 +2854,49 @@ describe('web app smoke pages', () => {
     expect(screen.getByText('执行记录')).toBeInTheDocument()
     expect(screen.queryByText('知识库')).not.toBeInTheDocument()
     expect(screen.queryByText('模板')).not.toBeInTheDocument()
+  })
+
+  it('opens the agent create drawer on /studio/agents/new', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/agents/new']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/agents/new" element={<AgentsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByPlaceholderText('输入员工名称')).toBeInTheDocument()
+    expect(screen.getByText('保存员工')).toBeInTheDocument()
+    expect(screen.getByText('员工试运行')).toBeInTheDocument()
+  })
+
+  it('opens the team create drawer on /studio/teams/new', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/teams/new']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/teams/new" element={<TeamsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('保存团队')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('输入团队名称')).toBeInTheDocument()
   })
 
   it('renders memory audit page with candidate and search panels', async () => {

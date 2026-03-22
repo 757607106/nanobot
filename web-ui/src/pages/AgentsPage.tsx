@@ -31,7 +31,7 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
 import { useDevMode } from '../devMode'
@@ -185,10 +185,12 @@ function statusColor(status: AgentRunSummary['status']) {
 
 export default function AgentsPage() {
   const { message } = App.useApp()
+  const location = useLocation()
   const navigate = useNavigate()
   const { agentId } = useParams()
   const { devMode } = useDevMode()
   const selectedAgentId = agentId && agentId !== 'new' ? agentId : null
+  const isCreateRoute = location.pathname.endsWith('/studio/agents/new')
 
   const [agents, setAgents] = useState<AgentDefinition[]>([])
   const [validTools, setValidTools] = useState<AgentTemplateTool[]>([])
@@ -227,13 +229,13 @@ export default function AgentsPage() {
       setRecentRuns([])
       setLastResult(null)
       setForm(createEmptyForm())
-      setIsDrawerOpen(agentId === 'new')
+      setIsDrawerOpen(isCreateRoute)
       return
     }
     void loadAgentDetail(selectedAgentId)
     void loadRecentRuns(selectedAgentId)
     setIsDrawerOpen(true)
-  }, [agentId, agents, loadingWorkspace, selectedAgentId])
+  }, [agents, isCreateRoute, loadingWorkspace, selectedAgentId])
 
   const handleCloseDrawer = () => {
     setIsDrawerOpen(false)
@@ -454,19 +456,26 @@ export default function AgentsPage() {
   async function handleSave() {
     const payload = toPayload(form)
     if (!payload.name) {
-      setError('员工名称不能为空。')
+      const nextError = '员工名称不能为空。'
+      setError(nextError)
+      message.error(nextError)
       return
     }
     if (!payload.systemPrompt) {
-      setError('角色说明不能为空。')
+      const nextError = '角色说明不能为空。'
+      setError(nextError)
+      message.error(nextError)
       return
     }
     if (!(payload.rules || []).length) {
-      setError('至少需要一条运行规则。')
+      const nextError = '至少需要一条运行规则。'
+      setError(nextError)
+      message.error(nextError)
       return
     }
     try {
       setSaving(true)
+      setError(null)
       const saved = currentAgent
         ? await api.updateAgent(currentAgent.agentId, payload)
         : await api.createAgent(payload)
@@ -476,7 +485,9 @@ export default function AgentsPage() {
       await loadAgentDetail(saved.agentId)
       await loadRecentRuns(saved.agentId)
     } catch (saveError) {
-      setError(getErrorMessage(saveError, '保存 Agent 失败'))
+      const nextError = getErrorMessage(saveError, '保存 Agent 失败')
+      setError(nextError)
+      message.error(nextError)
     } finally {
       setSaving(false)
     }
@@ -699,6 +710,7 @@ export default function AgentsPage() {
         }
       >
         <div className="page-stack studio-drawer-stack">
+          {error ? <Alert type="error" showIcon message={error} style={{ margin: '16px 16px 0' }} /> : null}
           <Card bordered={false} className="config-panel-card" loading={loadingDetail}>
             {currentAgent?.sourceTemplateName ? <Tag color="purple" style={{ marginBottom: '16px' }}>来自模板：{currentAgent.sourceTemplateName}</Tag> : null}
 

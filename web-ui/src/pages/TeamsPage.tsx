@@ -31,7 +31,7 @@ import {
   AppstoreOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import DevOnly from '../components/DevOnly'
 import { useDevMode } from '../devMode'
@@ -138,10 +138,12 @@ function isActiveRunStatus(status: AgentRunSummary['status']) {
 
 export default function TeamsPage() {
   const { message } = App.useApp()
+  const location = useLocation()
   const navigate = useNavigate()
   const { teamId } = useParams()
   const { devMode } = useDevMode()
   const selectedTeamId = teamId && teamId !== 'new' ? teamId : null
+  const isCreateRoute = location.pathname.endsWith('/studio/teams/new')
 
   const [teams, setTeams] = useState<TeamDefinition[]>([])
   const [agents, setAgents] = useState<AgentDefinition[]>([])
@@ -389,15 +391,20 @@ export default function TeamsPage() {
   async function handleSave() {
     const payload = toPayload(form)
     if (!payload.name) {
-      setError('Team 名称不能为空。')
+      const nextError = 'Team 名称不能为空。'
+      setError(nextError)
+      message.error(nextError)
       return
     }
     if (!payload.supervisorAgentId) {
-      setError('请先选择负责人 (supervisor agent)。')
+      const nextError = '请先选择负责人 (supervisor agent)。'
+      setError(nextError)
+      message.error(nextError)
       return
     }
     try {
       setSaving(true)
+      setError(null)
       const saved = currentTeam
         ? await api.updateTeam(currentTeam.teamId, payload)
         : await api.createTeam(payload)
@@ -406,7 +413,9 @@ export default function TeamsPage() {
       navigate(`/studio/teams/${saved.teamId}`, { replace: true })
       await loadTeamDetail(saved.teamId)
     } catch (saveError) {
-      setError(getErrorMessage(saveError, '保存 Team 失败'))
+      const nextError = getErrorMessage(saveError, '保存 Team 失败')
+      setError(nextError)
+      message.error(nextError)
     } finally {
       setSaving(false)
     }
@@ -728,7 +737,7 @@ export default function TeamsPage() {
         title={currentTeam ? '团队设置' : '新建团队'}
         width="min(680px, calc(100vw - 16px))"
         onClose={() => navigate('/studio/teams')}
-        open={!!selectedTeamId || teamId === 'new'}
+        open={!!selectedTeamId || isCreateRoute}
         styles={{ body: { padding: 0 } }}
         extra={
           <Space>
@@ -744,6 +753,7 @@ export default function TeamsPage() {
         }
       >
         <div className="page-stack studio-drawer-stack">
+          {error ? <Alert type="error" showIcon message={error} style={{ margin: '16px 16px 0' }} /> : null}
           <Tabs
             activeKey={activePanel}
             onChange={(value) => setActivePanel(value as 'config' | 'runs' | 'memory')}
