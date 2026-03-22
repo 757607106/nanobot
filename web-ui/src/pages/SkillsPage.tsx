@@ -255,6 +255,7 @@ export default function SkillsPage() {
           </div>
         ) : filteredSkills.length === 0 ? (
           <Empty
+            image={false}
             description={skills.length === 0 ? '还没有安装技能' : '没有匹配结果'}
             className="empty-block"
             style={{ padding: 40 }}

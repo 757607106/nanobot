@@ -373,12 +373,6 @@ export default function ModelsPage() {
           style={{ marginBottom: 24 }}
         >
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Alert
-              type="info"
-              showIcon
-              message="知识库文件解析优先使用官方 MinerU API"
-              description="这里仅保留官方文档里真正需要的项目级配置：API Base、API Token 和模型版本。HTML 文件上传时会自动按官方要求走 MinerU-HTML。"
-            />
             <div className="studio-form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
               <div className="studio-form-field">
                 <Text type="secondary">MinerU API Base</Text>
@@ -494,6 +488,7 @@ export default function ModelsPage() {
               )}
             >
               <Table 
+                locale={{ emptyText: <Empty image={false} description="暂无已注册模型" /> }}
                 dataSource={activeProviderBindings}
                 rowKey="bindingName"
                 pagination={false}
@@ -551,7 +546,7 @@ export default function ModelsPage() {
           </Form.Item>
           <Form.Item name="capabilityType" label="模型能力类型" initialValue="text_chat">
             <Select options={[
-              { value: 'text_chat', label: '文本对话 (Text Chat)' },
+              { value: 'text_chat', label: '文本对话 (Chat)' },
               { value: 'embedding', label: '向量嵌入 (Embedding)' },
               { value: 'multimodal', label: '多模态 (Multimodal)' },
             ]} />
@@ -596,7 +591,7 @@ export default function ModelsPage() {
               }}
             />
           ) : (
-            <Empty description="当前供应商没有返回模型列表" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            <Empty description="当前供应商没有返回模型列表" image={false} />
           )}
         </Space>
       </Modal>

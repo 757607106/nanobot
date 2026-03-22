@@ -420,7 +420,7 @@ export default function AgentsPage() {
     emptyText: string,
   ) {
     if (items.length === 0) {
-      return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
+      return <Empty image={false} description={emptyText} />
     }
     return (
       <div className="capability-card-grid">
@@ -606,12 +606,12 @@ export default function AgentsPage() {
 
       {agents.length === 0 && !loadingWorkspace ? (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="还没有创建 AI 员工"
+          image={false}
+          description="暂无员工数据"
           className="page-card"
         >
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/agents/new')}>
-            创建第一个员工
+            创建员工
           </Button>
         </Empty>
       ) : (
@@ -699,7 +699,7 @@ export default function AgentsPage() {
                 <Input
                   value={form.name}
                   onChange={(event) => updateForm('name', event.target.value)}
-                  placeholder="例如：法务研究员、产品分析员"
+                  placeholder="输入员工名称"
                 />
               </div>
 
@@ -709,7 +709,7 @@ export default function AgentsPage() {
                   mode="tags"
                   value={form.tags}
                   onChange={(value) => updateForm('tags', value)}
-                  placeholder="例如：法务、研究、评审"
+                  placeholder="输入标签"
                 />
               </div>
 
@@ -731,7 +731,7 @@ export default function AgentsPage() {
                   value={form.provider || undefined}
                   onChange={(value) => updateProvider(value ?? '')}
                   options={agentProviderOptions}
-                  placeholder="留空则按模型自动判断"
+                  placeholder="自动判断"
                 />
               </div>
 
@@ -741,7 +741,7 @@ export default function AgentsPage() {
                   value={form.model}
                   onChange={(value) => updateForm('model', value)}
                   options={modelSuggestions}
-                  placeholder="留空则使用默认模型"
+                  placeholder="使用默认模型"
                   allowClear
                   filterOption={(input, option) =>
                     (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
@@ -760,7 +760,7 @@ export default function AgentsPage() {
                   value={form.description}
                   onChange={(event) => updateForm('description', event.target.value)}
                   rows={3}
-                  placeholder="说明它负责什么、擅长什么、输出给谁。"
+                  placeholder="输入职责说明"
                 />
               </div>
 
@@ -770,7 +770,7 @@ export default function AgentsPage() {
                   value={form.systemPrompt}
                   onChange={(event) => updateForm('systemPrompt', event.target.value)}
                   rows={8}
-                  placeholder="定义这个员工的角色定位、职责边界和输出风格。"
+                  placeholder="输入角色说明"
                 />
               </div>
 
@@ -780,7 +780,7 @@ export default function AgentsPage() {
                   value={form.rulesText}
                   onChange={(event) => updateForm('rulesText', event.target.value)}
                   rows={4}
-                  placeholder="每行一条工作规则，例如：先确认任务范围再动手"
+                  placeholder="输入工作规则"
                 />
               </div>
             </div>
@@ -873,14 +873,7 @@ export default function AgentsPage() {
               ]}
             />
 
-            <Alert
-              className="studio-inline-alert"
-              type="info"
-              showIcon
-              message="试运行会使用当前员工配置执行任务。"
-            />
-
-            <div className="studio-form-actions">
+            <div className="studio-form-actions" style={{ marginTop: 24 }}>
               <Space wrap>
                 <Button icon={<CopyOutlined />} onClick={() => void handleCopy()} disabled={!currentAgent} loading={copying}>
                   复制
@@ -909,7 +902,7 @@ export default function AgentsPage() {
                 value={testPrompt}
                 onChange={(event) => setTestPrompt(event.target.value)}
                 rows={4}
-                placeholder="给这个 Agent 一个明确任务，验证它是否能按预期工作。"
+                placeholder="输入测试任务"
               />
             </div>
 
@@ -950,7 +943,7 @@ export default function AgentsPage() {
                 <Spin />
               </div>
             ) : recentRuns.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个员工还没有执行记录。" />
+              <Empty image={false} description="暂无执行记录" />
             ) : (
               <div className="studio-run-list">
                 {recentRuns.map((run) => (

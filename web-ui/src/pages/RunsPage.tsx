@@ -515,7 +515,7 @@ export default function RunsPage() {
               </Card>
             ) : (
               <Card className="page-card" bordered={false}>
-                <Empty description="暂无执行结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty description="暂无执行结果" image={false} />
               </Card>
             )}
             

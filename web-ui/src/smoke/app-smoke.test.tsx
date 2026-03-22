@@ -2997,7 +2997,7 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('渠道概览')).toBeInTheDocument()
     expect(screen.getByText('技能概览')).toBeInTheDocument()
     expect(screen.getByText('自动化状态')).toBeInTheDocument()
-    expect(screen.getByText('会话')).toBeInTheDocument()
+    expect(screen.getByText('系统总览')).toBeInTheDocument()
   })
 
   it('renders the chat page', async () => {
@@ -3072,7 +3072,7 @@ describe('web app smoke pages', () => {
   it('renders the channels page', async () => {
     renderPage(<ChannelsPage />)
     expect(await screen.findByText('消息投递设置')).toBeInTheDocument()
-    expect(screen.getByText('保存投递设置')).toBeInTheDocument()
+    expect(screen.getByText('保存设置')).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
   })
 

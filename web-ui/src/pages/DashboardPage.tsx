@@ -9,17 +9,17 @@ import type {
 } from '../types'
 
 const dashboardChannelIcons: Record<string, string> = {
-  telegram: '✈️',
-  whatsapp: '🟢',
-  discord: '🎮',
-  qq: '🐧',
-  slack: '💬',
-  matrix: '🔷',
-  feishu: '🪽',
-  dingtalk: '📘',
-  wecom: '🧩',
-  mochat: '🧠',
-  email: '✉️',
+  telegram: '/channel-logos/telegram.png',
+  whatsapp: '/channel-logos/whatsapp.jpeg',
+  discord: '/channel-logos/discord.jpeg',
+  qq: '/channel-logos/qq.png',
+  slack: '/channel-logos/slack.png',
+  matrix: '/channel-logos/matrix.png',
+  feishu: '/channel-logos/feishu.png',
+  dingtalk: '/channel-logos/dingtalk.jpeg',
+  wecom: '/channel-logos/wecom.jpeg',
+  mochat: '/channel-logos/mochat.jpeg',
+  email: '/channel-logos/email.jpeg',
 }
 
 function channelIconsLabel(name: string) {
@@ -145,17 +145,7 @@ export default function DashboardPage() {
     <div className="page-stack">
       <section className="chat-dashboard-shell">
         <div className="chat-dashboard-topbar">
-          <div className="chat-dashboard-title-chip">看板</div>
-        </div>
-
-        <div className="chat-dashboard-stats-grid">
-          {stats.map((item) => (
-            <div key={item.key} className="chat-dashboard-stat-card">
-              <span>{item.label}</span>
-              <strong>{item.value ?? '--'}</strong>
-              <small>{item.sub}</small>
-            </div>
-          ))}
+          <div className="chat-dashboard-title-chip">系统总览</div>
         </div>
 
         <div className="dashboard-overview-grid">
@@ -180,7 +170,17 @@ export default function DashboardPage() {
                     className={`chat-dashboard-channel-item status-${item.status}`}
                   >
                     <div className="chat-dashboard-channel-title">
-                      <span>{dashboardChannelIcons[item.name] || '📡'}</span>
+                      <span className="channel-icon-wrapper">
+                        {dashboardChannelIcons[item.name] ? (
+                          <img 
+                            src={dashboardChannelIcons[item.name]} 
+                            alt={item.name} 
+                            style={{ width: '1.2em', height: '1.2em', verticalAlign: 'middle', borderRadius: '4px' }} 
+                          />
+                        ) : (
+                          '📡'
+                        )}
+                      </span>
                       <strong>{channelIconsLabel(item.name)}</strong>
                     </div>
                     <div className="chat-dashboard-channel-tags">

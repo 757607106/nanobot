@@ -248,7 +248,7 @@ export default function MemoryAuditPage() {
 
   if (loadingWorkspace && teams.length === 0 && !selectedTeamId) {
     return (
-      <div className="page-card center-box">
+      <div className="center-box page-card">
         <Spin />
       </div>
     )
@@ -285,7 +285,7 @@ export default function MemoryAuditPage() {
           </div>
 
           {teams.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 Team">
+            <Empty image={false} description="暂无 Team">
               <Button type="primary" onClick={() => navigate('/studio/teams/new')}>
                 创建第一个 Team
               </Button>
@@ -328,7 +328,7 @@ export default function MemoryAuditPage() {
             </div>
 
             {!currentTeam ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择 Team" />
+              <Empty image={false} description="请选择 Team" />
             ) : (
               <Space wrap className="studio-chip-wrap">
                 <Tag>{currentTeam.memberCount} 位成员</Tag>
@@ -376,7 +376,7 @@ export default function MemoryAuditPage() {
                       </div>
 
                       {recentRuns.length === 0 ? (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无运行记录" />
+                        <Empty image={false} description="暂无运行记录" />
                       ) : (
                         <List
                           className="studio-run-list"
@@ -422,7 +422,7 @@ export default function MemoryAuditPage() {
                     </div>
 
                     {teamThreadMessages.length === 0 ? (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无对话" />
+                      <Empty image={false} description="暂无对话" />
                     ) : (
                       <List
                         className="studio-run-list"
@@ -472,7 +472,7 @@ export default function MemoryAuditPage() {
                     />
 
                     {filteredCandidates.length === 0 ? (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无候选记忆" />
+                      <Empty image={false} description="暂无候选记忆" />
                     ) : (
                       <List
                         className="studio-run-list"
@@ -530,7 +530,7 @@ export default function MemoryAuditPage() {
                         <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
                       </div>
                     ) : teamThreadMessages.length === 0 ? (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="点击“查看全文”后显示原文" />
+                      <Empty image={false} description="点击“查看全文”后显示原文" />
                     ) : (
                       <List
                         className="studio-run-list"
@@ -607,7 +607,7 @@ export default function MemoryAuditPage() {
                       </div>
 
                       {memorySearchResults.length === 0 ? (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无检索结果" />
+                        <Empty image={false} description="暂无检索结果" />
                       ) : (
                         <List
                           className="studio-run-list"
@@ -649,7 +649,7 @@ export default function MemoryAuditPage() {
                           <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
                         </div>
                       ) : (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选择结果后显示全文" />
+                        <Empty image={false} description="选择结果后显示全文" />
                       )}
                     </Card>
                   </div>

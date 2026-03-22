@@ -652,7 +652,7 @@ export default function KnowledgePage() {
                     </List.Item>
                   )}
                 />
-              ) : <Empty description="暂无任务记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+              ) : <Empty description="暂无任务记录" image={false} />}
             </Card>
           </Space>
         )
@@ -954,7 +954,7 @@ export default function KnowledgePage() {
           <Col xs={24} md={18}>
             {!selectedKbId && !isCreatingKb ? (
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={false}
                 description="选择知识库或新建"
                 style={{ background: 'var(--nb-card-bg)', padding: 48, borderRadius: 12 }}
               />

@@ -669,8 +669,8 @@ export default function TeamsPage() {
 
       {teams.length === 0 && !loadingWorkspace ? (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="暂无团队"
+          image={false}
+          description="暂无团队数据"
           className="page-card"
         >
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/studio/teams/new')}>
@@ -769,7 +769,7 @@ export default function TeamsPage() {
                 <Input
                   value={form.name}
                   onChange={(event) => updateForm('name', event.target.value)}
-                  placeholder="例如：客服协同组、研究评审组"
+                  placeholder="输入团队名称"
                 />
               </div>
 
@@ -784,7 +784,7 @@ export default function TeamsPage() {
                   value={form.description}
                   onChange={(event) => updateForm('description', event.target.value)}
                   rows={3}
-                  placeholder="说明团队负责什么场景、leader 如何分工、需要什么产出。"
+                  placeholder="输入团队说明"
                 />
               </div>
 
@@ -794,7 +794,7 @@ export default function TeamsPage() {
                   value={form.supervisorAgentId || undefined}
                   onChange={(value) => updateForm('supervisorAgentId', value)}
                   options={agentOptions}
-                  placeholder="选择负责统筹与汇总的员工"
+                  placeholder="选择负责人"
                 />
               </div>
 
@@ -805,7 +805,7 @@ export default function TeamsPage() {
                   value={form.memberAgentIds}
                   onChange={(value) => updateForm('memberAgentIds', value)}
                   options={memberOptions}
-                  placeholder="选择参与协作的员工"
+                  placeholder="选择成员"
                 />
               </div>
 
@@ -816,7 +816,7 @@ export default function TeamsPage() {
                   value={form.sharedKnowledgeBindingIds}
                   onChange={(value) => updateForm('sharedKnowledgeBindingIds', value)}
                   options={knowledgeOptions}
-                  placeholder="选择团队可使用的共享知识库"
+                  placeholder="选择共享知识库"
                 />
               </div>
 
@@ -826,7 +826,7 @@ export default function TeamsPage() {
                   mode="tags"
                   value={form.tags}
                   onChange={(value) => updateForm('tags', value)}
-                  placeholder="例如：客服、运营、排障"
+                  placeholder="输入标签"
                 />
               </div>
             </div>
@@ -904,13 +904,13 @@ export default function TeamsPage() {
                 </div>
 
                 {!currentTeam ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先保存团队" />
+                  <Empty image={false} description="先保存团队" />
                 ) : loadingThread && teamThreadMessages.length === 0 ? (
                   <div className="center-box">
                     <Spin />
                   </div>
                 ) : teamThreadMessages.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无对话" />
+                  <Empty image={false} description="暂无对话" />
                 ) : (
                   <List
                     className="studio-run-list"
@@ -1105,12 +1105,12 @@ export default function TeamsPage() {
                 </div>
 
                 {loadingRuns ? (
-                  <div className="center-box">
-                    <Spin />
-                  </div>
-                ) : recentRuns.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行记录" />
-                ) : (
+              <div className="center-box">
+                <Spin />
+              </div>
+            ) : recentRuns.length === 0 ? (
+              <Empty image={false} description="暂无运行记录" />
+            ) : (
                   <List
                     className="studio-run-list"
                     dataSource={recentRuns}
@@ -1161,7 +1161,7 @@ export default function TeamsPage() {
                 </div>
 
                 {selectedMembers.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无团队成员" />
+                  <Empty image={false} description="暂无团队成员" />
                 ) : (
                   <List
                     className="studio-run-list"
@@ -1241,7 +1241,7 @@ export default function TeamsPage() {
                   <Spin />
                 </div>
               ) : memoryCandidates.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无记忆候选" />
+                <Empty image={false} description="暂无记忆候选" />
               ) : (
                 <List
                   className="studio-run-list"

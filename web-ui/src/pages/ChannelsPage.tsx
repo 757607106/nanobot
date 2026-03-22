@@ -42,17 +42,17 @@ import type {
 const { Text } = Typography
 
 const channelIcons: Record<string, string> = {
-  telegram: '✈️',
-  whatsapp: '🟢',
-  discord: '🎮',
-  qq: '🐧',
-  slack: '💬',
-  matrix: '🔷',
-  feishu: '🪽',
-  dingtalk: '📘',
-  wecom: '🧩',
-  mochat: '🧠',
-  email: '✉️',
+  telegram: '/channel-logos/telegram.png',
+  whatsapp: '/channel-logos/whatsapp.jpeg',
+  discord: '/channel-logos/discord.jpeg',
+  qq: '/channel-logos/qq.png',
+  slack: '/channel-logos/slack.png',
+  matrix: '/channel-logos/matrix.png',
+  feishu: '/channel-logos/feishu.png',
+  dingtalk: '/channel-logos/dingtalk.jpeg',
+  wecom: '/channel-logos/wecom.jpeg',
+  mochat: '/channel-logos/mochat.jpeg',
+  email: '/channel-logos/email.jpeg',
 }
 
 const statusColorMap: Record<ChannelStateItem['status'], string> = {
@@ -160,16 +160,6 @@ export default function ChannelsPage() {
 
     return [...known, ...extras]
   }, [data?.items, itemsByName])
-
-  const stats = useMemo(() => {
-    const items = data?.items ?? []
-    return {
-      enabled: items.filter((item) => item.status === 'enabled').length,
-      configured: items.filter((item) => item.status === 'configured' || item.status === 'enabled').length,
-      incomplete: items.filter((item) => item.status === 'incomplete').length,
-      total: items.length,
-    }
-  }, [data?.items])
 
   async function loadChannels() {
     try {
@@ -421,35 +411,14 @@ export default function ChannelsPage() {
         </div>
       </div>
 
-      <div className="channels-registry-summary">
-        <div className="channels-registry-summary-card">
-          <span>已启用</span>
-          <strong>{stats.enabled}</strong>
-        </div>
-        <div className="channels-registry-summary-card">
-          <span>已配置</span>
-          <strong>{stats.configured}</strong>
-        </div>
-        <div className="channels-registry-summary-card">
-          <span>待补全</span>
-          <strong>{stats.incomplete}</strong>
-        </div>
-        <div className="channels-registry-summary-card">
-          <span>总数</span>
-          <strong>{stats.total}</strong>
-        </div>
-      </div>
-
       <div className="channels-delivery-card">
         <div className="channels-delivery-copy">
           <strong>消息投递设置</strong>
-          <span>保留当前项目的全局投递能力，用于控制渠道内是否显示执行进度和工具提示。</span>
         </div>
         <div className="channels-delivery-actions">
           <div className="channels-delivery-flag">
             <div>
               <span>推送执行进度</span>
-              <small>把执行进度同步到消息渠道</small>
             </div>
             <Switch
               checked={deliveryDraft.sendProgress}
@@ -459,7 +428,6 @@ export default function ChannelsPage() {
           <div className="channels-delivery-flag">
             <div>
               <span>推送操作提示</span>
-              <small>在渠道里显示工具调用提示</small>
             </div>
             <Switch
               checked={deliveryDraft.sendToolHints}
@@ -473,7 +441,7 @@ export default function ChannelsPage() {
             onClick={() => void saveDelivery()}
             data-testid={testIds.channels.deliverySave}
           >
-            保存投递设置
+            保存设置
           </Button>
         </div>
       </div>
@@ -494,7 +462,17 @@ export default function ChannelsPage() {
                   className="channels-registry-row-trigger"
                   onClick={() => void toggleExpand(meta.name)}
                 >
-                  <span className="channels-registry-row-icon">{channelIcons[meta.name] || '📡'}</span>
+                  <span className="channels-registry-row-icon">
+                    {channelIcons[meta.name] ? (
+                      <img 
+                        src={channelIcons[meta.name]} 
+                        alt={meta.name} 
+                        style={{ width: '1.2em', height: '1.2em', verticalAlign: 'middle', borderRadius: '4px' }} 
+                      />
+                    ) : (
+                      '📡'
+                    )}
+                  </span>
                   <div className="channels-registry-row-copy">
                     <div className="channels-registry-row-title">
                       <strong>{meta.label}</strong>
