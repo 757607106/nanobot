@@ -1350,6 +1350,17 @@ class RAGEngine:
         """Return structured LightRAG query data for a single knowledge base."""
         from lightrag import QueryParam
 
+        def _has_structured_evidence(result: Any) -> bool:
+            if not isinstance(result, dict):
+                return False
+            data = result.get("data") or {}
+            if not isinstance(data, dict):
+                return False
+            return any(
+                data.get(key)
+                for key in ("chunks", "entities", "relationships", "references")
+            )
+
         rag = await self._ensure_ready(kb_id)
         param_fields = getattr(QueryParam, "__annotations__", {})
         query_kwargs: dict[str, Any] = {
@@ -1364,7 +1375,17 @@ class RAGEngine:
         }
         filtered_kwargs = {key: value for key, value in query_kwargs.items() if key in param_fields}
         try:
-            return await rag.lightrag.aquery_data(query_text, QueryParam(**filtered_kwargs))
+            result = await rag.lightrag.aquery_data(query_text, QueryParam(**filtered_kwargs))
+            if filtered_kwargs.get("mode") != "naive" and not _has_structured_evidence(result):
+                fallback_kwargs = dict(filtered_kwargs)
+                fallback_kwargs["mode"] = "naive"
+                logger.warning(
+                    "RAGEngine: structured query returned no evidence for kb_id={} mode={}, retrying with naive mode",
+                    kb_id,
+                    filtered_kwargs.get("mode"),
+                )
+                return await rag.lightrag.aquery_data(query_text, QueryParam(**fallback_kwargs))
+            return result
         except Exception as exc:
             if filtered_kwargs.get("mode") != "naive" and self._is_timeout_like_error(exc):
                 fallback_kwargs = dict(filtered_kwargs)

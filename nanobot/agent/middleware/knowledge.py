@@ -31,6 +31,18 @@ def build_knowledge_prompt_block(hits: list[dict[str, Any]]) -> str:
     return "\n\n".join(sections)
 
 
+def build_knowledge_policy_block() -> str:
+    return "\n".join(
+        [
+            "# Knowledge Policy",
+            "You have bound knowledge bases.",
+            "When knowledge evidence exists, answer from that evidence.",
+            "When retrieval or query_kb returns no evidence, explicitly say no matching information was found in the bound knowledge base.",
+            "Do not fill gaps with general knowledge.",
+        ]
+    )
+
+
 @dataclass(slots=True)
 class KnowledgeBindingResult:
     binding_context: KnowledgeBindingContext | None
@@ -62,16 +74,19 @@ class KnowledgeBindingMiddleware:
             else list(base_tool_allowlist or [])
         )
 
-        knowledge_result: dict[str, Any] = {"hits": [], "requestedMode": "hybrid", "effectiveMode": "hybrid"}
+        knowledge_result: dict[str, Any] = {"hits": [], "requestedMode": "naive", "effectiveMode": "naive"}
+        prompt_sections: list[str] = []
+        if binding_context is not None and binding_context.has_bindings:
+            prompt_sections.append(build_knowledge_policy_block())
         if self.knowledge_service and binding_context is not None and binding_context.has_bindings:
             knowledge_result = self.knowledge_service.retrieve(
                 kb_ids=list(binding_context.bound_kb_ids),
                 query=str(task or ""),
                 limit=6,
+                requested_mode="naive",
             )
 
         knowledge_hits = list(knowledge_result.get("hits") or [])
-        prompt_sections: list[str] = []
         prompt_block = build_knowledge_prompt_block(knowledge_hits)
         if prompt_block:
             prompt_sections.append(prompt_block)

@@ -1,8 +1,6 @@
 """Knowledge-base tools for agent runs with bound knowledge bases."""
 
 from __future__ import annotations
-
-import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -89,6 +87,13 @@ class _KnowledgeToolBase(Tool):
             }:
                 return str(item["kbId"])
         raise ValueError(f"Unknown bound knowledge base: {requested}")
+
+    def _resolve_kb_payload(self, kb_name: str | None) -> dict[str, Any]:
+        kb_id = self._resolve_kb_id(kb_name)
+        for item in self._resolve_bound_kbs():
+            if str(item.get("kbId") or "") == kb_id:
+                return item
+        raise ValueError(f"Unknown bound knowledge base: {kb_name or kb_id}")
 
 
 class ListKnowledgeBasesTool(_KnowledgeToolBase):
@@ -191,7 +196,9 @@ class QueryKnowledgeBaseTool(_KnowledgeToolBase):
         limit: int = 6,
         **kwargs: Any,
     ) -> str:
-        kb_id = self._resolve_kb_id(kb_name)
+        kb = self._resolve_kb_payload(kb_name)
+        kb_id = str(kb.get("kbId") or "")
+        kb_label = str(kb.get("name") or kb_id)
         result = self.binding_context.knowledge_service.query_kb_for_agent(
             kb_id,
             query_text,
@@ -206,7 +213,15 @@ class QueryKnowledgeBaseTool(_KnowledgeToolBase):
         references = list(data.get("references") or [])
 
         if not any((chunks, entities, relationships, references)):
-            return json.dumps(result, ensure_ascii=False, indent=2)
+            return "\n".join(
+                [
+                    f"Knowledge base query mode: {metadata.get('mode') or metadata.get('query_mode') or 'naive'}",
+                    f"Knowledge base: {kb_label}",
+                    f"No matching evidence was found for: {query_text}",
+                    "Do not answer from general knowledge.",
+                    "Reply that the bound knowledge base did not contain a matching answer.",
+                ]
+            )
 
         lines = [
             f"Knowledge base query mode: {metadata.get('mode') or metadata.get('query_mode') or 'hybrid'}",

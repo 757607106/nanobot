@@ -2804,7 +2804,13 @@ class KnowledgeBaseService:
         file_name: str | None = None,
         limit: int = 6,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {"query": query_text, "topK": limit}
+        payload: dict[str, Any] = {
+            "query": query_text,
+            "topK": limit,
+            "chunkTopK": max(12, limit),
+            "mode": "naive",
+            "onlyNeedContext": True,
+        }
         if file_name:
             payload["fileName"] = file_name
         return self.query_database(kb_id, payload)

@@ -130,6 +130,41 @@ def test_knowledge_base_service_delete_files(tmp_path: Path) -> None:
     assert service.list_jobs(kb_id) == []
 
 
+def test_query_kb_for_agent_uses_fast_context_only_mode(tmp_path: Path) -> None:
+    instance = _make_instance(tmp_path)
+    service = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        rag_engine=FakeRAGEngine(),
+    )
+
+    created = service.create_knowledge_base({"name": "Agent KB"})
+    kb_id = created["kbId"]
+
+    uploaded = service.upload_files(
+        kb_id,
+        [
+            {
+                "file_name": "faq.md",
+                "mime_type": "text/markdown",
+                "content": b"Restart nanobot with supervisorctl restart nanobot.\n",
+            }
+        ],
+    )
+    file_id = uploaded["items"][0]["fileId"]
+    parse_job = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, parse_job)["status"] == "succeeded"
+    index_job = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, index_job)["status"] == "succeeded"
+
+    result = service.query_kb_for_agent(kb_id, "How do we restart nanobot?", limit=4)
+
+    assert result["metadata"]["mode"] == "naive"
+    assert result["queryParams"]["onlyNeedContext"] is True
+    assert result["queryParams"]["topK"] == 4
+
+
 def test_knowledge_base_store_initializes_current_schema(tmp_path: Path) -> None:
     db_path = tmp_path / "knowledge.db"
     KnowledgeBaseStore(db_path)

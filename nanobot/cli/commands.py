@@ -800,7 +800,7 @@ def gateway(
     else:
         console.print("[yellow]Warning: No channels enabled[/yellow]")
 
-    bindings_count = len(channel_bindings.list_bindings())
+    bindings_count = len(channel_bindings.list_bindings(tenant_id="default"))
     if bindings_count > 0:
         console.print(f"[green]✓[/green] Channel routing: {bindings_count} binding(s) active")
     else:
