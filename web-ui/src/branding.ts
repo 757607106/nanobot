@@ -1,11 +1,11 @@
-export const PLATFORM_BRAND_NAME = 'Nanobot'
-export const PLATFORM_ASSISTANT_NAME = 'Nanobot'
+export const PLATFORM_BRAND_NAME = 'NanoCrew'
+export const PLATFORM_ASSISTANT_NAME = 'NanoCrew'
 export const PLATFORM_BRAND_MARK = 'N'
 export const PLATFORM_BADGE_LABEL = 'SELF-HOSTED CONSOLE'
 export const PLATFORM_SUBTITLE = '多智能体管理面板'
 export const PLATFORM_CONSOLE_LABEL = `${PLATFORM_BRAND_NAME} 控制台`
-export const PLATFORM_BRAND_LOGO_SRC = '/nanobot-logo.png'
-export const PLATFORM_BRAND_ICON_SRC = '/nanobot-icon.png'
+export const PLATFORM_BRAND_LOGO_SRC = '/unnamed.png'
+export const PLATFORM_BRAND_ICON_SRC = '/unnamed.png'
 
 export function replaceBrandText(value: string) {
   return value

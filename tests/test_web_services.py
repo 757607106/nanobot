@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from nanobot.config import loader as config_loader
@@ -174,6 +175,34 @@ def test_web_mcp_server_service_handles_blocked_probe_and_enable_toggle(tmp_path
   )
   assert toggled["enabled"] is True
   assert toggled["entry"]["enabled"] is True
+
+
+def test_web_mcp_server_service_probe_surfaces_nested_http_errors(tmp_path, monkeypatch) -> None:
+  config, config_path = _make_service_config(tmp_path, monkeypatch)
+  config.tools.mcp_servers["remote-mcp"] = MCPServerConfig(
+    enabled=True,
+    type="streamableHttp",
+    url="https://example.com/mcp",
+    headers={"Authorization": "Bearer demo"},
+  )
+  save_config(config, config_path)
+
+  registry = WebMCPRegistryManager(config_path)
+  service = MCPServerService(config_path, registry)
+
+  async def fake_list_tools(_cfg):
+    request = httpx.Request("POST", "https://example.com/mcp")
+    response = httpx.Response(401, request=request)
+    try:
+      response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+      raise ExceptionGroup("unhandled errors in a TaskGroup", [exc]) from exc
+
+  monkeypatch.setattr(service, "_list_server_tools", fake_list_tools)
+
+  failed = service.probe_server(config, "remote-mcp")
+  assert failed["status"] == "failed"
+  assert failed["error"] == "401 Unauthorized for https://example.com/mcp"
 
 
 def test_web_operations_service_reports_validation_failures_directly(tmp_path, monkeypatch) -> None:

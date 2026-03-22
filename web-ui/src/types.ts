@@ -588,25 +588,74 @@ export interface MemorySourceDetail {
   metadata: Record<string, unknown>
 }
 
-export interface KnowledgeRetrievalProfile {
-  mode: 'local' | 'global' | 'hybrid' | 'naive' | string
+export interface KnowledgeQueryParams {
+  mode: 'local' | 'global' | 'hybrid' | 'naive' | 'mix' | string
   topK: number
-  chunkSize: number
-  chunkOverlap: number
-  citationRequired: boolean
-  vlmEnhanced: boolean
-  metadataFilters: Record<string, unknown>
+  chunkTopK: number
+  responseType: string
+  onlyNeedContext: boolean
+  onlyNeedPrompt: boolean
+  enableRerank: boolean
+  rerankModel?: string | null
+  options: Record<string, unknown>
+}
+
+export interface KnowledgeQueryParamOption {
+  key: string
+  label: string
+  type: 'select' | 'number' | 'boolean'
+  default?: string | number | boolean
+  min?: number
+  max?: number
+  step?: number
+  description?: string
+  options?: Array<{
+    value: string
+    label: string
+    description?: string
+  }>
+}
+
+export interface KnowledgeQueryParamSchema {
+  type: string
+  options: KnowledgeQueryParamOption[]
+}
+
+export type KnowledgeRetrievalProfile = KnowledgeQueryParams
+
+export interface KnowledgeDatabaseStats {
+  totalCount: number
+  folderCount: number
+  fileCount: number
+  indexedCount: number
+  parsedCount: number
+  errorCount: number
+}
+
+export interface KnowledgeMindmapNode {
+  content: string
+  children?: KnowledgeMindmapNode[]
 }
 
 export interface KnowledgeBaseDefinition {
   kbId: string
+  dbId: string
   tenantId: string
   instanceId: string
   name: string
   description: string
   enabled: boolean
+  kbType: string
+  embedInfo: Record<string, unknown>
+  llmInfo: Record<string, unknown>
+  queryParams: KnowledgeQueryParams
+  retrievalProfile: KnowledgeQueryParams
+  additionalParams: Record<string, unknown>
+  shareConfig: Record<string, unknown>
+  mindmap?: KnowledgeMindmapNode | null
+  sampleQuestions: string[]
   tags: string[]
-  retrievalProfile: KnowledgeRetrievalProfile
+  stats?: KnowledgeDatabaseStats
   createdAt?: string
   updatedAt?: string
 }
@@ -615,39 +664,74 @@ export interface KnowledgeBaseMutationInput {
   name: string
   description?: string
   enabled?: boolean
+  kbType?: string
+  embedInfo?: Record<string, unknown>
+  llmInfo?: Record<string, unknown>
+  queryParams?: Partial<KnowledgeQueryParams>
+  additionalParams?: Record<string, unknown>
+  shareConfig?: Record<string, unknown>
   tags?: string[]
-  retrievalProfile?: Partial<KnowledgeRetrievalProfile>
 }
 
-export interface KnowledgeDocument {
+export interface KnowledgeFile {
+  fileId: string
   docId: string
   kbId: string
+  dbId: string
   tenantId: string
   instanceId: string
-  sourceId?: string | null
-  sourceType: string
+  parentId?: string | null
+  filename: string
   title: string
-  mimeType?: string | null
-  fileName?: string | null
-  sourceUri?: string | null
+  originalFilename?: string | null
+  fileType: string
+  path: string
+  rawPath?: string | null
   filePath?: string | null
+  markdownFile?: string | null
   parsedPath?: string | null
-  checksum?: string | null
-  parserName?: string | null
+  status: string
   docStatus: string
+  contentHash?: string | null
+  checksum?: string | null
+  fileSize: number
   chunkCount: number
+  contentType?: string | null
+  mimeType?: string | null
+  processingParams: Record<string, unknown>
   metadata: Record<string, unknown>
+  isFolder: boolean
+  errorMessage?: string | null
   errorSummary?: string | null
+  createdBy?: string | null
+  updatedBy?: string | null
   createdAt?: string
   updatedAt?: string
 }
 
-export interface KnowledgeIngestJob {
+export type KnowledgeDocument = KnowledgeFile
+export type KnowledgeSource = KnowledgeFile
+
+export interface KnowledgeFileListResponse {
+  items: KnowledgeFile[]
+  stats: KnowledgeDatabaseStats
+}
+
+export interface KnowledgeFileDetail {
+  file: KnowledgeFile
+  content: string
+  chunks: KnowledgeQueryChunk[]
+  chunkCount: number
+}
+
+export interface KnowledgeJob {
   jobId: string
   tenantId: string
   instanceId: string
   kbId: string
-  docId: string
+  dbId: string
+  jobKind: string
+  targetFileIds: string[]
   status: string
   trackId: string
   errorSummary?: string | null
@@ -655,26 +739,7 @@ export interface KnowledgeIngestJob {
   updatedAt?: string
 }
 
-export interface KnowledgeSource {
-  sourceId: string
-  kbId: string
-  tenantId: string
-  instanceId: string
-  sourceType: string
-  title: string
-  enabled: boolean
-  sourceUri?: string | null
-  latestDocId?: string | null
-  syncCount: number
-  lastSyncedAt?: string | null
-  config: Record<string, unknown>
-  docCount: number
-  syncSupported: boolean
-  latestDocument?: KnowledgeDocument | null
-  latestJob?: KnowledgeIngestJob | null
-  createdAt?: string
-  updatedAt?: string
-}
+export type KnowledgeIngestJob = KnowledgeJob
 
 export interface KnowledgeHit {
   kbId?: string
@@ -698,11 +763,197 @@ export interface KnowledgeHit {
   }
 }
 
-export interface KnowledgeRetrieveResult {
-  hits: KnowledgeHit[]
-  requestedMode: string
-  effectiveMode: string
-  filters: Record<string, unknown>
+export interface KnowledgeQueryEntity {
+  entity_name?: string
+  entity_type?: string
+  description?: string
+  source_id?: string
+  file_path?: string
+  [key: string]: unknown
+}
+
+export interface KnowledgeQueryRelationship {
+  src_id?: string
+  tgt_id?: string
+  description?: string
+  keywords?: string
+  source_id?: string
+  file_path?: string
+  weight?: number
+  [key: string]: unknown
+}
+
+export interface KnowledgeQueryChunk {
+  chunk_id?: string
+  chunkId?: string
+  content?: string
+  reference_id?: string
+  file_id?: string
+  fileId?: string
+  filename?: string
+  file_path?: string
+  chunk_index?: number
+  chunkIndex?: number
+  metadata?: Record<string, unknown>
+  score?: number
+  similarity?: number
+  rerank_score?: number
+  [key: string]: unknown
+}
+
+export interface KnowledgeQueryReference {
+  reference_id?: string
+  file_path?: string
+  [key: string]: unknown
+}
+
+export interface KnowledgeQueryResult {
+  status?: string
+  message?: string
+  query?: string
+  data?: {
+    entities?: KnowledgeQueryEntity[]
+    relationships?: KnowledgeQueryRelationship[]
+    chunks?: KnowledgeQueryChunk[]
+    references?: KnowledgeQueryReference[]
+    [key: string]: unknown
+  }
+  metadata?: Record<string, unknown>
+  queryParams?: KnowledgeQueryParams
+}
+
+export type KnowledgeRetrieveResult = KnowledgeQueryResult
+
+export interface KnowledgeGraphNode {
+  id: string
+  labels: string[]
+  properties: Record<string, unknown>
+  title: string
+}
+
+export interface KnowledgeGraphEdge {
+  id: string
+  type: string
+  source: string
+  target: string
+  properties: Record<string, unknown>
+}
+
+export interface KnowledgeGraphData {
+  nodes: KnowledgeGraphNode[]
+  edges: KnowledgeGraphEdge[]
+  labels: string[]
+  isTruncated?: boolean
+}
+
+export interface KnowledgeGraphStats {
+  nodeCount: number
+  edgeCount: number
+  labels: string[]
+  isTruncated: boolean
+}
+
+export interface KnowledgeBenchmarkQuestion {
+  query: string
+  goldAnswer?: string
+  gold_answer?: string
+  goldChunkIds?: string[]
+  gold_chunk_ids?: string[]
+}
+
+export interface KnowledgeBenchmark {
+  id: string
+  benchmarkId: string
+  benchmark_id: string
+  dbId: string
+  db_id: string
+  name: string
+  description: string
+  questionCount: number
+  question_count: number
+  hasGoldChunks: boolean
+  has_gold_chunks: boolean
+  hasGoldAnswers: boolean
+  has_gold_answers: boolean
+  benchmarkFile?: string
+  benchmark_file?: string
+  createdBy?: string | null
+  created_at?: string
+  createdAt?: string
+  updated_at?: string
+  updatedAt?: string
+}
+
+export interface KnowledgePagination {
+  currentPage?: number
+  current_page?: number
+  pageSize?: number
+  page_size?: number
+  total?: number
+  totalQuestions?: number
+  total_questions?: number
+  totalPages?: number
+  total_pages?: number
+  hasNext?: boolean
+  hasPrev?: boolean
+}
+
+export interface KnowledgeBenchmarkDetail extends KnowledgeBenchmark {
+  questions: KnowledgeBenchmarkQuestion[]
+  pagination?: KnowledgePagination
+}
+
+export interface KnowledgeEvaluationSummary {
+  taskId: string
+  task_id: string
+  kbId?: string
+  dbId?: string
+  benchmarkId: string
+  benchmark_id: string
+  status: string
+  overallScore?: number | null
+  overall_score?: number | null
+  totalQuestions: number
+  total_questions: number
+  completedQuestions: number
+  completed_questions: number
+  retrievalConfig?: Record<string, unknown>
+  retrieval_config?: Record<string, unknown>
+  modelConfig?: Record<string, unknown>
+  model_config?: Record<string, unknown>
+  metrics?: Record<string, number>
+  errorSummary?: string | null
+  error_summary?: string | null
+  createdAt?: string
+  created_at?: string
+  updatedAt?: string
+  updated_at?: string
+  startedAt?: string
+  started_at?: string
+  finishedAt?: string
+  finished_at?: string
+}
+
+export interface KnowledgeEvaluationDetailRow {
+  rowId: string
+  row_id: string
+  query: string
+  goldAnswer?: string
+  gold_answer?: string
+  goldChunkIds?: string[]
+  gold_chunk_ids?: string[]
+  generatedAnswer?: string
+  generated_answer?: string
+  retrievedChunks?: KnowledgeQueryChunk[]
+  retrieved_chunks?: KnowledgeQueryChunk[]
+  metrics?: Record<string, unknown>
+  errorMessage?: string | null
+  error_message?: string | null
+}
+
+export interface KnowledgeEvaluationResult extends KnowledgeEvaluationSummary {
+  details: KnowledgeEvaluationDetailRow[]
+  pagination?: KnowledgePagination
 }
 
 export interface AgentRunSummary {

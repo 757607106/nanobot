@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import time
 import sqlite3
+import time
 from pathlib import Path
 
 from nanobot.platform.instances import PlatformInstance
@@ -17,7 +17,17 @@ def _make_instance(tmp_path: Path) -> PlatformInstance:
     )
 
 
-def test_knowledge_base_service_crud_ingest_and_retrieve(tmp_path) -> None:
+def _wait_for_job(service: KnowledgeBaseService, kb_id: str, job_id: str) -> dict[str, object]:
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        job = next((item for item in service.list_jobs(kb_id) if item["jobId"] == job_id), None)
+        if job and job["status"] in {"succeeded", "failed"}:
+            return job
+        time.sleep(0.05)
+    raise AssertionError(f"Timed out waiting for job {job_id}")
+
+
+def test_knowledge_base_service_file_and_source_flow(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
         KnowledgeBaseStore(instance.knowledge_db_path()),
@@ -30,15 +40,27 @@ def test_knowledge_base_service_crud_ingest_and_retrieve(tmp_path) -> None:
         {
             "name": "Ops Handbook",
             "description": "Runbooks and operating notes",
-            "retrievalProfile": {"mode": "hybrid", "chunkSize": 400, "chunkOverlap": 40},
+            "kbType": "lightrag",
         }
     )
-    assert created["kbId"] == "ops-handbook"
-    assert created["retrievalProfile"]["mode"] == "hybrid"
+    kb_id = created["kbId"]
 
-    faq_ingest = service.ingest_faq_table(
-        created["kbId"],
+    uploaded = service.upload_files(
+        kb_id,
+        [
+            {
+                "file_name": "handover.md",
+                "mime_type": "text/markdown",
+                "content": b"# Handover\n\nEscalation path: page the on-call engineer before restarting shared services.\n",
+            }
+        ],
+    )
+    file_id = uploaded["items"][0]["fileId"]
+
+    faq_source = service.add_source_file(
+        kb_id,
         {
+            "sourceType": "faq_table",
             "title": "Ops FAQ",
             "items": [
                 {
@@ -48,48 +70,27 @@ def test_knowledge_base_service_crud_ingest_and_retrieve(tmp_path) -> None:
             ],
         },
     )
-    assert faq_ingest["documents"][0]["docStatus"] == "indexed"
-    assert faq_ingest["jobs"][0]["status"] == "succeeded"
 
-    file_ingest = service.ingest_uploaded_files(
-        created["kbId"],
-        [
-            {
-                "file_name": "handover.md",
-                "mime_type": "text/markdown",
-                "content": b"# Handover\n\nEscalation path: page the on-call engineer before restarting shared services.\n",
-            }
-        ],
-    )
-    assert file_ingest["documents"][0]["docStatus"] == "indexed"
-    assert file_ingest["documents"][0]["chunkCount"] >= 1
+    parse_job = service.parse_files(kb_id, {"fileIds": [file_id, faq_source["fileId"]]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, parse_job)["status"] == "succeeded"
+
+    index_job = service.index_files(kb_id, {"fileIds": [file_id, faq_source["fileId"]]})["job"]["jobId"]
+    assert _wait_for_job(service, kb_id, index_job)["status"] == "succeeded"
+
+    listed_files = service.list_files(kb_id)
+    assert len(listed_files["items"]) == 2
+    assert all(item["status"] == "indexed" for item in listed_files["items"])
 
     retrieved = service.retrieve(
-        kb_ids=[created["kbId"]],
+        kb_ids=[kb_id],
         query="restart nanobot service",
         limit=4,
     )
-    assert retrieved["effectiveMode"] == "hybrid"
     assert len(retrieved["hits"]) >= 1
     assert any("supervisorctl restart nanobot" in hit["content"] for hit in retrieved["hits"])
 
-    semantic = service.retrieve(
-        kb_ids=[created["kbId"]],
-        query="restarting workers",
-        limit=4,
-        requested_mode="semantic",
-    )
-    assert semantic["effectiveMode"] == "semantic"
-    assert len(semantic["hits"]) >= 1
 
-    listed_docs = service.list_documents(created["kbId"])
-    assert len(listed_docs) == 2
-
-    listed_jobs = service.list_jobs(created["kbId"])
-    assert len(listed_jobs) == 2
-
-
-def test_knowledge_base_service_delete_documents(tmp_path) -> None:
+def test_knowledge_base_service_delete_files(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
         KnowledgeBaseStore(instance.knowledge_db_path()),
@@ -101,7 +102,7 @@ def test_knowledge_base_service_delete_documents(tmp_path) -> None:
     created = service.create_knowledge_base({"name": "Support KB"})
     kb_id = created["kbId"]
 
-    first = service.ingest_uploaded_files(
+    first = service.upload_files(
         kb_id,
         [
             {
@@ -111,7 +112,7 @@ def test_knowledge_base_service_delete_documents(tmp_path) -> None:
             }
         ],
     )
-    second = service.ingest_uploaded_files(
+    second = service.upload_files(
         kb_id,
         [
             {
@@ -122,165 +123,24 @@ def test_knowledge_base_service_delete_documents(tmp_path) -> None:
         ],
     )
 
-    doc_ids = [first["documents"][0]["docId"], second["documents"][0]["docId"]]
-    deleted = service.delete_documents(kb_id, doc_ids)
-    assert deleted == {"deletedCount": 2, "docIds": doc_ids}
-    assert service.list_documents(kb_id) == []
+    file_ids = [first["items"][0]["fileId"], second["items"][0]["fileId"]]
+    deleted = service.delete_files(kb_id, file_ids)
+    assert deleted == {"deletedCount": 2, "fileIds": file_ids}
+    assert service.list_files(kb_id)["items"] == []
     assert service.list_jobs(kb_id) == []
 
 
-def test_knowledge_base_service_sources_backfill_and_sync(tmp_path) -> None:
-    instance = _make_instance(tmp_path)
-    service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
-        instance=instance,
-        instance_id=instance.id,
-        rag_engine=FakeRAGEngine(),
-    )
-
-    created = service.create_knowledge_base({"name": "Support KB"})
-    kb_id = created["kbId"]
-
-    faq_ingest = service.ingest_faq_table(
-        kb_id,
-        {
-            "title": "Support FAQ",
-            "items": [
-                {
-                    "question": "How do we restart the worker?",
-                    "answer": "Restart the worker after draining the queue.",
-                }
-            ],
-        },
-    )
-    assert faq_ingest["documents"][0]["docStatus"] == "indexed"
-
-    sources = service.list_sources(kb_id)
-    assert len(sources) == 1
-    source = sources[0]
-    assert source["sourceType"] == "faq_table"
-    assert source["syncSupported"] is True
-    assert source["docCount"] == 1
-
-    updated_source = service.update_source(
-        kb_id,
-        source["sourceId"],
-        {
-            "title": "Support FAQ v2",
-            "enabled": False,
-            "items": [
-                {
-                    "question": "How do we restart the worker?",
-                    "answer": "Pause intake, then restart the worker safely.",
-                }
-            ],
-        },
-    )
-    assert updated_source["title"] == "Support FAQ v2"
-    assert updated_source["enabled"] is False
-    assert updated_source["config"]["items"][0]["answer"] == "Pause intake, then restart the worker safely."
-
-    reenabled = service.update_source(kb_id, source["sourceId"], {"enabled": True})
-    assert reenabled["enabled"] is True
-
-    sync_result = service.sync_source(kb_id, source["sourceId"])
-    assert sync_result["document"]["docStatus"] == "uploaded"
-    assert sync_result["job"]["status"] == "queued"
-    assert sync_result["source"]["syncCount"] == 2
-
-    deadline = time.time() + 3.0
-    latest_doc_id = sync_result["document"]["docId"]
-    latest_job_id = sync_result["job"]["jobId"]
-    latest_document = sync_result["document"]
-    latest_job = sync_result["job"]
-    while time.time() < deadline:
-        latest_document = next(item for item in service.list_documents(kb_id) if item["docId"] == latest_doc_id)
-        latest_job = next(item for item in service.list_jobs(kb_id) if item["jobId"] == latest_job_id)
-        if latest_document["docStatus"] == "indexed" and latest_job["status"] == "succeeded":
-            break
-        time.sleep(0.05)
-
-    assert latest_document["docStatus"] == "indexed"
-    assert latest_job["status"] == "succeeded"
-
-
-def test_knowledge_base_store_migrates_legacy_db_without_source_columns(tmp_path: Path) -> None:
-    db_path = tmp_path / "legacy-web-knowledge.db"
-    conn = sqlite3.connect(str(db_path))
-    conn.executescript(
-        """
-        CREATE TABLE knowledge_bases (
-            kb_id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL DEFAULT 'default',
-            instance_id TEXT NOT NULL,
-            name TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            config_json TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE knowledge_documents (
-            doc_id TEXT PRIMARY KEY,
-            kb_id TEXT NOT NULL,
-            tenant_id TEXT NOT NULL DEFAULT 'default',
-            instance_id TEXT NOT NULL,
-            source_type TEXT NOT NULL,
-            title TEXT NOT NULL,
-            mime_type TEXT,
-            file_name TEXT,
-            source_uri TEXT,
-            file_path TEXT,
-            parsed_path TEXT,
-            checksum TEXT,
-            parser_name TEXT,
-            doc_status TEXT NOT NULL,
-            chunk_count INTEGER NOT NULL DEFAULT 0,
-            metadata_json TEXT NOT NULL DEFAULT '{}',
-            error_summary TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE knowledge_ingest_jobs (
-            job_id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL DEFAULT 'default',
-            instance_id TEXT NOT NULL,
-            kb_id TEXT NOT NULL,
-            doc_id TEXT NOT NULL,
-            status TEXT NOT NULL,
-            track_id TEXT NOT NULL,
-            error_summary TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE knowledge_chunks (
-            chunk_id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL DEFAULT 'default',
-            instance_id TEXT NOT NULL,
-            kb_id TEXT NOT NULL,
-            doc_id TEXT NOT NULL,
-            ordinal INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            metadata_json TEXT NOT NULL DEFAULT '{}',
-            created_at TEXT NOT NULL
-        );
-        """
-    )
-    conn.commit()
-    conn.close()
-
-    store = KnowledgeBaseStore(db_path)
+def test_knowledge_base_store_initializes_current_schema(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    KnowledgeBaseStore(db_path)
 
     conn = sqlite3.connect(str(db_path))
-    document_columns = [row[1] for row in conn.execute("PRAGMA table_info(knowledge_documents)").fetchall()]
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
     indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()}
     conn.close()
 
-    assert "source_id" in document_columns
-    assert "knowledge_sources" in tables
-    assert "idx_knowledge_documents_source" in indexes
-    assert isinstance(store.fts_enabled, bool)
+    assert "knowledge_bases" in tables
+    assert "knowledge_files" in tables
+    assert "knowledge_jobs" in tables
+    assert "idx_knowledge_files_kb" in indexes
+    assert "idx_knowledge_jobs_kb" in indexes

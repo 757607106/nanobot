@@ -126,6 +126,18 @@ function splitArgTokens(raw: string) {
   return matches.map((item) => item.replace(/^['"]|['"]$/g, '').trim()).filter(Boolean)
 }
 
+export function normalizeMappingObject(payload: Record<string, unknown>, label: string) {
+  return Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => {
+      const normalizedKey = key.trim()
+      if (!normalizedKey) {
+        throw new Error(`${label}中的键不能为空`)
+      }
+      return [normalizedKey, String(value ?? '').trim()]
+    }),
+  )
+}
+
 function parseLineMapping(raw: string, label: string, separator: '=' | ':') {
   const result: Record<string, string> = {}
   const lines = raw
@@ -147,6 +159,26 @@ function parseLineMapping(raw: string, label: string, separator: '=' | ':') {
   }
 
   return result
+}
+
+export function parseMappingInput(raw: string, label: string, separator: '=' | ':') {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return {}
+  }
+  if (trimmed.startsWith('{')) {
+    let payload: Record<string, unknown>
+    try {
+      payload = JSON.parse(trimmed) as Record<string, unknown>
+    } catch {
+      throw new Error(`${label}格式不正确，请填写 JSON 对象或按每行一条的方式填写`)
+    }
+    if (!payload || Array.isArray(payload) || typeof payload !== 'object') {
+      throw new Error(`${label}必须是 JSON 对象`)
+    }
+    return normalizeMappingObject(payload, label)
+  }
+  return parseLineMapping(raw, label, separator)
 }
 
 function inferTransport(entry: Record<string, unknown>): EditableTransport {
@@ -189,12 +221,12 @@ function parseJsonImport(raw: string): ParsedJsonServer[] {
       args: Array.isArray(entry.args) ? entry.args.map((item) => String(item)) : [],
       env:
         entry.env && typeof entry.env === 'object' && !Array.isArray(entry.env)
-          ? Object.fromEntries(Object.entries(entry.env as Record<string, unknown>).map(([key, item]) => [key, String(item ?? '')]))
+          ? normalizeMappingObject(entry.env as Record<string, unknown>, '环境变量')
           : {},
       url: String(entry.url || ''),
       headers:
         entry.headers && typeof entry.headers === 'object' && !Array.isArray(entry.headers)
-          ? Object.fromEntries(Object.entries(entry.headers as Record<string, unknown>).map(([key, item]) => [key, String(item ?? '')]))
+          ? normalizeMappingObject(entry.headers as Record<string, unknown>, '请求头')
           : {},
       toolTimeout: Number(entry.toolTimeout ?? entry.timeout ?? 30) || 30,
     }
@@ -230,9 +262,9 @@ function buildServerConfig(draft: {
     type: draft.type,
     command: isRemote ? '' : command,
     args: isRemote ? [] : splitArgTokens(draft.argsText),
-    env: isRemote ? {} : parseLineMapping(draft.envText, '环境变量', '='),
+    env: isRemote ? {} : parseMappingInput(draft.envText, '环境变量', '='),
     url: isRemote ? url : '',
-    headers: isRemote ? parseLineMapping(draft.headersText, '请求头', ':') : {},
+    headers: isRemote ? parseMappingInput(draft.headersText, '请求头', ':') : {},
     toolTimeout: timeout,
   }
 }
@@ -878,7 +910,7 @@ export default function McpPage() {
                     aria-label="请求头（可选）"
                     value={draft.headersText}
                     onChange={(event) => setDraft((current) => ({ ...current, headersText: event.target.value }))}
-                    placeholder={'Authorization: Bearer <token>\nX-Custom: value'}
+                    placeholder={'Authorization: Bearer <token>\nX-Custom: value\n或粘贴 {"Authorization":"Bearer <token>"}'}
                   />
                 </div>
               </>
@@ -911,7 +943,7 @@ export default function McpPage() {
                     aria-label="环境变量（可选）"
                     value={draft.envText}
                     onChange={(event) => setDraft((current) => ({ ...current, envText: event.target.value }))}
-                    placeholder={'GITHUB_TOKEN=xxx\nSOME_KEY=value'}
+                    placeholder={'GITHUB_TOKEN=xxx\nSOME_KEY=value\n或粘贴 {"GITHUB_TOKEN":"xxx"}'}
                   />
                 </div>
               </>

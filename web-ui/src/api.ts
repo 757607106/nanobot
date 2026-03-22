@@ -30,8 +30,19 @@ import type {
   InstalledSkill,
   KnowledgeBaseDefinition,
   KnowledgeBaseMutationInput,
+  KnowledgeBenchmark,
+  KnowledgeBenchmarkDetail,
   KnowledgeDocument,
+  KnowledgeEvaluationResult,
+  KnowledgeEvaluationSummary,
+  KnowledgeFileDetail,
+  KnowledgeFileListResponse,
+  KnowledgeGraphData,
+  KnowledgeGraphStats,
   KnowledgeIngestJob,
+  KnowledgeMindmapNode,
+  KnowledgeQueryParams,
+  KnowledgeQueryParamSchema,
   KnowledgeSource,
   KnowledgeRetrieveResult,
   MarketplaceSearchResponse,
@@ -460,9 +471,21 @@ export const api = {
     const search = params.toString()
     return request<KnowledgeBaseDefinition[]>(`/knowledge-bases${search ? `?${search}` : ''}`)
   },
+  getAccessibleKnowledgeBases: (enabled = true) =>
+    request<KnowledgeBaseDefinition[]>(`/knowledge-bases/accessible?enabled=${String(enabled)}`),
   getKnowledgeBase: (kbId: string) => request<KnowledgeBaseDefinition>(`/knowledge-bases/${encodeURIComponent(kbId)}`),
   createKnowledgeBase: (payload: KnowledgeBaseMutationInput) =>
     request<KnowledgeBaseDefinition>('/knowledge-bases', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  generateKnowledgeBaseDescription: (payload: {
+    name: string
+    currentDescription?: string
+    fileList?: string[]
+    kbId?: string
+  }) =>
+    request<{ description: string }>('/knowledge-bases/generate-description', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
@@ -475,22 +498,50 @@ export const api = {
     request<{ deleted: boolean }>(`/knowledge-bases/${encodeURIComponent(kbId)}`, {
       method: 'DELETE',
     }),
-  getKnowledgeDocuments: (kbId: string) =>
-    request<KnowledgeDocument[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/documents`),
-  getKnowledgeSources: (kbId: string) =>
-    request<KnowledgeSource[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/sources`),
+  getKnowledgeFiles: (kbId: string) =>
+    request<KnowledgeFileListResponse>(`/knowledge-bases/${encodeURIComponent(kbId)}/files`),
+  getKnowledgeFileDetail: (kbId: string, fileId: string) =>
+    request<KnowledgeFileDetail>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/detail`),
+  getKnowledgeDocuments: async (kbId: string) => (await request<KnowledgeFileListResponse>(`/knowledge-bases/${encodeURIComponent(kbId)}/files`)).items,
+  getKnowledgeSources: async (kbId: string) => (await request<KnowledgeFileListResponse>(`/knowledge-bases/${encodeURIComponent(kbId)}/files`)).items,
+  createKnowledgeFolder: (kbId: string, payload: { name: string; parentId?: string | null }) =>
+    request<KnowledgeDocument>(`/knowledge-bases/${encodeURIComponent(kbId)}/folders`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  moveKnowledgeFile: (
+    kbId: string,
+    payload: { fileId: string; targetParentId?: string | null; filename?: string | null },
+  ) =>
+    request<KnowledgeDocument>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/move`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  downloadKnowledgeFileUrl: (kbId: string, fileId: string, variant: 'raw' | 'parsed' = 'raw') =>
+    `${API_BASE}/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/download?variant=${variant}`,
   deleteKnowledgeDocument: (kbId: string, docId: string) =>
-    request<{ deleted: boolean }>(
-      `/knowledge-bases/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(docId)}`,
-      {
-        method: 'DELETE',
-      },
-    ),
+    request<{ deleted: boolean }>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(docId)}`, {
+      method: 'DELETE',
+    }),
+  deleteKnowledgeFiles: (kbId: string, fileIds: string[]) =>
+    request<{ deletedCount: number; fileIds: string[] }>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ fileIds }),
+    }),
   getKnowledgeJobs: (kbId: string) =>
     request<KnowledgeIngestJob[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/jobs`),
   uploadKnowledgeDocuments: (kbId: string, formData: FormData) =>
-    request<{ documents: KnowledgeDocument[]; jobs: KnowledgeIngestJob[] }>(
-      `/knowledge-bases/${encodeURIComponent(kbId)}/documents`,
+    request<{ items: KnowledgeDocument[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/files`,
+      {
+        method: 'POST',
+        body: formData,
+        skipJsonContentType: true,
+      },
+    ),
+  uploadKnowledgeFiles: (kbId: string, formData: FormData) =>
+    request<{ items: KnowledgeDocument[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/files`,
       {
         method: 'POST',
         body: formData,
@@ -500,37 +551,199 @@ export const api = {
   addKnowledgeSource: (
     kbId: string,
     payload:
-      | { sourceType: 'web_url'; url: string; title?: string }
-      | { sourceType: 'faq_table'; title?: string; items: Array<{ question: string; answer: string }> },
+      | { sourceType: 'web_url'; url: string; title?: string; parentId?: string | null }
+      | { sourceType: 'faq_table'; title?: string; parentId?: string | null; items: Array<{ question: string; answer: string }> },
   ) =>
-    request<{ documents: KnowledgeDocument[]; jobs: KnowledgeIngestJob[] }>(
-      `/knowledge-bases/${encodeURIComponent(kbId)}/documents`,
+    request<KnowledgeDocument>(`/knowledge-bases/${encodeURIComponent(kbId)}/sources`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  parseKnowledgeFiles: (kbId: string, payload: { fileIds: string[] }) =>
+    request<{ job: KnowledgeIngestJob; items: KnowledgeDocument[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/files/parse`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    ),
+  indexKnowledgeFiles: (
+    kbId: string,
+    payload: {
+      fileIds: string[]
+      params?: {
+        chunkSize?: number
+        chunkOverlap?: number
+        chunkPresetId?: string
+        qaSeparator?: string
+      }
+    },
+  ) =>
+    request<{ job: KnowledgeIngestJob; items: KnowledgeDocument[] }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/files/index`,
       {
         method: 'POST',
         body: JSON.stringify(payload),
       },
     ),
   reindexKnowledgeBase: (kbId: string, payload?: { docIds?: string[] }) =>
-    request<{ documents: KnowledgeDocument[]; jobs: KnowledgeIngestJob[] }>(
+    request<{ job: KnowledgeIngestJob; items: KnowledgeDocument[] }>(
       `/knowledge-bases/${encodeURIComponent(kbId)}/reindex`,
       {
         method: 'POST',
-        body: JSON.stringify(payload ?? {}),
+        body: JSON.stringify({ docIds: payload?.docIds ?? [] }),
       },
     ),
+  getKnowledgeQueryParams: (kbId: string) =>
+    request<KnowledgeQueryParams>(`/knowledge-bases/${encodeURIComponent(kbId)}/query-params`),
+  getKnowledgeQueryParamSchema: (kbId: string) =>
+    request<KnowledgeQueryParamSchema>(`/knowledge-bases/${encodeURIComponent(kbId)}/query-params/schema`),
+  updateKnowledgeQueryParams: (kbId: string, payload: Partial<KnowledgeQueryParams>) =>
+    request<KnowledgeQueryParams>(`/knowledge-bases/${encodeURIComponent(kbId)}/query-params`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
   retrieveKnowledgeBase: (
     kbId: string,
-    payload: {
+    payload: Record<string, unknown> & {
       query: string
       mode?: string
-      limit?: number
-      filters?: Record<string, unknown>
+      topK?: number
+      chunkTopK?: number
+      fileIds?: string[]
+      fileName?: string
     },
   ) =>
-    request<KnowledgeRetrieveResult>(`/knowledge-bases/${encodeURIComponent(kbId)}/retrieve-test`, {
+    request<KnowledgeRetrieveResult>(`/knowledge-bases/${encodeURIComponent(kbId)}/query`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  queryKnowledgeBase: (
+    kbId: string,
+    payload: Record<string, unknown> & {
+      query: string
+      mode?: string
+      topK?: number
+      chunkTopK?: number
+      fileIds?: string[]
+      fileName?: string
+    },
+  ) =>
+    request<KnowledgeRetrieveResult>(`/knowledge-bases/${encodeURIComponent(kbId)}/query`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getKnowledgeSampleQuestions: (kbId: string) =>
+    request<{ questions: string[] }>(`/knowledge-bases/${encodeURIComponent(kbId)}/sample-questions`),
+  generateKnowledgeSampleQuestions: (kbId: string, count = 10) =>
+    request<{ questions: string[] }>(`/knowledge-bases/${encodeURIComponent(kbId)}/sample-questions`, {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    }),
+  getKnowledgeMindmap: (kbId: string) =>
+    request<{ mindmap: KnowledgeMindmapNode }>(`/knowledge-bases/${encodeURIComponent(kbId)}/mindmap`),
+  generateKnowledgeMindmap: (kbId: string, payload?: { fileIds?: string[] }) =>
+    request<{ mindmap: KnowledgeMindmapNode }>(`/knowledge-bases/${encodeURIComponent(kbId)}/mindmap`, {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    }),
+  getKnowledgeGraphLabels: (kbId: string) =>
+    request<{ labels: string[] }>(`/knowledge-bases/${encodeURIComponent(kbId)}/graph/labels`),
+  getKnowledgeGraph: (kbId: string, payload?: { nodeLabel?: string; maxDepth?: number; maxNodes?: number }) => {
+    const params = new URLSearchParams()
+    if (payload?.nodeLabel) params.set('node_label', payload.nodeLabel)
+    if (payload?.maxDepth) params.set('max_depth', String(payload.maxDepth))
+    if (payload?.maxNodes) params.set('max_nodes', String(payload.maxNodes))
+    const suffix = params.toString() ? `?${params.toString()}` : ''
+    return request<KnowledgeGraphData>(`/knowledge-bases/${encodeURIComponent(kbId)}/graph${suffix}`)
+  },
+  getKnowledgeGraphStats: (kbId: string) =>
+    request<KnowledgeGraphStats>(`/knowledge-bases/${encodeURIComponent(kbId)}/graph/stats`),
+  getKnowledgeBenchmarks: (kbId: string) =>
+    request<KnowledgeBenchmark[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/benchmarks`),
+  getKnowledgeBenchmarkDetail: (kbId: string, benchmarkId: string, page = 1, pageSize = 10) =>
+    request<KnowledgeBenchmarkDetail>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/benchmarks/${encodeURIComponent(benchmarkId)}?page=${page}&page_size=${pageSize}`,
+    ),
+  uploadKnowledgeBenchmark: (
+    kbId: string,
+    payload: {
+      file: File
+      name: string
+      description?: string
+    },
+  ) => {
+    const formData = new FormData()
+    formData.append('file', payload.file)
+    formData.append('name', payload.name)
+    formData.append('description', payload.description ?? '')
+    return request<KnowledgeBenchmark>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/benchmarks/upload`,
+      {
+        method: 'POST',
+        body: formData,
+        skipJsonContentType: true,
+      },
+    )
+  },
+  generateKnowledgeBenchmark: (
+    kbId: string,
+    payload: {
+      count?: number
+      name?: string
+      description?: string
+    },
+  ) =>
+    request<KnowledgeBenchmark>(`/knowledge-bases/${encodeURIComponent(kbId)}/benchmarks/generate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteKnowledgeBenchmark: (kbId: string, benchmarkId: string) =>
+    request<{ deleted: boolean }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/benchmarks/${encodeURIComponent(benchmarkId)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
+  downloadKnowledgeBenchmarkUrl: (kbId: string, benchmarkId: string) =>
+    `${API_BASE}/knowledge-bases/${encodeURIComponent(kbId)}/benchmarks/${encodeURIComponent(benchmarkId)}/download`,
+  getKnowledgeEvaluationHistory: (kbId: string) =>
+    request<KnowledgeEvaluationSummary[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/evaluation/history`),
+  runKnowledgeEvaluation: (
+    kbId: string,
+    payload: {
+      benchmarkId: string
+      modelConfig?: Record<string, unknown>
+    },
+  ) =>
+    request<{ taskId: string; task_id: string }>(`/knowledge-bases/${encodeURIComponent(kbId)}/evaluation/run`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getKnowledgeEvaluationResult: (
+    kbId: string,
+    taskId: string,
+    payload?: {
+      page?: number
+      pageSize?: number
+      errorOnly?: boolean
+    },
+  ) => {
+    const params = new URLSearchParams()
+    if (payload?.page) params.set('page', String(payload.page))
+    if (payload?.pageSize) params.set('page_size', String(payload.pageSize))
+    if (payload?.errorOnly) params.set('error_only', 'true')
+    const suffix = params.toString() ? `?${params.toString()}` : ''
+    return request<KnowledgeEvaluationResult>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/evaluation/results/${encodeURIComponent(taskId)}${suffix}`,
+    )
+  },
+  deleteKnowledgeEvaluationResult: (kbId: string, taskId: string) =>
+    request<{ deleted: boolean }>(
+      `/knowledge-bases/${encodeURIComponent(kbId)}/evaluation/results/${encodeURIComponent(taskId)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
   getAgents: (enabled?: boolean) => {
     const params = new URLSearchParams()
     if (typeof enabled === 'boolean') {

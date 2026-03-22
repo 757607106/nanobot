@@ -91,6 +91,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         instance=instance,
         instance_id=instance.id,
         rag_engine=rag_engine,
+        config=config,
     )
     teams = TeamDefinitionService(
         TeamDefinitionStore(instance.team_definitions_db_path()),
@@ -228,9 +229,10 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     @app.middleware("http")
     async def enforce_web_auth(request: Request, call_next):
         path = request.url.path
+        protected_legacy_prefixes = ("/api/knowledge/", "/api/evaluation/", "/api/graph/", "/api/mindmap/")
         if request.method == "OPTIONS":
             return await call_next(request)
-        if not path.startswith("/api/v1/"):
+        if not path.startswith("/api/v1/") and not any(path.startswith(prefix) for prefix in protected_legacy_prefixes):
             return await call_next(request)
         if path == "/api/v1/health" or path.startswith("/api/v1/auth/"):
             response = await call_next(request)

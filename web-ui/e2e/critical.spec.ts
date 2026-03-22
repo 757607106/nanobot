@@ -51,7 +51,7 @@ test.describe.serial('critical gui flows @critical', () => {
     await expect(page.getByTestId(testIds.chat.bubbleList)).toContainText('E2E mock 已收到：review the uploaded file')
   })
 
-  test('updates MCP detail and keeps isolated test chat separate', async ({ page }) => {
+  test('updates MCP detail and shows current tools', async ({ page }) => {
     await login(page)
     await page.getByTestId(testIds.app.navMcp).click()
     await expect(page).toHaveURL(/\/mcp$/)
@@ -63,11 +63,8 @@ test.describe.serial('critical gui flows @critical', () => {
     await page.getByTestId(testIds.mcp.detailEnv).fill('{\n  "FIXTURE_TOKEN": "demo-token"\n}')
     await page.getByTestId(testIds.mcp.detailSave).click()
     await page.getByTestId(testIds.mcp.detailToggle).click()
-
-    await page.getByTestId(testIds.mcp.detailTestInput).fill('只测试这个 MCP')
-    await page.getByTestId(testIds.mcp.detailTestSend).click()
-
-    await expect(page.getByText('fixture-mcp fixture 回应：只测试这个 MCP')).toBeVisible()
+    await expect(page.getByText('fixture_search')).toBeVisible()
+    await expect(page.getByText('fixture_read')).toBeVisible()
     await page.getByTestId(testIds.app.navMcp).click()
     await page.getByTestId(`${testIds.mcp.detailLinkPrefix}fixture-mcp`).click()
     await expect(page.getByTestId(testIds.mcp.detailDisplayName)).toHaveValue('Fixture MCP Ready')

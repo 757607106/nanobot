@@ -1,4 +1,4 @@
-"""SQLite store for instance-scoped knowledge bases and chunk retrieval."""
+"""SQLite store for the rebuilt knowledge-base subsystem."""
 
 from __future__ import annotations
 
@@ -7,16 +7,11 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from nanobot.platform.knowledge.models import (
-    KnowledgeBaseDefinition,
-    KnowledgeDocument,
-    KnowledgeIngestJob,
-    KnowledgeSource,
-)
+from nanobot.platform.knowledge.models import KnowledgeBaseDefinition, KnowledgeFile, KnowledgeJob
 
 
 class KnowledgeBaseStore:
-    """Persist knowledge bases, documents, ingest jobs, and chunks in SQLite."""
+    """Persist knowledge bases, file trees, and background jobs in SQLite."""
 
     _CREATE_SCHEMA = """
         CREATE TABLE IF NOT EXISTS knowledge_bases (
@@ -33,58 +28,47 @@ class KnowledgeBaseStore:
         CREATE INDEX IF NOT EXISTS idx_knowledge_bases_tenant_instance
         ON knowledge_bases(tenant_id, instance_id, updated_at DESC);
 
-        CREATE TABLE IF NOT EXISTS knowledge_documents (
-            doc_id TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS knowledge_files (
+            file_id TEXT PRIMARY KEY,
             kb_id TEXT NOT NULL,
             tenant_id TEXT NOT NULL DEFAULT 'default',
             instance_id TEXT NOT NULL,
-            source_id TEXT,
-            source_type TEXT NOT NULL,
-            title TEXT NOT NULL,
-            mime_type TEXT,
-            file_name TEXT,
-            source_uri TEXT,
-            file_path TEXT,
-            parsed_path TEXT,
-            checksum TEXT,
-            parser_name TEXT,
-            doc_status TEXT NOT NULL,
-            chunk_count INTEGER NOT NULL DEFAULT 0,
-            metadata_json TEXT NOT NULL DEFAULT '{}',
-            error_summary TEXT,
+            parent_id TEXT,
+            filename TEXT NOT NULL,
+            original_filename TEXT,
+            file_type TEXT NOT NULL,
+            path TEXT NOT NULL,
+            raw_path TEXT,
+            markdown_file TEXT,
+            status TEXT NOT NULL,
+            content_hash TEXT,
+            file_size INTEGER NOT NULL DEFAULT 0,
+            content_type TEXT,
+            processing_params_json TEXT NOT NULL DEFAULT '{}',
+            is_folder INTEGER NOT NULL DEFAULT 0,
+            error_message TEXT,
+            created_by TEXT,
+            updated_by TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
 
-        CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb
-        ON knowledge_documents(kb_id, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_knowledge_files_kb
+        ON knowledge_files(kb_id, updated_at DESC);
 
-        CREATE TABLE IF NOT EXISTS knowledge_sources (
-            source_id TEXT PRIMARY KEY,
-            kb_id TEXT NOT NULL,
-            tenant_id TEXT NOT NULL DEFAULT 'default',
-            instance_id TEXT NOT NULL,
-            source_type TEXT NOT NULL,
-            title TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            source_uri TEXT,
-            latest_doc_id TEXT,
-            sync_count INTEGER NOT NULL DEFAULT 0,
-            last_synced_at TEXT,
-            config_json TEXT NOT NULL DEFAULT '{}',
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
+        CREATE INDEX IF NOT EXISTS idx_knowledge_files_parent
+        ON knowledge_files(kb_id, parent_id, filename);
 
-        CREATE INDEX IF NOT EXISTS idx_knowledge_sources_kb
-        ON knowledge_sources(kb_id, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_knowledge_files_status
+        ON knowledge_files(kb_id, status, updated_at DESC);
 
-        CREATE TABLE IF NOT EXISTS knowledge_ingest_jobs (
+        CREATE TABLE IF NOT EXISTS knowledge_jobs (
             job_id TEXT PRIMARY KEY,
             tenant_id TEXT NOT NULL DEFAULT 'default',
             instance_id TEXT NOT NULL,
             kb_id TEXT NOT NULL,
-            doc_id TEXT NOT NULL,
+            job_kind TEXT NOT NULL,
+            target_file_ids_json TEXT NOT NULL,
             status TEXT NOT NULL,
             track_id TEXT NOT NULL,
             error_summary TEXT,
@@ -92,48 +76,13 @@ class KnowledgeBaseStore:
             updated_at TEXT NOT NULL
         );
 
-        CREATE INDEX IF NOT EXISTS idx_knowledge_ingest_jobs_kb
-        ON knowledge_ingest_jobs(kb_id, updated_at DESC);
-
-        CREATE TABLE IF NOT EXISTS knowledge_chunks (
-            chunk_id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL DEFAULT 'default',
-            instance_id TEXT NOT NULL,
-            kb_id TEXT NOT NULL,
-            doc_id TEXT NOT NULL,
-            ordinal INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            metadata_json TEXT NOT NULL DEFAULT '{}',
-            created_at TEXT NOT NULL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_doc
-        ON knowledge_chunks(doc_id, ordinal ASC);
-    """
-
-    _POST_MIGRATION_SCHEMA = """
-        CREATE INDEX IF NOT EXISTS idx_knowledge_documents_source
-        ON knowledge_documents(source_id, updated_at DESC);
-    """
-
-    _CREATE_FTS = """
-        CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_chunks_fts USING fts5(
-            chunk_id,
-            kb_id UNINDEXED,
-            doc_id UNINDEXED,
-            tenant_id UNINDEXED,
-            instance_id UNINDEXED,
-            title,
-            content,
-            tokenize = 'unicode61'
-        );
+        CREATE INDEX IF NOT EXISTS idx_knowledge_jobs_kb
+        ON knowledge_jobs(kb_id, updated_at DESC);
     """
 
     def __init__(self, db_path: Path):
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.fts_enabled = False
         self._init_tables()
 
     def _connect(self) -> sqlite3.Connection:
@@ -144,18 +93,6 @@ class KnowledgeBaseStore:
     def _init_tables(self) -> None:
         conn = self._connect()
         conn.executescript(self._CREATE_SCHEMA)
-        columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(knowledge_documents)").fetchall()
-        }
-        if "source_id" not in columns:
-            conn.execute("ALTER TABLE knowledge_documents ADD COLUMN source_id TEXT")
-        conn.executescript(self._POST_MIGRATION_SCHEMA)
-        try:
-            conn.executescript(self._CREATE_FTS)
-            self.fts_enabled = True
-        except sqlite3.DatabaseError:
-            self.fts_enabled = False
         conn.commit()
         conn.close()
 
@@ -166,22 +103,16 @@ class KnowledgeBaseStore:
         return KnowledgeBaseDefinition.from_record(dict(row))
 
     @staticmethod
-    def _deserialize_document(row: sqlite3.Row | None) -> KnowledgeDocument | None:
+    def _deserialize_file(row: sqlite3.Row | None) -> KnowledgeFile | None:
         if row is None:
             return None
-        return KnowledgeDocument.from_record(dict(row))
+        return KnowledgeFile.from_record(dict(row))
 
     @staticmethod
-    def _deserialize_job(row: sqlite3.Row | None) -> KnowledgeIngestJob | None:
+    def _deserialize_job(row: sqlite3.Row | None) -> KnowledgeJob | None:
         if row is None:
             return None
-        return KnowledgeIngestJob.from_record(dict(row))
-
-    @staticmethod
-    def _deserialize_source(row: sqlite3.Row | None) -> KnowledgeSource | None:
-        if row is None:
-            return None
-        return KnowledgeSource.from_record(dict(row))
+        return KnowledgeJob.from_record(dict(row))
 
     def get_kb(self, kb_id: str) -> KnowledgeBaseDefinition | None:
         conn = self._connect()
@@ -242,7 +173,7 @@ class KnowledgeBaseStore:
         conn.close()
         created = self.get_kb(kb.kb_id)
         if created is None:
-            raise RuntimeError(f"Failed to load created knowledge base {kb.kb_id}")
+            raise RuntimeError(f"Failed to reload created knowledge base {kb.kb_id}")
         return created
 
     def update_kb(self, kb: KnowledgeBaseDefinition) -> KnowledgeBaseDefinition | None:
@@ -270,143 +201,139 @@ class KnowledgeBaseStore:
     def delete_kb(self, kb_id: str) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
-        doc_rows = conn.execute("SELECT doc_id FROM knowledge_documents WHERE kb_id = ?", (kb_id,)).fetchall()
-        doc_ids = [row["doc_id"] for row in doc_rows]
-        if doc_ids:
-            placeholders = ",".join("?" for _ in doc_ids)
-            conn.execute(f"DELETE FROM knowledge_chunks WHERE doc_id IN ({placeholders})", doc_ids)
-            if self.fts_enabled:
-                conn.execute(f"DELETE FROM knowledge_chunks_fts WHERE doc_id IN ({placeholders})", doc_ids)
-        conn.execute("DELETE FROM knowledge_ingest_jobs WHERE kb_id = ?", (kb_id,))
-        conn.execute("DELETE FROM knowledge_sources WHERE kb_id = ?", (kb_id,))
-        conn.execute("DELETE FROM knowledge_documents WHERE kb_id = ?", (kb_id,))
+        conn.execute("DELETE FROM knowledge_jobs WHERE kb_id = ?", (kb_id,))
+        conn.execute("DELETE FROM knowledge_files WHERE kb_id = ?", (kb_id,))
         cursor.execute("DELETE FROM knowledge_bases WHERE kb_id = ?", (kb_id,))
         deleted = cursor.rowcount > 0
         conn.commit()
         conn.close()
         return deleted
 
-    def insert_document(self, document: KnowledgeDocument) -> KnowledgeDocument:
+    def insert_file(self, file: KnowledgeFile) -> KnowledgeFile:
         conn = self._connect()
         conn.execute(
             """
-            INSERT INTO knowledge_documents (
-                doc_id, kb_id, tenant_id, instance_id, source_id, source_type, title, mime_type, file_name,
-                source_uri, file_path, parsed_path, checksum, parser_name, doc_status, chunk_count,
-                metadata_json, error_summary, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO knowledge_files (
+                file_id, kb_id, tenant_id, instance_id, parent_id, filename, original_filename,
+                file_type, path, raw_path, markdown_file, status, content_hash, file_size,
+                content_type, processing_params_json, is_folder, error_message, created_by,
+                updated_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                document.doc_id,
-                document.kb_id,
-                document.tenant_id,
-                document.instance_id,
-                document.source_id,
-                document.source_type,
-                document.title,
-                document.mime_type,
-                document.file_name,
-                document.source_uri,
-                document.file_path,
-                document.parsed_path,
-                document.checksum,
-                document.parser_name,
-                document.doc_status.value,
-                document.chunk_count,
-                json.dumps(document.metadata, ensure_ascii=False),
-                document.error_summary,
-                document.created_at,
-                document.updated_at,
+                file.file_id,
+                file.kb_id,
+                file.tenant_id,
+                file.instance_id,
+                file.parent_id,
+                file.filename,
+                file.original_filename,
+                file.file_type,
+                file.path,
+                file.raw_path,
+                file.markdown_file,
+                file.status.value,
+                file.content_hash,
+                file.file_size,
+                file.content_type,
+                file.to_processing_params_json(),
+                1 if file.is_folder else 0,
+                file.error_message,
+                file.created_by,
+                file.updated_by,
+                file.created_at,
+                file.updated_at,
             ),
         )
         conn.commit()
         conn.close()
-        created = self.get_document(document.doc_id)
+        created = self.get_file(file.file_id)
         if created is None:
-            raise RuntimeError(f"Failed to load created knowledge document {document.doc_id}")
+            raise RuntimeError(f"Failed to reload created knowledge file {file.file_id}")
         return created
 
-    def get_document(self, doc_id: str) -> KnowledgeDocument | None:
+    def get_file(self, file_id: str) -> KnowledgeFile | None:
         conn = self._connect()
-        row = conn.execute("SELECT * FROM knowledge_documents WHERE doc_id = ?", (doc_id,)).fetchone()
+        row = conn.execute("SELECT * FROM knowledge_files WHERE file_id = ?", (file_id,)).fetchone()
         conn.close()
-        return self._deserialize_document(row)
+        return self._deserialize_file(row)
 
-    def list_documents(self, kb_id: str) -> list[KnowledgeDocument]:
+    def list_files(self, kb_id: str) -> list[KnowledgeFile]:
         conn = self._connect()
         rows = conn.execute(
             """
-            SELECT * FROM knowledge_documents
+            SELECT * FROM knowledge_files
             WHERE kb_id = ?
-            ORDER BY updated_at DESC, title ASC
+            ORDER BY is_folder DESC, path ASC, filename ASC
             """,
             (kb_id,),
         ).fetchall()
         conn.close()
-        return [item for row in rows if (item := self._deserialize_document(row)) is not None]
+        return [item for row in rows if (item := self._deserialize_file(row)) is not None]
 
-    def update_document(self, document: KnowledgeDocument) -> KnowledgeDocument | None:
+    def update_file(self, file: KnowledgeFile) -> KnowledgeFile | None:
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE knowledge_documents
-            SET title = ?, source_id = ?, mime_type = ?, file_name = ?, source_uri = ?, file_path = ?, parsed_path = ?,
-                checksum = ?, parser_name = ?, doc_status = ?, chunk_count = ?, metadata_json = ?,
-                error_summary = ?, updated_at = ?
-            WHERE doc_id = ?
+            UPDATE knowledge_files
+            SET parent_id = ?, filename = ?, original_filename = ?, file_type = ?, path = ?,
+                raw_path = ?, markdown_file = ?, status = ?, content_hash = ?, file_size = ?,
+                content_type = ?, processing_params_json = ?, is_folder = ?, error_message = ?,
+                created_by = ?, updated_by = ?, updated_at = ?
+            WHERE file_id = ?
             """,
             (
-                document.title,
-                document.source_id,
-                document.mime_type,
-                document.file_name,
-                document.source_uri,
-                document.file_path,
-                document.parsed_path,
-                document.checksum,
-                document.parser_name,
-                document.doc_status.value,
-                document.chunk_count,
-                json.dumps(document.metadata, ensure_ascii=False),
-                document.error_summary,
-                document.updated_at,
-                document.doc_id,
+                file.parent_id,
+                file.filename,
+                file.original_filename,
+                file.file_type,
+                file.path,
+                file.raw_path,
+                file.markdown_file,
+                file.status.value,
+                file.content_hash,
+                file.file_size,
+                file.content_type,
+                file.to_processing_params_json(),
+                1 if file.is_folder else 0,
+                file.error_message,
+                file.created_by,
+                file.updated_by,
+                file.updated_at,
+                file.file_id,
             ),
         )
         conn.commit()
         updated = cursor.rowcount > 0
         conn.close()
-        return self.get_document(document.doc_id) if updated else None
+        return self.get_file(file.file_id) if updated else None
 
-    def delete_document(self, doc_id: str) -> bool:
+    def delete_file(self, file_id: str) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
-        conn.execute("DELETE FROM knowledge_chunks WHERE doc_id = ?", (doc_id,))
-        if self.fts_enabled:
-            conn.execute("DELETE FROM knowledge_chunks_fts WHERE doc_id = ?", (doc_id,))
-        conn.execute("DELETE FROM knowledge_ingest_jobs WHERE doc_id = ?", (doc_id,))
-        cursor.execute("DELETE FROM knowledge_documents WHERE doc_id = ?", (doc_id,))
+        cursor.execute("DELETE FROM knowledge_files WHERE file_id = ?", (file_id,))
         deleted = cursor.rowcount > 0
         conn.commit()
         conn.close()
         return deleted
 
-    def insert_job(self, job: KnowledgeIngestJob) -> KnowledgeIngestJob:
+    def insert_job(self, job: KnowledgeJob) -> KnowledgeJob:
         conn = self._connect()
         conn.execute(
             """
-            INSERT INTO knowledge_ingest_jobs (
-                job_id, tenant_id, instance_id, kb_id, doc_id, status, track_id,
-                error_summary, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO knowledge_jobs (
+                job_id, tenant_id, instance_id, kb_id, job_kind, target_file_ids_json,
+                status, track_id, error_summary, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job.job_id,
                 job.tenant_id,
                 job.instance_id,
                 job.kb_id,
-                job.doc_id,
+                job.job_kind,
+                json.dumps(job.target_file_ids, ensure_ascii=False),
                 job.status.value,
                 job.track_id,
                 job.error_summary,
@@ -418,20 +345,20 @@ class KnowledgeBaseStore:
         conn.close()
         created = self.get_job(job.job_id)
         if created is None:
-            raise RuntimeError(f"Failed to load created knowledge job {job.job_id}")
+            raise RuntimeError(f"Failed to reload created knowledge job {job.job_id}")
         return created
 
-    def get_job(self, job_id: str) -> KnowledgeIngestJob | None:
+    def get_job(self, job_id: str) -> KnowledgeJob | None:
         conn = self._connect()
-        row = conn.execute("SELECT * FROM knowledge_ingest_jobs WHERE job_id = ?", (job_id,)).fetchone()
+        row = conn.execute("SELECT * FROM knowledge_jobs WHERE job_id = ?", (job_id,)).fetchone()
         conn.close()
         return self._deserialize_job(row)
 
-    def list_jobs(self, kb_id: str) -> list[KnowledgeIngestJob]:
+    def list_jobs(self, kb_id: str) -> list[KnowledgeJob]:
         conn = self._connect()
         rows = conn.execute(
             """
-            SELECT * FROM knowledge_ingest_jobs
+            SELECT * FROM knowledge_jobs
             WHERE kb_id = ?
             ORDER BY updated_at DESC, created_at DESC
             """,
@@ -440,289 +367,63 @@ class KnowledgeBaseStore:
         conn.close()
         return [item for row in rows if (item := self._deserialize_job(row)) is not None]
 
-    def update_job(self, job: KnowledgeIngestJob) -> KnowledgeIngestJob | None:
+    def update_job(self, job: KnowledgeJob) -> KnowledgeJob | None:
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE knowledge_ingest_jobs
-            SET status = ?, error_summary = ?, updated_at = ?
+            UPDATE knowledge_jobs
+            SET job_kind = ?, target_file_ids_json = ?, status = ?, track_id = ?,
+                error_summary = ?, updated_at = ?
             WHERE job_id = ?
             """,
-            (job.status.value, job.error_summary, job.updated_at, job.job_id),
+            (
+                job.job_kind,
+                json.dumps(job.target_file_ids, ensure_ascii=False),
+                job.status.value,
+                job.track_id,
+                job.error_summary,
+                job.updated_at,
+                job.job_id,
+            ),
         )
         conn.commit()
         updated = cursor.rowcount > 0
         conn.close()
         return self.get_job(job.job_id) if updated else None
 
-    def insert_source(self, source: KnowledgeSource) -> KnowledgeSource:
+    def get_kb_stats(self, kb_id: str) -> dict[str, int]:
         conn = self._connect()
-        conn.execute(
+        row = conn.execute(
             """
-            INSERT INTO knowledge_sources (
-                source_id, kb_id, tenant_id, instance_id, source_type, title, enabled, source_uri,
-                latest_doc_id, sync_count, last_synced_at, config_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                source.source_id,
-                source.kb_id,
-                source.tenant_id,
-                source.instance_id,
-                source.source_type,
-                source.title,
-                1 if source.enabled else 0,
-                source.source_uri,
-                source.latest_doc_id,
-                source.sync_count,
-                source.last_synced_at,
-                source.to_storage_json(),
-                source.created_at,
-                source.updated_at,
-            ),
-        )
-        conn.commit()
-        conn.close()
-        created = self.get_source(source.source_id)
-        if created is None:
-            raise RuntimeError(f"Failed to load created knowledge source {source.source_id}")
-        return created
-
-    def get_source(self, source_id: str) -> KnowledgeSource | None:
-        conn = self._connect()
-        row = conn.execute("SELECT * FROM knowledge_sources WHERE source_id = ?", (source_id,)).fetchone()
-        conn.close()
-        return self._deserialize_source(row)
-
-    def list_sources(self, kb_id: str) -> list[KnowledgeSource]:
-        conn = self._connect()
-        rows = conn.execute(
-            """
-            SELECT * FROM knowledge_sources
-            WHERE kb_id = ?
-            ORDER BY updated_at DESC, created_at DESC
-            """,
-            (kb_id,),
-        ).fetchall()
-        conn.close()
-        return [item for row in rows if (item := self._deserialize_source(row)) is not None]
-
-    def update_source(self, source: KnowledgeSource) -> KnowledgeSource | None:
-        conn = self._connect()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE knowledge_sources
-            SET title = ?, enabled = ?, source_uri = ?, latest_doc_id = ?, sync_count = ?, last_synced_at = ?,
-                config_json = ?, updated_at = ?
-            WHERE source_id = ?
-            """,
-            (
-                source.title,
-                1 if source.enabled else 0,
-                source.source_uri,
-                source.latest_doc_id,
-                source.sync_count,
-                source.last_synced_at,
-                source.to_storage_json(),
-                source.updated_at,
-                source.source_id,
-            ),
-        )
-        conn.commit()
-        updated = cursor.rowcount > 0
-        conn.close()
-        return self.get_source(source.source_id) if updated else None
-
-    def delete_source(self, source_id: str) -> bool:
-        conn = self._connect()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM knowledge_sources WHERE source_id = ?", (source_id,))
-        deleted = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return deleted
-
-    def list_documents_without_source(self, kb_id: str) -> list[KnowledgeDocument]:
-        conn = self._connect()
-        rows = conn.execute(
-            """
-            SELECT * FROM knowledge_documents
-            WHERE kb_id = ? AND (source_id IS NULL OR source_id = '')
-            ORDER BY updated_at DESC, created_at DESC
-            """,
-            (kb_id,),
-        ).fetchall()
-        conn.close()
-        return [item for row in rows if (item := self._deserialize_document(row)) is not None]
-
-    def replace_chunks(
-        self,
-        *,
-        tenant_id: str,
-        instance_id: str,
-        kb_id: str,
-        doc_id: str,
-        title: str,
-        chunks: list[dict[str, Any]],
-    ) -> None:
-        conn = self._connect()
-        conn.execute("DELETE FROM knowledge_chunks WHERE doc_id = ?", (doc_id,))
-        if self.fts_enabled:
-            conn.execute("DELETE FROM knowledge_chunks_fts WHERE doc_id = ?", (doc_id,))
-        for chunk in chunks:
-            conn.execute(
-                """
-                INSERT INTO knowledge_chunks (
-                    chunk_id, tenant_id, instance_id, kb_id, doc_id, ordinal, title, content,
-                    metadata_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    chunk["chunk_id"],
-                    tenant_id,
-                    instance_id,
-                    kb_id,
-                    doc_id,
-                    chunk["ordinal"],
-                    title,
-                    chunk["content"],
-                    json.dumps(chunk.get("metadata") or {}, ensure_ascii=False),
-                    chunk["created_at"],
-                ),
-            )
-            if self.fts_enabled:
-                conn.execute(
-                    """
-                    INSERT INTO knowledge_chunks_fts (
-                        chunk_id, kb_id, doc_id, tenant_id, instance_id, title, content
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        chunk["chunk_id"],
-                        kb_id,
-                        doc_id,
-                        tenant_id,
-                        instance_id,
-                        title,
-                        chunk["content"],
-                    ),
-                )
-        conn.commit()
-        conn.close()
-
-    def search_chunks(
-        self,
-        *,
-        tenant_id: str,
-        instance_id: str,
-        kb_ids: list[str],
-        query_text: str,
-        limit: int,
-    ) -> list[dict[str, Any]]:
-        if not kb_ids:
-            return []
-        kb_placeholders = ",".join("?" for _ in kb_ids)
-        values: list[Any] = [tenant_id, instance_id, *kb_ids]
-        conn = self._connect()
-        if self.fts_enabled:
-            rows = conn.execute(
-                f"""
-                SELECT
-                    chunks.chunk_id,
-                    chunks.kb_id,
-                    chunks.doc_id,
-                    chunks.ordinal,
-                    chunks.content,
-                    chunks.metadata_json,
-                    docs.title,
-                    docs.source_type,
-                    docs.source_uri,
-                    docs.file_name,
-                    docs.mime_type,
-                    docs.metadata_json AS document_metadata_json,
-                    bm25(knowledge_chunks_fts) AS rank
-                FROM knowledge_chunks_fts
-                JOIN knowledge_chunks AS chunks ON chunks.chunk_id = knowledge_chunks_fts.chunk_id
-                JOIN knowledge_documents AS docs ON docs.doc_id = chunks.doc_id
-                WHERE chunks.tenant_id = ?
-                  AND chunks.instance_id = ?
-                  AND chunks.kb_id IN ({kb_placeholders})
-                  AND knowledge_chunks_fts MATCH ?
-                ORDER BY rank ASC, chunks.ordinal ASC
-                LIMIT ?
-                """,
-                [*values, query_text, limit],
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                f"""
-                SELECT
-                    chunks.chunk_id,
-                    chunks.kb_id,
-                    chunks.doc_id,
-                    chunks.ordinal,
-                    chunks.content,
-                    chunks.metadata_json,
-                    docs.title,
-                    docs.source_type,
-                    docs.source_uri,
-                    docs.file_name,
-                    docs.mime_type,
-                    docs.metadata_json AS document_metadata_json,
-                    0.0 AS rank
-                FROM knowledge_chunks AS chunks
-                JOIN knowledge_documents AS docs ON docs.doc_id = chunks.doc_id
-                WHERE chunks.tenant_id = ?
-                  AND chunks.instance_id = ?
-                  AND chunks.kb_id IN ({kb_placeholders})
-                  AND chunks.content LIKE ?
-                ORDER BY chunks.ordinal ASC
-                LIMIT ?
-                """,
-                [*values, f"%{query_text}%", limit],
-            ).fetchall()
-        conn.close()
-        return [dict(row) for row in rows]
-
-    def list_chunks(
-        self,
-        *,
-        tenant_id: str,
-        instance_id: str,
-        kb_ids: list[str],
-        limit: int,
-    ) -> list[dict[str, Any]]:
-        if not kb_ids:
-            return []
-        kb_placeholders = ",".join("?" for _ in kb_ids)
-        conn = self._connect()
-        rows = conn.execute(
-            f"""
             SELECT
-                chunks.chunk_id,
-                chunks.kb_id,
-                chunks.doc_id,
-                chunks.ordinal,
-                chunks.content,
-                chunks.metadata_json,
-                docs.title,
-                docs.source_type,
-                docs.source_uri,
-                docs.file_name,
-                docs.mime_type,
-                docs.metadata_json AS document_metadata_json,
-                0.0 AS rank
-            FROM knowledge_chunks AS chunks
-            JOIN knowledge_documents AS docs ON docs.doc_id = chunks.doc_id
-            WHERE chunks.tenant_id = ?
-              AND chunks.instance_id = ?
-              AND chunks.kb_id IN ({kb_placeholders})
-            ORDER BY docs.updated_at DESC, chunks.ordinal ASC
-            LIMIT ?
+                COUNT(*) AS total_count,
+                SUM(CASE WHEN is_folder = 1 THEN 1 ELSE 0 END) AS folder_count,
+                SUM(CASE WHEN is_folder = 0 THEN 1 ELSE 0 END) AS file_count,
+                SUM(CASE WHEN status = 'indexed' THEN 1 ELSE 0 END) AS indexed_count,
+                SUM(CASE WHEN status = 'parsed' THEN 1 ELSE 0 END) AS parsed_count,
+                SUM(CASE WHEN status IN ('error_parsing', 'error_indexing') THEN 1 ELSE 0 END) AS error_count
+            FROM knowledge_files
+            WHERE kb_id = ?
             """,
-            [tenant_id, instance_id, *kb_ids, limit],
-        ).fetchall()
+            (kb_id,),
+        ).fetchone()
         conn.close()
-        return [dict(row) for row in rows]
+        if row is None:
+            return {
+                "totalCount": 0,
+                "folderCount": 0,
+                "fileCount": 0,
+                "indexedCount": 0,
+                "parsedCount": 0,
+                "errorCount": 0,
+            }
+        return {
+            "totalCount": int(row["total_count"] or 0),
+            "folderCount": int(row["folder_count"] or 0),
+            "fileCount": int(row["file_count"] or 0),
+            "indexedCount": int(row["indexed_count"] or 0),
+            "parsedCount": int(row["parsed_count"] or 0),
+            "errorCount": int(row["error_count"] or 0),
+        }
+

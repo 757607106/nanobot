@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from nanobot.agent.loop import AgentLoop
+from nanobot.agent.middleware import KnowledgeBindingMiddleware
 from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.dispatch import ChannelMessageDispatcher
@@ -219,8 +220,16 @@ class WebChannelRuntimeService:
             return f"Agent '{agent_id}' not found."
 
         sys_prompt = str(agent_def.get("systemPrompt") or "").strip()
-        tool_allow = list(agent_def.get("toolAllowlist") or [])
+        knowledge_binding = KnowledgeBindingMiddleware(self.state.app_knowledge).apply(
+            agent_def,
+            msg.content,
+            base_tool_allowlist=list(agent_def.get("toolAllowlist") or []),
+        )
+        tool_allow = knowledge_binding.effective_tool_allowlist
         skills = list(agent_def.get("skillIds") or [])
+        prompt_sections = [sys_prompt]
+        prompt_sections.extend(knowledge_binding.prompt_sections)
+        merged_prompt = "\n\n".join(section for section in prompt_sections if section)
 
         config = self.state.config
         provider = self.state.config_runtime.make_provider(config)
@@ -241,7 +250,8 @@ class WebChannelRuntimeService:
             channels_config=config.channels,
             tool_allowlist=tool_allow or None,
             skill_names=skills or None,
-            system_prompt_override=sys_prompt or None,
+            system_prompt_override=merged_prompt or None,
+            extra_tools=knowledge_binding.extra_tools,
         )
         try:
             return await isolated.process_direct(
@@ -323,8 +333,16 @@ class WebChannelRuntimeService:
                 _member_id: str = _m_id,
             ) -> str:
                 m_prompt = str(_member.get("systemPrompt") or "").strip()
-                m_tools = list(_member.get("toolAllowlist") or [])
+                knowledge_binding = KnowledgeBindingMiddleware(self.state.app_knowledge).apply(
+                    _member,
+                    task,
+                    base_tool_allowlist=list(_member.get("toolAllowlist") or []),
+                )
+                m_tools = knowledge_binding.effective_tool_allowlist
                 m_skills = list(_member.get("skillIds") or [])
+                prompt_sections = [m_prompt]
+                prompt_sections.extend(knowledge_binding.prompt_sections)
+                merged_prompt = "\n\n".join(section for section in prompt_sections if section)
                 iso = AgentLoop(
                     bus=self._bus,
                     provider=provider,
@@ -341,8 +359,9 @@ class WebChannelRuntimeService:
                     channels_config=config.channels,
                     tool_allowlist=m_tools or None,
                     skill_names=m_skills or None,
-                    system_prompt_override=m_prompt or None,
+                    system_prompt_override=merged_prompt or None,
                     include_workspace_memory=False,
+                    extra_tools=knowledge_binding.extra_tools,
                 )
                 try:
                     return await iso.process_direct(

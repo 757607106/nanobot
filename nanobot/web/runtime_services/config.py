@@ -157,6 +157,7 @@ class WebConfigRuntimeService:
         if self.state.app_knowledge is not None:
             rag_engine = create_rag_engine_from_config(config, self.state.instance.data_dir)
             self.state.app_knowledge.set_rag_engine(rag_engine)
+            self.state.app_knowledge.set_config(config)
         self.state.channel_runtime.restart()
         return self.get_config()
 

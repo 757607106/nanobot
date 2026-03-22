@@ -81,6 +81,34 @@ class FakeRAGEngine:
             },
         )
 
+    async def insert_chunks(
+        self,
+        kb_id: str,
+        chunks: list[str],
+        *,
+        doc_id: str | None = None,
+        file_path: str | None = None,
+    ) -> ParseResult:
+        normalized_chunks = [str(item or "").strip() for item in chunks if str(item or "").strip()]
+        if not normalized_chunks:
+            return ParseResult(success=False, parser_name="chunk_insert", error="chunks are required.")
+
+        stored_doc_id = str(doc_id or f"doc-{len(self._docs.get(kb_id, {})) + 1}")
+        self._docs.setdefault(kb_id, {})[stored_doc_id] = {
+            "content": "\n\n".join(normalized_chunks),
+            "file_path": str(file_path or f"{kb_id}.txt"),
+            "doc_id": stored_doc_id,
+        }
+        return ParseResult(
+            success=True,
+            parser_name="chunk_insert",
+            metadata={
+                "doc_id": stored_doc_id,
+                "file_path": str(file_path or f"{kb_id}.txt"),
+                "chunks_count": len(normalized_chunks),
+            },
+        )
+
     async def query(
         self,
         kb_ids: list[str],
@@ -118,6 +146,101 @@ class FakeRAGEngine:
 
         results.sort(key=lambda item: item.score, reverse=True)
         return results[: max(1, int(top_k))]
+
+    async def query_structured(
+        self,
+        kb_id: str,
+        query_text: str,
+        *,
+        mode: str = "hybrid",
+        top_k: int = 8,
+        chunk_top_k: int = 12,
+        response_type: str = "Multiple Paragraphs",
+        only_need_context: bool = False,
+        only_need_prompt: bool = False,
+        enable_rerank: bool = False,
+    ) -> dict:
+        del chunk_top_k, response_type, only_need_context, only_need_prompt, enable_rerank
+        hits = await self.query([kb_id], query_text, mode=mode, top_k=top_k)
+        chunks = []
+        references = []
+        for index, hit in enumerate(hits, start=1):
+            reference_id = str(hit.metadata.get("doc_id") or f"ref-{index}")
+            file_path = str(hit.metadata.get("file_path") or "")
+            references.append(
+                {
+                    "reference_id": reference_id,
+                    "file_path": file_path,
+                }
+            )
+            chunks.append(
+                {
+                    "chunk_id": f"{reference_id}::chunk::{index:04d}",
+                    "content": hit.content,
+                    "reference_id": reference_id,
+                    "file_path": file_path,
+                }
+            )
+        return {
+            "status": "success",
+            "message": hits[0].content if hits else None,
+            "data": {
+                "entities": [],
+                "relationships": [],
+                "chunks": chunks,
+                "references": references,
+            },
+            "metadata": {
+                "mode": mode,
+                "kbType": "lightrag",
+            },
+        }
+
+    async def get_graph_labels(self, kb_id: str) -> list[str]:
+        if not self._docs.get(kb_id):
+            return []
+        return ["Document"]
+
+    async def get_knowledge_graph(
+        self,
+        kb_id: str,
+        *,
+        label: str = "*",
+        max_depth: int = 2,
+        max_nodes: int = 50,
+    ) -> dict:
+        del label, max_depth
+        documents = list(self._docs.get(kb_id, {}).values())[: max(1, int(max_nodes))]
+        nodes = []
+        edges = []
+        for index, item in enumerate(documents, start=1):
+            node_id = str(item["doc_id"])
+            nodes.append(
+                {
+                    "id": node_id,
+                    "labels": ["Document"],
+                    "properties": {
+                        "name": Path(str(item["file_path"])).name,
+                    },
+                    "title": Path(str(item["file_path"])).name,
+                }
+            )
+            if index > 1:
+                edges.append(
+                    {
+                        "id": f"edge-{index - 1}-{index}",
+                        "type": "RELATED",
+                        "source": str(documents[index - 2]["doc_id"]),
+                        "target": node_id,
+                        "properties": {},
+                    }
+                )
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "labels": ["Document"] if nodes else [],
+            "isTruncated": False,
+        }
 
     async def delete_document(self, kb_id: str, doc_id: str) -> bool:
         return self._docs.get(kb_id, {}).pop(doc_id, None) is not None

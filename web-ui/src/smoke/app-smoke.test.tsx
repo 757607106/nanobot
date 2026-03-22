@@ -30,7 +30,15 @@ const mockApi = vi.hoisted(() => ({
   getChannels: vi.fn(),
   getKnowledgeBase: vi.fn(),
   getKnowledgeBases: vi.fn(),
+  getKnowledgeFiles: vi.fn(),
+  getKnowledgeFileDetail: vi.fn(),
   getKnowledgeSources: vi.fn(),
+  getKnowledgeQueryParamSchema: vi.fn(),
+  getKnowledgeSampleQuestions: vi.fn(),
+  getKnowledgeMindmap: vi.fn(),
+  getKnowledgeGraphStats: vi.fn(),
+  getKnowledgeBenchmarks: vi.fn(),
+  getKnowledgeEvaluationHistory: vi.fn(),
   getMemoryCandidates: vi.fn(),
   getMemorySource: vi.fn(),
   getTeam: vi.fn(),
@@ -707,6 +715,12 @@ vi.mock('antd', async () => {
   )
 
   const Spin = () => <div>loading</div>
+  const Statistic = ({ title, value }: Props & { title?: React.ReactNode; value?: React.ReactNode }) => (
+    <div>
+      <div>{title}</div>
+      <div>{value}</div>
+    </div>
+  )
 
   const Typography = {
     Title: ({ children }: Props) => <div>{children}</div>,
@@ -896,6 +910,7 @@ vi.mock('antd', async () => {
     Select,
     Space,
     Spin,
+    Statistic,
     Steps,
     Switch,
     Table,
@@ -1755,41 +1770,168 @@ describe('web app smoke pages', () => {
     mockApi.getKnowledgeBases.mockResolvedValue([
       {
         kbId: 'support-kb',
+        dbId: 'support-kb',
         tenantId: 'default',
         instanceId: 'instance-default',
         name: 'Support KB',
         description: 'Customer support knowledge base',
         enabled: true,
+        kbType: 'lightrag',
+        embedInfo: {},
+        llmInfo: {},
+        queryParams: {
+          mode: 'hybrid',
+          topK: 8,
+          chunkTopK: 8,
+          responseType: 'Multiple Paragraphs',
+          onlyNeedContext: false,
+          onlyNeedPrompt: false,
+          enableRerank: false,
+          rerankModel: null,
+          options: {},
+        },
         tags: ['support'],
         retrievalProfile: {
           mode: 'hybrid',
           topK: 8,
+          chunkTopK: 8,
+          responseType: 'Multiple Paragraphs',
+          onlyNeedContext: false,
+          onlyNeedPrompt: false,
+          enableRerank: false,
+          rerankModel: null,
           chunkSize: 800,
           chunkOverlap: 120,
           citationRequired: true,
           vlmEnhanced: false,
           metadataFilters: {},
+          options: {},
+        },
+        additionalParams: {},
+        shareConfig: {},
+        sampleQuestions: ['如何重启 worker？'],
+        stats: {
+          totalCount: 1,
+          folderCount: 0,
+          fileCount: 1,
+          indexedCount: 1,
+          parsedCount: 1,
+          errorCount: 0,
         },
       },
     ])
     mockApi.getKnowledgeBase.mockResolvedValue({
       kbId: 'support-kb',
+      dbId: 'support-kb',
       tenantId: 'default',
       instanceId: 'instance-default',
       name: 'Support KB',
       description: 'Customer support knowledge base',
       enabled: true,
+      kbType: 'lightrag',
+      embedInfo: {},
+      llmInfo: {},
+      queryParams: {
+        mode: 'hybrid',
+        topK: 8,
+        chunkTopK: 8,
+        responseType: 'Multiple Paragraphs',
+        onlyNeedContext: false,
+        onlyNeedPrompt: false,
+        enableRerank: false,
+        rerankModel: null,
+        options: {},
+      },
       tags: ['support'],
       retrievalProfile: {
         mode: 'hybrid',
         topK: 8,
+        chunkTopK: 8,
+        responseType: 'Multiple Paragraphs',
+        onlyNeedContext: false,
+        onlyNeedPrompt: false,
+        enableRerank: false,
+        rerankModel: null,
         chunkSize: 800,
         chunkOverlap: 120,
         citationRequired: true,
         vlmEnhanced: false,
         metadataFilters: {},
+        options: {},
+      },
+      additionalParams: {},
+      shareConfig: {},
+      sampleQuestions: ['如何重启 worker？'],
+      stats: {
+        totalCount: 1,
+        folderCount: 0,
+        fileCount: 1,
+        indexedCount: 1,
+        parsedCount: 1,
+        errorCount: 0,
       },
     })
+    mockApi.getKnowledgeFiles.mockResolvedValue({
+      items: [
+        {
+          fileId: 'file_support_runbook',
+          docId: 'doc_support_runbook',
+          kbId: 'support-kb',
+          dbId: 'support-kb',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          filename: 'worker-runbook.md',
+          title: 'Worker Runbook',
+          fileType: 'markdown',
+          path: '/worker-runbook.md',
+          status: 'indexed',
+          docStatus: 'indexed',
+          fileSize: 2048,
+          chunkCount: 4,
+          processingParams: {},
+          metadata: {},
+          isFolder: false,
+        },
+      ],
+      stats: {
+        totalCount: 1,
+        folderCount: 0,
+        fileCount: 1,
+        indexedCount: 1,
+        parsedCount: 1,
+        errorCount: 0,
+      },
+    })
+    mockApi.getKnowledgeFileDetail.mockResolvedValue({
+      file: {
+        fileId: 'file_support_runbook',
+        docId: 'doc_support_runbook',
+        kbId: 'support-kb',
+        dbId: 'support-kb',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        filename: 'worker-runbook.md',
+        title: 'Worker Runbook',
+        fileType: 'markdown',
+        path: '/worker-runbook.md',
+        status: 'indexed',
+        docStatus: 'indexed',
+        fileSize: 2048,
+        chunkCount: 4,
+        processingParams: {},
+        metadata: {},
+        isFolder: false,
+      },
+      content: '# Worker Runbook',
+      chunks: [],
+      chunkCount: 0,
+    })
+    mockApi.getKnowledgeQueryParamSchema.mockResolvedValue(null)
+    mockApi.getKnowledgeSampleQuestions.mockResolvedValue({ questions: ['如何重启 worker？'] })
+    mockApi.getKnowledgeGraphStats.mockResolvedValue(null)
+    mockApi.getKnowledgeMindmap.mockRejectedValue(new Error('mindmap not configured'))
+    mockApi.getKnowledgeBenchmarks.mockResolvedValue([])
+    mockApi.getKnowledgeEvaluationHistory.mockResolvedValue([])
     mockApi.getKnowledgeDocuments.mockResolvedValue([])
     mockApi.getKnowledgeSources.mockResolvedValue([
       {
@@ -2725,34 +2867,32 @@ describe('web app smoke pages', () => {
 
     renderWithProviders(
       <MemoryRouter
-        initialEntries={['/knowledge/support-kb']}
+        initialEntries={['/knowledge']}
         future={{
           v7_startTransition: true,
           v7_relativeSplatPath: true,
         }}
       >
         <Routes>
+          <Route path="/knowledge" element={<KnowledgePage />} />
           <Route path="/knowledge/:kbId" element={<KnowledgePage />} />
         </Routes>
       </MemoryRouter>,
     )
 
     expect(await screen.findByText('知识库列表')).toBeInTheDocument()
-    expect(screen.getByText('概览')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '文档' })).toBeInTheDocument()
-    expect(screen.getByText('验证')).toBeInTheDocument()
-    expect(screen.getByText('检索验证')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByRole('button', { name: '文档' }))
-    expect(await screen.findByText('文档管理')).toBeInTheDocument()
-    expect(screen.getByText('添加文档')).toBeInTheDocument()
-    expect(screen.getByText('文档名称')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Support KB'))
+    expect(await screen.findByText('返回列表')).toBeInTheDocument()
+    expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
+    expect(screen.getByText('文件树')).toBeInTheDocument()
+    expect(screen.getByText('检索测试')).toBeInTheDocument()
+    expect(screen.getByText('知识导图')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('设置'))
-    expect(await screen.findByText('RAG 引擎配置')).toBeInTheDocument()
-    expect(screen.getByText('RAG LLM 绑定')).toBeInTheDocument()
-    expect(screen.getByText('Embedding 绑定')).toBeInTheDocument()
+    expect(await screen.findByText('分块策略')).toBeInTheDocument()
+    expect(screen.getByText('保存知识库设置')).toBeInTheDocument()
   })
 
   it('renders teams page with catalog and team run panels', async () => {
@@ -3050,10 +3190,10 @@ describe('web app smoke pages', () => {
         </Routes>
       </MemoryRouter>,
     )
-    expect(await screen.findByText('维护 Workspace Files')).toBeInTheDocument()
-    expect(screen.getByText('连接详情')).toBeInTheDocument()
-    expect(screen.getByText('修复计划')).toBeInTheDocument()
-    expect(screen.getByText('隔离测试聊天')).toBeInTheDocument()
+    expect(await screen.findByText('配置 Workspace Files')).toBeInTheDocument()
+    expect(screen.getByText('连接配置')).toBeInTheDocument()
+    expect(screen.getByText('当前可用工具')).toBeInTheDocument()
+    expect(screen.getByText('read_file')).toBeInTheDocument()
   })
 
   it('renders the models page', async () => {

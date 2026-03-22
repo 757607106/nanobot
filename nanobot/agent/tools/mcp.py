@@ -2,6 +2,8 @@
 
 import asyncio
 from contextlib import AsyncExitStack
+import hashlib
+import re
 from typing import Any
 
 import httpx
@@ -11,13 +13,61 @@ from nanobot.agent.tools.base import Tool
 from nanobot.agent.tools.registry import ToolRegistry
 
 
+def _slugify_mcp_name(name: str, *, fallback: str) -> str:
+    """Return a provider-safe tool-name fragment for external MCP names."""
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", str(name or "").strip().lower()).strip("_")
+    if normalized:
+        return normalized
+    digest = hashlib.sha1(str(name or fallback).encode("utf-8")).hexdigest()[:8]
+    return f"{fallback}_{digest}"
+
+
+def _build_mcp_tool_name(server_name: str, tool_name: str) -> str:
+    """Build a provider-safe wrapped tool name for an MCP tool."""
+    safe_server = _slugify_mcp_name(server_name, fallback="server")
+    safe_tool = _slugify_mcp_name(tool_name, fallback="tool")
+    return f"mcp_{safe_server}_{safe_tool}"
+
+
+def _raw_mcp_tool_name(server_name: str, tool_name: str) -> str:
+    """Build the unsanitized legacy wrapped name used in old configs/logs."""
+    return f"mcp_{server_name}_{tool_name}"
+
+
+def _dedupe_mcp_tool_name(
+    base_name: str,
+    *,
+    server_name: str,
+    tool_name: str,
+    registry: ToolRegistry,
+) -> str:
+    """Resolve collisions after sanitization without changing the raw MCP call."""
+    if not registry.has(base_name):
+        return base_name
+    digest = hashlib.sha1(f"{server_name}\0{tool_name}".encode("utf-8")).hexdigest()[:8]
+    candidate = f"{base_name}_{digest}"
+    if not registry.has(candidate):
+        return candidate
+    suffix = 2
+    while registry.has(f"{candidate}_{suffix}"):
+        suffix += 1
+    return f"{candidate}_{suffix}"
+
+
 class MCPToolWrapper(Tool):
     """Wraps a single MCP server tool as a nanobot Tool."""
 
-    def __init__(self, session, server_name: str, tool_def, tool_timeout: int = 30):
+    def __init__(
+        self,
+        session,
+        server_name: str,
+        tool_def,
+        tool_timeout: int = 30,
+        wrapped_name: str | None = None,
+    ):
         self._session = session
         self._original_name = tool_def.name
-        self._name = f"mcp_{server_name}_{tool_def.name}"
+        self._name = wrapped_name or _build_mcp_tool_name(server_name, tool_def.name)
         self._description = tool_def.description or tool_def.name
         self._parameters = tool_def.inputSchema or {"type": "object", "properties": {}}
         self._tool_timeout = tool_timeout
@@ -147,13 +197,26 @@ async def connect_mcp_servers(
             registered_count = 0
             matched_enabled_tools: set[str] = set()
             available_raw_names = [tool_def.name for tool_def in tools.tools]
-            available_wrapped_names = [f"mcp_{name}_{tool_def.name}" for tool_def in tools.tools]
+            available_wrapped_names: list[str] = []
             for tool_def in tools.tools:
-                wrapped_name = f"mcp_{name}_{tool_def.name}"
+                raw_wrapped_name = _raw_mcp_tool_name(name, tool_def.name)
+                base_wrapped_name = _build_mcp_tool_name(name, tool_def.name)
+                wrapped_name = _dedupe_mcp_tool_name(
+                    base_wrapped_name,
+                    server_name=name,
+                    tool_name=tool_def.name,
+                    registry=registry,
+                )
+                available_wrapped_names.append(wrapped_name)
+                wrapped_aliases = {
+                    tool_def.name,
+                    raw_wrapped_name,
+                    base_wrapped_name,
+                    wrapped_name,
+                }
                 if (
                     not allow_all_tools
-                    and tool_def.name not in enabled_tools
-                    and wrapped_name not in enabled_tools
+                    and enabled_tools.isdisjoint(wrapped_aliases)
                 ):
                     logger.debug(
                         "MCP: skipping tool '{}' from server '{}' (not in enabledTools)",
@@ -161,15 +224,18 @@ async def connect_mcp_servers(
                         name,
                     )
                     continue
-                wrapper = MCPToolWrapper(session, name, tool_def, tool_timeout=cfg.tool_timeout)
+                wrapper = MCPToolWrapper(
+                    session,
+                    name,
+                    tool_def,
+                    tool_timeout=cfg.tool_timeout,
+                    wrapped_name=wrapped_name,
+                )
                 registry.register(wrapper)
                 logger.debug("MCP: registered tool '{}' from server '{}'", wrapper.name, name)
                 registered_count += 1
                 if enabled_tools:
-                    if tool_def.name in enabled_tools:
-                        matched_enabled_tools.add(tool_def.name)
-                    if wrapped_name in enabled_tools:
-                        matched_enabled_tools.add(wrapped_name)
+                    matched_enabled_tools.update(enabled_tools.intersection(wrapped_aliases))
 
             if enabled_tools and not allow_all_tools:
                 unmatched_enabled_tools = sorted(enabled_tools - matched_enabled_tools)

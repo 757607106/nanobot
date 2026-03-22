@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
+import re
 import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from nanobot.agent.tools.mcp import MCPToolWrapper, connect_mcp_servers
+from nanobot.agent.tools.mcp import MCPToolWrapper, _build_mcp_tool_name, connect_mcp_servers
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.config.schema import MCPServerConfig
 
@@ -153,6 +154,20 @@ async def test_execute_handles_generic_exception() -> None:
     assert result == "(MCP tool call failed: RuntimeError)"
 
 
+def test_wrapper_sanitizes_non_ascii_server_name() -> None:
+    tool_def = SimpleNamespace(
+        name="execute code",
+        description="demo tool",
+        inputSchema={"type": "object", "properties": {}},
+    )
+
+    wrapper = MCPToolWrapper(SimpleNamespace(call_tool=None), "代码解释器", tool_def)
+
+    assert re.fullmatch(r"[a-z0-9_]+", wrapper.name)
+    assert wrapper.name.startswith("mcp_server_")
+    assert wrapper.name.endswith("_execute_code")
+
+
 def _make_tool_def(name: str) -> SimpleNamespace:
     return SimpleNamespace(
         name=name,
@@ -280,3 +295,49 @@ async def test_connect_mcp_servers_enabled_tools_warns_on_unknown_entries(
     assert "enabledTools entries not found: unknown" in warnings[-1]
     assert "Available raw names: demo" in warnings[-1]
     assert "Available wrapped names: mcp_test_demo" in warnings[-1]
+
+
+@pytest.mark.asyncio
+async def test_connect_mcp_servers_supports_sanitized_wrapped_names_for_non_ascii_servers(
+    fake_mcp_runtime: dict[str, object | None],
+) -> None:
+    fake_mcp_runtime["session"] = _make_fake_session(["execute code"])
+    registry = ToolRegistry()
+    stack = AsyncExitStack()
+    await stack.__aenter__()
+    wrapped_name = _build_mcp_tool_name("代码解释器", "execute code")
+    try:
+        await connect_mcp_servers(
+            {"代码解释器": MCPServerConfig(command="fake", enabled_tools=[wrapped_name])},
+            registry,
+            stack,
+        )
+    finally:
+        await stack.aclose()
+
+    assert registry.tool_names == [wrapped_name]
+
+
+@pytest.mark.asyncio
+async def test_connect_mcp_servers_dedupes_sanitized_name_collisions(
+    fake_mcp_runtime: dict[str, object | None],
+) -> None:
+    fake_mcp_runtime["session"] = _make_fake_session(["demo"])
+    registry = ToolRegistry()
+    stack = AsyncExitStack()
+    await stack.__aenter__()
+    try:
+        await connect_mcp_servers(
+            {
+                "foo-bar": MCPServerConfig(command="fake"),
+                "foo bar": MCPServerConfig(command="fake"),
+            },
+            registry,
+            stack,
+        )
+    finally:
+        await stack.aclose()
+
+    assert registry.tool_names[0] == "mcp_foo_bar_demo"
+    assert registry.tool_names[1].startswith("mcp_foo_bar_demo_")
+    assert len(set(registry.tool_names)) == 2

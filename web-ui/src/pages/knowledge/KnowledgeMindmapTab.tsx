@@ -1,0 +1,116 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Empty, Space, Spin, Typography } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
+import type { KnowledgeMindmapNode } from '../../types'
+
+const { Text } = Typography
+
+interface KnowledgeMindmapTabProps {
+  mindmapLoading: boolean
+  mindmap: KnowledgeMindmapNode | null
+  onRegenerate: () => void
+}
+
+function mindmapToMarkdown(node: KnowledgeMindmapNode | null | undefined, level = 1): string {
+  if (!node?.content) {
+    return ''
+  }
+  const heading = `${'#'.repeat(level)} ${node.content}\n\n`
+  const children = (node.children || []).map((child) => mindmapToMarkdown(child, level + 1)).join('')
+  return `${heading}${children}`
+}
+
+export function KnowledgeMindmapTab({ mindmapLoading, mindmap, onRegenerate }: KnowledgeMindmapTabProps) {
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const markmapRef = useRef<any>(null)
+  const [rendering, setRendering] = useState(false)
+  const [renderError, setRenderError] = useState<string | null>(null)
+  const markdown = useMemo(() => mindmapToMarkdown(mindmap), [mindmap])
+
+  useEffect(() => {
+    let disposed = false
+
+    async function renderMindmap() {
+      if (!svgRef.current || !markdown.trim()) {
+        if (markmapRef.current) {
+          markmapRef.current.destroy()
+          markmapRef.current = null
+        }
+        return
+      }
+
+      try {
+        setRendering(true)
+        setRenderError(null)
+        const [{ Transformer }, { Markmap }] = await Promise.all([
+          import('markmap-lib'),
+          import('markmap-view'),
+        ])
+        if (disposed || !svgRef.current) return
+
+        markmapRef.current?.destroy?.()
+        const transformer = new Transformer()
+        const { root } = transformer.transform(markdown)
+        markmapRef.current = Markmap.create(svgRef.current, {
+          duration: 300,
+          maxWidth: 220,
+          nodeMinHeight: 24,
+          paddingX: 8,
+          spacingVertical: 6,
+          spacingHorizontal: 72,
+        })
+        markmapRef.current.setData(root)
+        markmapRef.current.fit?.()
+        window.setTimeout(() => {
+          markmapRef.current?.fit?.()
+        }, 200)
+      } catch (error) {
+        setRenderError(error instanceof Error ? error.message : '思维导图渲染失败')
+      } finally {
+        if (!disposed) {
+          setRendering(false)
+        }
+      }
+    }
+
+    void renderMindmap()
+
+    return () => {
+      disposed = true
+      markmapRef.current?.destroy?.()
+      markmapRef.current = null
+    }
+  }, [markdown])
+
+  return (
+    <div className="knowledge-tab-panel">
+      <div className="knowledge-query-actions">
+        <Space wrap>
+          <Button icon={<ReloadOutlined />} loading={mindmapLoading} onClick={onRegenerate}>
+            重新生成导图
+          </Button>
+          <Button disabled={!mindmap || rendering} onClick={() => markmapRef.current?.fit?.()}>
+            适应视图
+          </Button>
+        </Space>
+      </div>
+
+      {mindmapLoading || rendering ? (
+        <div className="knowledge-loading-panel"><Spin /></div>
+      ) : mindmap ? (
+        <div className="knowledge-mindmap-shell">
+          <div className="knowledge-mindmap-canvas">
+            <svg ref={svgRef} className="knowledge-mindmap-svg" />
+          </div>
+          <Text type="secondary">当前导图已切到可缩放的可视化视图，交互方向与 Yuxi-Know 的 Markmap 工作台保持一致。</Text>
+        </div>
+      ) : (
+        <div className="knowledge-loading-panel">
+          <Empty description="还没有知识导图，先生成一份导图看看知识结构。" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        </div>
+      )}
+
+      {renderError ? <Text type="danger">{renderError}</Text> : null}
+    </div>
+  )
+}

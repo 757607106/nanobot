@@ -170,7 +170,7 @@ class MCPServerService:
         try:
             tool_names = asyncio.run(self._list_server_tools(cfg))
         except Exception as exc:  # noqa: BLE001
-            message = str(exc) or type(exc).__name__
+            message = _describe_exception(exc)
             self._registry.record_probe_result(
                 server_name=server_name,
                 status="failed",
@@ -699,6 +699,32 @@ def _normalize_mapping(payload: dict[str, Any]) -> dict[str, str]:
             continue
         result[normalized_key] = str(value).strip()
     return result
+
+
+def _describe_exception(exc: BaseException) -> str:
+    root = _unwrap_exception(exc)
+    if isinstance(root, httpx.HTTPStatusError):
+        status = root.response.status_code if root.response is not None else None
+        reason = root.response.reason_phrase if root.response is not None else ""
+        url = str(root.request.url) if root.request is not None else ""
+        summary = " ".join(part for part in (str(status) if status is not None else "", reason) if part)
+        return f"{summary} for {url}".strip() if url else summary or str(root) or type(root).__name__
+    return str(root).strip() or type(root).__name__
+
+
+def _unwrap_exception(exc: BaseException) -> BaseException:
+    if isinstance(exc, BaseExceptionGroup):
+        for nested in exc.exceptions:
+            root = _unwrap_exception(nested)
+            if not isinstance(root, asyncio.CancelledError):
+                return root
+        if exc.exceptions:
+            return _unwrap_exception(exc.exceptions[0])
+    if exc.__cause__ is not None:
+        return _unwrap_exception(exc.__cause__)
+    if exc.__context__ is not None and not getattr(exc, "__suppress_context__", False):
+        return _unwrap_exception(exc.__context__)
+    return exc
 
 
 def _now_iso() -> str:

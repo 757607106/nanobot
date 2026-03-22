@@ -917,6 +917,52 @@ class RAGEngine:
                 error=str(exc),
             )
 
+    async def insert_chunks(
+        self,
+        kb_id: str,
+        chunks: list[str],
+        *,
+        doc_id: str | None = None,
+        file_path: str | None = None,
+    ) -> ParseResult:
+        """Insert pre-split chunks for cases where the caller controls chunking."""
+        try:
+            rag = await self._ensure_ready(kb_id)
+            normalized_chunks = [str(item or "").strip() for item in chunks if str(item or "").strip()]
+            if not normalized_chunks:
+                raise ValueError("chunks are required.")
+            await rag.insert_content_list(
+                [
+                    {"type": "text", "text": item, "page_idx": index}
+                    for index, item in enumerate(normalized_chunks)
+                ],
+                file_path=file_path or f"{kb_id}.txt",
+                doc_id=doc_id,
+            )
+            status = await self._require_processed_status(
+                rag,
+                kb_id=kb_id,
+                operation="insert_chunks",
+                doc_id=doc_id,
+                file_path=file_path,
+            )
+            return ParseResult(
+                success=True,
+                parser_name="chunk_insert",
+                metadata={
+                    "doc_id": doc_id,
+                    "file_path": file_path,
+                    "chunks_count": int(status.get("chunks_count") or len(normalized_chunks)),
+                },
+            )
+        except Exception as exc:
+            logger.error("RAGEngine: insert_chunks failed for kb_id={}: {}", kb_id, exc)
+            return ParseResult(
+                success=False,
+                parser_name="chunk_insert",
+                error=str(exc),
+            )
+
     async def query(
         self,
         kb_ids: list[str],
@@ -950,7 +996,7 @@ class RAGEngine:
             "local": "local",
             "global": "global",
             "naive": "naive",
-            "mix": "hybrid",
+            "mix": "mix",
         }.get(str(mode or "").strip().lower(), "hybrid")
 
         all_hits: list[RetrievalHit] = []
@@ -1004,6 +1050,106 @@ class RAGEngine:
             raise RuntimeError(f"RAGEngine query failed for all knowledge bases: {detail}")
 
         return all_hits[:top_k]
+
+    async def query_structured(
+        self,
+        kb_id: str,
+        query_text: str,
+        *,
+        mode: str = "hybrid",
+        top_k: int = 8,
+        chunk_top_k: int = 12,
+        response_type: str = "Multiple Paragraphs",
+        only_need_context: bool = False,
+        only_need_prompt: bool = False,
+        enable_rerank: bool = False,
+    ) -> dict[str, Any]:
+        """Return structured LightRAG query data for a single knowledge base."""
+        from lightrag import QueryParam
+
+        rag = await self._ensure_ready(kb_id)
+        param_fields = getattr(QueryParam, "__annotations__", {})
+        query_kwargs: dict[str, Any] = {
+            "mode": {
+                "keyword": "naive",
+                "semantic": "local",
+                "hybrid": "hybrid",
+                "local": "local",
+                "global": "global",
+                "naive": "naive",
+                "mix": "mix",
+            }.get(str(mode or "").strip().lower(), "hybrid"),
+            "top_k": max(1, int(top_k)),
+            "chunk_top_k": max(1, int(chunk_top_k)),
+            "response_type": response_type,
+            "only_need_context": bool(only_need_context),
+            "only_need_prompt": bool(only_need_prompt),
+            "enable_rerank": bool(enable_rerank),
+            "include_references": True,
+        }
+        filtered_kwargs = {key: value for key, value in query_kwargs.items() if key in param_fields}
+        return await rag.lightrag.aquery_data(query_text, QueryParam(**filtered_kwargs))
+
+    async def get_graph_labels(self, kb_id: str) -> list[str]:
+        """Return graph labels for a knowledge base."""
+        rag = await self._ensure_ready(kb_id)
+        labels = await rag.lightrag.get_graph_labels()
+        if isinstance(labels, dict):
+            values = labels.get("labels") or labels.get("data") or []
+            return [str(item) for item in values]
+        if isinstance(labels, list):
+            return [str(item) for item in labels]
+        return []
+
+    @staticmethod
+    def _normalize_graph(graph: Any, *, labels: list[str]) -> dict[str, Any]:
+        nodes = []
+        edges = []
+        for item in getattr(graph, "nodes", []) or []:
+            properties = dict(getattr(item, "properties", {}) or {})
+            nodes.append(
+                {
+                    "id": str(getattr(item, "id", "")),
+                    "labels": [str(label) for label in (getattr(item, "labels", []) or [])],
+                    "properties": properties,
+                    "title": str(properties.get("entity_name") or properties.get("name") or getattr(item, "id", "")),
+                }
+            )
+        for item in getattr(graph, "edges", []) or []:
+            properties = dict(getattr(item, "properties", {}) or {})
+            edges.append(
+                {
+                    "id": str(getattr(item, "id", "")),
+                    "type": str(getattr(item, "type", "") or properties.get("keywords") or "related"),
+                    "source": str(getattr(item, "source", "")),
+                    "target": str(getattr(item, "target", "")),
+                    "properties": properties,
+                }
+            )
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "labels": labels,
+            "isTruncated": bool(getattr(graph, "is_truncated", False)),
+        }
+
+    async def get_knowledge_graph(
+        self,
+        kb_id: str,
+        *,
+        label: str = "*",
+        max_depth: int = 2,
+        max_nodes: int = 50,
+    ) -> dict[str, Any]:
+        """Return a normalized LightRAG graph payload."""
+        rag = await self._ensure_ready(kb_id)
+        labels = await self.get_graph_labels(kb_id)
+        graph = await rag.lightrag.get_knowledge_graph(
+            node_label=label,
+            max_depth=max(1, int(max_depth)),
+            max_nodes=max(10, int(max_nodes)),
+        )
+        return self._normalize_graph(graph, labels=labels)
 
     async def delete_kb(self, kb_id: str) -> bool:
         """Delete all LightRAG data for a knowledge base.

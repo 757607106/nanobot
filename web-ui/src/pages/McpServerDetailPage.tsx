@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Alert, App, Button, Card, Empty, Input, InputNumber, List, Select, Space, Spin, Switch, Tag, Typography } from 'antd'
-import { ArrowLeftOutlined, DeleteOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Empty, Input, InputNumber, Select, Space, Spin, Switch, Tag, Typography } from 'antd'
+import { ArrowLeftOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
-import DevOnly from '../components/DevOnly'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import { testIds } from '../testIds'
-import type { McpProbeResult, McpRepairPlan, McpServerEntry, McpTestChatData } from '../types'
+import type { McpProbeResult, McpServerEntry } from '../types'
 
 const { Text } = Typography
+const transportLabels: Record<DetailDraft['type'], string> = {
+  stdio: 'stdio',
+  sse: 'SSE',
+  streamableHttp: 'HTTP',
+}
 
 interface DetailDraft {
   displayName: string
@@ -50,21 +54,15 @@ function parseJsonMapping(raw: string, label: string) {
 }
 
 export default function McpServerDetailPage() {
-  const { message, modal } = App.useApp()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const { serverName } = useParams()
   const [entry, setEntry] = useState<McpServerEntry | null>(null)
   const [draft, setDraft] = useState<DetailDraft | null>(null)
   const [probe, setProbe] = useState<McpProbeResult | null>(null)
-  const [repairPlan, setRepairPlan] = useState<McpRepairPlan | null>(null)
-  const [testChat, setTestChat] = useState<McpTestChatData | null>(null)
-  const [testInput, setTestInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [probing, setProbing] = useState(false)
-  const [repairingMode, setRepairingMode] = useState<'bounded' | 'dangerous' | null>(null)
-  const [sendingTestChat, setSendingTestChat] = useState(false)
-  const [clearingTestChat, setClearingTestChat] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -81,15 +79,9 @@ export default function McpServerDetailPage() {
     try {
       setLoading(true)
       setError(null)
-      const [next, repair, isolatedTestChat] = await Promise.all([
-        api.getMcpServer(target),
-        api.getMcpRepairPlan(target),
-        api.getMcpTestChat(target),
-      ])
+      const next = await api.getMcpServer(target)
       setEntry(next)
       setDraft(toDraft(next))
-      setRepairPlan(repair)
-      setTestChat(isolatedTestChat)
       setProbe(null)
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : '加载 MCP 详情失败')
@@ -98,21 +90,26 @@ export default function McpServerDetailPage() {
     }
   }
 
+  async function runProbe(target: string, options?: { notify?: boolean }) {
+    const next = await api.probeMcpServer(target)
+    setProbe(next)
+    if (next.entry) {
+      setEntry(next.entry)
+      setDraft(toDraft(next.entry))
+    }
+    if (options?.notify !== false) {
+      message.success(next.ok ? 'MCP 探测通过' : next.statusLabel)
+    }
+    return next
+  }
+
   async function handleProbe() {
     if (!serverName) {
       return
     }
     try {
       setProbing(true)
-      const next = await api.probeMcpServer(serverName)
-      setProbe(next)
-      if (next.entry) {
-        setEntry(next.entry)
-        setDraft((current) => (current ? { ...current } : toDraft(next.entry!)))
-      }
-      const nextPlan = await api.getMcpRepairPlan(serverName)
-      setRepairPlan(nextPlan)
-      message.success(next.ok ? 'MCP 探测通过' : next.statusLabel)
+      await runProbe(serverName)
     } catch (nextError) {
       message.error(nextError instanceof Error ? nextError.message : 'MCP 探测失败')
     } finally {
@@ -131,8 +128,6 @@ export default function McpServerDetailPage() {
         setEntry(next.entry)
         setDraft((current) => (current ? { ...current, enabled } : toDraft(next.entry!)))
       }
-      const nextPlan = await api.getMcpRepairPlan(serverName)
-      setRepairPlan(nextPlan)
       message.success(enabled ? 'MCP 已启用' : 'MCP 已停用')
     } catch (nextError) {
       message.error(nextError instanceof Error ? nextError.message : '切换 MCP 启用状态失败')
@@ -141,7 +136,7 @@ export default function McpServerDetailPage() {
     }
   }
 
-  async function handleSave() {
+  async function handleSave(probeAfterSave = false) {
     if (!serverName || !draft) {
       return
     }
@@ -165,95 +160,24 @@ export default function McpServerDetailPage() {
         setEntry(next.entry)
         setDraft(toDraft(next.entry))
       }
-      const nextPlan = await api.getMcpRepairPlan(serverName)
-      setRepairPlan(nextPlan)
-      message.success('MCP 详情已保存')
+      if (!probeAfterSave) {
+        message.success('MCP 配置已保存')
+        return
+      }
+      try {
+        setProbing(true)
+        const nextProbe = await runProbe(serverName, { notify: false })
+        message.success(nextProbe.ok ? '配置已保存并完成探测' : `配置已保存，${nextProbe.statusLabel}`)
+      } catch (probeError) {
+        message.warning(probeError instanceof Error ? `配置已保存，但探测失败：${probeError.message}` : '配置已保存，但探测失败')
+      } finally {
+        setProbing(false)
+      }
     } catch (nextError) {
-      message.error(nextError instanceof Error ? nextError.message : '保存 MCP 详情失败')
+      message.error(nextError instanceof Error ? nextError.message : '保存 MCP 配置失败')
     } finally {
       setSaving(false)
     }
-  }
-
-  async function handleRepair(dangerousMode: boolean) {
-    if (!serverName) {
-      return
-    }
-    try {
-      setRepairingMode(dangerousMode ? 'dangerous' : 'bounded')
-      const next = await api.runMcpRepair(serverName, dangerousMode)
-      setRepairPlan(next)
-      if (next.entry) {
-        const updatedEntry = next.entry
-        setEntry(updatedEntry)
-        setDraft((current) => (current ? { ...current } : toDraft(updatedEntry)))
-      }
-      message.success(dangerousMode ? '危险修复任务已触发' : '受限修复任务已触发')
-    } catch (nextError) {
-      message.error(nextError instanceof Error ? nextError.message : '触发 MCP 修复失败')
-    } finally {
-      setRepairingMode(null)
-    }
-  }
-
-  async function handleSendTestChat() {
-    if (!serverName || !testInput.trim()) {
-      return
-    }
-    try {
-      setSendingTestChat(true)
-      const next = await api.sendMcpTestChatMessage(serverName, testInput.trim())
-      setTestChat({
-        session: next.session,
-        messages: next.messages,
-        toolNames: next.toolNames,
-        recentToolActivity: next.recentToolActivity,
-      })
-      setTestInput('')
-      const nextPlan = await api.getMcpRepairPlan(serverName)
-      setRepairPlan(nextPlan)
-    } catch (nextError) {
-      message.error(nextError instanceof Error ? nextError.message : '发送测试消息失败')
-    } finally {
-      setSendingTestChat(false)
-    }
-  }
-
-  async function handleClearTestChat() {
-    if (!serverName) {
-      return
-    }
-    try {
-      setClearingTestChat(true)
-      await api.clearMcpTestChat(serverName)
-      const isolatedTestChat = await api.getMcpTestChat(serverName)
-      setTestChat(isolatedTestChat)
-      message.success('隔离测试聊天已清空')
-    } catch (nextError) {
-      message.error(nextError instanceof Error ? nextError.message : '清空测试聊天失败')
-    } finally {
-      setClearingTestChat(false)
-    }
-  }
-
-  function handleRemove() {
-    if (!serverName) {
-      return
-    }
-    modal.confirm({
-      title: `移除 MCP ${serverName}`,
-      content: '会从当前配置移除；若为受管安装，会尝试删除本地 checkout。',
-      okText: '确认移除',
-      cancelText: '取消',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        const next = await api.deleteMcpServer(serverName)
-        message.success(
-          next.checkoutRemoved ? 'MCP 已移除，受管安装目录也已删除' : 'MCP 已从配置中移除',
-        )
-        navigate('/mcp', { replace: true })
-      },
-    })
   }
 
   if (loading) {
@@ -274,11 +198,20 @@ export default function McpServerDetailPage() {
     )
   }
 
+  const toolNames = entry.toolNames || []
+  const showProbeAlert = probe || entry.lastError
+  const probeAlertType = probe
+    ? (probe.ok ? 'success' : probe.status === 'blocked' ? 'warning' : 'error')
+    : 'warning'
+  const probeAlertMessage = probe
+    ? (probe.ok ? `${probe.statusLabel} · ${probe.toolCount} 个工具` : probe.error || probe.statusLabel)
+    : entry.lastError || null
+
   return (
     <div className="page-stack">
       <PageHero
         className="page-hero-compact studio-hero"
-        title={`维护 ${entry.displayName}`}
+        title={`配置 ${entry.displayName}`}
         actions={(
           <div className="mcp-hero-actions">
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mcp')}>
@@ -287,42 +220,42 @@ export default function McpServerDetailPage() {
             <Button icon={<ReloadOutlined />} onClick={() => void loadServer(serverName)}>
               刷新
             </Button>
-            <Button onClick={() => void handleProbe()} loading={probing} data-testid={testIds.mcp.detailProbe}>
-              探测
-            </Button>
-            <Button onClick={() => void handleToggle(!entry.enabled)} loading={toggling} data-testid={testIds.mcp.detailToggle}>
-              {entry.enabled ? '停用 MCP' : '启用 MCP'}
-            </Button>
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              onClick={() => void handleSave()}
-              loading={saving}
-              data-testid={testIds.mcp.detailSave}
-            >
-              保存
-            </Button>
           </div>
         )}
       />
 
-      {probe ? (
+      {showProbeAlert && probeAlertMessage ? (
         <Alert
           className="mcp-inline-alert"
-          type={probe.ok ? 'success' : probe.status === 'blocked' ? 'warning' : 'error'}
-          message={probe.ok ? `${probe.statusLabel} · ${probe.toolCount} 个工具` : probe.error || probe.statusLabel}
+          type={probeAlertType}
+          message={probeAlertMessage}
         />
       ) : null}
 
-      {entry.lastError ? (
-        <Alert className="mcp-entry-alert" type="warning" message="最近一次探测错误" description={entry.lastError} />
-      ) : null}
-
-      <div className="page-grid system-dashboard-grid">
+      <div className="page-grid system-dashboard-grid mcp-detail-page-grid">
         <Card className="config-panel-card">
           <div className="config-card-header">
             <div className="page-section-title">
-              <Typography.Title level={4}>连接详情</Typography.Title>
+              <Typography.Title level={4}>连接配置</Typography.Title>
+            </div>
+            <Space wrap>
+              <Tag>{transportLabels[draft.type]}</Tag>
+              <Tag color={draft.enabled ? 'success' : 'default'}>{draft.enabled ? '已启用' : '已停用'}</Tag>
+            </Space>
+          </div>
+
+          <div className="page-meta-grid system-side-grid">
+            <div className="page-meta-card">
+              <span>服务 ID</span>
+              <strong>{entry.name}</strong>
+            </div>
+            <div className="page-meta-card">
+              <span>最近探测</span>
+              <strong>{entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '--'}</strong>
+            </div>
+            <div className="page-meta-card">
+              <span>工具缓存</span>
+              <strong>{entry.toolCountKnown ? entry.toolCount : '待探测'}</strong>
             </div>
           </div>
 
@@ -345,7 +278,6 @@ export default function McpServerDetailPage() {
               <Switch checked={draft.enabled} onChange={(checked) => setDraft({ ...draft, enabled: checked })} />
             </div>
 
-            <DevOnly>
             <div className="config-field-block">
               <div className="config-field-label-row">
                 <Text>传输方式</Text>
@@ -360,7 +292,6 @@ export default function McpServerDetailPage() {
                 onChange={(value) => setDraft({ ...draft, type: value as DetailDraft['type'] })}
               />
             </div>
-            </DevOnly>
 
             <div className="config-field-block">
               <div className="config-field-label-row">
@@ -374,7 +305,6 @@ export default function McpServerDetailPage() {
               />
             </div>
 
-            <DevOnly>
             {draft.type === 'stdio' ? (
               <>
                 <div className="config-field-block">
@@ -396,204 +326,81 @@ export default function McpServerDetailPage() {
                     style={{ height: 180, resize: 'none' }}
                   />
                 </div>
+
+                <div className="config-field-block">
+                  <div className="config-field-label-row">
+                    <Text>环境变量 JSON</Text>
+                  </div>
+                  <Input.TextArea
+                    className="config-json-editor"
+                    value={draft.envText}
+                    spellCheck={false}
+                    onChange={(event) => setDraft({ ...draft, envText: event.target.value })}
+                    style={{ height: 220, resize: 'none' }}
+                    data-testid={testIds.mcp.detailEnv}
+                  />
+                </div>
               </>
             ) : (
-              <div className="config-field-block">
-                <div className="config-field-label-row">
-                  <Text>URL</Text>
+              <>
+                <div className="config-field-block">
+                  <div className="config-field-label-row">
+                    <Text>URL</Text>
+                  </div>
+                  <Input value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} />
                 </div>
-                <Input value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} />
-              </div>
+
+                <div className="config-field-block">
+                  <div className="config-field-label-row">
+                    <Text>请求头 JSON</Text>
+                  </div>
+                  <Input.TextArea
+                    className="config-json-editor"
+                    value={draft.headersText}
+                    spellCheck={false}
+                    onChange={(event) => setDraft({ ...draft, headersText: event.target.value })}
+                    style={{ height: 220, resize: 'none' }}
+                  />
+                </div>
+              </>
             )}
-            </DevOnly>
+          </div>
 
-            <DevOnly>
-            <div className="config-field-block">
-              <div className="config-field-label-row">
-                <Text>环境变量 JSON</Text>
-              </div>
-              <Input.TextArea
-                className="config-json-editor"
-                value={draft.envText}
-                spellCheck={false}
-                onChange={(event) => setDraft({ ...draft, envText: event.target.value })}
-                style={{ height: 220, resize: 'none' }}
-                data-testid={testIds.mcp.detailEnv}
-              />
-            </div>
-            </DevOnly>
-
-            <div className="config-field-block">
-              <div className="config-field-label-row">
-                <Text>请求头 JSON</Text>
-              </div>
-              <Input.TextArea
-                className="config-json-editor"
-                value={draft.headersText}
-                spellCheck={false}
-                onChange={(event) => setDraft({ ...draft, headersText: event.target.value })}
-                style={{ height: 220, resize: 'none' }}
-              />
-            </div>
+          <div className="mcp-detail-action-row">
+            <Button onClick={() => void handleToggle(!entry.enabled)} loading={toggling} data-testid={testIds.mcp.detailToggle}>
+              {entry.enabled ? '立即停用' : '立即启用'}
+            </Button>
+            <Button
+              icon={<SaveOutlined />}
+              onClick={() => void handleSave()}
+              loading={saving}
+              data-testid={testIds.mcp.detailSave}
+            >
+              保存配置
+            </Button>
+            <Button onClick={() => void handleProbe()} loading={probing} data-testid={testIds.mcp.detailProbe}>
+              立即探测
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={() => void handleSave(true)}
+              loading={saving || probing}
+            >
+              保存并探测
+            </Button>
           </div>
         </Card>
 
-        <div className="page-stack system-side-stack">
+        <div className="page-stack">
           <Card className="config-panel-card">
             <div className="config-card-header">
               <div className="page-section-title">
-                <Typography.Title level={4}>修复计划</Typography.Title>
+                <Typography.Title level={4}>当前可用工具</Typography.Title>
               </div>
-              {repairPlan ? <Tag>{repairPlan.diagnosisLabel}</Tag> : null}
+              <Tag>{entry.toolCountKnown ? `${entry.toolCount} 个` : '待探测'}</Tag>
             </div>
 
-            {repairPlan ? (
-              <div className="page-stack">
-                <Alert
-                  type={repairPlan.status === 'ready' ? 'success' : repairPlan.status === 'blocked' ? 'warning' : 'error'}
-                  message={repairPlan.summary}
-                  description={repairPlan.detail}
-                />
-
-                {repairPlan.missingEnv.length > 0 ? (
-                  <div className="tag-cloud">
-                    {repairPlan.missingEnv.map((item) => <Tag key={item}>{item}</Tag>)}
-                  </div>
-                ) : null}
-
-                <div className="page-scroll-shell mcp-repair-shell">
-                  <List
-                    dataSource={repairPlan.steps}
-                    renderItem={(item) => (
-                      <List.Item>
-                        <div className="page-stack">
-                          <Space wrap>
-                            <Text strong>{item.title}</Text>
-                            <Tag>{item.safe ? '受限步骤' : '危险步骤'}</Tag>
-                          </Space>
-                          <Text type="secondary">{item.description}</Text>
-                        </div>
-                      </List.Item>
-                    )}
-                  />
-                </div>
-
-                <div className="page-meta-grid system-side-grid">
-                  <div className="page-meta-card">
-                    <span>修复 worker</span>
-                    <strong>{repairPlan.worker.configured ? '已配置' : '未配置'}</strong>
-                  </div>
-                  <div className="page-meta-card">
-                    <span>危险模式</span>
-                    <strong>{repairPlan.worker.dangerousAvailable ? '可显式启用' : '默认关闭'}</strong>
-                  </div>
-                  <div className="page-meta-card">
-                    <span>最近修复状态</span>
-                    <strong>{repairPlan.run.status}</strong>
-                  </div>
-                  <div className="page-meta-card">
-                    <span>最近请求</span>
-                    <strong>{formatDateTimeZh(repairPlan.run.lastRequestedAt)}</strong>
-                  </div>
-                </div>
-
-                {repairPlan.run.commandPreview ? (
-                  <div className="mono-block mono-block-large">{repairPlan.run.commandPreview}</div>
-                ) : (
-                  <Text type="secondary">未配置修复命令。</Text>
-                )}
-
-                <Space wrap>
-                  <Button onClick={() => void handleRepair(false)} disabled={!repairPlan.worker.configured} loading={repairingMode === 'bounded'}>
-                    运行受限修复
-                  </Button>
-                  <Button onClick={() => void handleRepair(true)} disabled={!repairPlan.worker.dangerousAvailable} loading={repairingMode === 'dangerous'}>
-                    运行危险修复
-                  </Button>
-                  <Button onClick={() => void handleProbe()} loading={probing}>
-                    修复后重新探测
-                  </Button>
-                </Space>
-              </div>
-            ) : (
-              <Empty description="暂未生成修复计划" className="empty-block" />
-            )}
-          </Card>
-
-          <Card className="config-panel-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>隔离测试聊天</Typography.Title>
-              </div>
-              {testChat ? <Tag>{testChat.session.messageCount} 条</Tag> : null}
-            </div>
-
-            {testChat ? (
-              <div className="page-stack">
-                <div className="tag-cloud">
-                  {(entry.toolNames && entry.toolNames.length > 0)
-                    ? entry.toolNames.map((toolName) => <Tag key={toolName}>{toolName}</Tag>)
-                    : <Tag>当前没有缓存工具列表</Tag>}
-                </div>
-
-                <div className="mono-block mono-block-large mcp-test-chat-shell">
-                  {testChat.messages.length
-                    ? testChat.messages.map((message) => `[${message.role}] ${message.content || '--'}`).join('\n\n')
-                    : '当前还没有隔离测试聊天记录'}
-                </div>
-
-                {testChat.recentToolActivity.length > 0 ? (
-                  <div className="page-scroll-shell mcp-activity-shell">
-                    <List
-                      dataSource={testChat.recentToolActivity}
-                      renderItem={(item) => (
-                        <List.Item>
-                          <div className="page-stack">
-                            <Space wrap>
-                              <Text strong>{item.toolName}</Text>
-                              <Tag>{item.source}</Tag>
-                            </Space>
-                            <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
-                          </div>
-                        </List.Item>
-                      )}
-                    />
-                  </div>
-                ) : null}
-
-                <Input.TextArea
-                  value={testInput}
-                  onChange={(event) => setTestInput(event.target.value)}
-                  placeholder="输入一条只针对当前 MCP 的测试消息"
-                  style={{ minHeight: 120 }}
-                  data-testid={testIds.mcp.detailTestInput}
-                />
-
-                <Space wrap>
-                  <Button
-                    type="primary"
-                    onClick={() => void handleSendTestChat()}
-                    loading={sendingTestChat}
-                    data-testid={testIds.mcp.detailTestSend}
-                  >
-                    发送测试消息
-                  </Button>
-                  <Button onClick={() => void handleClearTestChat()} loading={clearingTestChat}>
-                    清空测试聊天
-                  </Button>
-                </Space>
-              </div>
-            ) : (
-              <Empty description="暂时无法读取测试会话" className="empty-block" />
-            )}
-          </Card>
-
-          <Card className="config-panel-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>探测摘要</Typography.Title>
-              </div>
-            </div>
             <div className="page-meta-grid system-side-grid">
               <div className="page-meta-card">
                 <span>最后状态</span>
@@ -612,52 +419,19 @@ export default function McpServerDetailPage() {
                 <strong>{entry.lastToolSyncAt ? formatDateTimeZh(entry.lastToolSyncAt) : '--'}</strong>
               </div>
             </div>
-            <div className="mono-block mono-block-large">
-              {(entry.toolNames && entry.toolNames.length > 0) ? entry.toolNames.join('\n') : '最近一次探测还没有缓存工具列表'}
-            </div>
-          </Card>
+            {probe && !probe.ok && probe.missingEnv.length > 0 ? (
+              <div className="tag-cloud">
+                {probe.missingEnv.map((item) => <Tag key={item}>{item}</Tag>)}
+              </div>
+            ) : null}
 
-          <DevOnly>
-          <Card className="config-panel-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>安装元数据</Typography.Title>
+            {toolNames.length > 0 ? (
+              <div className="tag-cloud mcp-tool-cloud">
+                {toolNames.map((toolName) => <Tag key={toolName}>{toolName}</Tag>)}
               </div>
-            </div>
-            <div className="detail-grid">
-              <div className="detail-block">
-                <Text type="secondary">来源仓库</Text>
-                <div className="mono-block mono-block-large">{entry.repoUrl || '当前没有仓库来源'}</div>
-              </div>
-              <div className="detail-block">
-                <Text type="secondary">安装目录</Text>
-                <div className="mono-block mono-block-large">{entry.installDir || '非受管安装'}</div>
-              </div>
-              <div className="detail-block">
-                <Text type="secondary">必填环境变量</Text>
-                <div className="mono-block mono-block-large">
-                  {(entry.requiredEnv && entry.requiredEnv.length > 0) ? entry.requiredEnv.join('\n') : '无'}
-                </div>
-              </div>
-              <div className="detail-block">
-                <Text type="secondary">安装步骤</Text>
-                <div className="mono-block mono-block-large">
-                  {(entry.installSteps && entry.installSteps.length > 0) ? entry.installSteps.join('\n') : '无'}
-                </div>
-              </div>
-            </div>
-          </Card>
-          </DevOnly>
-
-          <Card className="config-panel-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>移除 MCP</Typography.Title>
-              </div>
-            </div>
-            <Button danger icon={<DeleteOutlined />} onClick={handleRemove}>
-              移除当前 MCP
-            </Button>
+            ) : (
+              <Empty description="还没有可用工具，保存配置后点一次“立即探测”即可。" className="empty-block" />
+            )}
           </Card>
         </div>
       </div>

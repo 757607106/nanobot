@@ -1,4 +1,4 @@
-"""Knowledge-base models for the first enterprise KB slice."""
+"""Knowledge-base models aligned with the Yuxi-Know style data shape."""
 
 from __future__ import annotations
 
@@ -19,11 +19,9 @@ class KnowledgeDocumentStatus(StrEnum):
     PARSED = "parsed"
     INDEXING = "indexing"
     INDEXED = "indexed"
-    KG_BUILDING = "kg_building"
-    KG_BUILT = "kg_built"
+    FOLDER = "folder"
     ERROR_PARSING = "error_parsing"
     ERROR_INDEXING = "error_indexing"
-    ERROR_KG = "error_kg"
 
 
 class KnowledgeJobStatus(StrEnum):
@@ -34,47 +32,130 @@ class KnowledgeJobStatus(StrEnum):
 
 
 @dataclass(slots=True)
-class KnowledgeRetrievalProfile:
-    mode: str = "hybrid"  # LightRAG modes: local, global, hybrid, naive
-    top_k: int = 8
-    chunk_size: int = 800
-    chunk_overlap: int = 120
-    citation_required: bool = True
-    vlm_enhanced: bool = False  # VLM-enhanced query mode
-    metadata_filters: dict[str, Any] = field(default_factory=dict)
+class KnowledgeQueryParams:
+    mode: str = "mix"
+    top_k: int = 10
+    chunk_top_k: int = 12
+    response_type: str = "Multiple Paragraphs"
+    only_need_context: bool = True
+    only_need_prompt: bool = False
+    enable_rerank: bool = False
+    rerank_model: str | None = None
+    options: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any] | None) -> "KnowledgeRetrievalProfile":
-        payload = payload or {}
+    def from_dict(
+        cls,
+        payload: dict[str, Any] | None,
+        *,
+        defaults: dict[str, Any] | None = None,
+    ) -> "KnowledgeQueryParams":
+        base = dict(defaults or {})
+        data = {
+            **base,
+            **dict(payload or {}),
+        }
+        known_keys = {
+            "mode",
+            "top_k",
+            "topK",
+            "chunk_top_k",
+            "chunkTopK",
+            "response_type",
+            "responseType",
+            "only_need_context",
+            "onlyNeedContext",
+            "only_need_prompt",
+            "onlyNeedPrompt",
+            "enable_rerank",
+            "enableRerank",
+            "rerank_model",
+            "rerankModel",
+            "options",
+        }
+        extra_options = {
+            key: value
+            for key, value in data.items()
+            if key not in known_keys and value is not None
+        }
+        options = {
+            **dict(base.get("options") or {}),
+            **dict(data.get("options") or {}),
+        }
+        options.update(extra_options)
         return cls(
-            mode=str(payload.get("mode") or "hybrid").strip() or "hybrid",
-            top_k=max(1, int(payload.get("top_k") or payload.get("topK") or 8)),
-            chunk_size=max(200, int(payload.get("chunk_size") or payload.get("chunkSize") or 800)),
-            chunk_overlap=max(0, int(payload.get("chunk_overlap") or payload.get("chunkOverlap") or 120)),
-            citation_required=bool(
-                payload.get("citation_required")
-                if "citation_required" in payload
-                else payload.get("citationRequired", True)
+            mode=str(data.get("mode") or "mix").strip() or "mix",
+            top_k=max(1, int(data.get("top_k") or data.get("topK") or 10)),
+            chunk_top_k=max(1, int(data.get("chunk_top_k") or data.get("chunkTopK") or 12)),
+            response_type=str(data.get("response_type") or data.get("responseType") or "Multiple Paragraphs").strip()
+            or "Multiple Paragraphs",
+            only_need_context=bool(
+                data.get("only_need_context")
+                if "only_need_context" in data
+                else data.get("onlyNeedContext", True)
             ),
-            vlm_enhanced=bool(
-                payload.get("vlm_enhanced")
-                if "vlm_enhanced" in payload
-                else payload.get("vlmEnhanced", False)
+            only_need_prompt=bool(
+                data.get("only_need_prompt")
+                if "only_need_prompt" in data
+                else data.get("onlyNeedPrompt", False)
             ),
-            metadata_filters=dict(
-                payload.get("metadata_filters") or payload.get("metadataFilters") or {}
+            enable_rerank=bool(
+                data.get("enable_rerank")
+                if "enable_rerank" in data
+                else data.get("enableRerank", False)
             ),
+            rerank_model=str(data.get("rerank_model") or data.get("rerankModel") or "").strip() or None,
+            options=options,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["topK"] = payload.pop("top_k")
-        payload["chunkSize"] = payload.pop("chunk_size")
-        payload["chunkOverlap"] = payload.pop("chunk_overlap")
-        payload["citationRequired"] = payload.pop("citation_required")
-        payload["vlmEnhanced"] = payload.pop("vlm_enhanced")
-        payload["metadataFilters"] = payload.pop("metadata_filters")
-        return payload
+        return {
+            "mode": self.mode,
+            "topK": self.top_k,
+            "chunkTopK": self.chunk_top_k,
+            "responseType": self.response_type,
+            "onlyNeedContext": self.only_need_context,
+            "onlyNeedPrompt": self.only_need_prompt,
+            "enableRerank": self.enable_rerank,
+            "rerankModel": self.rerank_model,
+            "options": dict(self.options),
+        }
+
+
+KnowledgeRetrievalProfile = KnowledgeQueryParams
+
+
+def default_query_params_payload(kb_type: str | None) -> dict[str, Any]:
+    normalized = str(kb_type or "lightrag").strip().lower()
+    if normalized == "milvus":
+        return {
+            "mode": "vector",
+            "topK": 10,
+            "chunkTopK": 12,
+            "responseType": "Multiple Paragraphs",
+            "onlyNeedContext": False,
+            "onlyNeedPrompt": False,
+            "enableRerank": False,
+            "options": {
+                "search_mode": "vector",
+                "similarity_threshold": 0.0,
+                "keyword_top_k": 50,
+            },
+        }
+    return {
+        "mode": "mix",
+        "topK": 10,
+        "chunkTopK": 12,
+        "responseType": "Multiple Paragraphs",
+        "onlyNeedContext": True,
+        "onlyNeedPrompt": False,
+        "enableRerank": False,
+        "options": {},
+    }
+
+
+def default_query_params_for_kb_type(kb_type: str | None) -> KnowledgeQueryParams:
+    return KnowledgeQueryParams.from_dict({}, defaults=default_query_params_payload(kb_type))
 
 
 @dataclass(slots=True)
@@ -85,8 +166,15 @@ class KnowledgeBaseDefinition:
     name: str
     description: str = ""
     enabled: bool = True
+    kb_type: str = "lightrag"
+    embed_info: dict[str, Any] = field(default_factory=dict)
+    llm_info: dict[str, Any] = field(default_factory=dict)
+    query_params: KnowledgeQueryParams = field(default_factory=KnowledgeQueryParams)
+    additional_params: dict[str, Any] = field(default_factory=dict)
+    share_config: dict[str, Any] = field(default_factory=dict)
+    mindmap: dict[str, Any] | None = None
+    sample_questions: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
-    retrieval_profile: KnowledgeRetrievalProfile = field(default_factory=KnowledgeRetrievalProfile)
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
 
@@ -94,118 +182,183 @@ class KnowledgeBaseDefinition:
         return json.dumps(
             {
                 "description": self.description,
+                "kb_type": self.kb_type,
+                "embed_info": self.embed_info,
+                "llm_info": self.llm_info,
+                "query_params": self.query_params.to_dict(),
+                "additional_params": self.additional_params,
+                "share_config": self.share_config,
+                "mindmap": self.mindmap,
+                "sample_questions": self.sample_questions,
                 "tags": self.tags,
-                "retrieval_profile": self.retrieval_profile.to_dict(),
             },
             ensure_ascii=False,
         )
 
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> "KnowledgeBaseDefinition":
-        stored = json.loads(record["config_json"])
+        stored = json.loads(record.get("config_json") or "{}")
+        kb_type = str(stored.get("kb_type") or stored.get("kbType") or "lightrag")
         return cls(
             kb_id=record["kb_id"],
             tenant_id=record["tenant_id"],
             instance_id=record["instance_id"],
             name=record["name"],
-            description=stored.get("description", ""),
+            description=str(stored.get("description") or ""),
             enabled=bool(record.get("enabled", True)),
-            tags=list(stored.get("tags") or []),
-            retrieval_profile=KnowledgeRetrievalProfile.from_dict(stored.get("retrieval_profile")),
+            kb_type=kb_type,
+            embed_info=dict(stored.get("embed_info") or stored.get("embedInfo") or {}),
+            llm_info=dict(stored.get("llm_info") or stored.get("llmInfo") or {}),
+            query_params=KnowledgeQueryParams.from_dict(
+                stored.get("query_params")
+                or stored.get("queryParams")
+                or stored.get("retrieval_profile")
+                or stored.get("retrievalProfile"),
+                defaults=default_query_params_payload(kb_type),
+            ),
+            additional_params=dict(
+                stored.get("additional_params") or stored.get("additionalParams") or {}
+            ),
+            share_config=dict(stored.get("share_config") or stored.get("shareConfig") or {}),
+            mindmap=stored.get("mindmap"),
+            sample_questions=[str(item).strip() for item in (stored.get("sample_questions") or stored.get("sampleQuestions") or []) if str(item).strip()],
+            tags=[str(item).strip() for item in (stored.get("tags") or []) if str(item).strip()],
             created_at=record.get("created_at") or now_iso(),
             updated_at=record.get("updated_at") or now_iso(),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["kbId"] = payload.pop("kb_id")
-        payload["tenantId"] = payload.pop("tenant_id")
-        payload["instanceId"] = payload.pop("instance_id")
-        payload.pop("retrieval_profile", None)
-        payload["retrievalProfile"] = self.retrieval_profile.to_dict()
-        payload["createdAt"] = payload.pop("created_at")
-        payload["updatedAt"] = payload.pop("updated_at")
-        return payload
+        return {
+            "kbId": self.kb_id,
+            "dbId": self.kb_id,
+            "tenantId": self.tenant_id,
+            "instanceId": self.instance_id,
+            "name": self.name,
+            "description": self.description,
+            "enabled": self.enabled,
+            "kbType": self.kb_type,
+            "embedInfo": dict(self.embed_info),
+            "llmInfo": dict(self.llm_info),
+            "queryParams": self.query_params.to_dict(),
+            "retrievalProfile": self.query_params.to_dict(),
+            "additionalParams": dict(self.additional_params),
+            "shareConfig": dict(self.share_config),
+            "mindmap": self.mindmap,
+            "sampleQuestions": list(self.sample_questions),
+            "tags": list(self.tags),
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+        }
 
 
 @dataclass(slots=True)
-class KnowledgeDocument:
-    doc_id: str
+class KnowledgeFile:
+    file_id: str
     kb_id: str
     tenant_id: str
     instance_id: str
-    source_type: str
-    title: str
-    source_id: str | None = None
-    mime_type: str | None = None
-    file_name: str | None = None
-    source_uri: str | None = None
-    file_path: str | None = None
-    parsed_path: str | None = None
-    checksum: str | None = None
-    parser_name: str | None = None
-    doc_status: KnowledgeDocumentStatus = KnowledgeDocumentStatus.UPLOADED
-    chunk_count: int = 0
-    metadata: dict[str, Any] = field(default_factory=dict)
-    error_summary: str | None = None
+    parent_id: str | None
+    filename: str
+    original_filename: str | None = None
+    file_type: str = "file"
+    path: str = "/"
+    raw_path: str | None = None
+    markdown_file: str | None = None
+    status: KnowledgeDocumentStatus = KnowledgeDocumentStatus.UPLOADED
+    content_hash: str | None = None
+    file_size: int = 0
+    content_type: str | None = None
+    processing_params: dict[str, Any] = field(default_factory=dict)
+    is_folder: bool = False
+    error_message: str | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
 
     @classmethod
-    def from_record(cls, record: dict[str, Any]) -> "KnowledgeDocument":
+    def from_record(cls, record: dict[str, Any]) -> "KnowledgeFile":
+        status_value = record.get("status") or (
+            KnowledgeDocumentStatus.FOLDER.value if record.get("is_folder") else KnowledgeDocumentStatus.UPLOADED.value
+        )
         return cls(
-            doc_id=record["doc_id"],
+            file_id=record["file_id"],
             kb_id=record["kb_id"],
             tenant_id=record["tenant_id"],
             instance_id=record["instance_id"],
-            source_id=record.get("source_id"),
-            source_type=record["source_type"],
-            title=record["title"],
-            mime_type=record.get("mime_type"),
-            file_name=record.get("file_name"),
-            source_uri=record.get("source_uri"),
-            file_path=record.get("file_path"),
-            parsed_path=record.get("parsed_path"),
-            checksum=record.get("checksum"),
-            parser_name=record.get("parser_name"),
-            doc_status=KnowledgeDocumentStatus(record.get("doc_status") or KnowledgeDocumentStatus.UPLOADED.value),
-            chunk_count=int(record.get("chunk_count") or 0),
-            metadata=json.loads(record.get("metadata_json") or "{}"),
-            error_summary=record.get("error_summary"),
+            parent_id=record.get("parent_id"),
+            filename=record["filename"],
+            original_filename=record.get("original_filename"),
+            file_type=record.get("file_type") or "file",
+            path=record.get("path") or "/",
+            raw_path=record.get("raw_path"),
+            markdown_file=record.get("markdown_file"),
+            status=KnowledgeDocumentStatus(status_value),
+            content_hash=record.get("content_hash"),
+            file_size=int(record.get("file_size") or 0),
+            content_type=record.get("content_type"),
+            processing_params=json.loads(record.get("processing_params_json") or "{}"),
+            is_folder=bool(record.get("is_folder")),
+            error_message=record.get("error_message"),
+            created_by=record.get("created_by"),
+            updated_by=record.get("updated_by"),
             created_at=record.get("created_at") or now_iso(),
             updated_at=record.get("updated_at") or now_iso(),
         )
 
+    def to_processing_params_json(self) -> str:
+        return json.dumps(self.processing_params, ensure_ascii=False)
+
     def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["docId"] = payload.pop("doc_id")
-        payload["kbId"] = payload.pop("kb_id")
-        payload["tenantId"] = payload.pop("tenant_id")
-        payload["instanceId"] = payload.pop("instance_id")
-        payload["sourceId"] = payload.pop("source_id")
-        payload["sourceType"] = payload.pop("source_type")
-        payload["mimeType"] = payload.pop("mime_type")
-        payload["fileName"] = payload.pop("file_name")
-        payload["sourceUri"] = payload.pop("source_uri")
-        payload["filePath"] = payload.pop("file_path")
-        payload["parsedPath"] = payload.pop("parsed_path")
-        payload["parserName"] = payload.pop("parser_name")
-        payload.pop("doc_status", None)
-        payload["docStatus"] = self.doc_status.value
-        payload["chunkCount"] = payload.pop("chunk_count")
-        payload["errorSummary"] = payload.pop("error_summary")
-        payload["createdAt"] = payload.pop("created_at")
-        payload["updatedAt"] = payload.pop("updated_at")
-        return payload
+        return {
+            "fileId": self.file_id,
+            "docId": self.file_id,
+            "kbId": self.kb_id,
+            "dbId": self.kb_id,
+            "tenantId": self.tenant_id,
+            "instanceId": self.instance_id,
+            "parentId": self.parent_id,
+            "filename": self.filename,
+            "title": self.filename,
+            "originalFilename": self.original_filename,
+            "fileType": self.file_type,
+            "path": self.path,
+            "rawPath": self.raw_path,
+            "filePath": self.raw_path,
+            "markdownFile": self.markdown_file,
+            "parsedPath": self.markdown_file,
+            "status": self.status.value,
+            "docStatus": self.status.value,
+            "contentHash": self.content_hash,
+            "checksum": self.content_hash,
+            "fileSize": self.file_size,
+            "chunkCount": int(self.processing_params.get("chunksCount") or 0),
+            "contentType": self.content_type,
+            "mimeType": self.content_type,
+            "processingParams": dict(self.processing_params),
+            "metadata": dict(self.processing_params),
+            "isFolder": self.is_folder,
+            "errorMessage": self.error_message,
+            "errorSummary": self.error_message,
+            "createdBy": self.created_by,
+            "updatedBy": self.updated_by,
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+        }
+
+
+KnowledgeDocument = KnowledgeFile
+KnowledgeSource = KnowledgeFile
 
 
 @dataclass(slots=True)
-class KnowledgeIngestJob:
+class KnowledgeJob:
     job_id: str
     tenant_id: str
     instance_id: str
     kb_id: str
-    doc_id: str
+    job_kind: str
+    target_file_ids: list[str]
     status: KnowledgeJobStatus
     track_id: str
     error_summary: str | None = None
@@ -213,13 +366,14 @@ class KnowledgeIngestJob:
     updated_at: str = field(default_factory=now_iso)
 
     @classmethod
-    def from_record(cls, record: dict[str, Any]) -> "KnowledgeIngestJob":
+    def from_record(cls, record: dict[str, Any]) -> "KnowledgeJob":
         return cls(
             job_id=record["job_id"],
             tenant_id=record["tenant_id"],
             instance_id=record["instance_id"],
             kb_id=record["kb_id"],
-            doc_id=record["doc_id"],
+            job_kind=str(record.get("job_kind") or "ingest"),
+            target_file_ids=[str(item) for item in json.loads(record.get("target_file_ids_json") or "[]")],
             status=KnowledgeJobStatus(record["status"]),
             track_id=record["track_id"],
             error_summary=record.get("error_summary"),
@@ -228,70 +382,20 @@ class KnowledgeIngestJob:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["jobId"] = payload.pop("job_id")
-        payload["tenantId"] = payload.pop("tenant_id")
-        payload["instanceId"] = payload.pop("instance_id")
-        payload["kbId"] = payload.pop("kb_id")
-        payload["docId"] = payload.pop("doc_id")
-        payload["status"] = self.status.value
-        payload["trackId"] = payload.pop("track_id")
-        payload["errorSummary"] = payload.pop("error_summary")
-        payload["createdAt"] = payload.pop("created_at")
-        payload["updatedAt"] = payload.pop("updated_at")
-        return payload
+        return {
+            "jobId": self.job_id,
+            "tenantId": self.tenant_id,
+            "instanceId": self.instance_id,
+            "kbId": self.kb_id,
+            "dbId": self.kb_id,
+            "jobKind": self.job_kind,
+            "targetFileIds": list(self.target_file_ids),
+            "status": self.status.value,
+            "trackId": self.track_id,
+            "errorSummary": self.error_summary,
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+        }
 
 
-@dataclass(slots=True)
-class KnowledgeSource:
-    source_id: str
-    kb_id: str
-    tenant_id: str
-    instance_id: str
-    source_type: str
-    title: str
-    enabled: bool = True
-    source_uri: str | None = None
-    latest_doc_id: str | None = None
-    sync_count: int = 0
-    last_synced_at: str | None = None
-    config: dict[str, Any] = field(default_factory=dict)
-    created_at: str = field(default_factory=now_iso)
-    updated_at: str = field(default_factory=now_iso)
-
-    @classmethod
-    def from_record(cls, record: dict[str, Any]) -> "KnowledgeSource":
-        return cls(
-            source_id=record["source_id"],
-            kb_id=record["kb_id"],
-            tenant_id=record["tenant_id"],
-            instance_id=record["instance_id"],
-            source_type=record["source_type"],
-            title=record["title"],
-            enabled=bool(record.get("enabled", True)),
-            source_uri=record.get("source_uri"),
-            latest_doc_id=record.get("latest_doc_id"),
-            sync_count=int(record.get("sync_count") or 0),
-            last_synced_at=record.get("last_synced_at"),
-            config=json.loads(record.get("config_json") or "{}"),
-            created_at=record.get("created_at") or now_iso(),
-            updated_at=record.get("updated_at") or now_iso(),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["sourceId"] = payload.pop("source_id")
-        payload["kbId"] = payload.pop("kb_id")
-        payload["tenantId"] = payload.pop("tenant_id")
-        payload["instanceId"] = payload.pop("instance_id")
-        payload["sourceType"] = payload.pop("source_type")
-        payload["sourceUri"] = payload.pop("source_uri")
-        payload["latestDocId"] = payload.pop("latest_doc_id")
-        payload["syncCount"] = payload.pop("sync_count")
-        payload["lastSyncedAt"] = payload.pop("last_synced_at")
-        payload["createdAt"] = payload.pop("created_at")
-        payload["updatedAt"] = payload.pop("updated_at")
-        return payload
-
-    def to_storage_json(self) -> str:
-        return json.dumps(self.config, ensure_ascii=False)
+KnowledgeIngestJob = KnowledgeJob

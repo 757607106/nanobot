@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import McpPage from './pages/McpPage'
+import McpPage, { parseMappingInput } from './pages/McpPage'
 import { renderWithProviders } from './test/renderApp'
 
 const mockApi = vi.hoisted(() => ({
@@ -177,6 +177,15 @@ describe('McpPage', () => {
           toolTimeout: 30,
         },
       }),
+    })
+  })
+
+  it('accepts pasted JSON objects for mapping fields', () => {
+    expect(parseMappingInput('{"Authorization":"Bearer token"}', '请求头', ':')).toEqual({
+      Authorization: 'Bearer token',
+    })
+    expect(parseMappingInput('{"GITHUB_TOKEN":"token-123"}', '环境变量', '=')).toEqual({
+      GITHUB_TOKEN: 'token-123',
     })
   })
 

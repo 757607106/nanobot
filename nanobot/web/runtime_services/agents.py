@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from nanobot.agent.middleware import KnowledgeBindingMiddleware
 from nanobot.agent.loop import AgentLoop
 from nanobot.agent.skills import SkillsLoader
 from nanobot.providers.registry import find_by_model
@@ -50,35 +51,6 @@ class WebAgentRuntimeService:
             if message.get("role") == "assistant":
                 return self.state.chat_runtime.format_message(index + 1, session_id, message)
         return None
-
-    @staticmethod
-    def _build_knowledge_prompt_block(hits: list[dict[str, Any]]) -> str:
-        if not hits:
-            return ""
-        sections = [
-            "# Retrieved Knowledge",
-            "Use the following evidence only when it is relevant to the user's request.",
-            "Prefer citing the source title or URL in plain language when you rely on it.",
-        ]
-        for index, hit in enumerate(hits, start=1):
-            citation = hit.get("citation") or {}
-            label = citation.get("title") or hit.get("title") or f"Chunk {index}"
-            source_uri = citation.get("sourceUri")
-            source_type = citation.get("sourceType") or "knowledge"
-            header = f"## Evidence {index}: {label}"
-            meta = f"Source Type: {source_type}"
-            if source_uri:
-                meta += f"\nSource URI: {source_uri}"
-            sections.append(f"{header}\n{meta}\n\n{hit.get('content', '').strip()}")
-        return "\n\n".join(sections)
-
-    def _retrieve_bound_knowledge(self, agent: dict[str, Any], task: str) -> dict[str, Any]:
-        if not self.state.app_knowledge:
-            return {"hits": [], "requestedMode": "hybrid", "effectiveMode": "hybrid"}
-        kb_ids = list(agent.get("knowledgeBindingIds") or [])
-        if not kb_ids:
-            return {"hits": [], "requestedMode": "hybrid", "effectiveMode": "hybrid"}
-        return self.state.app_knowledge.retrieve(kb_ids=kb_ids, query=task, limit=6)
 
     def _validate_agent_bindings(
         self,
@@ -210,12 +182,17 @@ class WebAgentRuntimeService:
             if include_workspace_memory is not None
             else (str(agent.get("memoryScope") or "agent_profile") == "workspace_shared")
         )
-        knowledge_result = self._retrieve_bound_knowledge(agent, task)
-        knowledge_hits = list(knowledge_result.get("hits") or [])
+        knowledge_binding = KnowledgeBindingMiddleware(self.state.app_knowledge).apply(
+            agent,
+            task,
+            base_tool_allowlist=list(agent.get("toolAllowlist", [])),
+        )
+        knowledge_hits = knowledge_binding.knowledge_hits
+        effective_tool_allowlist = knowledge_binding.effective_tool_allowlist
+        knowledge_names = list(knowledge_binding.event_payload.get("knowledgeNames") or [])
         prompt_sections = [str(agent.get("systemPrompt") or "").strip()]
         prompt_sections.extend(section for section in (additional_prompt_sections or []) if str(section or "").strip())
-        if knowledge_hits:
-            prompt_sections.append(self._build_knowledge_prompt_block(knowledge_hits))
+        prompt_sections.extend(knowledge_binding.prompt_sections)
         system_prompt_override = "\n\n".join(section for section in prompt_sections if section)
 
         record = self.state.runs.create_run(
@@ -246,21 +223,17 @@ class WebAgentRuntimeService:
             record.run_id,
             "bindings_resolved",
             {
-                "toolAllowlist": agent.get("toolAllowlist", []),
+                "toolAllowlist": effective_tool_allowlist,
                 "mcpServerIds": agent.get("mcpServerIds", []),
                 "skillIds": agent.get("skillIds", []),
                 "knowledgeBindingIds": agent.get("knowledgeBindingIds", []),
+                "knowledgeNames": knowledge_names,
             },
         )
         self.state.runs.append_event(
             record.run_id,
             "knowledge_retrieved",
-            {
-                "knowledgeBindingIds": agent.get("knowledgeBindingIds", []),
-                "requestedMode": knowledge_result.get("requestedMode"),
-                "effectiveMode": knowledge_result.get("effectiveMode"),
-                "hitCount": len(knowledge_hits),
-            },
+            dict(knowledge_binding.event_payload),
         )
 
         isolated_agent = AgentLoop(
@@ -279,11 +252,12 @@ class WebAgentRuntimeService:
             mcp_servers=config.tools.mcp_servers,
             channels_config=config.channels,
             run_registry=self.state.runs,
-            tool_allowlist=list(agent.get("toolAllowlist", [])),
+            tool_allowlist=effective_tool_allowlist,
             skill_names=list(agent.get("skillIds", [])),
             system_prompt_override=system_prompt_override,
             include_workspace_memory=effective_include_workspace_memory,
             memory_sections=memory_sections,
+            extra_tools=knowledge_binding.extra_tools,
         )
 
         progress_events: list[str] = []
@@ -335,7 +309,7 @@ class WebAgentRuntimeService:
                 sections=[
                     ("Task", task),
                     ("Result", response),
-                    ("Bindings", self._format_bindings_markdown(agent)),
+                    ("Bindings", self._format_bindings_markdown({**agent, "toolAllowlist": effective_tool_allowlist})),
                     ("Retrieved Knowledge", self._format_knowledge_hits_markdown(knowledge_hits)),
                 ],
             )
@@ -373,7 +347,7 @@ class WebAgentRuntimeService:
             "pendingKnowledgeBindings": list(agent.get("knowledgeBindingIds") or []),
             "knowledgeHits": knowledge_hits,
             "appliedBindings": {
-                "toolAllowlist": list(agent.get("toolAllowlist") or []),
+                "toolAllowlist": effective_tool_allowlist,
                 "mcpServerIds": list(agent.get("mcpServerIds") or []),
                 "skillIds": list(agent.get("skillIds") or []),
                 "knowledgeBindingIds": list(agent.get("knowledgeBindingIds") or []),

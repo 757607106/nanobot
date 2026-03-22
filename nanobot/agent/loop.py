@@ -19,6 +19,12 @@ from nanobot.agent.subagent import SubagentManager
 from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from nanobot.agent.tools.knowledge import (
+    KnowledgeBindingContext,
+    build_knowledge_binding_context,
+    get_common_kb_tools,
+)
+from nanobot.agent.tools.base import Tool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.shell import ExecTool
@@ -73,6 +79,10 @@ class AgentLoop:
         include_workspace_memory: bool = True,
         memory_sections: list[tuple[str, str]] | None = None,
         channel_dispatcher: Any | None = None,
+        extra_tools: list[Tool] | None = None,
+        knowledge_binding_context: KnowledgeBindingContext | None = None,
+        knowledge_service: Any | None = None,
+        bound_knowledge_ids: list[str] | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig, WebSearchConfig
 
@@ -115,6 +125,13 @@ class AgentLoop:
 
         self._running = False
         self._channel_dispatcher = channel_dispatcher
+        self._knowledge_binding_context = knowledge_binding_context or build_knowledge_binding_context(
+            knowledge_service,
+            bound_knowledge_ids,
+        )
+        self._extra_tools = list(extra_tools or [])
+        if self._knowledge_binding_context is not None:
+            self._extra_tools.extend(get_common_kb_tools(self._knowledge_binding_context))
         self._mcp_servers = mcp_servers or {}
         self._mcp_stack: AsyncExitStack | None = None
         self._mcp_connected = False
@@ -170,6 +187,8 @@ class AgentLoop:
         if self.cron_service:
             cron_tool = CronTool(self.cron_service)
             _register(cron_tool.name, cron_tool)
+        for tool in self._extra_tools:
+            _register(tool.name, tool)
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""

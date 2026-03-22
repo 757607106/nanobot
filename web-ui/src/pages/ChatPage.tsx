@@ -943,9 +943,7 @@ export default function ChatPage() {
         <aside className="chat-shell-side">
           <div className="chat-rail-head">
             <div className="chat-rail-brand">
-              <span className="chat-rail-brand-mark">nanobot</span>
               <span className="section-kicker">会话中心</span>
-              <Text type="secondary">独立聊天工作台</Text>
             </div>
             <Button
               type="primary"
@@ -1022,14 +1020,6 @@ export default function ChatPage() {
                 <Text type="secondary">{selectedSessionSubtitle}</Text>
               </div>
               <div className="chat-stage-actions">
-                <div className="chat-stage-tags">
-                  {workspaceData?.runtime.resolvedProvider ? (
-                    <Tag className="chat-stage-tag">{workspaceData.runtime.resolvedProvider}</Tag>
-                  ) : null}
-                  {workspaceData?.runtime.model ? (
-                    <Tag className="chat-stage-tag">{workspaceData.runtime.model}</Tag>
-                  ) : null}
-                </div>
                 <Button
                   type="text"
                   icon={<ReloadOutlined />}
@@ -1149,7 +1139,7 @@ export default function ChatPage() {
                         onClick={() => setLibraryOpen(true)}
                         disabled={mutatingSessionFiles || recentUploads.length === 0}
                       >
-                        导入文件
+                        历史文件
                       </Button>
                     </span>
                   }
@@ -1175,7 +1165,7 @@ export default function ChatPage() {
       </div>
 
       <Modal
-        title="从文件库导入"
+        title="历史文件"
         open={libraryOpen}
         footer={null}
         onCancel={() => setLibraryOpen(false)}
