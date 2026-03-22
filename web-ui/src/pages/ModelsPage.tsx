@@ -334,17 +334,6 @@ export default function ModelsPage() {
   }, [bindings, activeProviderName])
 
   const activeProviderConfig = config?.providers?.[activeProviderName || '']
-  const mineruConfig = config?.rag ?? {}
-
-  function updateRagConfig(field: 'mineruApiBase' | 'mineruApiToken' | 'mineruModelVersion', value: string | null) {
-    updateConfig((current) => ({
-      ...current,
-      rag: {
-        ...(current.rag ?? {}),
-        [field]: value,
-      },
-    }))
-  }
 
   return (
     <div className="page-stack">
@@ -363,49 +352,6 @@ export default function ModelsPage() {
       />
       
       <div className="studio-container" style={{ padding: '0 24px' }}>
-        <Card
-          title="MinerU 文档解析"
-          extra={(
-            <a href="https://mineru.net/apiManage/docs" target="_blank" rel="noreferrer">
-              官方文档
-            </a>
-          )}
-          style={{ marginBottom: 24 }}
-        >
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <div className="studio-form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-              <div className="studio-form-field">
-                <Text type="secondary">MinerU API Base</Text>
-                <Input
-                  value={mineruConfig.mineruApiBase || ''}
-                  onChange={(event) => updateRagConfig('mineruApiBase', event.target.value)}
-                  placeholder="https://mineru.net"
-                />
-              </div>
-              <div className="studio-form-field">
-                <Text type="secondary">MinerU API Token</Text>
-                <Input.Password
-                  value={mineruConfig.mineruApiToken || ''}
-                  onChange={(event) => updateRagConfig('mineruApiToken', event.target.value)}
-                  placeholder="官网申请的 API Token"
-                />
-              </div>
-              <div className="studio-form-field">
-                <Text type="secondary">MinerU 模型版本</Text>
-                <Select
-                  value={mineruConfig.mineruModelVersion || 'pipeline'}
-                  onChange={(value) => updateRagConfig('mineruModelVersion', value)}
-                  options={[
-                    { value: 'pipeline', label: 'pipeline' },
-                    { value: 'vlm', label: 'vlm' },
-                    { value: 'MinerU-HTML', label: 'MinerU-HTML' },
-                  ]}
-                />
-              </div>
-            </div>
-          </Space>
-        </Card>
-
         <Input.Search
           placeholder="搜索供应商..."
           value={searchQuery}

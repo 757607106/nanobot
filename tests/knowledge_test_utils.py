@@ -32,28 +32,6 @@ class FakeRAGEngine:
         self._docs: dict[str, dict[str, dict[str, str]]] = {}
         self.prepare_calls: list[tuple[str, str]] = []
 
-    async def parse_and_index(
-        self,
-        kb_id: str,
-        file_path: str,
-        *,
-        doc_id: str | None = None,
-        output_dir: str | None = None,
-        **kwargs,
-    ) -> ParseResult:
-        text = Path(file_path).read_text(encoding="utf-8", errors="ignore")
-        result = await self.insert_text(kb_id, text, doc_id=doc_id, file_path=file_path)
-        return ParseResult(
-            success=result.success,
-            parser_name="fake_rag_parser",
-            error=result.error,
-            metadata={
-                **dict(result.metadata or {}),
-                "output_dir": output_dir or "",
-                "file_path": file_path,
-            },
-        )
-
     async def insert_text(
         self,
         kb_id: str,

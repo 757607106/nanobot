@@ -300,9 +300,6 @@ class RAGConfig(Base):
     max_async: int = 4  # Official LightRAG MAX_ASYNC for LLM concurrency during query/index
     max_parallel_insert: int = 2  # Official LightRAG MAX_PARALLEL_INSERT for document ingest workers
     embedding_func_max_async: int = 8  # Official LightRAG EMBEDDING_FUNC_MAX_ASYNC for embedding concurrency
-    mineru_api_base: str = ""  # MinerU official API base URL, defaulting to https://mineru.net when empty
-    mineru_api_token: str = ""  # MinerU official API token
-    mineru_model_version: Literal["pipeline", "vlm", "MinerU-HTML"] = "pipeline"  # Official MinerU model version
     milvus: RagMilvusConfig = Field(default_factory=RagMilvusConfig)
     graph_store: RagGraphStoreConfig = Field(default_factory=RagGraphStoreConfig)
 

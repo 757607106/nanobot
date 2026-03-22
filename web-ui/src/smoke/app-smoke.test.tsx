@@ -1078,9 +1078,6 @@ function makeConfig() {
     rag: {
       llmBinding: 'deepseek-default',
       embeddingBinding: 'openai-embedding',
-      mineruApiBase: 'https://mineru.net',
-      mineruApiToken: 'mineru-token',
-      mineruModelVersion: 'vlm',
     },
   }
 }
@@ -3200,7 +3197,6 @@ describe('web app smoke pages', () => {
     renderPage(<ModelsPage />)
     expect(await screen.findByText('模型供应商')).toBeInTheDocument()
     expect(screen.getByText('保存所有配置')).toBeInTheDocument()
-    expect(screen.getByText('MinerU 文档解析')).toBeInTheDocument()
     expect(screen.getByText('DeepSeek')).toBeInTheDocument()
     fireEvent.click(screen.getByText('DeepSeek'))
     expect(await screen.findByText('云端供应商全局凭据')).toBeInTheDocument()

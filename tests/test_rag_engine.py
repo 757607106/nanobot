@@ -499,9 +499,6 @@ def test_create_rag_engine_from_config_uses_rag_specific_bindings(monkeypatch, t
                 "maxAsync": 3,
                 "maxParallelInsert": 1,
                 "embeddingFuncMaxAsync": 5,
-                "mineruApiBase": "https://mineru.net",
-                "mineruApiToken": "mineru-token",
-                "mineruModelVersion": "vlm",
             },
         }
     )
@@ -517,9 +514,6 @@ def test_create_rag_engine_from_config_uses_rag_specific_bindings(monkeypatch, t
     assert engine._embedding_model == "text-embedding-3-large"
     assert engine._llm_timeout == 42
     assert engine._embedding_timeout == 21
-    assert engine._mineru_api_base == "https://mineru.net"
-    assert engine._mineru_api_token == "mineru-token"
-    assert engine._mineru_model_version == "vlm"
     assert engine._lightrag_base_kwargs["vector_storage"] == "MilvusVectorDBStorage"
     assert engine._lightrag_base_kwargs["graph_storage"] == "NetworkXStorage"
     assert engine._lightrag_base_kwargs["default_llm_timeout"] == 42
@@ -758,80 +752,6 @@ def test_config_infers_embedding_capability_type_for_legacy_binding() -> None:
     )
 
     assert config.model_bindings["legacy-embed"].capability_type == "embedding"
-
-
-def test_require_mineru_success_accepts_zero_code() -> None:
-    payload = {
-        "code": 0,
-        "msg": "ok",
-        "data": {"batch_id": "batch-1"},
-    }
-
-    result = RAGEngine._require_mineru_success(payload, operation="file upload URL request")
-
-    assert result == {"batch_id": "batch-1"}
-
-
-@pytest.mark.asyncio
-async def test_rag_engine_parse_and_index_prefers_official_mineru_api(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(
-        storage_root=tmp_path / "storage",
-        default_model="openai/gpt-4o-mini",
-        mineru_api_token="mineru-token",
-        mineru_api_base="https://mineru.net",
-        mineru_model_version="vlm",
-    )
-    fake_rag = _FakeRag(
-        status_by_id={
-            "doc-1": {
-                "status": "processed",
-                "error_msg": "",
-                "chunks_count": 3,
-                "multimodal_processed": True,
-            }
-        },
-        ready=True,
-    )
-
-    async def _fake_mineru(file_path: str, *, output_dir: Path, doc_id: str | None = None):
-        from nanobot.platform.knowledge.rag_engine import MineruParseArtifacts
-
-        return MineruParseArtifacts(
-            content_list=[{"type": "text", "text": "hello", "page_idx": 0}],
-            output_dir=output_dir,
-            markdown="hello",
-            batch_id="batch-1",
-            model_version="vlm",
-            full_zip_url="https://cdn.example.com/result.zip",
-        )
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-    monkeypatch.setattr(engine, "_parse_file_with_mineru_api", _fake_mineru)
-
-    result = await engine.parse_and_index("kb-a", str(tmp_path / "demo.pdf"), doc_id="doc-1")
-
-    assert result.success is True
-    assert result.parser_name == "mineru_api"
-    assert result.metadata["mineru_batch_id"] == "batch-1"
-    assert fake_rag.process_calls == []
-    assert len(fake_rag.insert_calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_rag_engine_parse_and_index_rejects_office_without_mineru_api_token(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(
-        storage_root=tmp_path / "storage",
-        default_model="openai/gpt-4o-mini",
-    )
-    fake_rag = _FakeRag(ready=True)
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-
-    result = await engine.parse_and_index("kb-a", str(tmp_path / "demo.docx"), doc_id="doc-1")
-
-    assert result.success is False
-    assert "official MinerU API path" in str(result.error)
-    assert fake_rag.process_calls == []
 
 
 def test_rag_engine_runtime_config_applies_per_kb_overrides(tmp_path: Path) -> None:

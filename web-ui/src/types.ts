@@ -178,9 +178,6 @@ export interface ConfigMeta {
 export interface RagConfigData {
   llmBinding?: string | null
   embeddingBinding?: string | null
-  mineruApiBase?: string | null
-  mineruApiToken?: string | null
-  mineruModelVersion?: 'pipeline' | 'vlm' | 'MinerU-HTML' | null
 }
 
 export interface ConfigData {

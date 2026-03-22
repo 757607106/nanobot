@@ -9,13 +9,11 @@ that the rest of the platform relies on.
 from __future__ import annotations
 
 import asyncio
-import io
 import json
 import os
 import re
 import shutil
 import time
-import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -64,18 +62,6 @@ class RetrievalHit:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class MineruParseArtifacts:
-    """Normalized parse artifacts returned by the official MinerU API."""
-
-    content_list: list[dict[str, Any]]
-    output_dir: Path
-    markdown: str = ""
-    batch_id: str | None = None
-    model_version: str | None = None
-    full_zip_url: str | None = None
-
-
 # ---------------------------------------------------------------------------
 # RAG Engine
 # ---------------------------------------------------------------------------
@@ -86,7 +72,7 @@ class RAGEngine:
     *   Creates one ``RAGAnything`` instance per knowledge base (lazy).
     *   Adapts nanobot's ``Config`` into the LLM / embedding / vision
         functions that RAG-Anything expects.
-    *   Exposes ``parse_and_index``, ``insert_text``, ``query``, and
+    *   Exposes ``insert_text``, ``query``, and
         ``delete_kb`` as the public API consumed by ``KnowledgeBaseService``.
     """
 
@@ -108,9 +94,6 @@ class RAGEngine:
         embedding_max_tokens: int = 8192,
         llm_timeout: float = 60.0,
         embedding_timeout: float = 30.0,
-        mineru_api_base: str = "",
-        mineru_api_token: str = "",
-        mineru_model_version: str = "pipeline",
         lightrag_base_kwargs: dict[str, Any] | None = None,
         storage_env: dict[str, str] | None = None,
     ) -> None:
@@ -139,10 +122,6 @@ class RAGEngine:
         self._llm_timeout = max(float(llm_timeout or 0), 0.001)
         self._embedding_timeout = max(float(embedding_timeout or 0), 0.001)
 
-        # Document parsing config
-        self._mineru_api_base = mineru_api_base
-        self._mineru_api_token = mineru_api_token
-        self._mineru_model_version = mineru_model_version or "pipeline"
         self._lightrag_base_kwargs = dict(lightrag_base_kwargs or {})
         self._storage_env = {key: value for key, value in dict(storage_env or {}).items() if str(value or "").strip()}
 
@@ -491,7 +470,7 @@ class RAGEngine:
 
             config = RAGAnythingConfig(
                 working_dir=str(working_dir),
-                parser="mineru",
+                parser="docling",
                 parse_method="auto",
                 enable_image_processing=True,
                 enable_table_processing=True,
@@ -508,6 +487,10 @@ class RAGEngine:
                     "llm_model_name": str(runtime.get("llm_model") or self._default_model or "").strip(),
                 },
             )
+            # nanobot pre-parses documents before indexing and only uses direct
+            # content insertion, so external parser binary checks are dead weight.
+            if hasattr(rag, "_parser_installation_checked"):
+                rag._parser_installation_checked = True
 
             self._instances[kb_id] = rag
             self._instance_runtime_keys[kb_id] = runtime_key
@@ -791,225 +774,6 @@ class RAGEngine:
 
         return vision_model_func
 
-    @staticmethod
-    def _supported_mineru_api_extensions() -> set[str]:
-        return {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg", ".html"}
-
-    @staticmethod
-    def _office_like_extensions() -> set[str]:
-        return {".doc", ".docx", ".ppt", ".pptx", ".html"}
-
-    def _mineru_api_enabled(self) -> bool:
-        return bool(str(self._mineru_api_token or "").strip())
-
-    def _mineru_api_base_url(self) -> str:
-        return str(self._mineru_api_base or "").strip().rstrip("/") or "https://mineru.net"
-
-    def _mineru_model_version_for_file(self, file_path: str) -> str:
-        suffix = Path(file_path).suffix.lower()
-        configured = str(self._mineru_model_version or "pipeline").strip() or "pipeline"
-        if suffix == ".html":
-            return "MinerU-HTML"
-        if configured == "MinerU-HTML":
-            logger.warning(
-                "RAGEngine: MinerU-HTML only applies to .html files, fallback to pipeline for {}",
-                file_path,
-            )
-            return "pipeline"
-        return configured
-
-    def _should_use_mineru_api(self, file_path: str) -> bool:
-        return self._mineru_api_enabled() and Path(file_path).suffix.lower() in self._supported_mineru_api_extensions()
-
-    def _requires_official_mineru_api(self, file_path: str) -> bool:
-        return Path(file_path).suffix.lower() in self._office_like_extensions()
-
-    def _mineru_headers(self) -> dict[str, str]:
-        token = str(self._mineru_api_token or "").strip()
-        if not token:
-            raise RuntimeError("MinerU API token is not configured.")
-        return {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-
-    @staticmethod
-    def _require_mineru_success(payload: Any, *, operation: str) -> dict[str, Any]:
-        if not isinstance(payload, dict):
-            raise RuntimeError(f"MinerU {operation} returned an invalid response payload.")
-        raw_code = payload.get("code")
-        try:
-            code = int(raw_code)
-        except (TypeError, ValueError):
-            code = -1
-        if code != 0:
-            raise RuntimeError(f"MinerU {operation} failed: {payload.get('msg') or 'unknown error'}")
-        data = payload.get("data")
-        if not isinstance(data, dict):
-            raise RuntimeError(f"MinerU {operation} returned no data payload.")
-        return data
-
-    @staticmethod
-    def _normalize_mineru_content_list(
-        content_list: Any,
-        *,
-        asset_root: Path,
-    ) -> list[dict[str, Any]]:
-        if not isinstance(content_list, list):
-            return []
-
-        normalized: list[dict[str, Any]] = []
-        for index, item in enumerate(content_list):
-            if not isinstance(item, dict):
-                continue
-            next_item = dict(item)
-            img_path = str(next_item.get("img_path") or "").strip()
-            if img_path and not Path(img_path).is_absolute():
-                next_item["img_path"] = str((asset_root / img_path).resolve())
-            if next_item.get("page_idx") is None:
-                next_item["page_idx"] = 0
-            if next_item.get("type") == "text":
-                next_item["text"] = str(next_item.get("text") or "").strip()
-                if not next_item["text"]:
-                    continue
-            normalized.append(next_item)
-            if index > 100_000:
-                break
-        return normalized
-
-    @staticmethod
-    def _load_mineru_artifacts(output_dir: Path) -> tuple[list[dict[str, Any]], str, Path]:
-        content_file = next(output_dir.rglob("*_content_list.json"), None)
-        markdown_file = next(output_dir.rglob("full.md"), None)
-        asset_root = content_file.parent if content_file is not None else (
-            markdown_file.parent if markdown_file is not None else output_dir
-        )
-
-        content_list: list[dict[str, Any]] = []
-        if content_file is not None:
-            try:
-                loaded = json.loads(content_file.read_text(encoding="utf-8"))
-                if isinstance(loaded, list):
-                    content_list = loaded
-            except Exception as exc:
-                raise RuntimeError(f"Failed to read MinerU content_list output: {exc}") from exc
-
-        markdown = ""
-        if markdown_file is not None:
-            markdown = markdown_file.read_text(encoding="utf-8").strip()
-
-        return content_list, markdown, asset_root
-
-    async def _parse_file_with_mineru_api(
-        self,
-        file_path: str,
-        *,
-        output_dir: Path,
-        doc_id: str | None = None,
-    ) -> MineruParseArtifacts:
-        import httpx
-
-        source_path = Path(file_path)
-        if not source_path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        headers = self._mineru_headers()
-        base_url = self._mineru_api_base_url()
-        model_version = self._mineru_model_version_for_file(file_path)
-        data_id = str(doc_id or source_path.stem).strip() or source_path.stem
-        payload = {
-            "files": [{"name": source_path.name, "data_id": data_id}],
-            "model_version": model_version,
-        }
-        if model_version != "MinerU-HTML":
-            payload["enable_formula"] = True
-            payload["enable_table"] = True
-
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(connect=15.0, read=60.0, write=60.0, pool=60.0),
-            follow_redirects=True,
-        ) as client:
-            create_response = await client.post(
-                f"{base_url}/api/v4/file-urls/batch",
-                headers=headers,
-                json=payload,
-            )
-            create_response.raise_for_status()
-            create_data = self._require_mineru_success(
-                create_response.json(),
-                operation="file upload URL request",
-            )
-            batch_id = str(create_data.get("batch_id") or "").strip()
-            file_urls = create_data.get("file_urls")
-            if not batch_id or not isinstance(file_urls, list) or not file_urls:
-                raise RuntimeError("MinerU file upload URL request returned no batch_id or file_urls.")
-
-            upload_response = await client.put(str(file_urls[0]), content=source_path.read_bytes())
-            upload_response.raise_for_status()
-
-            result: dict[str, Any] | None = None
-            for _ in range(180):
-                poll_response = await client.get(
-                    f"{base_url}/api/v4/extract-results/batch/{batch_id}",
-                    headers=headers,
-                )
-                poll_response.raise_for_status()
-                poll_data = self._require_mineru_success(
-                    poll_response.json(),
-                    operation="batch result query",
-                )
-                extract_result = poll_data.get("extract_result")
-                if not isinstance(extract_result, list) or not extract_result:
-                    await asyncio.sleep(1.0)
-                    continue
-                result = next(
-                    (
-                        item for item in extract_result
-                        if str(item.get("data_id") or "").strip() == data_id
-                    ),
-                    extract_result[0],
-                )
-                state = str(result.get("state") or "").strip().lower()
-                if state == "done":
-                    break
-                if state == "failed":
-                    raise RuntimeError(str(result.get("err_msg") or "MinerU parsing failed."))
-                await asyncio.sleep(1.0)
-            else:
-                raise RuntimeError(f"MinerU batch {batch_id} did not finish within the polling window.")
-
-            if not isinstance(result, dict):
-                raise RuntimeError(f"MinerU batch {batch_id} returned no extract result.")
-            full_zip_url = str(result.get("full_zip_url") or "").strip()
-            if not full_zip_url:
-                raise RuntimeError(f"MinerU batch {batch_id} finished without full_zip_url.")
-
-            zip_response = await client.get(full_zip_url)
-            zip_response.raise_for_status()
-
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(io.BytesIO(zip_response.content)) as archive:
-            archive.extractall(output_dir)
-
-        raw_content_list, markdown, asset_root = self._load_mineru_artifacts(output_dir)
-        content_list = self._normalize_mineru_content_list(raw_content_list, asset_root=asset_root)
-        if not content_list and markdown:
-            content_list = [{"type": "text", "text": markdown, "page_idx": 0}]
-        if not content_list:
-            raise RuntimeError("MinerU output did not contain content_list.json or full.md.")
-
-        return MineruParseArtifacts(
-            content_list=content_list,
-            output_dir=output_dir,
-            markdown=markdown,
-            batch_id=batch_id,
-            model_version=model_version,
-            full_zip_url=full_zip_url,
-        )
-
     # ------------------------------------------------------------------
     # Instance management
     # ------------------------------------------------------------------
@@ -1041,113 +805,6 @@ class RAGEngine:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-
-    async def parse_and_index(
-        self,
-        kb_id: str,
-        file_path: str,
-        *,
-        doc_id: str | None = None,
-        output_dir: str | None = None,
-        **kwargs: Any,
-    ) -> ParseResult:
-        """Parse a document and build KG + vector index via RAG-Anything.
-
-        Args:
-            kb_id: Knowledge base identifier.
-            file_path: Path to the document file.
-            output_dir: Optional output directory for parsed artifacts.
-            **kwargs: Additional arguments passed to process_document_complete.
-
-        Returns:
-            ParseResult indicating success or failure.
-        """
-        try:
-            rag = await self._ensure_ready(kb_id)
-            working_dir = self._kb_working_dir(kb_id)
-            output_root = Path(output_dir) if output_dir else (working_dir / "parsed_output")
-            output_dir_path = output_root if output_dir else output_root / str(doc_id or Path(file_path).stem or "document")
-            output_dir_path.mkdir(parents=True, exist_ok=True)
-
-            parser_name = "mineru"
-            use_mineru_api = self._should_use_mineru_api(file_path)
-            if not use_mineru_api and self._requires_official_mineru_api(file_path):
-                raise RuntimeError(
-                    "Office/HTML documents require the official MinerU API path. "
-                    "Please configure MinerU API Token and restart the Web backend to apply the new RAG engine."
-                )
-
-            logger.info(
-                "RAGEngine: parse route for kb_id={} file_path={} -> {}",
-                kb_id,
-                file_path,
-                "official MinerU API" if use_mineru_api else "local RAG-Anything parser",
-            )
-
-            if use_mineru_api:
-                parser_name = "mineru_api"
-                artifacts = await self._parse_file_with_mineru_api(
-                    file_path,
-                    output_dir=output_dir_path,
-                    doc_id=doc_id,
-                )
-                await rag.insert_content_list(
-                    artifacts.content_list,
-                    file_path=file_path,
-                    doc_id=doc_id,
-                )
-                metadata: dict[str, Any] = {
-                    "output_dir": str(artifacts.output_dir),
-                    "file_path": file_path,
-                    "mineru_batch_id": artifacts.batch_id,
-                    "mineru_model_version": artifacts.model_version,
-                    "mineru_full_zip_url": artifacts.full_zip_url,
-                }
-                if doc_id:
-                    metadata["doc_id"] = doc_id
-            else:
-                processed = await rag.process_document_complete(
-                    file_path=file_path,
-                    output_dir=str(output_dir_path),
-                    parse_method="auto",
-                    doc_id=doc_id,
-                    **kwargs,
-                )
-                if processed is False:
-                    raise RuntimeError(
-                        f"RAGAnything reported unsuccessful document processing for kb_id={kb_id}, "
-                        f"file_path={file_path}."
-                    )
-                metadata = {
-                    "output_dir": str(output_dir_path),
-                    "file_path": file_path,
-                }
-                if doc_id:
-                    metadata["doc_id"] = doc_id
-
-            status = await self._require_processed_status(
-                rag,
-                kb_id=kb_id,
-                operation="parse_and_index",
-                doc_id=doc_id,
-                file_path=file_path,
-            )
-
-            return ParseResult(
-                success=True,
-                parser_name=parser_name,
-                metadata={
-                    **metadata,
-                    "chunks_count": int(status.get("chunks_count") or 0),
-                },
-            )
-        except Exception as exc:
-            logger.error("RAGEngine: parse_and_index failed for kb_id={}: {}", kb_id, exc)
-            return ParseResult(
-                success=False,
-                parser_name="mineru_api" if self._should_use_mineru_api(file_path) else "mineru",
-                error=str(exc),
-            )
 
     async def insert_text(
         self,
@@ -1943,9 +1600,6 @@ def create_rag_engine_from_config(
         embedding_dim=embedding_dim,
         llm_timeout=float(getattr(rag_config, "llm_timeout", 60) or 60),
         embedding_timeout=float(getattr(rag_config, "embedding_timeout", 30) or 30),
-        mineru_api_base=rag_config.mineru_api_base,
-        mineru_api_token=rag_config.mineru_api_token,
-        mineru_model_version=rag_config.mineru_model_version,
         lightrag_base_kwargs=lightrag_base_kwargs,
         storage_env=storage_env,
     )
