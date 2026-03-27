@@ -507,7 +507,6 @@ def gateway(
     dispatcher = ChannelMessageDispatcher(
         bus,
         agent_handler=platform_runtime.handle_agent_message,
-        team_handler=platform_runtime.handle_team_message,
     )
 
     # Create agent with cron service

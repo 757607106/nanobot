@@ -15,7 +15,7 @@ ChannelDispatchResponse = str | dict[str, Any] | None
 
 
 class ChannelMessageDispatcher:
-    """Routes inbound messages to the correct agent or team based on routing metadata.
+    """Routes inbound messages to the correct agent based on routing metadata.
 
     When ``_RoutingBusProxy`` enriches a message with ``_routing_target_type``
     and ``_routing_target_id``, this dispatcher resolves and executes the target.
@@ -23,7 +23,6 @@ class ChannelMessageDispatcher:
     Callers register async handler callbacks:
 
     - ``agent_handler(agent_id, msg) -> str | dict | None``  – run the named agent
-    - ``team_handler(team_id, msg) -> str | dict | None``    – run the named team
     """
 
     def __init__(
@@ -31,12 +30,10 @@ class ChannelMessageDispatcher:
         bus: MessageBus,
         *,
         agent_handler: Callable[[str, InboundMessage], Awaitable[ChannelDispatchResponse]] | None = None,
-        team_handler: Callable[[str, InboundMessage], Awaitable[ChannelDispatchResponse]] | None = None,
         audit_service: ChannelAuditService | None = None,
     ):
         self.bus = bus
         self.agent_handler = agent_handler
-        self.team_handler = team_handler
         self.audit_service = audit_service
 
     @staticmethod
@@ -80,8 +77,6 @@ class ChannelMessageDispatcher:
             response: ChannelDispatchResponse = None
             if target_type == "agent" and self.agent_handler:
                 response = await self.agent_handler(target_id, msg)
-            elif target_type == "team" and self.team_handler:
-                response = await self.team_handler(target_id, msg)
             else:
                 logger.warning(
                     "No handler for routing target_type={} (target_id={})",

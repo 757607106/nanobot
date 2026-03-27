@@ -74,26 +74,6 @@ class TestChannelMessageDispatcher:
         assert outbound.chat_id == "123"
 
     @pytest.mark.asyncio
-    async def test_dispatch_calls_team_handler(self, bus):
-        handler = AsyncMock(return_value="Team result")
-        dispatcher = ChannelMessageDispatcher(bus, team_handler=handler)
-        msg = InboundMessage(
-            channel="whatsapp",
-            chat_id="456",
-            content="Task",
-            sender_id="user",
-            metadata={
-                "_routing_target_type": "team",
-                "_routing_target_id": "support-team",
-            },
-        )
-        result = await dispatcher.dispatch(msg)
-        assert result is True
-        handler.assert_called_once_with("support-team", msg)
-        outbound = await asyncio.wait_for(bus.consume_outbound(), timeout=1.0)
-        assert outbound.content == "Team result"
-
-    @pytest.mark.asyncio
     async def test_dispatch_handles_none_response(self, bus):
         handler = AsyncMock(return_value=None)
         dispatcher = ChannelMessageDispatcher(bus, agent_handler=handler)

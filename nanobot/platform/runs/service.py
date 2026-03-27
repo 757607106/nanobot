@@ -70,7 +70,6 @@ class RunService:
         artifact_dir: Path | None = None,
         tenant_settings_loader: Callable[[str], dict[str, Any] | None] | None = None,
         agent_definition_loader: Callable[[str, str | None], dict[str, Any] | None] | None = None,
-        team_definition_loader: Callable[[str, str | None], dict[str, Any] | None] | None = None,
     ):
         self.store = store
         self.instance_id = instance_id
@@ -79,7 +78,6 @@ class RunService:
         self.artifact_dir = artifact_dir
         self.tenant_settings_loader = tenant_settings_loader
         self.agent_definition_loader = agent_definition_loader
-        self.team_definition_loader = team_definition_loader
         self._scope_enforced = False
         if self.artifact_dir is not None:
             self.artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -94,10 +92,8 @@ class RunService:
         self,
         *,
         agent_loader: Callable[[str, str | None], dict[str, Any] | None] | None = None,
-        team_loader: Callable[[str, str | None], dict[str, Any] | None] | None = None,
     ) -> None:
         self.agent_definition_loader = agent_loader
-        self.team_definition_loader = team_loader
 
     def with_tenant(self, tenant_id: str | None) -> RunService:
         """Return a tenant-scoped facade over the shared run registry."""
@@ -498,11 +494,7 @@ class RunService:
         candidate_source = "none"
         candidate_loader: Callable[[str, str | None], dict[str, Any] | None] | None = None
         candidate_id: str | None = None
-        if record.team_id and self.team_definition_loader is not None:
-            candidate_source = "team_template"
-            candidate_loader = self.team_definition_loader
-            candidate_id = record.team_id
-        elif record.agent_id and self.agent_definition_loader is not None:
+        if record.agent_id and self.agent_definition_loader is not None:
             candidate_source = "agent_template"
             candidate_loader = self.agent_definition_loader
             candidate_id = record.agent_id
@@ -533,7 +525,7 @@ class RunService:
         raw_policy = definition_payload.get("artifactRetentionPolicy") or definition_payload.get("artifact_retention_policy") or {}
         policy = normalize_artifact_retention_policy(
             raw_policy,
-            default_action_by="team_template" if candidate_source == "team_template" else "agent_template",
+            default_action_by="agent_template",
         )
         policy["source"] = candidate_source if policy.get("enabled") else "none"
         policy["templateId"] = candidate_id if policy.get("enabled") else None

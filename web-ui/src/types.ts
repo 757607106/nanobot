@@ -536,61 +536,12 @@ export interface AgentDefinitionMutationInput {
   templateName?: string
 }
 
-export interface TeamDefinition {
-  teamId: string
-  tenantId: string
-  instanceId: string
-  name: string
-  description: string
-  supervisorAgentId: string
-  memberAgentIds: string[]
-  sharedKnowledgeBindingIds: string[]
-  memberAccessPolicy: Record<string, unknown>
-  tags: string[]
-  enabled: boolean
-  memberCount: number
-  artifactRetentionPolicy?: ArtifactRetentionPolicyConfig | null
-  createdAt?: string
-  updatedAt?: string
-}
-
-export interface TeamDefinitionMutationInput {
-  name: string
-  description?: string
-  supervisorAgentId: string
-  memberAgentIds?: string[]
-  sharedKnowledgeBindingIds?: string[]
-  memberAccessPolicy?: Record<string, unknown>
-  tags?: string[]
-  enabled?: boolean
-  artifactRetentionPolicy?: ArtifactRetentionPolicyConfig | null
-}
-
-export interface TeamMemorySnapshot {
-  teamId: string
-  content: string
-  fileName: string
-  candidateCount: number
-  updatedAt?: string
-}
-
 export interface AgentMemorySnapshot {
   agentId: string
   content: string
   fileName: string
   candidateCount: number
   updatedAt?: string
-}
-
-export interface TeamThreadSummary {
-  threadId: string
-  session: SessionSummary
-}
-
-export interface TeamThreadMessages {
-  threadId: string
-  messages: ChatMessage[]
-  total: number
 }
 
 export interface MemoryCandidate {
@@ -1262,14 +1213,7 @@ export interface AgentTestRunResult {
   }
 }
 
-export interface TeamTestRunResult {
-  team: TeamDefinition
-  run: AgentRunSummary
-  supervisorRun: AgentRunSummary | null
-  memberRuns: AgentRunSummary[]
-  finalAssistantMessage: ChatMessage | null
-  teamKnowledgeHits: KnowledgeHit[]
-}
+
 
 export interface AuthStatus {
   initialized: boolean
@@ -1550,7 +1494,7 @@ export interface ChannelBinding {
   instanceId: string
   channelName: string
   channelChatId: string
-  targetType: 'agent' | 'team'
+  targetType: 'agent'
   targetId: string
   priority: number
   enabled: boolean
@@ -1562,7 +1506,7 @@ export interface ChannelBinding {
 export interface ChannelBindingMutationInput {
   channelName: string
   channelChatId?: string
-  targetType: 'agent' | 'team'
+  targetType: 'agent'
   targetId: string
   priority?: number
   enabled?: boolean

@@ -4,7 +4,6 @@ import SectionTabs from '../components/SectionTabs'
 
 const studioRoutes = [
   { key: '/studio/agents', label: 'AI 员工', shortLabel: '员工' },
-  { key: '/studio/teams', label: '团队', shortLabel: '团队' },
   { key: '/studio/runs', label: '执行记录', shortLabel: '记录' },
 ]
 
@@ -13,7 +12,7 @@ function resolveActiveKey(pathname: string) {
     return '/studio/agents'
   }
   if (pathname === '/studio/memory' || pathname.startsWith('/studio/memory/')) {
-    return '/studio/teams'
+    return '/studio/agents'
   }
   const matched = studioRoutes.find((item) => pathname === item.key || pathname.startsWith(`${item.key}/`))
   return matched?.key ?? '/studio/agents'

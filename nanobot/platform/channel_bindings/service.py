@@ -23,7 +23,7 @@ class ChannelBindingValidationError(ValueError):
     """Raised when a channel binding payload is invalid."""
 
 
-_ALLOWED_TARGET_TYPES = {"agent", "team"}
+_ALLOWED_TARGET_TYPES = {"agent"}
 
 
 class ChannelBindingService:
@@ -62,13 +62,6 @@ class ChannelBindingService:
             except Exception as exc:
                 raise ChannelBindingValidationError(
                     f"Agent '{target_id}' does not exist."
-                ) from exc
-        elif target_type == "team" and self.team_lookup:
-            try:
-                call_with_tenant(self.team_lookup, target_id, tenant_id=tenant_id or "")
-            except Exception as exc:
-                raise ChannelBindingValidationError(
-                    f"Team '{target_id}' does not exist."
                 ) from exc
 
     def resolve_binding(

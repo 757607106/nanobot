@@ -78,12 +78,6 @@ import type {
   SetupMutationResult,
   SetupStatus,
   SystemStatus,
-  TeamDefinition,
-  TeamDefinitionMutationInput,
-  TeamMemorySnapshot,
-  TeamThreadMessages,
-  TeamThreadSummary,
-  TeamTestRunResult,
   ValidationRunResult,
   WhatsAppBindingStatus,
 } from './types'
@@ -817,58 +811,6 @@ export const api = {
   testRunAgent: (agentId: string, content: string) =>
     request<AgentTestRunResult>(`/agents/${encodeURIComponent(agentId)}/test-run`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
-    }),
-  getTeams: (enabled?: boolean) => {
-    const params = new URLSearchParams()
-    if (typeof enabled === 'boolean') {
-      params.set('enabled', String(enabled))
-    }
-    const search = params.toString()
-    return request<TeamDefinition[]>(`/teams${search ? `?${search}` : ''}`)
-  },
-  getTeam: (teamId: string) => request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}`),
-  getTeamThread: (teamId: string) =>
-    request<TeamThreadSummary>(`/teams/${encodeURIComponent(teamId)}/thread`),
-  getTeamThreadMessages: (teamId: string, limit = 40) => {
-    const query = new URLSearchParams()
-    query.set('limit', String(limit))
-    return request<TeamThreadMessages>(`/teams/${encodeURIComponent(teamId)}/thread/messages?${query.toString()}`)
-  },
-  createTeam: (payload: TeamDefinitionMutationInput) =>
-    request<TeamDefinition>('/teams', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  updateTeam: (teamId: string, payload: Partial<TeamDefinitionMutationInput>) =>
-    request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
-  deleteTeam: (teamId: string) =>
-    request<{ deleted: boolean }>(`/teams/${encodeURIComponent(teamId)}`, {
-      method: 'DELETE',
-    }),
-  copyTeam: (teamId: string, name?: string) =>
-    request<TeamDefinition>(`/teams/${encodeURIComponent(teamId)}/copy`, {
-      method: 'POST',
-      body: JSON.stringify(name ? { name } : {}),
-    }),
-  runTeam: (teamId: string, content: string) =>
-    request<TeamTestRunResult>(`/teams/${encodeURIComponent(teamId)}/runs`, {
-      method: 'POST',
-      body: JSON.stringify({ content }),
-    }),
-  retryTeamRun: (teamId: string, runId: string, appendContext?: string) =>
-    request<TeamTestRunResult>(`/teams/${encodeURIComponent(teamId)}/runs/${encodeURIComponent(runId)}/retry`, {
-      method: 'POST',
-      body: JSON.stringify({ appendContext: appendContext ?? null }),
-    }),
-  getTeamMemory: (teamId: string) =>
-    request<TeamMemorySnapshot>(`/teams/${encodeURIComponent(teamId)}/memory`),
-  updateTeamMemory: (teamId: string, content: string) =>
-    request<TeamMemorySnapshot>(`/teams/${encodeURIComponent(teamId)}/memory`, {
-      method: 'PUT',
       body: JSON.stringify({ content }),
     }),
   getMemoryCandidates: (params?: {

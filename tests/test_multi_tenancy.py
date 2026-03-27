@@ -10,9 +10,6 @@ import pytest
 from nanobot.platform.agents.models import AgentDefinition, now_iso
 from nanobot.platform.agents.store import AgentDefinitionStore
 from nanobot.platform.agents.service import AgentDefinitionService
-from nanobot.platform.teams.models import TeamDefinition
-from nanobot.platform.teams.store import TeamDefinitionStore
-from nanobot.platform.teams.service import TeamDefinitionService
 from nanobot.platform.channel_bindings.models import ChannelBinding
 from nanobot.platform.channel_bindings.store import ChannelBindingStore
 from nanobot.platform.channel_bindings.service import ChannelBindingService
@@ -97,71 +94,6 @@ class TestAgentMultiTenancy:
         # Correct tenant - delete succeeds
         assert store.delete("agent-1", tenant_id="tenant-a") is True
         assert store.get("agent-1") is None
-
-
-class TestTeamMultiTenancy:
-    """Test that team operations respect tenant isolation."""
-
-    def test_get_with_tenant_id_isolates(self, tmp_db):
-        store = TeamDefinitionStore(tmp_db / "teams.db")
-        now = now_iso()
-        t1 = TeamDefinition(
-            team_id="team-1", tenant_id="tenant-a", instance_id="inst-1",
-            name="Team A1", description="", supervisor_agent_id="agent-1",
-            member_agent_ids=[], shared_knowledge_binding_ids=[],
-            member_access_policy={}, tags=[], enabled=True,
-            created_at=now, updated_at=now,
-        )
-        t2 = TeamDefinition(
-            team_id="team-2", tenant_id="tenant-b", instance_id="inst-1",
-            name="Team B1", description="", supervisor_agent_id="agent-2",
-            member_agent_ids=[], shared_knowledge_binding_ids=[],
-            member_access_policy={}, tags=[], enabled=True,
-            created_at=now, updated_at=now,
-        )
-        store.create(t1)
-        store.create(t2)
-
-        assert store.get("team-1", tenant_id="tenant-a") is not None
-        assert store.get("team-1", tenant_id="tenant-b") is None
-        assert store.get("team-2", tenant_id="tenant-b") is not None
-        assert store.get("team-2", tenant_id="tenant-a") is None
-
-    def test_update_with_tenant_id_isolates(self, tmp_db):
-        store = TeamDefinitionStore(tmp_db / "teams.db")
-        now = now_iso()
-        t1 = TeamDefinition(
-            team_id="team-1", tenant_id="tenant-a", instance_id="inst-1",
-            name="Team A1", description="", supervisor_agent_id="agent-1",
-            member_agent_ids=[], shared_knowledge_binding_ids=[],
-            member_access_policy={}, tags=[], enabled=True,
-            created_at=now, updated_at=now,
-        )
-        store.create(t1)
-
-        from dataclasses import replace
-        updated = replace(t1, name="Updated Team", updated_at=now_iso())
-
-        assert store.update(updated, tenant_id="tenant-b") is None
-        result = store.update(updated, tenant_id="tenant-a")
-        assert result is not None
-        assert result.name == "Updated Team"
-
-    def test_delete_with_tenant_id_isolates(self, tmp_db):
-        store = TeamDefinitionStore(tmp_db / "teams.db")
-        now = now_iso()
-        t1 = TeamDefinition(
-            team_id="team-1", tenant_id="tenant-a", instance_id="inst-1",
-            name="Team A1", description="", supervisor_agent_id="agent-1",
-            member_agent_ids=[], shared_knowledge_binding_ids=[],
-            member_access_policy={}, tags=[], enabled=True,
-            created_at=now, updated_at=now,
-        )
-        store.create(t1)
-        assert store.delete("team-1", tenant_id="tenant-b") is False
-        assert store.get("team-1") is not None
-        assert store.delete("team-1", tenant_id="tenant-a") is True
-        assert store.get("team-1") is None
 
 
 class TestChannelBindingMultiTenancy:
@@ -269,26 +201,6 @@ class TestServiceTenantPassthrough:
         from nanobot.platform.agents import AgentDefinitionNotFoundError
         with pytest.raises(AgentDefinitionNotFoundError):
             service.get_agent("agent-1", tenant_id="tenant-b")
-
-    def test_team_service_get_with_tenant(self, tmp_db):
-        store = TeamDefinitionStore(tmp_db / "teams.db")
-        service = TeamDefinitionService(store, instance_id="inst-1")
-        now = now_iso()
-        t1 = TeamDefinition(
-            team_id="team-1", tenant_id="tenant-a", instance_id="inst-1",
-            name="Team A1", description="", supervisor_agent_id="agent-1",
-            member_agent_ids=[], shared_knowledge_binding_ids=[],
-            member_access_policy={}, tags=[], enabled=True,
-            created_at=now, updated_at=now,
-        )
-        store.create(t1)
-
-        data = service.get_team("team-1", tenant_id="tenant-a")
-        assert data["name"] == "Team A1"
-
-        from nanobot.platform.teams import TeamDefinitionNotFoundError
-        with pytest.raises(TeamDefinitionNotFoundError):
-            service.get_team("team-1", tenant_id="tenant-b")
 
     def test_channel_binding_service_get_with_tenant(self, tmp_db):
         store = ChannelBindingStore(tmp_db / "cb.db")

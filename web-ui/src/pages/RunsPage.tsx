@@ -27,7 +27,6 @@ import {
   PauseCircleOutlined,
   ReloadOutlined,
   RobotOutlined,
-  TeamOutlined,
   UserOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -49,7 +48,6 @@ import type {
   ChatMessage,
   RunArtifactDetail,
   RunBoundaryAudit,
-  TeamThreadSummary,
 } from '../types'
 
 const { Paragraph, Text, Title } = Typography
@@ -741,7 +739,7 @@ function renderTreeNode(node: AgentRunTreeNode, selectedRunId: string | null, na
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <Space>
-            {node.kind === 'team' ? <TeamOutlined /> : <RobotOutlined />}
+            <RobotOutlined />
             <Text strong>{node.label}</Text>
             {controlScopeTag(node.controlScope)}
           </Space>
@@ -779,12 +777,10 @@ export default function RunsPage() {
   const [runTree, setRunTree] = useState<AgentRunTreeNode | null>(null)
   const [artifact, setArtifact] = useState<RunArtifactDetail | null>(null)
   const [boundaryAudit, setBoundaryAudit] = useState<RunBoundaryAudit | null>(null)
-  const [threadSummary, setThreadSummary] = useState<TeamThreadSummary | null>(null)
-  const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([])
+
   const [loadingRuns, setLoadingRuns] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [loadingArtifact, setLoadingArtifact] = useState(false)
-  const [loadingThreadAudit, setLoadingThreadAudit] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [artifactAction, setArtifactAction] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -808,7 +804,7 @@ export default function RunsPage() {
       width: 120,
       render: (_, record) => (
         <Space direction="vertical" size={0}>
-          <Tag bordered={false}>{record.kind === 'team' ? 'Team' : 'Agent'}</Tag>
+          <Tag bordered={false}>{record.kind === 'subagent' ? 'Subagent' : 'Agent'}</Tag>
           {record.controlScope && controlScopeTag(record.controlScope)}
         </Space>
       ),
@@ -852,8 +848,6 @@ export default function RunsPage() {
       setRunTree(null)
       setArtifact(null)
       setBoundaryAudit(null)
-      setThreadSummary(null)
-      setThreadMessages([])
       return
     }
     void loadRunDetail(selectedRunId)
@@ -916,25 +910,6 @@ export default function RunsPage() {
         setBoundaryAudit(await api.getRunBoundaryAudit(nextRunId))
       } catch {
         setBoundaryAudit(null)
-      }
-      if (run.teamId && run.threadId) {
-        setLoadingThreadAudit(true)
-        try {
-          const [summary, messages] = await Promise.all([
-            api.getTeamThread(run.teamId),
-            api.getTeamThreadMessages(run.teamId, 8),
-          ])
-          setThreadSummary(summary)
-          setThreadMessages(messages.messages)
-        } catch {
-          setThreadSummary(null)
-          setThreadMessages([])
-        } finally {
-          setLoadingThreadAudit(false)
-        }
-      } else {
-        setThreadSummary(null)
-        setThreadMessages([])
       }
       let artifactErrorMessage: string | null = null
       if (run.artifactPath) {
@@ -1282,40 +1257,6 @@ export default function RunsPage() {
       }
     ]
 
-    // Add conversation tab if applicable
-    if (selectedRun.teamId && selectedRun.threadId) {
-      tabItems.push({
-        key: 'conversation',
-        label: '对话',
-        icon: <MessageOutlined />,
-        children: (
-          <Card className="page-card" bordered={false} title="对话记录" extra={<Tag>{selectedRun.threadId}</Tag>}>
-            <List
-              dataSource={threadMessages}
-              renderItem={(item) => (
-                <List.Item className="studio-run-message-item">
-                  <div className="studio-run-message-shell">
-                      <div className={`studio-run-message-avatar${item.role === 'user' ? ' is-user' : ''}`}>
-                        {item.role === 'user' ? <UserOutlined /> : <RobotOutlined />}
-                      </div>
-                      <div className="studio-run-message-content">
-                        <div className="studio-run-message-meta">
-                          <Text strong>{item.role === 'user' ? '用户' : item.role}</Text>
-                          <Text type="secondary">{formatDateTimeZh(item.createdAt)}</Text>
-                        </div>
-                        <div className={`studio-run-message-bubble${item.role === 'user' ? ' is-user' : ''}`}>
-                          <Text style={{ lineHeight: 1.6 }}>{item.content}</Text>
-                        </div>
-                      </div>
-                  </div>
-                </List.Item>
-              )}
-            />
-          </Card>
-        )
-      })
-    }
-
     // Add artifact tab if applicable
     if (selectedRun.artifactPath) {
       const artifactAudit = artifact?.audit || boundaryAudit?.artifact || null
@@ -1527,7 +1468,6 @@ export default function RunsPage() {
                 options={[
                   { value: 'all', label: '全部类型' },
                   { value: 'agent', label: 'Agent' },
-                  { value: 'team', label: 'Team' },
                 ]}
               />
             </Space>

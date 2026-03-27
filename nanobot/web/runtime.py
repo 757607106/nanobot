@@ -25,7 +25,6 @@ from nanobot.web.runtime_services import (
     WebChatRuntimeService,
     WebConfigRuntimeService,
     WebScheduleRuntimeService,
-    WebTeamRuntimeService,
     WebWorkspaceRuntimeService,
 )
 from nanobot.web.runtime_services.channel_runtime import WebChannelRuntimeService
@@ -90,7 +89,6 @@ class WebAppState:
         self.sessions: SessionManager | None = None
         self.agent_templates: AgentTemplateManager | None = None
         self.app_agents = None
-        self.app_teams = None
         self.app_knowledge = None
         self.app_memory = None
         self.tenants_service = None
@@ -99,7 +97,6 @@ class WebAppState:
         self.calendar_repo = get_calendar_repository(config.workspace_path)
 
         self.agent_runtime = WebAgentRuntimeService(self)
-        self.team_runtime = WebTeamRuntimeService(self)
         self.chat_runtime = WebChatRuntimeService(self)
         self.schedule_runtime = WebScheduleRuntimeService(self)
         self.workspace_runtime = WebWorkspaceRuntimeService(self, DOCUMENT_DEFINITIONS)
@@ -267,9 +264,6 @@ class WebAppState:
     async def test_agent_run(self, agent_id: str, content: str, *, tenant_id: str | None = None) -> dict[str, Any]:
         return await self.agent_runtime.test_run_agent(agent_id, content, tenant_id=tenant_id)
 
-    async def test_team_run(self, team_id: str, content: str, *, tenant_id: str | None = None) -> dict[str, Any]:
-        return await self.team_runtime.start_team_run(team_id, content, tenant_id=tenant_id)
-
     def create_agent_template(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.workspace_runtime.create_agent_template(payload)
 
@@ -324,7 +318,6 @@ class WebAppState:
     async def shutdown_async(self) -> None:
         self.channel_runtime.stop()
         self.schedule_runtime.stop_runtime()
-        await self.team_runtime.shutdown_async()
         if self.agent is not None:
             await self.agent.close_mcp()
 

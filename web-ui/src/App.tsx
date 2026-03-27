@@ -24,7 +24,6 @@ const SetupPage = lazy(() => import('./pages/SetupPage'))
 const SkillsPage = lazy(() => import('./pages/SkillsPage'))
 const StudioLayoutPage = lazy(() => import('./pages/StudioLayoutPage'))
 const AgentsPage = lazy(() => import('./pages/AgentsPage'))
-const TeamsPage = lazy(() => import('./pages/TeamsPage'))
 const MemoryAuditPage = lazy(() => import('./pages/MemoryAuditPage'))
 const RunsPage = lazy(() => import('./pages/RunsPage'))
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'))
@@ -252,9 +251,6 @@ export function AppRoutes() {
           <Route path="agents" element={withRouteSuspense(<AgentsPage />)} />
           <Route path="agents/new" element={withRouteSuspense(<AgentsPage />)} />
           <Route path="agents/:agentId" element={withRouteSuspense(<AgentsPage />)} />
-          <Route path="teams" element={withRouteSuspense(<TeamsPage />)} />
-          <Route path="teams/new" element={withRouteSuspense(<TeamsPage />)} />
-          <Route path="teams/:teamId" element={withRouteSuspense(<TeamsPage />)} />
           <Route path="memory" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route path="memory/agents/:agentId" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route path="memory/:teamId" element={withRouteSuspense(<MemoryAuditPage />)} />

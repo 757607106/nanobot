@@ -34,7 +34,6 @@ import type {
   ChannelBinding,
   ChannelBindingMutationInput,
   ChannelStateItem,
-  TeamDefinition,
 } from '../types'
 
 const { Text } = Typography
@@ -46,7 +45,7 @@ const { Text } = Typography
 interface BindingFormState {
   channelName: string
   channelChatId: string
-  targetType: 'agent' | 'team'
+  targetType: 'agent'
   targetId: string
   priority: number
   enabled: boolean
@@ -104,14 +103,13 @@ export default function ChannelBindingsPage() {
   // Data
   const [bindings, setBindings] = useState<ChannelBinding[]>([])
   const [agents, setAgents] = useState<AgentDefinition[]>([])
-  const [teams, setTeams] = useState<TeamDefinition[]>([])
   const [channels, setChannels] = useState<ChannelStateItem[]>([])
   const [currentBinding, setCurrentBinding] = useState<ChannelBinding | null>(null)
 
   // Form
   const [form, setForm] = useState<BindingFormState>(createEmptyForm())
   const [searchQuery, setSearchQuery] = useState('')
-  const [listFilter, setListFilter] = useState<'all' | 'enabled' | 'agent' | 'team'>('all')
+  const [listFilter, setListFilter] = useState<'all' | 'enabled'>('all')
 
   // Loading
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
@@ -129,12 +127,6 @@ export default function ChannelBindingsPage() {
       if (listFilter === 'enabled' && !binding.enabled) {
         return false
       }
-      if (listFilter === 'agent' && binding.targetType !== 'agent') {
-        return false
-      }
-      if (listFilter === 'team' && binding.targetType !== 'team') {
-        return false
-      }
       if (!query) {
         return true
       }
@@ -146,15 +138,12 @@ export default function ChannelBindingsPage() {
         resolveTargetName(binding),
       ].some((value) => String(value || '').toLowerCase().includes(query))
     })
-  }, [bindings, listFilter, searchQuery, agents, teams])
+  }, [bindings, listFilter, searchQuery, agents])
 
-  // Target options (dynamic based on targetType)
+  // Target options
   const targetOptions = useMemo(() => {
-    if (form.targetType === 'team') {
-      return teams.map((t) => ({ value: t.teamId, label: t.name }))
-    }
     return agents.map((a) => ({ value: a.agentId, label: a.name }))
-  }, [form.targetType, agents, teams])
+  }, [agents])
 
   const channelOptions = useMemo(() => {
     return channels.map((ch) => ({ value: ch.name, label: ch.name }))
@@ -162,12 +151,8 @@ export default function ChannelBindingsPage() {
 
   // Resolve target name for display
   function resolveTargetName(binding: ChannelBinding): string {
-    if (binding.targetType === 'agent') {
-      const a = agents.find((x) => x.agentId === binding.targetId)
-      return a?.name || binding.targetId
-    }
-    const t = teams.find((x) => x.teamId === binding.targetId)
-    return t?.name || binding.targetId
+    const a = agents.find((x) => x.agentId === binding.targetId)
+    return a?.name || binding.targetId
   }
 
   // ---------------------------------------------------------------------------
@@ -177,15 +162,13 @@ export default function ChannelBindingsPage() {
   async function loadWorkspace() {
     setLoadingWorkspace(true)
     try {
-      const [bindingsData, agentsData, teamsData, channelsData] = await Promise.all([
+      const [bindingsData, agentsData, channelsData] = await Promise.all([
         api.getChannelBindings(),
         api.getAgents(),
-        api.getTeams(),
         api.getChannels(),
       ])
       setBindings(bindingsData)
       setAgents(agentsData)
-      setTeams(teamsData)
       setChannels(channelsData.items || [])
     } catch (err) {
       message.error(getErrorMessage(err, '加载数据失败'))
@@ -237,7 +220,7 @@ export default function ChannelBindingsPage() {
       return
     }
     if (!form.targetId.trim()) {
-      message.warning('请选择目标 Agent 或 Team。')
+      message.warning('请选择目标 AI 员工。')
       return
     }
     setSaving(true)
@@ -347,12 +330,10 @@ export default function ChannelBindingsPage() {
             />
             <Segmented
               value={listFilter}
-              onChange={(value) => setListFilter(value as 'all' | 'enabled' | 'agent' | 'team')}
+              onChange={(value) => setListFilter(value as 'all' | 'enabled')}
               options={[
                 { label: '全部', value: 'all' },
                 { label: '启用', value: 'enabled' },
-                { label: '员工', value: 'agent' },
-                { label: '团队', value: 'team' },
               ]}
             />
           </div>
@@ -388,12 +369,11 @@ export default function ChannelBindingsPage() {
                         </Tag>
                       </div>
                       <Text type="secondary">
-                        → {item.targetType === 'agent' ? 'AI员工' : '团队'}:{' '}
-                        {resolveTargetName(item)}
+                        → AI员工: {resolveTargetName(item)}
                       </Text>
                       <div className="channel-card-meta">
                         <Tag>{item.channelChatId || '*'}</Tag>
-                        <Tag>{item.targetType === 'agent' ? 'AI 员工' : '团队'}</Tag>
+                        <Tag>AI 员工</Tag>
                         {item.priority > 0 ? <Tag color="blue">优先级: {item.priority}</Tag> : null}
                       </div>
                     </div>
@@ -445,31 +425,13 @@ export default function ChannelBindingsPage() {
               />
             </div>
 
-            {/* Target Type */}
-            <div className="studio-form-field">
-              <Text type="secondary">目标类型</Text>
-              <Segmented
-                value={form.targetType}
-                options={[
-                  { value: 'agent', label: 'AI员工' },
-                  { value: 'team', label: '团队' },
-                ]}
-                onChange={(val) => {
-                  updateForm('targetType', val as 'agent' | 'team')
-                  updateForm('targetId', '')
-                }}
-              />
-            </div>
-
             {/* Target */}
             <div className="studio-form-field">
-              <Text type="secondary">
-                {form.targetType === 'agent' ? '目标 AI 员工' : '目标团队'}
-              </Text>
+              <Text type="secondary">目标 AI 员工</Text>
               <Select
                 showSearch
                 value={form.targetId || undefined}
-                placeholder={form.targetType === 'agent' ? '选择 AI 员工' : '选择团队'}
+                placeholder="选择 AI 员工"
                 options={targetOptions}
                 onChange={(val) => updateForm('targetId', val)}
                 optionFilterProp="label"

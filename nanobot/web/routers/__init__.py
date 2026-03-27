@@ -14,7 +14,6 @@ from nanobot.web.routers.operations import router as operations_router
 from nanobot.web.routers.runs import router as runs_router
 from nanobot.web.routers.schedule import router as schedule_router
 from nanobot.web.routers.setup import router as setup_router
-from nanobot.web.routers.teams import router as teams_router
 from nanobot.web.routers.tenants import router as tenants_router
 from nanobot.web.routers.workspace import router as workspace_router
 
@@ -33,7 +32,6 @@ __all__ = [
     "runs_router",
     "schedule_router",
     "setup_router",
-    "teams_router",
     "tenants_router",
     "workspace_router",
 ]

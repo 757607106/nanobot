@@ -79,9 +79,6 @@ class PlatformInstance:
     def knowledge_db_path(self) -> Path:
         return self.data_dir / "web-knowledge.db"
 
-    def team_definitions_db_path(self) -> Path:
-        return self.data_dir / "web-teams.db"
-
     def memory_db_path(self) -> Path:
         return self.data_dir / "web-memory.db"
 

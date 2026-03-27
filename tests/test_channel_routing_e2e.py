@@ -6,7 +6,7 @@ Tests the full message flow:
     -> MessageBus
     -> AgentLoop._dispatch (via consume_inbound)
     -> ChannelMessageDispatcher.dispatch
-    -> agent_handler / team_handler
+    -> agent_handler
     -> OutboundMessage
 """
 
@@ -369,7 +369,7 @@ class TestFullRoutingPipeline:
 
         agent_handler = AsyncMock(return_value="I am agent-13, ready to help!")
         dispatcher = ChannelMessageDispatcher(
-            bus, agent_handler=agent_handler, team_handler=None,
+            bus, agent_handler=agent_handler,
         )
 
         # 1) Publish inbound message through the routing proxy
@@ -396,38 +396,6 @@ class TestFullRoutingPipeline:
         assert outbound.channel == "qq"
         assert outbound.chat_id == "group_123"
         assert outbound.content == "I am agent-13, ready to help!"
-
-    @pytest.mark.asyncio
-    async def test_e2e_team_routing(
-        self,
-        service: ChannelBindingService,
-        bus: MessageBus,
-        proxy: _RoutingBusProxy,
-    ) -> None:
-        """Full E2E: QQ message -> exact binding -> team handler -> outbound response."""
-        _create_binding(
-            service,
-            channel="qq",
-            chat_id="team_group",
-            target_type="team",
-            target_id="support-team",
-        )
-
-        team_handler = AsyncMock(return_value="Team response: issue escalated.")
-        dispatcher = ChannelMessageDispatcher(
-            bus, agent_handler=None, team_handler=team_handler,
-        )
-
-        msg = _make_msg(channel="qq", chat_id="team_group", content="urgent issue")
-        await proxy.publish_inbound(msg)
-
-        received = await asyncio.wait_for(bus.consume_inbound(), timeout=2.0)
-        handled = await dispatcher.dispatch(received)
-        assert handled is True
-
-        team_handler.assert_called_once_with("support-team", received)
-        outbound = await asyncio.wait_for(bus.consume_outbound(), timeout=2.0)
-        assert outbound.content == "Team response: issue escalated."
 
     @pytest.mark.asyncio
     async def test_e2e_no_binding_falls_through(

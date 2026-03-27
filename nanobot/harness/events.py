@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-
 
 def preview_text(value: Any, *, limit: int = 500) -> str:
     """Normalize text-like content into a compact single-line preview."""
@@ -78,74 +76,3 @@ def build_tool_result_payload(
     return payload
 
 
-def summarize_langgraph_message(message: BaseMessage) -> dict[str, Any]:
-    """Build a compact event-safe summary for one LangGraph message."""
-    if isinstance(message, AIMessage):
-        role = "assistant"
-    elif isinstance(message, HumanMessage):
-        role = "user"
-    elif isinstance(message, ToolMessage):
-        role = "tool"
-    elif isinstance(message, SystemMessage):
-        role = "system"
-    else:
-        role = "message"
-
-    content = ""
-    if isinstance(message.content, str):
-        content = message.content
-    elif message.content:
-        content = str(message.content)
-
-    summary: dict[str, Any] = {
-        "role": role,
-        "messageType": type(message).__name__,
-    }
-    preview = preview_text(content, limit=280)
-    if preview:
-        summary["contentPreview"] = preview
-        summary["contentLength"] = len(content)
-
-    if isinstance(message, AIMessage) and message.tool_calls:
-        tool_names = [
-            str(tool_call.get("name") or "").strip()
-            for tool_call in message.tool_calls
-            if str(tool_call.get("name") or "").strip()
-        ]
-        if tool_names:
-            summary["toolCalls"] = tool_names
-
-    if isinstance(message, ToolMessage) and message.tool_call_id:
-        summary["toolCallId"] = message.tool_call_id
-
-    return summary
-
-
-def summarize_langgraph_chunk(chunk: dict[str, Any]) -> dict[str, Any] | None:
-    """Build a compact root-run event summary for one LangGraph stream chunk."""
-    node_summaries: list[dict[str, Any]] = []
-    last_message: dict[str, Any] | None = None
-
-    for node_name, node_payload in chunk.items():
-        if not isinstance(node_payload, dict):
-            continue
-        messages = node_payload.get("messages")
-        if not isinstance(messages, list) or not messages:
-            continue
-        summary: dict[str, Any] = {
-            "node": str(node_name),
-            "messageCount": len(messages),
-        }
-        latest = messages[-1]
-        if isinstance(latest, BaseMessage):
-            latest_summary = summarize_langgraph_message(latest)
-            summary["lastMessage"] = latest_summary
-            last_message = latest_summary
-        node_summaries.append(summary)
-
-    if not node_summaries:
-        return None
-    return {
-        "nodes": node_summaries,
-        "lastMessage": last_message,
-    }

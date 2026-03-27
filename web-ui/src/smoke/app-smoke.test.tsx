@@ -7,13 +7,10 @@ const mockApi = vi.hoisted(() => ({
   applyMemoryCandidate: vi.fn(),
   createAgent: vi.fn(),
   createAgentMemoryCandidate: vi.fn(),
-  createTeam: vi.fn(),
   createCalendarEvent: vi.fn(),
   createKnowledgeBase: vi.fn(),
   copyAgent: vi.fn(),
-  copyTeam: vi.fn(),
   deleteAgent: vi.fn(),
-  deleteTeam: vi.fn(),
   deleteKnowledgeBase: vi.fn(),
   deleteKnowledgeDocument: vi.fn(),
   deleteSession: vi.fn(),
@@ -45,11 +42,7 @@ const mockApi = vi.hoisted(() => ({
   getKnowledgeEvaluationHistory: vi.fn(),
   getMemoryCandidates: vi.fn(),
   getMemorySource: vi.fn(),
-  getTeam: vi.fn(),
-  getTeamThread: vi.fn(),
-  getTeamThreadMessages: vi.fn(),
-  getTeamMemory: vi.fn(),
-  getTeams: vi.fn(),
+
   getKnowledgeDocuments: vi.fn(),
   getKnowledgeJobs: vi.fn(),
   getWhatsAppBindingStatus: vi.fn(),
@@ -71,7 +64,6 @@ const mockApi = vi.hoisted(() => ({
   clearMcpTestChat: vi.fn(),
   cancelRun: vi.fn(),
   runValidation: vi.fn(),
-  runTeam: vi.fn(),
   setMcpServerEnabled: vi.fn(),
   rotateProfilePassword: vi.fn(),
   triggerOpsAction: vi.fn(),
@@ -102,7 +94,6 @@ const mockApi = vi.hoisted(() => ({
   getInstalledSkills: vi.fn(),
   getValidTemplateTools: vi.fn(),
   renameSession: vi.fn(),
-  retryTeamRun: vi.fn(),
   retrieveKnowledgeBase: vi.fn(),
   reindexKnowledgeBase: vi.fn(),
   installMarketplaceSkill: vi.fn(),
@@ -119,9 +110,7 @@ const mockApi = vi.hoisted(() => ({
   uploadSkillZip: vi.fn(),
   updateAgent: vi.fn(),
   updateAgentMemory: vi.fn(),
-  updateTeam: vi.fn(),
   updateKnowledgeBase: vi.fn(),
-  updateTeamMemory: vi.fn(),
   updateConfig: vi.fn(),
   updateCalendarEvent: vi.fn(),
   updateCalendarSettings: vi.fn(),
@@ -231,7 +220,6 @@ vi.mock('@ant-design/icons', async () => {
     SearchOutlined: makeIcon('search'),
     SettingOutlined: makeIcon('setting'),
     SunOutlined: makeIcon('sun'),
-    TeamOutlined: makeIcon('team'),
     ToolOutlined: makeIcon('tool'),
     UploadOutlined: makeIcon('upload'),
     UserOutlined: makeIcon('user'),
@@ -986,7 +974,6 @@ import SetupPage from '../pages/SetupPage'
 import StudioLayoutPage from '../pages/StudioLayoutPage'
 import SystemLayoutPage from '../pages/SystemLayoutPage'
 import SystemPage from '../pages/SystemPage'
-import TeamsPage from '../pages/TeamsPage'
 import ValidationPage from '../pages/ValidationPage'
 import { renderWithProviders } from '../test/renderApp'
 
@@ -1577,30 +1564,6 @@ function makeAgents() {
   ]
 }
 
-function makeTeams() {
-  return [
-    {
-      teamId: 'support-team',
-      tenantId: 'default',
-      instanceId: 'instance-default',
-      name: 'Support Team',
-      description: 'Coordinate support replies and QA.',
-      supervisorAgentId: 'support-lead',
-      memberAgentIds: ['support-member'],
-      sharedKnowledgeBindingIds: ['support-kb'],
-      memberAccessPolicy: {
-        teamSharedKnowledge: 'members_read',
-        teamSharedMemory: 'leader_write_member_read',
-      },
-      tags: ['support'],
-      enabled: true,
-      memberCount: 2,
-      createdAt: '2026-03-14T09:10:00Z',
-      updatedAt: '2026-03-14T09:10:00Z',
-    },
-  ]
-}
-
 function makeAgentMemory() {
   return {
     agentId: 'support-lead',
@@ -1869,8 +1832,8 @@ describe('web app smoke pages', () => {
       instanceId: 'instance-default',
       channelName: 'discord',
       channelChatId: '*',
-      targetType: 'team',
-      targetId: 'support-team',
+      targetType: 'agent',
+      targetId: 'support-member',
       priority: 0,
       enabled: true,
       metadata: {},
@@ -2108,110 +2071,36 @@ describe('web app smoke pages', () => {
       },
     ])
     mockApi.getKnowledgeJobs.mockResolvedValue([])
-    mockApi.getTeams.mockResolvedValue(makeTeams())
-    mockApi.getTeam.mockResolvedValue(makeTeams()[0])
-    mockApi.getTeamThread.mockResolvedValue({
-      threadId: 'team-thread:support-team',
-      session: {
-        id: 'team-thread:support-team',
-        sessionId: 'team-thread:support-team',
-        title: 'Team Thread · Support Team',
-        createdAt: '2026-03-14T10:09:00Z',
-        updatedAt: '2026-03-14T10:12:00Z',
-        messageCount: 4,
-      },
-    })
-    mockApi.getTeamThreadMessages.mockResolvedValue({
-      threadId: 'team-thread:support-team',
-      total: 4,
-      messages: [
-        {
-          id: 'msg_1',
-          sessionId: 'team-thread:support-team',
-          sequence: 1,
-          role: 'user',
-          content: 'Initial support request',
-          createdAt: '2026-03-14T10:09:00Z',
-        },
-        {
-          id: 'msg_2',
-          sessionId: 'team-thread:support-team',
-          sequence: 2,
-          role: 'assistant',
-          content: 'First team summary',
-          createdAt: '2026-03-14T10:09:10Z',
-        },
-      ],
-    })
-    mockApi.getTeamMemory.mockResolvedValue({
-      teamId: 'support-team',
-      content: 'Triage first, then summarize impact and next actions clearly.',
-      fileName: 'support-team.md',
-      candidateCount: 1,
-      updatedAt: '2026-03-14T10:10:00Z',
-    })
-    mockApi.updateTeamMemory.mockResolvedValue({
-      teamId: 'support-team',
-      content: 'Triage first, then summarize impact and next actions clearly.',
-      fileName: 'support-team.md',
-      candidateCount: 1,
-      updatedAt: '2026-03-14T10:10:00Z',
-    })
-    mockApi.getMemoryCandidates.mockImplementation(async (params?: { agentId?: string; scope?: string }) => {
-      if (params?.scope === 'agent_profile' || params?.agentId) {
-        return makeAgentMemoryCandidates()
-      }
-      return {
-        total: 1,
-        items: [
-          {
-            candidateId: 'memcand_1',
-            tenantId: 'default',
-            instanceId: 'instance-default',
-            scope: 'team_shared',
-            sourceKind: 'member_result',
-            title: 'Support Team · Research memory',
-            content: 'Always confirm region and customer impact before escalation.',
-            teamId: 'support-team',
-            agentId: 'reviewer-agent',
-            runId: 'run_team_1',
-            status: 'proposed',
-            createdAt: '2026-03-14T10:11:00Z',
-            updatedAt: '2026-03-14T10:11:00Z',
-            appliedAt: null,
-          },
-        ],
-      }
-    })
+    mockApi.getMemoryCandidates.mockResolvedValue(makeAgentMemoryCandidates())
     mockApi.applyMemoryCandidate.mockResolvedValue({
-      candidateId: 'memcand_1',
+      candidateId: 'memcand_agent_1',
       tenantId: 'default',
       instanceId: 'instance-default',
-      scope: 'team_shared',
-      sourceKind: 'member_result',
-      title: 'Support Team · Research memory',
-      content: 'Always confirm region and customer impact before escalation.',
-      teamId: 'support-team',
-      agentId: 'reviewer-agent',
-      runId: 'run_team_1',
+      scope: 'agent_profile',
+      sourceKind: 'manual_note',
+      title: 'Support Lead candidate',
+      content: 'Prefer numbered remediation steps in operator-facing replies.',
+      teamId: null,
+      agentId: 'support-lead',
+      runId: 'run_123',
       status: 'applied',
-      createdAt: '2026-03-14T10:11:00Z',
+      createdAt: '2026-03-14T10:09:00Z',
       updatedAt: '2026-03-14T10:12:00Z',
       appliedAt: '2026-03-14T10:12:00Z',
     })
     mockApi.rejectMemoryCandidate.mockResolvedValue({
-      candidateId: 'memcand_1',
+      candidateId: 'memcand_agent_1',
       tenantId: 'default',
       instanceId: 'instance-default',
-      scope: 'team_shared',
-      sourceKind: 'member_result',
-      title: 'Support Team · Research memory',
-      content: 'Always confirm region and customer impact before escalation.',
-      teamId: 'support-team',
-      agentId: 'reviewer-agent',
-      runId: 'run_team_1',
+      scope: 'agent_profile',
+      sourceKind: 'manual_note',
+      title: 'Support Lead candidate',
+      content: 'Prefer numbered remediation steps in operator-facing replies.',
+      teamId: null,
+      agentId: 'support-lead',
+      runId: 'run_123',
       status: 'rejected',
-      createdAt: '2026-03-14T10:11:00Z',
+      createdAt: '2026-03-14T10:09:00Z',
       updatedAt: '2026-03-14T10:12:00Z',
       appliedAt: null,
     })
@@ -2220,9 +2109,9 @@ describe('web app smoke pages', () => {
       total: 1,
       items: [
         {
-          sourceType: 'team_memory',
-          sourceId: 'support-team',
-          title: 'Team Shared Memory · support-team',
+          sourceType: 'agent_memory',
+          sourceId: 'support-lead',
+          title: 'Agent Memory · support-lead',
           content: 'Triage first, then summarize impact and next actions clearly.',
           preview: 'Triage first, then summarize impact and next actions clearly.',
           score: 2,
@@ -2231,9 +2120,9 @@ describe('web app smoke pages', () => {
       ],
     })
     mockApi.getMemorySource.mockResolvedValue({
-      sourceType: 'team_memory',
-      sourceId: 'support-team',
-      title: 'Team Shared Memory · support-team',
+      sourceType: 'agent_memory',
+      sourceId: 'support-lead',
+      title: 'Agent Memory · support-lead',
       content: 'Triage first, then summarize impact and next actions clearly.',
       metadata: {},
     })
@@ -2851,97 +2740,6 @@ describe('web app smoke pages', () => {
       name: 'Support Lead Copy',
     })
     mockApi.deleteAgent.mockResolvedValue({ deleted: true })
-    mockApi.createTeam.mockResolvedValue(makeTeams()[0])
-    mockApi.updateTeam.mockResolvedValue(makeTeams()[0])
-    mockApi.copyTeam.mockResolvedValue({
-      ...makeTeams()[0],
-      teamId: 'support-team-copy',
-      name: 'Support Team Copy',
-    })
-    mockApi.deleteTeam.mockResolvedValue({ deleted: true })
-    mockApi.runTeam.mockResolvedValue({
-      team: makeTeams()[0],
-      run: {
-        runId: 'team_run_1',
-        tenantId: 'default',
-        instanceId: 'instance-default',
-        kind: 'team',
-        status: 'succeeded',
-        label: 'Support Team',
-        taskPreview: 'Coordinate support reply quality.',
-        agentId: null,
-        teamId: 'support-team',
-        threadId: null,
-        parentRunId: null,
-        rootRunId: 'team_run_1',
-        sessionKey: 'team-test:support-team:team_run_1',
-        originChannel: 'web',
-        originChatId: 'support-team',
-        spawnDepth: 0,
-        controlScope: 'top_level',
-        workspacePath: '/tmp/workspace',
-        memoryScope: 'team_thread',
-        knowledgeScope: 'team_bindings',
-        resultSummary: {
-          content: 'Final support summary ready for the operator.',
-          metadata: {},
-          toolsUsed: [],
-        },
-        childrenCount: 3,
-        createdAt: '2026-03-14T10:10:00Z',
-        startedAt: '2026-03-14T10:10:01Z',
-        finishedAt: '2026-03-14T10:10:08Z',
-        lastErrorCode: null,
-        lastErrorMessage: null,
-        artifactPath: null,
-      },
-      supervisorRun: {
-        ...makeTeams()[0],
-      } as any,
-      memberRuns: [],
-      finalAssistantMessage: {
-        role: 'assistant',
-        content: 'Final support summary ready for the operator.',
-      },
-      teamKnowledgeHits: [],
-    })
-    mockApi.retryTeamRun.mockResolvedValue({
-      team: makeTeams()[0],
-      run: {
-        runId: 'team_run_retry_1',
-        tenantId: 'default',
-        instanceId: 'instance-default',
-        kind: 'team',
-        status: 'queued',
-        label: 'Support Team',
-        taskPreview: 'Coordinate support reply quality.',
-        agentId: null,
-        teamId: 'support-team',
-        threadId: null,
-        parentRunId: null,
-        rootRunId: 'team_run_retry_1',
-        sessionKey: 'team-test:support-team:team_run_retry_1',
-        originChannel: 'web',
-        originChatId: 'support-team',
-        spawnDepth: 0,
-        controlScope: 'top_level',
-        workspacePath: '/tmp/workspace',
-        memoryScope: 'team_thread',
-        knowledgeScope: 'team_bindings',
-        resultSummary: null,
-        childrenCount: 0,
-        createdAt: '2026-03-14T10:12:00Z',
-        startedAt: null,
-        finishedAt: null,
-        lastErrorCode: null,
-        lastErrorMessage: null,
-        artifactPath: null,
-      },
-      supervisorRun: null,
-      memberRuns: [],
-      finalAssistantMessage: null,
-      teamKnowledgeHits: [],
-    })
     mockApi.deleteKnowledgeDocument.mockResolvedValue({ deleted: true })
     mockApi.uploadKnowledgeDocuments.mockResolvedValue({ documents: [], jobs: [] })
     mockApi.addKnowledgeSource.mockResolvedValue({ documents: [], jobs: [] })
@@ -3271,7 +3069,7 @@ describe('web app smoke pages', () => {
 
     renderWithProviders(
       <MemoryRouter
-        initialEntries={['/studio/teams']}
+        initialEntries={['/studio/agents']}
         future={{
           v7_startTransition: true,
           v7_relativeSplatPath: true,
@@ -3279,14 +3077,14 @@ describe('web app smoke pages', () => {
       >
         <Routes>
           <Route path="/studio" element={<StudioLayoutPage />}>
-            <Route path="teams" element={<div>Teams Placeholder</div>} />
+            <Route path="agents" element={<div>Agents Placeholder</div>} />
           </Route>
         </Routes>
       </MemoryRouter>,
     )
 
     expect(await screen.findByText('AI 员工')).toBeInTheDocument()
-    expect(screen.getByText('团队')).toBeInTheDocument()
+    expect(screen.queryByText('团队')).not.toBeInTheDocument()
     expect(screen.queryByText('渠道绑定')).not.toBeInTheDocument()
     expect(screen.queryByText('记忆')).not.toBeInTheDocument()
     expect(screen.getByText('执行记录')).toBeInTheDocument()
@@ -3346,49 +3144,26 @@ describe('web app smoke pages', () => {
     expect(screen.getByText('员工记忆概览')).toBeInTheDocument()
   })
 
-  it('opens the team create drawer on /studio/teams/new', async () => {
-    installMatchMedia(false)
-
-    renderWithProviders(
-      <MemoryRouter
-        initialEntries={['/studio/teams/new']}
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      >
-        <Routes>
-          <Route path="/studio/teams/new" element={<TeamsPage />} />
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText('保存团队')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('输入团队名称')).toBeInTheDocument()
-    expect(screen.getByText('产物归档天数')).toBeInTheDocument()
-    expect(screen.getByText('产物删除天数')).toBeInTheDocument()
-  })
-
   it('renders memory audit page with candidate and search panels', async () => {
     installMatchMedia(false)
 
     renderWithProviders(
       <MemoryRouter
-        initialEntries={['/studio/memory/support-team']}
+        initialEntries={['/studio/memory/agents/support-lead']}
         future={{
           v7_startTransition: true,
           v7_relativeSplatPath: true,
         }}
       >
         <Routes>
-          <Route path="/studio/memory/:teamId" element={<MemoryAuditPage />} />
+          <Route path="/studio/memory/agents/:agentId" element={<MemoryAuditPage />} />
         </Routes>
       </MemoryRouter>,
     )
 
     expect(await screen.findByText('统一记忆审计')).toBeInTheDocument()
-    expect((await screen.findAllByText('Support Team')).length).toBeGreaterThan(0)
-    expect(screen.getByText('最近对话')).toBeInTheDocument()
+    expect((await screen.findAllByText('Support Lead')).length).toBeGreaterThan(0)
+    expect(screen.getByText('员工记忆概览')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('候选审核'))
     expect(await screen.findByText('候选记录')).toBeInTheDocument()
@@ -3460,40 +3235,7 @@ describe('web app smoke pages', () => {
     expect(screen.getByText('保存知识库设置')).toBeInTheDocument()
   })
 
-  it('renders teams page with catalog and team run panels', async () => {
-    installMatchMedia(false)
 
-    renderWithProviders(
-      <MemoryRouter
-        initialEntries={['/studio/teams/support-team']}
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      >
-        <Routes>
-          <Route path="/studio/teams/:teamId" element={<TeamsPage />} />
-          <Route path="/studio/memory/:teamId" element={<MemoryAuditPage />} />
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText('所有协作团队')).toBeInTheDocument()
-    expect(screen.getAllByText('团队配置').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Support Team').length).toBeGreaterThan(0)
-
-    fireEvent.click(screen.getByText('团队运行'))
-    expect(await screen.findByText('团队对话')).toBeInTheDocument()
-    expect(screen.getByText('团队试运行')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByText('团队记忆'))
-    expect(await screen.findByText('记忆候选')).toBeInTheDocument()
-    expect(screen.getByText('保存团队记忆')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '进入统一记忆审计' }))
-    expect(await screen.findByText('统一记忆审计')).toBeInTheDocument()
-    expect(screen.getByText('最近对话')).toBeInTheDocument()
-  })
 
   it('renders channel bindings page with list and form', async () => {
     installMatchMedia(false)

@@ -13,14 +13,12 @@ def _make_runtime(**overrides) -> CLIGatewayRoutingRuntime:
     return CLIGatewayRoutingRuntime(
         state=state,
         agents_service=overrides.pop("agents_service", SimpleNamespace()),
-        teams_service=overrides.pop("teams_service", SimpleNamespace()),
         channel_bindings=overrides.pop("channel_bindings", SimpleNamespace()),
         routing_service=overrides.pop("routing_service", SimpleNamespace()),
         runs=overrides.pop("runs", SimpleNamespace()),
         knowledge_service=overrides.pop("knowledge_service", SimpleNamespace(shutdown=lambda: None)),
         memory_service=overrides.pop("memory_service", SimpleNamespace()),
         agent_runtime=overrides.pop("agent_runtime", SimpleNamespace()),
-        team_runtime=overrides.pop("team_runtime", SimpleNamespace()),
     )
 
 
@@ -60,26 +58,6 @@ async def test_cli_gateway_agent_handler_reuses_shared_agent_runtime() -> None:
         chat_id="42",
     )
     isolated.close_mcp.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_cli_gateway_team_handler_reuses_shared_team_runtime() -> None:
-    team_runtime = SimpleNamespace(
-        run_team_sync=AsyncMock(return_value={"finalContent": "team reply"})
-    )
-    runtime = _make_runtime(team_runtime=team_runtime)
-    message = SimpleNamespace(content="handle this", channel="slack", chat_id="room-1", session_key="slack:room-1")
-
-    result = await runtime.handle_team_message("ops-team", message)
-
-    assert result == "team reply"
-    team_runtime.run_team_sync.assert_awaited_once_with(
-        "ops-team",
-        "handle this",
-        origin_channel="slack",
-        origin_chat_id="room-1",
-        session_key="slack:room-1",
-    )
 
 
 def test_cli_gateway_bind_main_agent_updates_runtime_state() -> None:

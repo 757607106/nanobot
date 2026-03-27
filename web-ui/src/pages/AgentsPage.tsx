@@ -25,7 +25,6 @@ import {
   ReloadOutlined,
   RobotOutlined,
   SaveOutlined,
-  TeamOutlined,
   AppstoreOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
@@ -710,7 +709,7 @@ export default function AgentsPage() {
       <div className="stat-card-row">
         <div className="stat-card">
           <div className="stat-card-icon is-primary">
-            <TeamOutlined />
+            <RobotOutlined />
           </div>
           <div className="stat-card-copy">
             <div className="stat-card-metric">{agents.length}</div>

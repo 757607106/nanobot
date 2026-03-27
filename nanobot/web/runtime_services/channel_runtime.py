@@ -154,7 +154,6 @@ class WebChannelRuntimeService:
             dispatcher = ChannelMessageDispatcher(
                 self._bus,
                 agent_handler=self._agent_handler,
-                team_handler=self._team_handler,
                 audit_service=self.state.channel_audit_service,
             )
 
@@ -287,43 +286,5 @@ class WebChannelRuntimeService:
             "metadata": {
                 "targetType": "agent",
                 "targetId": agent_id,
-            },
-        }
-
-    async def _team_handler(self, team_id: str, msg: InboundMessage) -> dict[str, Any] | str | None:
-        """Route an inbound channel message to a team via the shared team runtime."""
-        tenant_id = get_metadata_tenant_id(self._message_metadata(msg))
-        route_metadata = self._route_metadata(
-            msg,
-            tenant_id=tenant_id,
-            target_type="team",
-            target_id=team_id,
-        )
-        try:
-            result = await self.state.team_runtime.run_team_sync(
-                team_id,
-                msg.content,
-                tenant_id=tenant_id,
-                origin_channel=msg.channel,
-                origin_chat_id=msg.chat_id,
-                session_key=msg.session_key,
-                route_metadata=route_metadata,
-            )
-        except KeyError:
-            logger.warning("Team definition '{}' not found for channel routing", team_id)
-            return f"Team '{team_id}' not found."
-        except ValueError as exc:
-            return str(exc)
-        except Exception as exc:
-            logger.exception("Team '{}' LangGraph execution failed", team_id)
-            return f"Team execution error: {exc}"
-        final_content = str(result.get("finalContent") or "").strip()
-        return {
-            "content": final_content or "(Team produced no response)",
-            "runId": str((result.get("run") or {}).get("runId") or "").strip() or None,
-            "artifactPath": str((result.get("run") or {}).get("artifactPath") or "").strip() or None,
-            "metadata": {
-                "targetType": "team",
-                "targetId": team_id,
             },
         }

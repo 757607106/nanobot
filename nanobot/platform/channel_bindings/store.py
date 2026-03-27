@@ -18,7 +18,7 @@ class ChannelBindingStore:
             instance_id    TEXT NOT NULL,
             channel_name   TEXT NOT NULL,
             channel_chat_id TEXT NOT NULL DEFAULT '*',
-            target_type    TEXT NOT NULL CHECK(target_type IN ('agent', 'team')),
+            target_type    TEXT NOT NULL CHECK(target_type IN ('agent')),
             target_id      TEXT NOT NULL,
             priority       INTEGER NOT NULL DEFAULT 0,
             enabled        INTEGER NOT NULL DEFAULT 1,
