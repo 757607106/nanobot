@@ -253,7 +253,6 @@ export function AppRoutes() {
           <Route path="agents/:agentId" element={withRouteSuspense(<AgentsPage />)} />
           <Route path="memory" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route path="memory/agents/:agentId" element={withRouteSuspense(<MemoryAuditPage />)} />
-          <Route path="memory/:teamId" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route
             path="runs"
             element={withRouteSuspense(<RunsPage />)}

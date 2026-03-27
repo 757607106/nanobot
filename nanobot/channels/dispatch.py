@@ -1,4 +1,4 @@
-"""Channel message dispatcher for routing inbound messages to target agents or teams."""
+"""Channel message dispatcher for routing inbound messages to target agents."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ class ChannelMessageDispatcher:
     async def dispatch(self, msg: InboundMessage) -> bool:
         """Attempt to dispatch *msg* via routing metadata.
 
-        Returns ``True`` if the message was handled (routed to an agent/team),
+        Returns ``True`` if the message was handled (routed to an agent),
         ``False`` if no routing metadata was present and the caller should
         fall through to default processing.
         """

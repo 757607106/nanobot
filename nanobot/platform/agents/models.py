@@ -1,4 +1,4 @@
-"""Agent definition models for multi-agent productization."""
+"""Agent definition models for reusable single-agent configurations."""
 
 from __future__ import annotations
 
@@ -35,7 +35,6 @@ class AgentDefinition:
     tags: list[str] = field(default_factory=list)
     memory_scope: str = "agent_profile"
     source_template_name: str | None = None
-    team_role_hint: str = ""
     max_execution_timeout_seconds: int = 300
     output_format_hint: str = ""
     artifact_retention_policy: dict[str, Any] = field(default_factory=dict)
@@ -59,7 +58,6 @@ class AgentDefinition:
             "tags": self.tags,
             "memory_scope": self.memory_scope,
             "source_template_name": self.source_template_name,
-            "team_role_hint": self.team_role_hint,
             "max_execution_timeout_seconds": self.max_execution_timeout_seconds,
             "output_format_hint": self.output_format_hint,
             "artifact_retention_policy": self.artifact_retention_policy,
@@ -69,6 +67,9 @@ class AgentDefinition:
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> "AgentDefinition":
         stored = json.loads(record["config_json"])
+        memory_scope = stored.get("memory_scope") or "agent_profile"
+        if memory_scope not in {"agent_profile", "workspace_shared"}:
+            memory_scope = "agent_profile"
         return cls(
             agent_id=record["agent_id"],
             tenant_id=record["tenant_id"],
@@ -87,9 +88,8 @@ class AgentDefinition:
             skill_ids=list(stored.get("skill_ids") or []),
             knowledge_binding_ids=list(stored.get("knowledge_binding_ids") or []),
             tags=list(stored.get("tags") or []),
-            memory_scope=stored.get("memory_scope") or "agent_profile",
+            memory_scope=memory_scope,
             source_template_name=record.get("source_template_name") or stored.get("source_template_name"),
-            team_role_hint=stored.get("team_role_hint") or "",
             max_execution_timeout_seconds=int(stored.get("max_execution_timeout_seconds") or 300),
             output_format_hint=stored.get("output_format_hint") or "",
             artifact_retention_policy=dict(stored.get("artifact_retention_policy") or {}),
@@ -109,7 +109,6 @@ class AgentDefinition:
         payload["knowledgeBindingIds"] = payload.pop("knowledge_binding_ids")
         payload["memoryScope"] = payload.pop("memory_scope")
         payload["sourceTemplateName"] = payload.pop("source_template_name")
-        payload["teamRoleHint"] = payload.pop("team_role_hint")
         payload["maxExecutionTimeoutSeconds"] = payload.pop("max_execution_timeout_seconds")
         payload["outputFormatHint"] = payload.pop("output_format_hint")
         payload["artifactRetentionPolicy"] = payload.pop("artifact_retention_policy")

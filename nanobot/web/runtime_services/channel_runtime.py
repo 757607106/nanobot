@@ -1,8 +1,8 @@
 """Channel routing runtime for the nanobot Web UI.
 
 Starts enabled channels (Telegram, QQ, Discord, …) in a dedicated background
-thread with its own asyncio event-loop, resolves channel bindings to agent /
-team targets, and dispatches inbound messages accordingly.
+thread with its own asyncio event-loop, resolves channel bindings to agent
+targets, and dispatches inbound messages accordingly.
 
 The pattern mirrors ``WebScheduleRuntimeService`` — a daemon thread that owns
 an ``asyncio.new_event_loop()`` so that the long-running ``agent.run()`` and

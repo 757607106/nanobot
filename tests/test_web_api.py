@@ -1447,8 +1447,8 @@ def test_web_api_runs_list_detail_children_and_cancel(web_client: TestClient) ->
         origin_chat_id="session-1",
     )
     child = web_client.app.state.runs.create_run(
-        kind=RunKind.SUBAGENT,
-        label="Research subagent",
+        kind=RunKind.AGENT,
+        label="Research follow-up",
         task_preview="Collect references",
         agent_id="main-agent",
         session_key="web:session-1",
@@ -1456,13 +1456,17 @@ def test_web_api_runs_list_detail_children_and_cancel(web_client: TestClient) ->
         origin_chat_id="session-1",
         parent_run_id=parent.run_id,
         root_run_id=parent.run_id,
-        spawn_depth=1,
         control_scope=RunControlScope.CHILD,
     )
 
     listed = web_client.get(
         "/api/v1/runs",
-        params={"sessionKey": "web:session-1", "kind": "subagent", "agentId": "main-agent"},
+        params={
+            "sessionKey": "web:session-1",
+            "kind": "agent",
+            "agentId": "main-agent",
+            "parentRunId": parent.run_id,
+        },
     )
     assert listed.status_code == 200
     assert listed.json()["data"]["total"] == 1
@@ -1619,7 +1623,7 @@ def test_web_api_agent_test_run_accepts_legacy_runtime_tools(
         json={
             "name": "Legacy Runtime Agent",
             "systemPrompt": "Use runtime tools when appropriate.",
-            "toolAllowlist": ["read_file", "message", "spawn"],
+            "toolAllowlist": ["read_file", "message", "cron"],
         },
     )
     assert created.status_code == 201
@@ -1629,7 +1633,7 @@ def test_web_api_agent_test_run_accepts_legacy_runtime_tools(
 
     async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
         assert "Use runtime tools when appropriate." in messages[0]["content"]
-        assert {tool["function"]["name"] for tool in tools} == {"read_file", "message", "spawn"}
+        assert {tool["function"]["name"] for tool in tools} == {"read_file", "message", "cron"}
         return LLMResponse(content="Legacy runtime tools ok", tool_calls=[])
 
     provider.chat_with_retry = fake_chat_with_retry
@@ -1647,7 +1651,7 @@ def test_web_api_agent_test_run_accepts_legacy_runtime_tools(
     payload = tested.json()["data"]
     assert payload["run"]["status"] == "succeeded"
     assert payload["assistantMessage"]["content"] == "Legacy runtime tools ok"
-    assert payload["appliedBindings"]["toolAllowlist"] == ["read_file", "message", "spawn"]
+    assert payload["appliedBindings"]["toolAllowlist"] == ["read_file", "message", "cron"]
 
 
 
@@ -3147,11 +3151,11 @@ def test_web_api_agent_templates_page_data_exposes_builtin_and_workspace_semanti
     assert detail_payload["tools"] == ["read_file", "list_dir"]
 
 
-def test_web_api_valid_template_tools_include_runtime_message_and_spawn(web_client: TestClient) -> None:
+def test_web_api_valid_template_tools_include_runtime_message_and_cron(web_client: TestClient) -> None:
     response = web_client.get("/api/v1/agent-templates/tools/valid")
     assert response.status_code == 200
     names = {item["name"] for item in response.json()["data"]}
-    assert {"read_file", "message", "spawn", "cron"} <= names
+    assert {"read_file", "message", "cron"} <= names
 
 
 def test_web_api_agents_crud_copy_and_toggle(web_client: TestClient) -> None:

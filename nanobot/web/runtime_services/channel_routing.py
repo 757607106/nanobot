@@ -14,7 +14,7 @@ from nanobot.platform.channel_bindings import ChannelBindingService
 class RoutingTarget:
     """Resolved routing target for an inbound message."""
 
-    target_type: str  # "agent" or "team"
+    target_type: str  # "agent"
     target_id: str
     binding_id: str
     binding_chat_id: str
@@ -22,7 +22,7 @@ class RoutingTarget:
 
 
 class ChannelRoutingService:
-    """Resolves inbound channel messages to their target agent or team.
+    """Resolves inbound channel messages to their target agent.
 
     Uses the ChannelBindingService for database-configured routing:
     1. Exact match on (channel_name, chat_id) for the tenant

@@ -5428,11 +5428,6 @@ textarea.config-json-editor.ant-input {
     0 12px 20px rgba(93, 64, 55, 0.1);
 }
 
-.id-badge-avatar.is-team {
-  background: color-mix(in srgb, var(--nb-rose) 16%, #efe3d6 84%);
-  color: var(--nb-ink);
-}
-
 .id-badge-info {
   display: grid;
   justify-items: center;
@@ -5474,7 +5469,7 @@ textarea.config-json-editor.ant-input {
   letter-spacing: 0.05em;
 }
 
-.id-badge-team {
+.id-badge-tag {
   margin-top: 12px;
   padding: 6px 11px;
   background: rgba(255, 255, 255, 0.28);

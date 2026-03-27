@@ -1,4 +1,4 @@
-"""Models for team shared memory and candidate memory updates."""
+"""Models for memory candidates and memory updates."""
 
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ class MemoryCandidate:
     source_kind: str
     title: str
     content: str
-    team_id: str | None = None
     agent_id: str | None = None
     run_id: str | None = None
     status: str = "proposed"
@@ -40,7 +39,6 @@ class MemoryCandidate:
             source_kind=record["source_kind"],
             title=record["title"],
             content=record["content"],
-            team_id=record.get("team_id"),
             agent_id=record.get("agent_id"),
             run_id=record.get("run_id"),
             status=record.get("status") or "proposed",
@@ -55,7 +53,6 @@ class MemoryCandidate:
         payload["tenantId"] = payload.pop("tenant_id")
         payload["instanceId"] = payload.pop("instance_id")
         payload["sourceKind"] = payload.pop("source_kind")
-        payload["teamId"] = payload.pop("team_id")
         payload["agentId"] = payload.pop("agent_id")
         payload["runId"] = payload.pop("run_id")
         payload["createdAt"] = payload.pop("created_at")

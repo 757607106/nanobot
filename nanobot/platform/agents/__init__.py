@@ -1,4 +1,4 @@
-"""Agent definition helpers for future multi-agent productization."""
+"""Agent definition helpers for reusable single-agent configurations."""
 
 from nanobot.platform.agents.models import AgentDefinition
 from nanobot.platform.agents.service import (

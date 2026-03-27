@@ -19,7 +19,6 @@ class WorkspaceBinding:
     instance_id: str | None = None
     principal_kind: str | None = None
     principal_id: str | None = None
-    team_id: str | None = None
     thread_id: str | None = None
     root_run_id: str | None = None
     session_key: str | None = None
@@ -34,7 +33,6 @@ class WorkspaceBinding:
             "instanceId": self.instance_id,
             "principalKind": self.principal_kind,
             "principalId": self.principal_id,
-            "teamId": self.team_id,
             "threadId": self.thread_id,
             "rootRunId": self.root_run_id,
             "sessionKey": self.session_key,
@@ -54,7 +52,6 @@ class WorkspaceProvider(Protocol):
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -76,7 +73,6 @@ class SharedWorkspaceProvider:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -89,7 +85,6 @@ class SharedWorkspaceProvider:
             instance_id=instance_id,
             principal_kind=principal_kind,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -118,7 +113,6 @@ class ThreadWorkspaceProvider:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -143,7 +137,6 @@ class ThreadWorkspaceProvider:
             instance_id=instance_id,
             principal_kind=principal_kind,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -167,14 +160,12 @@ class AgentWorkspaceProvider:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
     ) -> WorkspaceBinding:
         scope_key = (
             str(principal_id or "").strip()
-            or str(team_id or "").strip()
             or str(root_run_id or "").strip()
             or str(principal_kind or "").strip()
             or "default"
@@ -191,7 +182,6 @@ class AgentWorkspaceProvider:
             instance_id=instance_id,
             principal_kind=principal_kind,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -215,7 +205,6 @@ class TenantScopedWorkspaceProvider:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -228,7 +217,6 @@ class TenantScopedWorkspaceProvider:
             tenant_id=tenant_id,
             instance_id=instance_id,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -254,7 +242,6 @@ class TenantScopedWorkspaceProvider:
             instance_id=str(instance_id or "default"),
             principal_kind=binding.principal_kind,
             principal_id=binding.principal_id,
-            team_id=binding.team_id,
             thread_id=binding.thread_id,
             root_run_id=binding.root_run_id,
             session_key=binding.session_key,

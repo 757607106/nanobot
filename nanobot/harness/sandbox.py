@@ -46,7 +46,6 @@ class SandboxBinding:
     instance_id: str | None = None
     principal_kind: str | None = None
     principal_id: str | None = None
-    team_id: str | None = None
     thread_id: str | None = None
     root_run_id: str | None = None
     session_key: str | None = None
@@ -71,7 +70,6 @@ class SandboxBinding:
             "instanceId": self.instance_id,
             "principalKind": self.principal_kind,
             "principalId": self.principal_id,
-            "teamId": self.team_id,
             "threadId": self.thread_id,
             "rootRunId": self.root_run_id,
             "sessionKey": self.session_key,
@@ -91,7 +89,6 @@ class SandboxProvider(Protocol):
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -115,7 +112,6 @@ class LocalSandboxProvider:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -136,7 +132,6 @@ class LocalSandboxProvider:
             instance_id=resolved_instance_id,
             principal_kind=principal_kind,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -164,7 +159,6 @@ class DockerSandboxProvider:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -204,7 +198,6 @@ class DockerSandboxProvider:
             instance_id=resolved_instance_id,
             principal_kind=principal_kind,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -239,7 +232,6 @@ class RemoteSandboxProvider:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -262,7 +254,6 @@ class RemoteSandboxProvider:
             instance_id=resolved_instance_id,
             principal_kind=principal_kind,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,

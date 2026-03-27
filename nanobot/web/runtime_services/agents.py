@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from nanobot.harness import (
-    ChildTaskRequest,
-    ChildTaskResult,
     ExecutionContext,
     ExecutionEnvironmentBinding,
     ExecutionAssemblyState,
@@ -126,7 +124,6 @@ class WebAgentRuntimeService:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -139,7 +136,6 @@ class WebAgentRuntimeService:
             tenant_id=tenant_id,
             instance_id=instance_id,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -154,7 +150,6 @@ class WebAgentRuntimeService:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -167,7 +162,6 @@ class WebAgentRuntimeService:
             tenant_id=tenant_id,
             instance_id=instance_id,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -183,7 +177,6 @@ class WebAgentRuntimeService:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         principal_id: str,
-        team_id: str | None = None,
         thread_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
@@ -196,7 +189,6 @@ class WebAgentRuntimeService:
             tenant_id=tenant_id,
             instance_id=instance_id,
             principal_id=principal_id,
-            team_id=team_id,
             thread_id=thread_id,
             root_run_id=root_run_id,
             session_key=session_key,
@@ -355,6 +347,8 @@ class WebAgentRuntimeService:
         memory_sections: list[tuple[str, str]] | None = None,
     ) -> tuple[bool, list[tuple[str, str]]]:
         memory_scope = str(agent.get("memoryScope") or "agent_profile")
+        if memory_scope not in {"agent_profile", "workspace_shared"}:
+            memory_scope = "agent_profile"
         effective_include_workspace_memory = (
             include_workspace_memory
             if include_workspace_memory is not None
@@ -477,11 +471,9 @@ class WebAgentRuntimeService:
         origin_chat_id: str,
         origin_channel: str = "web",
         control_scope: RunControlScope = RunControlScope.TOP_LEVEL,
-        team_id: str | None = None,
         parent_run_id: str | None = None,
         root_run_id: str | None = None,
         thread_id: str | None = None,
-        spawn_depth: int = 0,
         workspace_scope: str = "shared",
         workspace_path: str | None = None,
         sandbox_kind: str = "local",
@@ -497,9 +489,7 @@ class WebAgentRuntimeService:
             or "default"
         ).strip() or "default"
         tenant_id = str(agent.get("tenantId") or "default").strip() or "default"
-        knowledge_scope = "bindings" if prepared.knowledge_policy.binding_ids else ("team_shared" if team_id else "workspace")
-        role = "member" if control_scope == RunControlScope.MEMBER else "leader" if control_scope == RunControlScope.LEADER else None
-        principal_kind = "team_member" if control_scope == RunControlScope.MEMBER else "agent"
+        knowledge_scope = "bindings" if prepared.knowledge_policy.binding_ids else "workspace"
         knowledge_policy = KnowledgePolicy(
             scope=knowledge_scope,
             binding_ids=prepared.knowledge_policy.binding_ids,
@@ -510,12 +500,11 @@ class WebAgentRuntimeService:
         return ExecutionContext(
             tenant_id=tenant_id,
             instance_id=instance_id,
-            principal_kind=principal_kind,
+            principal_kind="agent",
             principal_id=agent_id or str(label or agent.get("name") or "agent"),
             label=str(label or agent.get("name") or "Agent"),
             agent_id=agent_id,
-            team_id=team_id,
-            role=role,
+            role=None,
             root_run_id=root_run_id,
             parent_run_id=parent_run_id,
             session_key=session_key,
@@ -524,7 +513,6 @@ class WebAgentRuntimeService:
             thread_id=thread_id,
             origin_channel=origin_channel,
             origin_chat_id=origin_chat_id,
-            spawn_depth=spawn_depth,
             control_scope=control_scope,
             workspace_path=workspace_path or str(prepared.config.workspace_path),
             workspace_scope=workspace_scope,
@@ -631,58 +619,6 @@ class WebAgentRuntimeService:
         )
         return isolated_agent, prepared
 
-    async def execute_child_agent_task(
-        self,
-        request: ChildTaskRequest,
-        *,
-        on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
-        on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
-    ) -> ChildTaskResult:
-        """Execute a delegated child-agent task via the shared runtime path."""
-        agent = request.agent_definition
-        if agent is None:
-            agent_id = str(request.agent_id or "").strip()
-            if not agent_id:
-                raise ValueError("agent_id or agent_definition is required for child agent tasks.")
-            agent = self.state.app_agents.get_agent(agent_id, tenant_id=request.tenant_id)
-        runs = getattr(self.state, "runs", None)
-        if runs and request.control_scope != RunControlScope.TOP_LEVEL:
-            runs.check_limits(
-                session_key=request.resolved_session_key(),
-                parent_run_id=request.parent_run_id,
-                spawn_depth=request.spawn_depth,
-                tenant_id=request.tenant_id,
-                instance_id=request.instance_id,
-            )
-
-        run_coro = self.run_agent_definition(
-            agent,
-            task=request.task,
-            label=request.resolved_label(),
-            session_key=request.resolved_session_key(),
-            session_id=request.resolved_session_id(),
-            session_title=request.session_title or request.resolved_label(),
-            origin_chat_id=request.origin_chat_id,
-            origin_channel=request.origin_channel,
-            control_scope=request.control_scope,
-            team_id=request.team_id,
-            parent_run_id=request.parent_run_id,
-            root_run_id=request.root_run_id,
-            thread_id=request.thread_id,
-            spawn_depth=request.spawn_depth,
-            additional_prompt_sections=request.additional_prompt_sections_as_list() or None,
-            include_workspace_memory=request.include_workspace_memory,
-            memory_sections=request.memory_sections_as_list() or None,
-            on_progress=on_progress,
-            on_run_event=on_run_event,
-        )
-        timeout_seconds = int(request.timeout_seconds or 0)
-        if timeout_seconds > 0:
-            run_result = await asyncio.wait_for(run_coro, timeout=timeout_seconds)
-        else:
-            run_result = await run_coro
-        return ChildTaskResult.from_agent_run(request, run_result)
-
     async def run_agent_definition(
         self,
         agent: dict[str, Any],
@@ -695,11 +631,9 @@ class WebAgentRuntimeService:
         origin_chat_id: str,
         origin_channel: str = "web",
         control_scope: RunControlScope = RunControlScope.TOP_LEVEL,
-        team_id: str | None = None,
         parent_run_id: str | None = None,
         root_run_id: str | None = None,
         thread_id: str | None = None,
-        spawn_depth: int = 0,
         route_metadata: dict[str, Any] | None = None,
         additional_prompt_sections: list[str] | None = None,
         include_workspace_memory: bool | None = None,
@@ -731,11 +665,9 @@ class WebAgentRuntimeService:
             origin_chat_id=origin_chat_id,
             origin_channel=origin_channel,
             control_scope=control_scope,
-            team_id=team_id,
             parent_run_id=parent_run_id,
             root_run_id=root_run_id,
             thread_id=thread_id,
-            spawn_depth=spawn_depth,
         )
         environment = self.resolve_environment_binding(
             workspace=prepared.config.workspace_path,
@@ -745,7 +677,6 @@ class WebAgentRuntimeService:
             tenant_id=execution_context.tenant_id,
             instance_id=execution_context.instance_id,
             principal_id=execution_context.principal_id,
-            team_id=execution_context.team_id,
             thread_id=execution_context.thread_id,
             root_run_id=execution_context.effective_root_run_id,
             session_key=execution_context.session_key,
@@ -779,14 +710,12 @@ class WebAgentRuntimeService:
             tenant_id=execution_context.tenant_id,
             instance_id=execution_context.instance_id,
             agent_id=execution_context.agent_id,
-            team_id=execution_context.team_id,
             thread_id=execution_context.thread_id,
             parent_run_id=execution_context.parent_run_id,
             root_run_id=execution_context.root_run_id,
             session_key=execution_context.session_key,
             origin_channel=execution_context.origin_channel,
             origin_chat_id=execution_context.origin_chat_id,
-            spawn_depth=execution_context.spawn_depth,
             control_scope=execution_context.control_scope,
             workspace_path=execution_context.workspace_path,
             memory_scope=execution_context.memory_policy.scope,

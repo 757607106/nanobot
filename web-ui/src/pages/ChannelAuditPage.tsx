@@ -21,7 +21,6 @@ import {
   ReloadOutlined,
   RobotOutlined,
   SearchOutlined,
-  TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -243,7 +242,7 @@ export default function ChannelAuditPage() {
                       <Tag>{item.chatId}</Tag>
                       <Tag>{item.resolutionKind === 'wildcard' ? '通配命中' : item.resolutionKind === 'exact' ? '精确命中' : '未命中'}</Tag>
                       {item.targetType ? (
-                        <Tag color="blue" icon={item.targetType === 'team' ? <TeamOutlined /> : <RobotOutlined />}>
+                        <Tag color="blue" icon={<RobotOutlined />}>
                           {item.targetType}:{item.targetId}
                         </Tag>
                       ) : null}

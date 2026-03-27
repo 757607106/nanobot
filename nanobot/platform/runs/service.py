@@ -30,7 +30,7 @@ class RunNotFoundError(KeyError):
 
 
 class RunLimitExceededError(RuntimeError):
-    """Raised when a new subagent would exceed configured limits."""
+    """Raised when a new linked run would exceed configured limits."""
 
 
 class RunStateError(RuntimeError):
@@ -46,7 +46,7 @@ class RunArtifactLifecycleError(RuntimeError):
 
 
 class RunService:
-    """Run registry facade used by the Web layer and subagent manager."""
+    """Run registry facade used by the Web layer."""
 
     _ACTIVE_STATUSES = (
         RunStatus.QUEUED.value,
@@ -139,14 +139,12 @@ class RunService:
         tenant_id: str | None = None,
         instance_id: str | None = None,
         agent_id: str | None = None,
-        team_id: str | None = None,
         thread_id: str | None = None,
         parent_run_id: str | None = None,
         root_run_id: str | None = None,
         session_key: str | None = None,
         origin_channel: str | None = None,
         origin_chat_id: str | None = None,
-        spawn_depth: int = 0,
         control_scope: RunControlScope = RunControlScope.TOP_LEVEL,
         workspace_path: str | None = None,
         memory_scope: str | None = None,
@@ -163,14 +161,12 @@ class RunService:
             label=label,
             task_preview=task_preview,
             agent_id=agent_id,
-            team_id=team_id,
             thread_id=thread_id,
             parent_run_id=parent_run_id,
             root_run_id=root_run_id or run_id,
             session_key=session_key,
             origin_channel=origin_channel,
             origin_chat_id=origin_chat_id,
-            spawn_depth=spawn_depth,
             control_scope=control_scope,
             workspace_path=workspace_path,
             memory_scope=memory_scope,
@@ -1095,7 +1091,6 @@ class RunService:
         status: str | None = None,
         kind: str | None = None,
         agent_id: str | None = None,
-        team_id: str | None = None,
         session_key: str | None = None,
         parent_run_id: str | None = None,
         root_run_id: str | None = None,
@@ -1108,7 +1103,6 @@ class RunService:
             status=status,
             kind=kind,
             agent_id=agent_id,
-            team_id=team_id,
             session_key=session_key,
             parent_run_id=parent_run_id,
             root_run_id=root_run_id,
@@ -1203,13 +1197,11 @@ class RunService:
                 "rootRunId": record.root_run_id,
                 "threadId": record.thread_id,
                 "sessionKey": record.session_key,
-                "spawnDepth": record.spawn_depth,
             },
             "principal": {
                 "principalKind": execution_payload.get("principalKind") or execution_payload.get("principal_kind"),
-                "principalId": execution_payload.get("principalId") or execution_payload.get("principal_id") or record.agent_id or record.team_id or record.run_id,
+                "principalId": execution_payload.get("principalId") or execution_payload.get("principal_id") or record.agent_id or record.run_id,
                 "agentId": record.agent_id,
-                "teamId": record.team_id,
                 "label": execution_payload.get("label"),
                 "role": execution_payload.get("role"),
             },
@@ -1279,14 +1271,11 @@ class RunService:
         *,
         session_key: str | None,
         parent_run_id: str | None,
-        spawn_depth: int,
         tenant_id: str | None = None,
         instance_id: str | None = None,
     ) -> None:
         effective_tenant_id = self.tenant_id if self._scope_enforced else tenant_id
         effective_instance_id = self.instance_id if self._scope_enforced else instance_id
-        if spawn_depth > self.limits.max_spawn_depth:
-            raise RunLimitExceededError("Child task depth limit exceeded.")
         if self.store.count_runs(
             tenant_id=effective_tenant_id,
             instance_id=effective_instance_id,

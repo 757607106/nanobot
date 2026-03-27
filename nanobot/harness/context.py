@@ -63,7 +63,7 @@ class KnowledgePolicy:
 
 @dataclass(slots=True)
 class ExecutionContext:
-    """Explicit runtime context for one agent or child-agent execution."""
+    """Explicit runtime context for one agent execution."""
 
     tenant_id: str
     instance_id: str
@@ -71,7 +71,6 @@ class ExecutionContext:
     principal_id: str
     label: str
     agent_id: str | None = None
-    team_id: str | None = None
     role: str | None = None
     run_id: str | None = None
     root_run_id: str | None = None
@@ -82,7 +81,6 @@ class ExecutionContext:
     thread_id: str | None = None
     origin_channel: str = "web"
     origin_chat_id: str = "direct"
-    spawn_depth: int = 0
     control_scope: RunControlScope = RunControlScope.TOP_LEVEL
     workspace_path: str | None = None
     workspace_scope: str = "shared"
@@ -111,7 +109,6 @@ class ExecutionContext:
             "principalId": self.principal_id,
             "label": self.label,
             "agentId": self.agent_id,
-            "teamId": self.team_id,
             "role": self.role,
             "runId": self.run_id,
             "rootRunId": self.effective_root_run_id,
@@ -122,7 +119,6 @@ class ExecutionContext:
             "threadId": self.thread_id,
             "originChannel": self.origin_channel,
             "originChatId": self.origin_chat_id,
-            "spawnDepth": self.spawn_depth,
             "controlScope": self.control_scope.value,
             "workspacePath": self.workspace_path,
             "workspaceScope": self.workspace_scope,
@@ -151,7 +147,6 @@ class ExecutionContext:
             "tenant_id": self.tenant_id,
             "instance_id": self.instance_id,
             "agent_id": self.agent_id,
-            "team_id": self.team_id,
             "role": self.role,
             "thread_id": self.thread_id,
             "origin_channel": self.origin_channel,
@@ -175,16 +170,14 @@ class ExecutionContext:
         return {key: value for key, value in payload.items() if value is not None}
 
     def to_agent_loop_run_context(self) -> dict[str, Any]:
-        """Return the normalized child-task lineage payload for AgentLoop."""
+        """Return the normalized lineage payload for AgentLoop."""
         payload = {
             "run_id": self.effective_run_id,
             "root_run_id": self.effective_root_run_id,
             "tenant_id": self.tenant_id,
             "instance_id": self.instance_id,
             "agent_id": self.agent_id,
-            "team_id": self.team_id,
             "thread_id": self.thread_id,
-            "spawn_depth": self.spawn_depth,
             "principal_kind": self.principal_kind,
             "principal_id": self.principal_id,
             "role": self.role,

@@ -1,4 +1,4 @@
-"""Shared execution helpers for agent and subagent runtimes."""
+"""Shared execution helpers for the agent runtime."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTo
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.shell import ExecTool
-from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.providers.base import LLMProvider, ToolCallRequest
 
@@ -89,7 +88,6 @@ def build_workspace_tool_registry(
     sandbox_provider: Any | None = None,
     tool_allowlist: set[str] | list[str] | tuple[str, ...] | None = None,
     message_send_callback: Callable[..., Awaitable[None]] | None = None,
-    spawn_manager: Any | None = None,
     cron_service: Any | None = None,
     extra_tools: list[Tool] | None = None,
 ) -> ToolRegistry:
@@ -139,8 +137,6 @@ def build_workspace_tool_registry(
 
     if message_send_callback is not None:
         _register(MessageTool(send_callback=message_send_callback))
-    if spawn_manager is not None:
-        _register(SpawnTool(manager=spawn_manager))
     if cron_service is not None:
         _register(CronTool(cron_service))
     for tool in extra_tools or []:
@@ -162,7 +158,7 @@ async def run_tool_loop(
     hooks: ToolLoopHooks | None = None,
     log_prefix: str | None = None,
 ) -> ToolLoopResult:
-    """Execute a standard LLM/tool loop shared by main agents and subagents."""
+    """Execute the standard LLM/tool loop for the main agent."""
     messages = list(initial_messages)
     iteration = 0
     final_content = None

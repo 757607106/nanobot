@@ -1,15 +1,4 @@
-"""Execution harness primitives for agent and team runtimes."""
-
-from .child_tasks import (
-    ChildTaskHandle,
-    ChildTaskProjector,
-    ChildTaskRequest,
-    ChildTaskResult,
-    ChildTaskRuntime,
-    InProcessChildTaskRuntime,
-    collect_child_run_ids,
-    materialize_child_execution_context,
-)
+"""Execution harness primitives for agent runtimes."""
 from .context import ExecutionContext, KnowledgePolicy, MemoryPolicy, ToolPolicy
 from .environment import ExecutionEnvironmentBinding, resolve_execution_environment
 from .events import (
@@ -50,11 +39,6 @@ from .workspace import (
 )
 
 __all__ = [
-    "ChildTaskHandle",
-    "ChildTaskProjector",
-    "ChildTaskRequest",
-    "ChildTaskResult",
-    "ChildTaskRuntime",
     "ExecutionContext",
     "ExecutionEnvironmentBinding",
     "ExecutionAssemblyState",
@@ -68,7 +52,6 @@ __all__ = [
     "MemoryPolicy",
     "MemoryPolicyMiddleware",
     "RemoteSandboxProvider",
-    "InProcessChildTaskRuntime",
     "PromptAssemblyMiddleware",
     "PromptSeedMiddleware",
     "RuntimePromptFragmentsMiddleware",
@@ -87,8 +70,6 @@ __all__ = [
     "build_model_result_payload",
     "build_tool_called_payload",
     "build_tool_result_payload",
-    "collect_child_run_ids",
-    "materialize_child_execution_context",
     "preview_text",
     "resolve_execution_environment",
     "build_sandbox_provider",

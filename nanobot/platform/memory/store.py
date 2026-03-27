@@ -9,7 +9,7 @@ from typing import Any
 from nanobot.platform.memory.models import MemoryCandidate
 
 
-class TeamMemoryStore:
+class MemoryStore:
     """Persist memory candidates in an instance-scoped SQLite file."""
 
     _CREATE_SCHEMA = """
@@ -18,7 +18,6 @@ class TeamMemoryStore:
             tenant_id TEXT NOT NULL DEFAULT 'default',
             instance_id TEXT NOT NULL,
             scope TEXT NOT NULL,
-            team_id TEXT,
             agent_id TEXT,
             run_id TEXT,
             source_kind TEXT NOT NULL,
@@ -30,8 +29,6 @@ class TeamMemoryStore:
             applied_at TEXT
         );
 
-        CREATE INDEX IF NOT EXISTS idx_memory_candidates_team
-        ON memory_candidates(team_id, status, updated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_memory_candidates_agent
         ON memory_candidates(agent_id, status, updated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_memory_candidates_run
@@ -71,7 +68,6 @@ class TeamMemoryStore:
                 tenant_id,
                 instance_id,
                 scope,
-                team_id,
                 agent_id,
                 run_id,
                 source_kind,
@@ -81,14 +77,13 @@ class TeamMemoryStore:
                 created_at,
                 updated_at,
                 applied_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 candidate.candidate_id,
                 candidate.tenant_id,
                 candidate.instance_id,
                 candidate.scope,
-                candidate.team_id,
                 candidate.agent_id,
                 candidate.run_id,
                 candidate.source_kind,
@@ -121,7 +116,6 @@ class TeamMemoryStore:
         *,
         tenant_id: str,
         instance_id: str,
-        team_id: str | None = None,
         agent_id: str | None = None,
         status: str | None = None,
         scope: str | None = None,
@@ -129,9 +123,6 @@ class TeamMemoryStore:
     ) -> list[MemoryCandidate]:
         where = ["tenant_id = ?", "instance_id = ?"]
         values: list[Any] = [tenant_id, instance_id]
-        if team_id:
-            where.append("team_id = ?")
-            values.append(team_id)
         if agent_id:
             where.append("agent_id = ?")
             values.append(agent_id)
@@ -161,16 +152,12 @@ class TeamMemoryStore:
         *,
         tenant_id: str,
         instance_id: str,
-        team_id: str | None = None,
         agent_id: str | None = None,
         status: str | None = None,
         scope: str | None = None,
     ) -> int:
         where = ["tenant_id = ?", "instance_id = ?"]
         values: list[Any] = [tenant_id, instance_id]
-        if team_id:
-            where.append("team_id = ?")
-            values.append(team_id)
         if agent_id:
             where.append("agent_id = ?")
             values.append(agent_id)

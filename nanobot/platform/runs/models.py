@@ -1,4 +1,4 @@
-"""Run registry models for subagent and future multi-agent runtime state."""
+"""Run registry models for agent runtime state."""
 
 from __future__ import annotations
 
@@ -17,8 +17,6 @@ class RunKind(StrEnum):
     """High-level run kind."""
 
     AGENT = "agent"
-    SUBAGENT = "subagent"
-    TEAM = "team"
 
 
 class RunStatus(StrEnum):
@@ -38,8 +36,6 @@ class RunControlScope(StrEnum):
 
     TOP_LEVEL = "top_level"
     CHILD = "child"
-    LEADER = "leader"
-    MEMBER = "member"
 
 
 @dataclass(slots=True)
@@ -82,17 +78,16 @@ class RunEvent:
 
 @dataclass(slots=True)
 class RunLimits:
-    """Default runtime limits for subagent execution."""
+    """Default runtime limits for linked agent executions."""
 
     max_global_running: int = 8
     max_running_per_session: int = 4
     max_children_per_parent: int = 8
-    max_spawn_depth: int = 1
 
 
 @dataclass(slots=True)
 class RunRecord:
-    """Stored run metadata for subagent execution."""
+    """Stored run metadata for agent execution."""
 
     run_id: str
     tenant_id: str
@@ -102,14 +97,12 @@ class RunRecord:
     label: str
     task_preview: str
     agent_id: str | None = None
-    team_id: str | None = None
     thread_id: str | None = None
     parent_run_id: str | None = None
     root_run_id: str | None = None
     session_key: str | None = None
     origin_channel: str | None = None
     origin_chat_id: str | None = None
-    spawn_depth: int = 0
     control_scope: RunControlScope = RunControlScope.TOP_LEVEL
     workspace_path: str | None = None
     memory_scope: str | None = None
@@ -133,14 +126,12 @@ class RunRecord:
         payload["instanceId"] = payload.pop("instance_id")
         payload["taskPreview"] = payload.pop("task_preview")
         payload["agentId"] = payload.pop("agent_id")
-        payload["teamId"] = payload.pop("team_id")
         payload["threadId"] = payload.pop("thread_id")
         payload["parentRunId"] = payload.pop("parent_run_id")
         payload["rootRunId"] = payload.pop("root_run_id")
         payload["sessionKey"] = payload.pop("session_key")
         payload["originChannel"] = payload.pop("origin_channel")
         payload["originChatId"] = payload.pop("origin_chat_id")
-        payload["spawnDepth"] = payload.pop("spawn_depth")
         payload["controlScope"] = payload.pop("control_scope")
         payload["workspacePath"] = payload.pop("workspace_path")
         payload["memoryScope"] = payload.pop("memory_scope")
@@ -157,4 +148,3 @@ class RunRecord:
         if events is not None:
             payload["events"] = [event.to_dict() for event in events]
         return payload
-

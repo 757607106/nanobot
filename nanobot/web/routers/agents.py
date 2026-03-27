@@ -152,7 +152,6 @@ def create_agent_memory_candidate(
         title = str(payload.title or "").strip() or f"{agent['name']} candidate"
         data = get_tenant_memory_service(request).create_candidate(
             scope="agent_profile",
-            team_id=None,
             agent_id=agent_id,
             run_id=payload.runId,
             source_kind=payload.sourceKind,

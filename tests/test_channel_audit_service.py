@@ -102,8 +102,8 @@ def test_channel_audit_service_supports_query_filters(tmp_path) -> None:
         sender_id="user-2",
         message_preview="shipping issue",
         resolved=True,
-        target_type="team",
-        target_id="support-team",
+        target_type="agent",
+        target_id="support-agent",
     )
 
     filtered = service.list_entries(
@@ -114,4 +114,4 @@ def test_channel_audit_service_supports_query_filters(tmp_path) -> None:
 
     assert len(filtered) == 1
     assert filtered[0]["channelName"] == "discord"
-    assert filtered[0]["targetId"] == "support-team"
+    assert filtered[0]["targetId"] == "support-agent"

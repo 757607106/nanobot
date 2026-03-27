@@ -1,4 +1,4 @@
-"""Run registry helpers for subagent and future multi-agent runtime state."""
+"""Run registry helpers for agent runtime state."""
 
 from nanobot.platform.runs.models import (
     RunControlScope,

@@ -1,4 +1,4 @@
-"""Channel binding routes for routing messages to agents or teams."""
+"""Channel binding routes for routing messages to agents."""
 
 from __future__ import annotations
 

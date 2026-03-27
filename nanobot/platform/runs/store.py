@@ -29,14 +29,12 @@ class RunStore:
             label TEXT NOT NULL,
             task_preview TEXT NOT NULL,
             agent_id TEXT,
-            team_id TEXT,
             thread_id TEXT,
             parent_run_id TEXT,
             root_run_id TEXT NOT NULL,
             session_key TEXT,
             origin_channel TEXT,
             origin_chat_id TEXT,
-            spawn_depth INTEGER NOT NULL DEFAULT 0,
             control_scope TEXT NOT NULL DEFAULT 'top_level',
             workspace_path TEXT,
             memory_scope TEXT,
@@ -62,8 +60,6 @@ class RunStore:
         ON run_records(session_key);
         CREATE INDEX IF NOT EXISTS idx_run_records_agent_id
         ON run_records(agent_id);
-        CREATE INDEX IF NOT EXISTS idx_run_records_team_id
-        ON run_records(team_id);
         CREATE INDEX IF NOT EXISTS idx_run_records_created_at
         ON run_records(created_at DESC);
 
@@ -134,14 +130,12 @@ class RunStore:
             label=row["label"],
             task_preview=row["task_preview"],
             agent_id=row["agent_id"],
-            team_id=row["team_id"],
             thread_id=row["thread_id"],
             parent_run_id=row["parent_run_id"],
             root_run_id=row["root_run_id"],
             session_key=row["session_key"],
             origin_channel=row["origin_channel"],
             origin_chat_id=row["origin_chat_id"],
-            spawn_depth=int(row["spawn_depth"]),
             control_scope=RunControlScope(row["control_scope"]),
             workspace_path=row["workspace_path"],
             memory_scope=row["memory_scope"],
@@ -161,13 +155,13 @@ class RunStore:
             """
             INSERT INTO run_records (
                 run_id, tenant_id, instance_id, kind, status, label, task_preview,
-                agent_id, team_id, thread_id, parent_run_id, root_run_id, session_key,
-                origin_channel, origin_chat_id, spawn_depth, control_scope,
+                agent_id, thread_id, parent_run_id, root_run_id, session_key,
+                origin_channel, origin_chat_id, control_scope,
                 workspace_path, memory_scope, knowledge_scope, result_summary_json,
                 artifact_path, last_error_code, last_error_message, created_at,
                 started_at, finished_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.run_id,
@@ -178,14 +172,12 @@ class RunStore:
                 record.label,
                 record.task_preview,
                 record.agent_id,
-                record.team_id,
                 record.thread_id,
                 record.parent_run_id,
                 record.root_run_id or record.run_id,
                 record.session_key,
                 record.origin_channel,
                 record.origin_chat_id,
-                record.spawn_depth,
                 record.control_scope.value,
                 record.workspace_path,
                 record.memory_scope,
@@ -245,7 +237,6 @@ class RunStore:
         status: str | None = None,
         kind: str | None = None,
         agent_id: str | None = None,
-        team_id: str | None = None,
         session_key: str | None = None,
         parent_run_id: str | None = None,
         root_run_id: str | None = None,
@@ -269,9 +260,6 @@ class RunStore:
         if agent_id is not None:
             where.append("agent_id = ?")
             values.append(agent_id)
-        if team_id is not None:
-            where.append("team_id = ?")
-            values.append(team_id)
         if session_key is not None:
             where.append("session_key = ?")
             values.append(session_key)

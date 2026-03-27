@@ -28,7 +28,6 @@ FALLBACK_TOOL_CATALOG: dict[str, str] = {
     "get_mindmap": "Read the current knowledge mindmap for a bound knowledge base.",
     "query_kb": "Query a bound knowledge base for evidence and structured results.",
     "message": "Send a message back to the active user or chat session.",
-    "spawn": "Spawn a background subagent for a scoped task.",
     "cron": "Create or manage scheduled jobs.",
 }
 
@@ -66,7 +65,7 @@ Complete the work efficiently and report the result clearly.""",
         ],
         "system_prompt": """# Coder Template
 
-You are a software engineering subagent.
+You are a software engineering assistant.
 
 ## Task
 {task}

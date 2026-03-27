@@ -1,17 +1,17 @@
-"""Memory governance helpers for the collaboration domain."""
+"""Memory governance helpers."""
 
 from nanobot.platform.memory.models import MemoryCandidate
 from nanobot.platform.memory.service import (
     MemoryCandidateNotFoundError,
     MemoryCandidateValidationError,
-    TeamMemoryService,
+    MemoryService,
 )
-from nanobot.platform.memory.store import TeamMemoryStore
+from nanobot.platform.memory.store import MemoryStore
 
 __all__ = [
     "MemoryCandidate",
     "MemoryCandidateNotFoundError",
     "MemoryCandidateValidationError",
-    "TeamMemoryService",
-    "TeamMemoryStore",
+    "MemoryService",
+    "MemoryStore",
 ]

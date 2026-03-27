@@ -1,4 +1,4 @@
-"""Run registry routes for subagent and future multi-agent runtime state."""
+"""Run registry routes for agent runtime state."""
 
 from __future__ import annotations
 
@@ -44,7 +44,6 @@ def list_runs(
     status: str | None = Query(default=None),
     kind: str | None = Query(default=None),
     agent_id: str | None = Query(default=None, alias="agentId"),
-    team_id: str | None = Query(default=None, alias="teamId"),
     session_key: str | None = Query(default=None, alias="sessionKey"),
     parent_run_id: str | None = Query(default=None, alias="parentRunId"),
     root_run_id: str | None = Query(default=None, alias="rootRunId"),
@@ -55,7 +54,6 @@ def list_runs(
         status=status,
         kind=kind,
         agent_id=agent_id,
-        team_id=team_id,
         session_key=session_key,
         parent_run_id=parent_run_id,
         root_run_id=root_run_id,
@@ -291,25 +289,6 @@ async def cancel_run(request: Request, run_id: str) -> JSONResponse:
         raise APIError(409, "RUN_CANCEL_INVALID", str(exc)) from exc
 
     task_cancel_sent = False
-    run = runs.get_run(run_id, include_events=False)
-    agent = getattr(request.app.state.web, "agent", None)
-    subagents = getattr(agent, "subagents", None)
-    if subagents is not None:
-        task_cancel_sent = await subagents.cancel_run(run_id)
-    if not task_cancel_sent:
-        team_runtime = getattr(request.app.state.web, "team_runtime", None)
-        if team_runtime is not None:
-            team_root_run_id = None
-            if run.get("kind") == "team":
-                team_root_run_id = run_id
-            elif run.get("teamId") and run.get("rootRunId"):
-                team_root_run_id = str(run["rootRunId"])
-                try:
-                    runs.request_cancel(team_root_run_id)
-                except (RunNotFoundError, RunStateError):
-                    pass
-            if team_root_run_id:
-                task_cancel_sent = await team_runtime.cancel_run(team_root_run_id)
 
     return _json_response(
         202,

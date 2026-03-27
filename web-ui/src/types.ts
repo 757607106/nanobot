@@ -283,7 +283,7 @@ export interface ChannelAuditEntry {
   resolved: boolean
   resolutionKind: 'none' | 'exact' | 'wildcard' | string
   bindingId?: string | null
-  targetType?: 'agent' | 'team' | string | null
+  targetType?: 'agent' | string | null
   targetId?: string | null
   messageId?: string | null
   dispatchRunId?: string | null
@@ -552,7 +552,6 @@ export interface MemoryCandidate {
   sourceKind: string
   title: string
   content: string
-  teamId?: string | null
   agentId?: string | null
   runId?: string | null
   status: string
@@ -959,20 +958,18 @@ export interface AgentRunSummary {
   runId: string
   tenantId: string
   instanceId: string
-  kind: 'agent' | 'subagent' | 'team'
+  kind: 'agent'
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancel_requested' | 'cancelled' | 'timed_out'
   label: string
   taskPreview: string
   agentId?: string | null
-  teamId?: string | null
   threadId?: string | null
   parentRunId?: string | null
   rootRunId?: string | null
   sessionKey?: string | null
   originChannel?: string | null
   originChatId?: string | null
-  spawnDepth: number
-  controlScope: 'top_level' | 'child' | 'leader' | 'member'
+  controlScope: 'top_level' | 'child'
   workspacePath?: string | null
   memoryScope?: string | null
   knowledgeScope?: string | null
@@ -1098,13 +1095,11 @@ export interface RunBoundaryAudit {
     rootRunId?: string | null
     threadId?: string | null
     sessionKey?: string | null
-    spawnDepth?: number
   }
   principal: {
     principalKind?: string | null
     principalId: string
     agentId?: string | null
-    teamId?: string | null
     label?: string | null
     role?: string | null
   }

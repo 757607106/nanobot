@@ -1,4 +1,4 @@
-"""Channel binding helpers for routing messages to agents or teams."""
+"""Channel binding helpers for routing messages to agents."""
 
 from nanobot.platform.channel_bindings.models import ChannelBinding
 from nanobot.platform.channel_bindings.service import (

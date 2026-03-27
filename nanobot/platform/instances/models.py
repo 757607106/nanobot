@@ -82,9 +82,6 @@ class PlatformInstance:
     def memory_db_path(self) -> Path:
         return self.data_dir / "web-memory.db"
 
-    def team_memory_dir(self) -> Path:
-        return ensure_dir(self.data_dir / "team-memory")
-
     def agent_memory_dir(self) -> Path:
         return ensure_dir(self.data_dir / "agent-memory")
 

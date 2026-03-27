@@ -493,7 +493,7 @@ def gateway(
     cron_store_path = get_cron_dir() / "jobs.json"
     cron = CronService(cron_store_path)
 
-    # --- Platform services for multi-agent channel routing ---
+    # --- Platform services for agent channel routing ---
     instance = PlatformInstanceService().get_default_instance(get_config_path())
     platform_runtime = build_cli_gateway_routing_runtime(
         config=config,

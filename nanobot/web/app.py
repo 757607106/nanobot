@@ -21,7 +21,7 @@ from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBind
 from nanobot.platform.instances import PlatformInstanceService
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
-from nanobot.platform.memory import TeamMemoryService, TeamMemoryStore
+from nanobot.platform.memory import MemoryService, MemoryStore
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.platform.tenants import TenantService, TenantStore
 from nanobot.web.auth import SESSION_COOKIE_NAME, WebAuthManager
@@ -94,8 +94,8 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         rag_engine=rag_engine,
         config=config,
     )
-    memory = TeamMemoryService(
-        TeamMemoryStore(instance.memory_db_path()),
+    memory = MemoryService(
+        MemoryStore(instance.memory_db_path()),
         instance=instance,
         instance_id=instance.id,
         agent_lookup=agents.require_agent,

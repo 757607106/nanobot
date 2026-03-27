@@ -1,4 +1,4 @@
-"""Channel binding models for routing channel messages to agents or teams."""
+"""Channel binding models for routing channel messages to agents."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def now_iso() -> str:
 
 @dataclass(slots=True)
 class ChannelBinding:
-    """Maps a channel + chat_id to a specific agent or team."""
+    """Maps a channel + chat_id to one specific agent."""
 
     binding_id: str
     tenant_id: str

@@ -17,7 +17,7 @@ from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBind
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
-from nanobot.platform.memory import TeamMemoryService, TeamMemoryStore
+from nanobot.platform.memory import MemoryService, MemoryStore
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.session.manager import SessionManager
 from nanobot.web.runtime_services.agents import WebAgentRuntimeService
@@ -47,7 +47,7 @@ class CLIGatewayRoutingRuntime:
     routing_service: ChannelRoutingService
     runs: RunService
     knowledge_service: KnowledgeBaseService
-    memory_service: TeamMemoryService
+    memory_service: MemoryService
     agent_runtime: WebAgentRuntimeService
 
     def bind_main_agent(self, agent: AgentLoop) -> None:
@@ -111,8 +111,8 @@ def build_cli_gateway_routing_runtime(
         instance_id=instance.id,
         artifact_dir=instance.agent_artifacts_dir(),
     )
-    memory_service = TeamMemoryService(
-        TeamMemoryStore(instance.memory_db_path()),
+    memory_service = MemoryService(
+        MemoryStore(instance.memory_db_path()),
         instance=instance,
         instance_id=instance.id,
         agent_lookup=agents_service.require_agent,

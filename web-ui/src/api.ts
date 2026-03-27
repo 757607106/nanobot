@@ -814,16 +814,12 @@ export const api = {
       body: JSON.stringify({ content }),
     }),
   getMemoryCandidates: (params?: {
-    teamId?: string
     agentId?: string
     status?: string
     scope?: string
     limit?: number
   }) => {
     const query = new URLSearchParams()
-    if (params?.teamId) {
-      query.set('teamId', params.teamId)
-    }
     if (params?.agentId) {
       query.set('agentId', params.agentId)
     }
@@ -847,12 +843,12 @@ export const api = {
     request<MemoryCandidate>(`/memory-candidates/${encodeURIComponent(candidateId)}/reject`, {
       method: 'POST',
     }),
-  searchMemory: (payload: { query: string; teamId?: string; agentId?: string; limit?: number; mode?: string }) =>
+  searchMemory: (payload: { query: string; agentId?: string; limit?: number; mode?: string }) =>
     request<MemorySearchResult>('/memory-search', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
-  getMemorySource: (payload: { sourceType: string; sourceId: string; teamId?: string; agentId?: string }) =>
+  getMemorySource: (payload: { sourceType: string; sourceId: string; agentId?: string }) =>
     request<MemorySourceDetail>('/memory-get', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -861,7 +857,6 @@ export const api = {
     status?: string
     kind?: string
     agentId?: string
-    teamId?: string
     sessionKey?: string
     parentRunId?: string
     rootRunId?: string
@@ -877,9 +872,6 @@ export const api = {
     }
     if (params?.agentId) {
       query.set('agentId', params.agentId)
-    }
-    if (params?.teamId) {
-      query.set('teamId', params.teamId)
     }
     if (params?.sessionKey) {
       query.set('sessionKey', params.sessionKey)

@@ -8,7 +8,6 @@ import {
   Col,
   Descriptions,
   Empty,
-  List,
   Row,
   Select,
   Space,
@@ -51,32 +50,6 @@ import type {
 } from '../types'
 
 const { Paragraph, Text, Title } = Typography
-
-interface ChildTaskActivity {
-  key: string
-  handleId?: string | null
-  runId?: string | null
-  label: string
-  task?: string | null
-  status: string
-  principalKind?: string | null
-  principalId?: string | null
-  agentId?: string | null
-  teamId?: string | null
-  originChannel?: string | null
-  originChatId?: string | null
-  timeoutSeconds?: number | null
-  scheduledAt?: string | null
-  updatedAt?: string | null
-  completedAt?: string | null
-  content?: string | null
-  error?: string | null
-  progressMessage?: string | null
-  progressStage?: string | null
-  childKind?: string | null
-  childControlScope?: string | null
-  childSummary?: string | null
-}
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -149,180 +122,6 @@ function isCancelable(status: AgentRunSummary['status']) {
   return status === 'queued' || status === 'running'
 }
 
-function childTaskStatusColor(status: string) {
-  switch (status) {
-    case 'ok':
-    case 'succeeded':
-      return 'success'
-    case 'timed_out':
-    case 'cancel_requested':
-      return 'warning'
-    case 'cancelled':
-      return 'default'
-    case 'error':
-    case 'failed':
-      return 'error'
-    case 'scheduled':
-    case 'queued':
-    case 'running':
-      return 'processing'
-    default:
-      return 'default'
-  }
-}
-
-function childTaskStatusLabel(status: string) {
-  switch (status) {
-    case 'ok':
-    case 'succeeded':
-      return '成功'
-    case 'timed_out':
-      return '超时'
-    case 'cancel_requested':
-      return '取消中'
-    case 'cancelled':
-      return '已取消'
-    case 'error':
-    case 'failed':
-      return '失败'
-    case 'scheduled':
-      return '已派发'
-    case 'queued':
-      return '排队中'
-    case 'running':
-      return '运行中'
-    default:
-      return status || '未知'
-  }
-}
-
-function compactText(value: string | null | undefined, fallback = '-') {
-  const text = String(value || '').trim()
-  if (!text) {
-    return fallback
-  }
-  return text.length > 140 ? `${text.slice(0, 140)}...` : text
-}
-
-function childTaskActivityKey(payload?: Record<string, unknown>, fallback = 'child-task') {
-  const handleId = String(payload?.handleId || '').trim()
-  if (handleId) {
-    return `handle:${handleId}`
-  }
-  const childRunId = String(payload?.childRunId || '').trim()
-  if (childRunId) {
-    return `run:${childRunId}`
-  }
-  const parts = [
-    payload?.principalKind,
-    payload?.principalId || payload?.agentId,
-    payload?.label,
-    payload?.task,
-  ]
-    .map((value) => String(value || '').trim())
-    .filter(Boolean)
-  return parts.length ? parts.join('::') : fallback
-}
-
-function buildChildTaskActivities(
-  events?: AgentRunSummary['events'],
-  children?: AgentRunSummary[],
-): ChildTaskActivity[] {
-  const items = new Map<string, ChildTaskActivity>()
-
-  for (const child of children || []) {
-    items.set(`run:${child.runId}`, {
-      key: `run:${child.runId}`,
-      runId: child.runId,
-      label: child.label,
-      task: child.taskPreview,
-      status: child.status,
-      principalKind: child.kind,
-      principalId: child.agentId || child.teamId || child.runId,
-      agentId: child.agentId,
-      teamId: child.teamId,
-      originChannel: child.originChannel,
-      originChatId: child.originChatId,
-      scheduledAt: child.createdAt,
-      completedAt: child.finishedAt,
-      childKind: child.kind,
-      childControlScope: child.controlScope,
-      childSummary: child.resultSummary?.content || null,
-    })
-  }
-
-  for (const event of events || []) {
-    if (
-      event.eventType !== 'child_task_scheduled' &&
-      event.eventType !== 'child_task_progress' &&
-      event.eventType !== 'child_task_completed'
-    ) {
-      continue
-    }
-    const payload = event.payload || {}
-    const key = childTaskActivityKey(payload, `${event.eventType}:${event.createdAt || ''}`)
-    const childRunId = String(payload.childRunId || '').trim() || null
-    const fallbackRunKey = childRunId ? `run:${childRunId}` : null
-    const existingKey =
-      items.has(key)
-        ? key
-        : fallbackRunKey && items.has(fallbackRunKey)
-          ? fallbackRunKey
-          : key
-    const current = items.get(existingKey) || {
-      key,
-      runId: null,
-      label: String(payload.label || '').trim() || '子任务',
-      status: 'scheduled',
-    }
-
-    current.handleId = String(payload.handleId || current.handleId || '').trim() || null
-    current.runId = String(payload.childRunId || current.runId || '').trim() || null
-    current.label = String(payload.label || current.label || '').trim() || '子任务'
-    current.task = String(payload.task || current.task || '').trim() || null
-    current.principalKind = String(payload.principalKind || current.principalKind || '').trim() || null
-    current.principalId = String(payload.principalId || current.principalId || '').trim() || null
-    current.agentId = String(payload.agentId || current.agentId || '').trim() || null
-    current.teamId = String(payload.teamId || current.teamId || '').trim() || null
-    current.originChannel = String(payload.originChannel || current.originChannel || '').trim() || null
-    current.originChatId = String(payload.originChatId || current.originChatId || '').trim() || null
-    current.timeoutSeconds =
-      payload.timeoutSeconds == null ? current.timeoutSeconds || null : Number(payload.timeoutSeconds)
-
-    if (event.eventType === 'child_task_scheduled') {
-      current.scheduledAt = event.createdAt || current.scheduledAt || null
-      if (!current.status || current.status === 'queued') {
-        current.status = 'scheduled'
-      }
-    } else if (event.eventType === 'child_task_progress') {
-      current.updatedAt = event.createdAt || current.updatedAt || null
-      current.status = String(payload.status || current.status || 'running').trim() || 'running'
-      current.progressMessage = String(payload.message || current.progressMessage || '').trim() || null
-      current.progressStage = String(payload.stage || current.progressStage || '').trim() || null
-    } else {
-      current.completedAt = event.createdAt || current.completedAt || null
-      current.status = String(payload.status || current.status || 'ok').trim() || 'ok'
-      current.content = String(payload.content || current.content || '').trim() || null
-      current.error = String(payload.error || current.error || '').trim() || null
-    }
-
-    const nextKey = current.handleId
-      ? `handle:${current.handleId}`
-      : current.runId
-        ? `run:${current.runId}`
-        : key
-    current.key = nextKey
-    if (existingKey !== nextKey) {
-      items.delete(existingKey)
-    }
-    items.set(nextKey, current)
-  }
-
-  return Array.from(items.values()).sort((left, right) =>
-    String(left.scheduledAt || left.completedAt || '').localeCompare(String(right.scheduledAt || right.completedAt || '')),
-  )
-}
-
 function eventLabel(eventType: string, devMode = true) {
   switch (eventType) {
     case 'queued':
@@ -341,32 +140,10 @@ function eventLabel(eventType: string, devMode = true) {
       return devMode ? '已装配绑定能力' : '准备就绪'
     case 'knowledge_retrieved':
       return devMode ? '已检索知识库' : '准备就绪'
-    case 'team_run_requested':
-      return '收到团队任务'
-    case 'team_definition_resolved':
-      return devMode ? '已解析 TeamDefinition' : '准备就绪'
-    case 'team_knowledge_retrieved':
-      return devMode ? '已检索团队共享知识' : '准备就绪'
     case 'retry_requested':
       return '已发起重跑'
     case 'memory_candidate_proposed':
       return '已生成记忆候选'
-    case 'child_task_scheduled':
-      return '子任务已派发'
-    case 'child_task_progress':
-      return '子任务执行中'
-    case 'child_task_completed':
-      return '子任务已完成'
-    case 'member_scheduled':
-      return '成员已派发'
-    case 'member_completed':
-      return '成员已完成'
-    case 'leader_scheduled':
-      return 'Leader 已开始汇总'
-    case 'leader_completed':
-      return 'Leader 已完成汇总'
-    case 'team_completed':
-      return '团队运行完成'
     case 'execution_context_materialized':
       return devMode ? '已物化执行上下文' : '执行边界已确认'
     case 'channel_dispatch_resolved':
@@ -395,8 +172,6 @@ function eventPayloadSummary(eventType: string, payload?: Record<string, unknown
   switch (eventType) {
     case 'progress':
       return String(payload.content || '')
-    case 'team_run_requested':
-      return String(payload.contentPreview || '')
     case 'bindings_resolved': {
       if (!devMode) {
         const total =
@@ -414,13 +189,7 @@ function eventPayloadSummary(eventType: string, payload?: Record<string, unknown
       ].join(' · ')
     }
     case 'knowledge_retrieved':
-    case 'team_knowledge_retrieved':
       return `mode: ${payload.effectiveMode || payload.requestedMode || 'keyword'} · hits: ${payload.hitCount || 0}`
-    case 'team_definition_resolved':
-      return [
-        `members: ${Array.isArray(payload.memberAgentIds) ? payload.memberAgentIds.length : 0}`,
-        `shared KB: ${Array.isArray(payload.sharedKnowledgeBindingIds) ? payload.sharedKnowledgeBindingIds.length : 0}`,
-      ].join(' · ')
     case 'retry_requested':
       return [
         `source: ${payload.sourceRunId || 'n/a'}`,
@@ -428,34 +197,6 @@ function eventPayloadSummary(eventType: string, payload?: Record<string, unknown
       ].join(' · ')
     case 'memory_candidate_proposed':
       return [payload.candidateId, payload.agentId, payload.runId].filter(Boolean).join(' · ')
-    case 'child_task_scheduled':
-      return [
-        String(payload.label || payload.principalId || '子任务'),
-        payload.timeoutSeconds != null ? `${payload.timeoutSeconds}s` : null,
-        String(payload.childRunId || ''),
-      ].filter(Boolean).join(' · ')
-    case 'child_task_progress':
-      return [
-        String(payload.label || payload.principalId || '子任务'),
-        childTaskStatusLabel(String(payload.status || 'running')),
-        String(payload.stage || payload.message || ''),
-      ].filter(Boolean).join(' · ')
-    case 'child_task_completed':
-      return [
-        String(payload.label || payload.principalId || '子任务'),
-        childTaskStatusLabel(String(payload.status || 'ok')),
-        String(payload.error || payload.childRunId || ''),
-      ].filter(Boolean).join(' · ')
-    case 'member_scheduled':
-    case 'member_completed':
-    case 'leader_scheduled':
-    case 'leader_completed':
-      return [payload.agentName, payload.runId].filter(Boolean).join(' · ')
-    case 'team_completed':
-      return [
-        `supervisor: ${payload.supervisorRunId || 'n/a'}`,
-        `members: ${Array.isArray(payload.memberRunIds) ? payload.memberRunIds.length : 0}`,
-      ].join(' · ')
     case 'execution_context_materialized':
       return [
         String(payload.principalKind || payload.principal_kind || 'agent'),
@@ -576,9 +317,6 @@ function renderBoundaryAuditPanel(audit: RunBoundaryAudit | null, devMode: boole
           </Descriptions.Item>
           <Descriptions.Item label="Agent ID">
             {audit.principal.agentId ? <Text code copyable>{audit.principal.agentId}</Text> : <Text type="secondary">-</Text>}
-          </Descriptions.Item>
-          <Descriptions.Item label="Team ID">
-            {audit.principal.teamId ? <Text code copyable>{audit.principal.teamId}</Text> : <Text type="secondary">-</Text>}
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -706,10 +444,6 @@ function renderBoundaryAuditPanel(audit: RunBoundaryAudit | null, devMode: boole
 
 function controlScopeTag(scope: string) {
   switch (scope) {
-    case 'leader':
-      return <Tag color="purple" bordered={false}>Supervisor</Tag>
-    case 'member':
-      return <Tag color="cyan" bordered={false}>成员</Tag>
     case 'child':
       return <Tag color="orange" bordered={false}>子任务</Tag>
     default:
@@ -770,7 +504,6 @@ export default function RunsPage() {
   const threadFilter = (searchParams.get('threadId') || '').trim()
 
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [kindFilter, setKindFilter] = useState<string>('all')
   const [runs, setRuns] = useState<AgentRunSummary[]>([])
   const [selectedRun, setSelectedRun] = useState<AgentRunSummary | null>(null)
   const [children, setChildren] = useState<AgentRunSummary[]>([])
@@ -795,17 +528,6 @@ export default function RunsPage() {
         <Space direction="vertical" size={0}>
           <Text strong>{text}</Text>
           <Text type="secondary" style={{ fontFamily: 'var(--font-mono)' }}>{record.runId}</Text>
-        </Space>
-      ),
-    },
-    {
-      title: '类型',
-      key: 'kind',
-      width: 120,
-      render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          <Tag bordered={false}>{record.kind === 'subagent' ? 'Subagent' : 'Agent'}</Tag>
-          {record.controlScope && controlScopeTag(record.controlScope)}
         </Space>
       ),
     },
@@ -836,7 +558,7 @@ export default function RunsPage() {
 
   useEffect(() => {
     void loadRuns()
-  }, [statusFilter, kindFilter, threadFilter])
+  }, [statusFilter, threadFilter])
 
   useEffect(() => {
     if (loadingRuns) return
@@ -872,17 +594,12 @@ export default function RunsPage() {
     () => runs.filter((item) => item.status === 'failed').length,
     [runs],
   )
-  const childTaskActivities = useMemo(
-    () => buildChildTaskActivities(selectedRun?.events, children),
-    [children, selectedRun?.events],
-  )
 
   async function loadRuns() {
     try {
       setLoadingRuns(true)
       const payload = await api.getRuns({
         status: statusFilter === 'all' ? undefined : statusFilter,
-        kind: kindFilter === 'all' ? undefined : kindFilter,
         threadId: threadFilter || undefined,
         limit: 80,
       })
@@ -1112,9 +829,6 @@ export default function RunsPage() {
                     <Descriptions.Item label="Agent">
                       {selectedRun.agentId ? <Tag color="blue" bordered={false}>{selectedRun.agentId}</Tag> : '-'}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Team">
-                      {selectedRun.teamId ? <Tag color="geekblue" bordered={false}>{selectedRun.teamId}</Tag> : '-'}
-                    </Descriptions.Item>
                     <Descriptions.Item label="创建时间">
                       {formatDateTimeZh(selectedRun.createdAt)}
                     </Descriptions.Item>
@@ -1134,72 +848,6 @@ export default function RunsPage() {
         icon: <ClockCircleOutlined />,
         children: (
           <Space direction="vertical" size={24} style={{ width: '100%' }}>
-            {childTaskActivities.length > 0 ? (
-              <Card
-                className="page-card"
-                bordered={false}
-                title="子任务执行"
-                extra={(
-                  <Space wrap size={[8, 8]}>
-                    <Tag bordered={false}>总计 {childTaskActivities.length}</Tag>
-                    <Tag color="blue" bordered={false}>
-                      活动中 {childTaskActivities.filter((item) => ['scheduled', 'queued', 'running', 'cancel_requested'].includes(item.status)).length}
-                    </Tag>
-                    <Tag color="green" bordered={false}>
-                      成功 {childTaskActivities.filter((item) => ['ok', 'succeeded'].includes(item.status)).length}
-                    </Tag>
-                  </Space>
-                )}
-              >
-                <List
-                  dataSource={childTaskActivities}
-                  renderItem={(item) => (
-                    <List.Item key={item.key}>
-                      <div style={{ width: '100%' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                          <Space wrap>
-                            <Text strong>{item.label}</Text>
-                            <Tag color={childTaskStatusColor(item.status)} bordered={false}>
-                              {childTaskStatusLabel(item.status)}
-                            </Tag>
-                            {item.principalKind ? <Tag bordered={false}>{item.principalKind}</Tag> : null}
-                            {item.childControlScope ? controlScopeTag(item.childControlScope) : null}
-                          </Space>
-                          {item.runId ? (
-                            <Button size="small" onClick={() => navigate(`/studio/runs/${item.runId}`)}>
-                              查看运行
-                            </Button>
-                          ) : null}
-                        </div>
-                        <Space wrap size={[8, 8]} style={{ marginTop: 8 }}>
-                          {item.runId ? <Text code copyable>{item.runId}</Text> : null}
-                          {item.originChannel ? (
-                            <Tag bordered={false}>{`${item.originChannel}:${item.originChatId || '-'}`}</Tag>
-                          ) : null}
-                          {item.progressStage ? <Tag color="processing" bordered={false}>{item.progressStage}</Tag> : null}
-                          {item.timeoutSeconds ? <Tag color="orange" bordered={false}>{`${item.timeoutSeconds}s`}</Tag> : null}
-                          {item.scheduledAt ? <Text type="secondary">派发 {formatDateTimeZh(item.scheduledAt)}</Text> : null}
-                          {item.updatedAt && !item.completedAt ? <Text type="secondary">运行中 {formatDateTimeZh(item.updatedAt)}</Text> : null}
-                          {item.completedAt ? <Text type="secondary">完成 {formatDateTimeZh(item.completedAt)}</Text> : null}
-                        </Space>
-                        {item.task ? (
-                          <Paragraph style={{ marginTop: 8, marginBottom: 0 }} ellipsis={{ rows: 1 }}>
-                            {item.task}
-                          </Paragraph>
-                        ) : null}
-                        {item.error ? (
-                          <Text type="danger">{compactText(item.error)}</Text>
-                        ) : item.progressMessage && !item.completedAt ? (
-                          <Text type="secondary">{compactText(item.progressMessage)}</Text>
-                        ) : item.content || item.childSummary ? (
-                          <Text type="secondary">{compactText(item.content || item.childSummary)}</Text>
-                        ) : null}
-                      </div>
-                    </List.Item>
-                  )}
-                />
-              </Card>
-            ) : null}
             <Card className="page-card" bordered={false} title="执行过程">
               {!selectedRun.events?.length ? (
                 <Empty description="暂无过程记录" />
@@ -1460,14 +1108,6 @@ export default function RunsPage() {
                   { value: 'running', label: '运行中' },
                   { value: 'succeeded', label: '成功' },
                   { value: 'failed', label: '失败' },
-                ]}
-              />
-              <Select
-                value={kindFilter}
-                onChange={setKindFilter}
-                options={[
-                  { value: 'all', label: '全部类型' },
-                  { value: 'agent', label: 'Agent' },
                 ]}
               />
             </Space>

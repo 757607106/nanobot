@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Query, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -17,13 +17,8 @@ def _memory_service(request: Request):
     return get_tenant_memory_service(request)
 
 
-class TeamMemoryUpdateRequest(BaseModel):
-    content: str
-
-
 class MemorySearchRequest(BaseModel):
     query: str
-    teamId: str | None = None
     agentId: str | None = None
     limit: int = 10
     mode: str = "hybrid"
@@ -32,36 +27,12 @@ class MemorySearchRequest(BaseModel):
 class MemoryGetRequest(BaseModel):
     sourceType: str
     sourceId: str
-    teamId: str | None = None
     agentId: str | None = None
-
-
-@router.get("/api/v1/teams/{team_id}/memory")
-def get_team_memory(request: Request, team_id: str) -> JSONResponse:
-    try:
-        data = _memory_service(request).get_team_memory(team_id)
-    except MemoryCandidateValidationError as exc:
-        raise APIError(400, "TEAM_MEMORY_INVALID", str(exc)) from exc
-    return _json_response(200, _ok(data))
-
-
-@router.put("/api/v1/teams/{team_id}/memory")
-def update_team_memory(
-    request: Request,
-    team_id: str,
-    payload: TeamMemoryUpdateRequest,
-) -> JSONResponse:
-    try:
-        data = _memory_service(request).update_team_memory(team_id, payload.content)
-    except MemoryCandidateValidationError as exc:
-        raise APIError(400, "TEAM_MEMORY_INVALID", str(exc)) from exc
-    return _json_response(200, _ok(data))
 
 
 @router.get("/api/v1/memory-candidates")
 def list_memory_candidates(
     request: Request,
-    team_id: str | None = Query(default=None, alias="teamId"),
     agent_id: str | None = Query(default=None, alias="agentId"),
     status: str | None = Query(default=None),
     scope: str | None = Query(default=None),
@@ -69,7 +40,6 @@ def list_memory_candidates(
 ) -> JSONResponse:
     try:
         items = _memory_service(request).list_candidates(
-            team_id=team_id,
             agent_id=agent_id,
             status=status,
             scope=scope,
@@ -88,7 +58,6 @@ def search_memory(
     try:
         data = _memory_service(request).search(
             query=payload.query,
-            team_id=payload.teamId,
             agent_id=payload.agentId,
             limit=payload.limit,
             mode=payload.mode,
@@ -107,7 +76,6 @@ def get_memory_source(
         data = _memory_service(request).get_memory_source(
             source_type=payload.sourceType,
             source_id=payload.sourceId,
-            team_id=payload.teamId,
             agent_id=payload.agentId,
         )
     except MemoryCandidateValidationError as exc:

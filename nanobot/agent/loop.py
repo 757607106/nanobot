@@ -20,8 +20,6 @@ from nanobot.agent.execution import (
     strip_think,
 )
 from nanobot.agent.memory import MemoryConsolidator
-from nanobot.agent.subagent_protocol import build_subagent_followup_prompt, parse_subagent_result_metadata
-from nanobot.agent.subagent import SubagentManager
 from nanobot.agent.tools.knowledge import (
     KnowledgeBindingContext,
     build_knowledge_binding_context,
@@ -139,20 +137,6 @@ class AgentLoop:
         self.context = ContextBuilder(workspace, virtual_workspace_path=virtual_workspace_path)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
-        self.subagents = SubagentManager(
-            provider=provider,
-            workspace=workspace,
-            bus=bus,
-            model=self.model,
-            web_search_config=self.web_search_config,
-            web_proxy=web_proxy,
-            exec_config=self.exec_config,
-            restrict_to_workspace=restrict_to_workspace,
-            run_registry=run_registry,
-            workspace_provider=workspace_provider,
-            sandbox_provider=self._sandbox_provider,
-        )
-
         self._running = False
         self._channel_dispatcher = channel_dispatcher
         self._knowledge_binding_context = knowledge_binding_context or build_knowledge_binding_context(
@@ -194,7 +178,6 @@ class AgentLoop:
             sandbox_provider=self._sandbox_provider,
             tool_allowlist=self.tool_allowlist,
             message_send_callback=self.bus.publish_outbound,
-            spawn_manager=self.subagents,
             cron_service=self.cron_service,
             extra_tools=self._extra_tools,
         )
@@ -317,27 +300,16 @@ class AgentLoop:
         run_context: dict[str, Any] | None = None,
     ) -> None:
         """Update context for all tools that need routing info."""
-        for name in ("message", "spawn", "cron"):
+        for name in ("message", "cron"):
             if tool := self.tools.get(name):
                 if name == "message" and hasattr(tool, "set_context"):
                     tool.set_context(channel, chat_id, *([message_id] if message_id else []))
-                elif name == "spawn" and hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id, session_key=session_key)
                 elif hasattr(tool, "set_context"):
                     tool.set_context(channel, chat_id)
-                if name == "spawn" and hasattr(tool, "set_run_context"):
-                    tool.set_run_context(run_context)
 
     @staticmethod
     def _resolve_system_target(msg: InboundMessage) -> tuple[str, str, str]:
         """Resolve the real parent session for a system-originated event."""
-        subagent_result = parse_subagent_result_metadata(msg.metadata)
-        if subagent_result is not None:
-            return (
-                subagent_result["originChannel"],
-                subagent_result["originChatId"],
-                subagent_result["sessionKey"],
-            )
         if ":" in msg.chat_id:
             channel, chat_id = msg.chat_id.split(":", 1)
         else:
@@ -372,7 +344,7 @@ class AgentLoop:
                 task.add_done_callback(lambda t, k=msg.session_key: self._active_tasks.get(k, []) and self._active_tasks[k].remove(t) if t in self._active_tasks.get(k, []) else None)
 
     async def _handle_stop(self, msg: InboundMessage) -> None:
-        """Cancel all active tasks and subagents for the session."""
+        """Cancel all active tasks for the session."""
         tasks = self._active_tasks.pop(msg.session_key, [])
         cancelled = sum(1 for t in tasks if not t.done() and t.cancel())
         for t in tasks:
@@ -380,9 +352,7 @@ class AgentLoop:
                 await t
             except (asyncio.CancelledError, Exception):
                 pass
-        sub_cancelled = await self.subagents.cancel_by_session(msg.session_key)
-        total = cancelled + sub_cancelled
-        content = f"Stopped {total} task(s)." if total else "No active task to stop."
+        content = f"Stopped {cancelled} task(s)." if cancelled else "No active task to stop."
         await self.bus.publish_outbound(OutboundMessage(
             channel=msg.channel, chat_id=msg.chat_id, content=content,
         ))
@@ -479,15 +449,9 @@ class AgentLoop:
                 run_context=run_context,
             )
             history = session.get_history(max_messages=0)
-            subagent_result = parse_subagent_result_metadata(msg.metadata)
-            if subagent_result is not None:
-                current_message = build_subagent_followup_prompt(subagent_result)
-                current_role = "user"
-                skip = 2 + len(history)
-            else:
-                current_message = msg.content
-                current_role = "assistant" if msg.sender_id == "subagent" else "user"
-                skip = 1 + len(history)
+            current_message = msg.content
+            current_role = "user"
+            skip = 1 + len(history)
             messages = self.context.build_messages(
                 history=history,
                 current_message=current_message,

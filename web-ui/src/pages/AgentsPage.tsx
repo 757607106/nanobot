@@ -198,7 +198,6 @@ function statusColor(status: AgentRunSummary['status']) {
 
 const memoryScopeOptions = [
   { value: 'agent_profile', label: '仅员工自身' },
-  { value: 'team_shared', label: '团队共享' },
   { value: 'workspace_shared', label: '工作区共享' },
 ]
 
@@ -803,7 +802,7 @@ export default function AgentsPage() {
                   <div className="id-badge-id">{item.agentId.split('-')[0].toUpperCase()}</div>
                 </div>
                 {item.tags && item.tags.length > 0 && (
-                  <div className="id-badge-team">
+                  <div className="id-badge-tag">
                     {item.tags[0]}
                   </div>
                 )}
