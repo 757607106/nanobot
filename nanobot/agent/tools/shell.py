@@ -3,10 +3,170 @@
 import asyncio
 import os
 import re
-from pathlib import Path
+import shlex
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from nanobot.agent.tools.base import Tool
+
+
+async def _run_shell_subprocess(
+    command: str,
+    *,
+    cwd: str,
+    timeout: int,
+    env: dict[str, str],
+) -> str:
+    process = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
+        env=env,
+    )
+
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        process.kill()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            pass
+        return f"Error: Command timed out after {timeout} seconds"
+
+    output_parts = []
+
+    if stdout:
+        output_parts.append(stdout.decode("utf-8", errors="replace"))
+
+    if stderr:
+        stderr_text = stderr.decode("utf-8", errors="replace")
+        if stderr_text.strip():
+            output_parts.append(f"STDERR:\n{stderr_text}")
+
+    output_parts.append(f"\nExit code: {process.returncode}")
+
+    result = "\n".join(output_parts) if output_parts else "(no output)"
+    max_len = ExecTool._MAX_OUTPUT
+    if len(result) > max_len:
+        half = max_len // 2
+        result = (
+            result[:half]
+            + f"\n\n... ({len(result) - max_len:,} chars truncated) ...\n\n"
+            + result[-half:]
+        )
+    return result
+
+
+@dataclass(slots=True)
+class LocalShellSandboxExecutor:
+    """Default shell executor that preserves today's local subprocess behavior."""
+
+    async def run(
+        self,
+        command: str,
+        *,
+        tool: Any,
+        host_cwd: str,
+        runtime_cwd: str,
+        timeout: int,
+        path_append: str,
+    ) -> str:
+        _ = runtime_cwd
+        env = tool._build_env(path_append=path_append, include_host_env=True)
+        return await _run_shell_subprocess(command, cwd=host_cwd, timeout=timeout, env=env)
+
+
+@dataclass(slots=True)
+class DockerShellSandboxExecutor:
+    """Bind-mount Docker executor with explicit host/runtime workspace split."""
+
+    image: str
+    network_mode: str
+    host_workspace_path: str
+    runtime_workdir: str
+    env: dict[str, str] = field(default_factory=dict)
+    mounts: tuple[tuple[str, str, bool], ...] = ()
+    env_allowlist: tuple[str, ...] = ()
+    docker_binary: str = "docker"
+
+    async def run(
+        self,
+        command: str,
+        *,
+        tool: Any,
+        host_cwd: str,
+        runtime_cwd: str,
+        timeout: int,
+        path_append: str,
+    ) -> str:
+        if not self.host_workspace_path:
+            return "Error: Docker sandbox is missing a host workspace path"
+        runtime_command = command
+        if path_append:
+            runtime_command = f"export PATH=\"$PATH:{path_append}\" && {runtime_command}"
+        allowed_env_keys = {str(key).strip() for key in self.env_allowlist if str(key).strip()}
+        container_env = {
+            key: value
+            for key, value in {**tool.env, **self.env}.items()
+            if str(key or "").strip() and (not allowed_env_keys or key in allowed_env_keys)
+        }
+        env_parts = [
+            f"-e {shlex.quote(f'{key}={value}')}"
+            for key, value in sorted(container_env.items())
+        ]
+        mount_specs = [
+            f"{source}:{target}:{'ro' if read_only else 'rw'}"
+            for source, target, read_only in (self.mounts or ())
+            if source and target
+        ]
+        mount_parts = [
+            f"-v {shlex.quote(spec)}"
+            for spec in mount_specs
+        ]
+        docker_command = " ".join(
+            part
+            for part in [
+                shlex.quote(self.docker_binary),
+                "run --rm",
+                f"--network {shlex.quote(self.network_mode or 'bridge')}",
+                f"-v {shlex.quote(f'{self.host_workspace_path}:{self.runtime_workdir}')}",
+                *mount_parts,
+                f"-w {shlex.quote(runtime_cwd or self.runtime_workdir)}",
+                " ".join(env_parts).strip(),
+                shlex.quote(self.image or "python:3.12-slim"),
+                "sh -lc",
+                shlex.quote(runtime_command),
+            ]
+            if part
+        )
+        env = {"PATH": os.environ.get("PATH", "")}
+        return await _run_shell_subprocess(docker_command, cwd=host_cwd, timeout=timeout, env=env)
+
+
+@dataclass(slots=True)
+class UnsupportedSandboxExecutor:
+    """Executor stub for declared-but-not-configured sandbox backends."""
+
+    reason: str
+
+    async def run(
+        self,
+        command: str,
+        *,
+        tool: Any,
+        host_cwd: str,
+        runtime_cwd: str,
+        timeout: int,
+        path_append: str,
+    ) -> str:
+        _ = (command, tool, host_cwd, runtime_cwd, timeout, path_append)
+        return f"Error: {self.reason}"
 
 
 class ExecTool(Tool):
@@ -20,9 +180,16 @@ class ExecTool(Tool):
         allow_patterns: list[str] | None = None,
         restrict_to_workspace: bool = False,
         path_append: str = "",
+        host_working_dir: str | None = None,
+        runtime_workdir: str | None = None,
+        sandbox_executor: Any | None = None,
+        env: dict[str, str] | None = None,
     ):
         self.timeout = timeout
         self.working_dir = working_dir
+        self.host_working_dir = host_working_dir or working_dir
+        self.runtime_workdir = runtime_workdir or self.host_working_dir or working_dir
+        self.sandbox_executor = sandbox_executor or LocalShellSandboxExecutor()
         self.deny_patterns = deny_patterns or [
             r"\brm\s+-[rf]{1,2}\b",          # rm -r, rm -rf, rm -fr
             r"\bdel\s+/[fq]\b",              # del /f, del /q
@@ -37,6 +204,7 @@ class ExecTool(Tool):
         self.allow_patterns = allow_patterns or []
         self.restrict_to_workspace = restrict_to_workspace
         self.path_append = path_append
+        self.env = dict(env or {})
 
     @property
     def name(self) -> str:
@@ -79,67 +247,49 @@ class ExecTool(Tool):
         self, command: str, working_dir: str | None = None,
         timeout: int | None = None, **kwargs: Any,
     ) -> str:
-        cwd = working_dir or self.working_dir or os.getcwd()
-        guard_error = self._guard_command(command, cwd)
+        host_cwd, runtime_cwd = self._resolve_cwds(working_dir)
+        guard_error = self._guard_command(command, str(host_cwd))
         if guard_error:
             return guard_error
 
         effective_timeout = min(timeout or self.timeout, self._MAX_TIMEOUT)
 
-        env = os.environ.copy()
-        if self.path_append:
-            env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
-
         try:
-            process = await asyncio.create_subprocess_shell(
+            return await self.sandbox_executor.run(
                 command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-                env=env,
+                tool=self,
+                host_cwd=str(host_cwd),
+                runtime_cwd=runtime_cwd,
+                timeout=effective_timeout,
+                path_append=self.path_append,
             )
-
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=effective_timeout,
-                )
-            except asyncio.TimeoutError:
-                process.kill()
-                try:
-                    await asyncio.wait_for(process.wait(), timeout=5.0)
-                except asyncio.TimeoutError:
-                    pass
-                return f"Error: Command timed out after {effective_timeout} seconds"
-
-            output_parts = []
-
-            if stdout:
-                output_parts.append(stdout.decode("utf-8", errors="replace"))
-
-            if stderr:
-                stderr_text = stderr.decode("utf-8", errors="replace")
-                if stderr_text.strip():
-                    output_parts.append(f"STDERR:\n{stderr_text}")
-
-            output_parts.append(f"\nExit code: {process.returncode}")
-
-            result = "\n".join(output_parts) if output_parts else "(no output)"
-
-            # Head + tail truncation to preserve both start and end of output
-            max_len = self._MAX_OUTPUT
-            if len(result) > max_len:
-                half = max_len // 2
-                result = (
-                    result[:half]
-                    + f"\n\n... ({len(result) - max_len:,} chars truncated) ...\n\n"
-                    + result[-half:]
-                )
-
-            return result
 
         except Exception as e:
             return f"Error executing command: {str(e)}"
+
+    def _build_env(self, *, path_append: str, include_host_env: bool) -> dict[str, str]:
+        env = os.environ.copy() if include_host_env else {}
+        env.update({key: value for key, value in self.env.items() if str(key or "").strip()})
+        if path_append:
+            env["PATH"] = env.get("PATH", "") + os.pathsep + path_append
+        return env
+
+    def _resolve_cwds(self, requested_working_dir: str | None) -> tuple[Path, str]:
+        host_base = Path(self.host_working_dir or self.working_dir or os.getcwd()).expanduser()
+        if requested_working_dir:
+            requested = Path(requested_working_dir).expanduser()
+            host_cwd = requested if requested.is_absolute() else host_base / requested
+        else:
+            host_cwd = host_base
+        runtime_base = str(self.runtime_workdir or self.host_working_dir or self.working_dir or host_cwd)
+        runtime_cwd = runtime_base
+        try:
+            relative = host_cwd.resolve().relative_to(host_base.resolve())
+            runtime_cwd = str(PurePosixPath(runtime_base) / relative.as_posix()) if str(relative) != "." else runtime_base
+        except Exception:
+            if requested_working_dir:
+                runtime_cwd = str(requested_working_dir)
+        return host_cwd, runtime_cwd
 
     def _guard_command(self, command: str, cwd: str) -> str | None:
         """Best-effort safety guard for potentially destructive commands."""

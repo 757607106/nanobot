@@ -33,6 +33,7 @@ import {
 import { motion } from 'framer-motion'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
+import { artifactRetentionPolicyToForm, buildArtifactRetentionPolicyInput } from '../artifactRetention'
 import DevOnly from '../components/DevOnly'
 import { useDevMode } from '../devMode'
 import { formatDateTimeZh } from '../locale'
@@ -64,6 +65,8 @@ interface TeamFormState {
   teamSharedMemoryPolicy: string
   tags: string[]
   enabled: boolean
+  artifactArchiveAfterDays: string
+  artifactDeleteAfterDays: string
 }
 
 const teamSharedKnowledgeOptions = [
@@ -89,10 +92,13 @@ function createEmptyForm(): TeamFormState {
     teamSharedMemoryPolicy: 'leader_write_member_read',
     tags: [],
     enabled: true,
+    artifactArchiveAfterDays: '',
+    artifactDeleteAfterDays: '',
   }
 }
 
 function teamToForm(team: TeamDefinition): TeamFormState {
+  const artifactRetention = artifactRetentionPolicyToForm(team.artifactRetentionPolicy)
   return {
     name: team.name,
     description: team.description,
@@ -103,6 +109,8 @@ function teamToForm(team: TeamDefinition): TeamFormState {
     teamSharedMemoryPolicy: String(team.memberAccessPolicy?.teamSharedMemory || 'leader_write_member_read'),
     tags: [...team.tags],
     enabled: team.enabled,
+    artifactArchiveAfterDays: artifactRetention.archiveAfterDays,
+    artifactDeleteAfterDays: artifactRetention.deleteAfterDays,
   }
 }
 
@@ -119,6 +127,10 @@ function toPayload(form: TeamFormState): TeamDefinitionMutationInput {
     },
     tags: [...form.tags],
     enabled: form.enabled,
+    artifactRetentionPolicy: buildArtifactRetentionPolicyInput(
+      form.artifactArchiveAfterDays,
+      form.artifactDeleteAfterDays,
+    ),
   }
 }
 
@@ -389,7 +401,15 @@ export default function TeamsPage() {
   }
 
   async function handleSave() {
-    const payload = toPayload(form)
+    let payload: TeamDefinitionMutationInput
+    try {
+      payload = toPayload(form)
+    } catch (payloadError) {
+      const nextError = getErrorMessage(payloadError, '产物保留策略无效')
+      setError(nextError)
+      message.error(nextError)
+      return
+    }
     if (!payload.name) {
       const nextError = 'Team 名称不能为空。'
       setError(nextError)
@@ -866,6 +886,27 @@ export default function TeamsPage() {
                           options={teamSharedMemoryOptions}
                         />
                       </div>
+                      <div className="studio-form-field">
+                        <Text type="secondary">产物归档天数</Text>
+                        <Input
+                          value={form.artifactArchiveAfterDays}
+                          onChange={(event) => updateForm('artifactArchiveAfterDays', event.target.value)}
+                          placeholder="留空表示不归档"
+                        />
+                      </div>
+                      <div className="studio-form-field">
+                        <Text type="secondary">产物删除天数</Text>
+                        <Input
+                          value={form.artifactDeleteAfterDays}
+                          onChange={(event) => updateForm('artifactDeleteAfterDays', event.target.value)}
+                          placeholder="留空表示不删除"
+                        />
+                      </div>
+                      <div className="studio-form-field studio-form-field-span-2">
+                        <Text type="secondary">
+                          留空时回退到租户默认策略；Team 模板策略会覆盖成员模板策略。
+                        </Text>
+                      </div>
                     </div>
                   ),
                 },
@@ -1238,6 +1279,9 @@ export default function TeamsPage() {
                   </Button>
                   <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSaveTeamMemory()} loading={savingMemory} disabled={!currentTeam}>
                     保存团队记忆
+                  </Button>
+                  <Button onClick={() => currentTeam && navigate(`/studio/memory/${currentTeam.teamId}`)} disabled={!currentTeam}>
+                    进入统一记忆审计
                   </Button>
                 </Space>
               </div>

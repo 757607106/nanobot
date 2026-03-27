@@ -42,6 +42,7 @@ from nanobot.platform.knowledge.models import (
     now_iso,
 )
 from nanobot.platform.knowledge.store import KnowledgeBaseStore
+from nanobot.platform.tenant_scope import clone_service_with_overrides
 from nanobot.utils.helpers import ensure_dir, safe_filename
 
 if TYPE_CHECKING:
@@ -105,6 +106,7 @@ class KnowledgeBaseService:
         self._futures: set[Future[Any]] = set()
         self._futures_lock = Lock()
         self._rag_engine_lock = Lock()
+        self._retired_rag_engines: list[Any] = []
         self._job_options_lock = Lock()
         self._job_options: dict[str, dict[str, Any]] = {}
         self.artifacts = KnowledgeArtifactStore(
@@ -137,6 +139,13 @@ class KnowledgeBaseService:
                 self._run_async(self.rag_engine.shutdown_async())
             except Exception:
                 logger.exception("Failed to shut down knowledge RAG engine")
+        for retired in list(self._retired_rag_engines):
+            if retired is None or not self._loop.is_running():
+                continue
+            try:
+                self._run_async(retired.shutdown_async())
+            except Exception:
+                logger.exception("Failed to shut down retired knowledge RAG engine")
         if self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
         if self._loop_thread.is_alive():
@@ -145,12 +154,22 @@ class KnowledgeBaseService:
 
     def set_rag_engine(self, rag_engine: RAGEngine | None) -> None:
         with self._rag_engine_lock:
+            previous = self.rag_engine
             self.rag_engine = rag_engine
             if rag_engine is not None and hasattr(rag_engine, "set_kb_runtime_resolver"):
                 rag_engine.set_kb_runtime_resolver(self._resolve_kb_runtime_overrides)
+            if previous is not None and previous is not rag_engine:
+                self._retired_rag_engines.append(previous)
 
     def set_config(self, config: Config | None) -> None:
         self.config = config
+
+    def with_tenant(self, tenant_id: str | None) -> KnowledgeBaseService:
+        """Return a lightweight tenant-scoped view over the shared service runtime."""
+        normalized = str(tenant_id or "default").strip() or "default"
+        if normalized == self.tenant_id:
+            return self
+        return clone_service_with_overrides(self, tenant_id=normalized)
 
     @staticmethod
     def _knowledge_model_value(info: dict[str, Any] | None, *keys: str) -> str:
@@ -839,22 +858,20 @@ class KnowledgeBaseService:
                 content_hash=hashlib.sha256(response.content).hexdigest(),
                 file_size=len(response.content),
                 content_type=content_type,
-                processing_params={"sourceType": "web_url", "sourceUrl": url},
+                processing_params={
+                    "sourceType": "web_url",
+                    "sourceUrl": url,
+                    "sourceTitle": base_name,
+                    "sourceEnabled": True,
+                    "syncCount": 1,
+                },
                 created_at=now,
                 updated_at=now,
             )
         )
         return self._serialize_file(record)
 
-    def add_source_file(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        source_type = self._normalize_text(payload.get("sourceType"), required=True, field_name="sourceType")
-        if source_type == "web_url":
-            return self.fetch_url_file(kb_id, payload)
-        if source_type != "faq_table":
-            raise KnowledgeBaseValidationError(f"Unsupported knowledge source type: {source_type}")
-
-        self.require_kb(kb_id)
-        items = payload.get("items")
+    def _normalize_faq_items(self, items: Any) -> list[dict[str, str]]:
         if not isinstance(items, list) or not items:
             raise KnowledgeBaseValidationError("FAQ table source requires a non-empty items list.")
         normalized_items: list[dict[str, str]] = []
@@ -864,6 +881,17 @@ class KnowledgeBaseService:
             question = self._normalize_text(item.get("question"), required=True, field_name=f"items[{index}].question")
             answer = self._normalize_text(item.get("answer"), required=True, field_name=f"items[{index}].answer")
             normalized_items.append({"question": question, "answer": answer})
+        return normalized_items
+
+    def add_source_file(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        source_type = self._normalize_text(payload.get("sourceType"), required=True, field_name="sourceType")
+        if source_type == "web_url":
+            return self.fetch_url_file(kb_id, payload)
+        if source_type != "faq_table":
+            raise KnowledgeBaseValidationError(f"Unsupported knowledge source type: {source_type}")
+
+        self.require_kb(kb_id)
+        normalized_items = self._normalize_faq_items(payload.get("items"))
 
         parent = self._ensure_parent_folder(kb_id, self._normalize_text(payload.get("parentId"), field_name="parentId") or None)
         title = self._normalize_text(payload.get("title"), field_name="title") or "faq-table"
@@ -890,12 +918,179 @@ class KnowledgeBaseService:
                 content_hash=hashlib.sha256(raw_bytes).hexdigest(),
                 file_size=len(raw_bytes),
                 content_type="application/json",
-                processing_params={"sourceType": "faq_table", "faqItems": normalized_items},
+                processing_params={
+                    "sourceType": "faq_table",
+                    "faqItems": normalized_items,
+                    "sourceTitle": title,
+                    "sourceEnabled": True,
+                    "syncCount": 1,
+                },
                 created_at=now,
                 updated_at=now,
             )
         )
         return self._serialize_file(record)
+
+    @staticmethod
+    def _is_source_type_supported(source_type: str) -> bool:
+        return source_type in {"faq_table", "web_url"}
+
+    def _is_source_file(self, file: KnowledgeFile) -> bool:
+        source_type = str(file.processing_params.get("sourceType") or "").strip()
+        return not file.is_folder and self._is_source_type_supported(source_type)
+
+    def _source_title(self, file: KnowledgeFile) -> str:
+        return (
+            self._normalize_text(file.processing_params.get("sourceTitle"), field_name="sourceTitle")
+            or Path(file.filename).stem
+            or file.filename
+        )
+
+    def _serialize_source(self, file: KnowledgeFile) -> dict[str, Any]:
+        source_type = str(file.processing_params.get("sourceType") or file.file_type or "").strip()
+        return {
+            "sourceId": file.file_id,
+            "kbId": file.kb_id,
+            "sourceType": source_type,
+            "title": self._source_title(file),
+            "enabled": bool(file.processing_params.get("sourceEnabled", True)),
+            "syncSupported": self._is_source_type_supported(source_type),
+            "syncCount": int(file.processing_params.get("syncCount") or 1),
+            "docCount": 1,
+            "latestDocument": self._serialize_file(file),
+            "config": {
+                "title": self._source_title(file),
+                "items": list(file.processing_params.get("faqItems") or []),
+                "url": self._normalize_text(file.processing_params.get("sourceUrl"), field_name="sourceUrl") or None,
+            },
+            "createdAt": file.created_at,
+            "updatedAt": file.updated_at,
+        }
+
+    def list_sources(self, kb_id: str) -> list[dict[str, Any]]:
+        self.require_kb(kb_id)
+        files = [item for item in self.store.list_files(kb_id) if self._is_source_file(item)]
+        files.sort(key=lambda item: item.updated_at, reverse=True)
+        return [self._serialize_source(item) for item in files]
+
+    def update_source(self, kb_id: str, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        source = self._require_file(kb_id, source_id)
+        if not self._is_source_file(source):
+            raise KnowledgeSourceNotFoundError(source_id)
+
+        source_type = str(source.processing_params.get("sourceType") or "").strip()
+        processing_params = dict(source.processing_params)
+        title = self._normalize_text(payload.get("title"), field_name="title") or self._source_title(source)
+        enabled = (
+            bool(payload.get("enabled"))
+            if "enabled" in payload
+            else bool(processing_params.get("sourceEnabled", True))
+        )
+
+        content_hash = source.content_hash
+        file_size = source.file_size
+        content_type = source.content_type
+
+        if source_type == "faq_table":
+            items = payload.get("items") if "items" in payload else processing_params.get("faqItems")
+            normalized_items = self._normalize_faq_items(items)
+            raw_bytes = json.dumps(normalized_items, ensure_ascii=False, indent=2).encode("utf-8")
+            raw_path = Path(source.raw_path or self._file_storage_paths(kb_id, source.file_id, source.filename)[0])
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_path.write_bytes(raw_bytes)
+            processing_params["faqItems"] = normalized_items
+            content_hash = hashlib.sha256(raw_bytes).hexdigest()
+            file_size = len(raw_bytes)
+            content_type = "application/json"
+        elif source_type == "web_url":
+            url_value = (
+                self._normalize_text(payload.get("url"), field_name="url")
+                or self._normalize_text(payload.get("sourceUrl"), field_name="sourceUrl")
+                or self._normalize_text(processing_params.get("sourceUrl"), field_name="sourceUrl")
+            )
+            if not url_value:
+                raise KnowledgeBaseValidationError("Web source requires a non-empty url.")
+            processing_params["sourceUrl"] = url_value
+
+        processing_params["sourceTitle"] = title
+        processing_params["sourceEnabled"] = enabled
+        updated = self._update_file(
+            replace(
+                source,
+                content_hash=content_hash,
+                file_size=file_size,
+                content_type=content_type,
+                processing_params=processing_params,
+                updated_at=now_iso(),
+            )
+        )
+        return self._serialize_source(updated)
+
+    def sync_source(self, kb_id: str, source_id: str) -> dict[str, Any]:
+        source = self._require_file(kb_id, source_id)
+        if not self._is_source_file(source):
+            raise KnowledgeSourceNotFoundError(source_id)
+
+        source_type = str(source.processing_params.get("sourceType") or "").strip()
+        processing_params = dict(source.processing_params)
+        updated_source = source
+
+        if source_type == "faq_table":
+            raw_bytes = json.dumps(
+                self._normalize_faq_items(processing_params.get("faqItems")),
+                ensure_ascii=False,
+                indent=2,
+            ).encode("utf-8")
+            raw_path = Path(source.raw_path or self._file_storage_paths(kb_id, source.file_id, source.filename)[0])
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_path.write_bytes(raw_bytes)
+            processing_params["syncCount"] = int(processing_params.get("syncCount") or 1) + 1
+            updated_source = self._update_file(
+                replace(
+                    source,
+                    status=KnowledgeDocumentStatus.UPLOADED,
+                    content_hash=hashlib.sha256(raw_bytes).hexdigest(),
+                    file_size=len(raw_bytes),
+                    content_type="application/json",
+                    processing_params=processing_params,
+                    error_message=None,
+                    updated_at=now_iso(),
+                )
+            )
+        elif source_type == "web_url":
+            url = self._normalize_text(processing_params.get("sourceUrl"), required=True, field_name="sourceUrl")
+            response = httpx.get(url, timeout=20.0, follow_redirects=True)
+            response.raise_for_status()
+            raw_path = Path(source.raw_path or self._file_storage_paths(kb_id, source.file_id, source.filename)[0])
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_path.write_bytes(response.content)
+            processing_params["syncCount"] = int(processing_params.get("syncCount") or 1) + 1
+            updated_source = self._update_file(
+                replace(
+                    source,
+                    status=KnowledgeDocumentStatus.UPLOADED,
+                    content_hash=hashlib.sha256(response.content).hexdigest(),
+                    file_size=len(response.content),
+                    content_type=str(response.headers.get("content-type") or "").split(";")[0].strip() or None,
+                    processing_params=processing_params,
+                    error_message=None,
+                    updated_at=now_iso(),
+                )
+            )
+
+        ingest = self.ingest_files(
+            kb_id,
+            {
+                "fileIds": [updated_source.file_id],
+                "params": {"autoIndex": True},
+            },
+        )
+        refreshed = self._require_file(kb_id, updated_source.file_id)
+        return {
+            "source": self._serialize_source(refreshed),
+            "document": self._serialize_file(refreshed),
+            "job": dict(ingest.get("job") or {}),
+        }
 
     def move_file(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_kb(kb_id)

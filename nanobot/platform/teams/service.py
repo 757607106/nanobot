@@ -6,6 +6,7 @@ import re
 from dataclasses import replace
 from typing import Any, Callable
 
+from nanobot.platform.artifact_retention import normalize_artifact_retention_policy
 from nanobot.platform.teams.models import (
     SupervisorConfig,
     TeamDefinition,
@@ -13,6 +14,7 @@ from nanobot.platform.teams.models import (
     now_iso,
 )
 from nanobot.platform.teams.store import TeamDefinitionStore
+from nanobot.platform.tenant_scope import call_with_tenant
 
 
 class TeamDefinitionNotFoundError(KeyError):
@@ -158,22 +160,22 @@ class TeamDefinitionService:
             counter += 1
         return candidate
 
-    def _validate_agent_reference(self, agent_id: str, *, field_name: str) -> str:
+    def _validate_agent_reference(self, agent_id: str, *, field_name: str, tenant_id: str) -> str:
         resolved = self._normalize_text(agent_id, required=True, field_name=field_name)
         if self.agent_lookup is None:
             return resolved
         try:
-            self.agent_lookup(resolved)
+            call_with_tenant(self.agent_lookup, resolved, tenant_id=tenant_id)
         except Exception as exc:
             raise TeamDefinitionValidationError(f"{field_name} '{resolved}' does not exist.") from exc
         return resolved
 
-    def _normalize_member_agent_ids(self, value: Any, *, supervisor_agent_id: str) -> list[str]:
+    def _normalize_member_agent_ids(self, value: Any, *, supervisor_agent_id: str, tenant_id: str) -> list[str]:
         member_agent_ids = self._normalize_string_list(value, field_name="memberAgentIds")
         if supervisor_agent_id in member_agent_ids:
             raise TeamDefinitionValidationError("memberAgentIds must not include the supervisor agent.")
         return [
-            self._validate_agent_reference(agent_id, field_name="memberAgentIds")
+            self._validate_agent_reference(agent_id, field_name="memberAgentIds", tenant_id=tenant_id)
             for agent_id in member_agent_ids
         ]
 
@@ -183,10 +185,12 @@ class TeamDefinitionService:
         supervisor_agent_id = self._validate_agent_reference(
             self._get_value(payload, "supervisorAgentId", "supervisor_agent_id"),
             field_name="supervisorAgentId",
+            tenant_id=tenant_id,
         )
         member_agent_ids = self._normalize_member_agent_ids(
             self._get_value(payload, "memberAgentIds", "member_agent_ids"),
             supervisor_agent_id=supervisor_agent_id,
+            tenant_id=tenant_id,
         )
         supervisor_config = self._normalize_supervisor_config(
             self._get_value(payload, "supervisorConfig", "supervisor_config"),
@@ -214,6 +218,11 @@ class TeamDefinitionService:
             tags=self._normalize_string_list(self._get_value(payload, "tags"), field_name="tags"),
             enabled=True if self._get_value(payload, "enabled") is None else bool(self._get_value(payload, "enabled")),
             team_thread_enabled=team_thread_enabled,
+            artifact_retention_policy=normalize_artifact_retention_policy(
+                self._get_value(payload, "artifactRetentionPolicy", "artifact_retention_policy"),
+                error_cls=TeamDefinitionValidationError,
+                default_action_by="team_template",
+            ),
             created_at=now,
             updated_at=now,
         )
@@ -234,6 +243,7 @@ class TeamDefinitionService:
             "tags": self._get_value(payload, "tags"),
             "enabled": self._get_value(payload, "enabled"),
             "team_thread_enabled": self._get_value(payload, "teamThreadEnabled", "team_thread_enabled"),
+            "artifact_retention_policy": self._get_value(payload, "artifactRetentionPolicy", "artifact_retention_policy"),
         }
 
         name = existing.name
@@ -246,6 +256,7 @@ class TeamDefinitionService:
             supervisor_agent_id = self._validate_agent_reference(
                 updates["supervisor_agent_id"],
                 field_name="supervisorAgentId",
+                tenant_id=existing.tenant_id,
             )
 
         member_agent_ids = (
@@ -254,6 +265,7 @@ class TeamDefinitionService:
             else self._normalize_member_agent_ids(
                 updates["member_agent_ids"],
                 supervisor_agent_id=supervisor_agent_id,
+                tenant_id=existing.tenant_id,
             )
         )
 
@@ -292,6 +304,13 @@ class TeamDefinitionService:
             else self._normalize_string_list(updates["tags"], field_name="tags"),
             enabled=existing.enabled if updates["enabled"] is None else bool(updates["enabled"]),
             team_thread_enabled=team_thread_enabled,
+            artifact_retention_policy=existing.artifact_retention_policy
+            if updates["artifact_retention_policy"] is None
+            else normalize_artifact_retention_policy(
+                updates["artifact_retention_policy"],
+                error_cls=TeamDefinitionValidationError,
+                default_action_by="team_template",
+            ),
             updated_at=now_iso(),
         )
 

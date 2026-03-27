@@ -28,8 +28,17 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
 from loguru import logger
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
+from nanobot.harness import (
+    ChildTaskHandle,
+    ChildTaskProjector,
+    ChildTaskRequest,
+    ChildTaskResult,
+    InProcessChildTaskRuntime,
+    collect_child_run_ids,
+)
+from nanobot.harness.events import summarize_langgraph_chunk
 from nanobot.platform.runs import RunControlScope
 from nanobot.platform.teams.models import SupervisorConfig
 from nanobot.providers.base import ToolCallRequest
@@ -100,9 +109,7 @@ class NanobotSupervisorLLM(BaseChatModel):
     provider: Any = Field(exclude=True)
     model_name: str = ""
     bound_tools: list[dict[str, Any]] | None = Field(default=None, exclude=True)
-
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def _llm_type(self) -> str:
@@ -179,6 +186,278 @@ class MemberCallTracker:
         return self.total_calls >= self.max_total_calls
 
 
+@dataclass(slots=True)
+class TeamMemberTaskRuntime:
+    """Shared child-task adapter for LangGraph member tool calls."""
+
+    team: dict[str, Any]
+    root_run_id: str
+    thread_id: str
+    agent_runtime: Any
+    runs: Any
+    propose_memory_candidate: Any
+    tracker: MemberCallTracker
+    root_origin_channel: str
+    root_origin_chat_id: str
+    shared_knowledge_block: str | None
+    team_memory_sections: list[tuple[str, str]]
+    member_access_policy: dict[str, Any]
+    child_runtime: InProcessChildTaskRuntime
+
+    def _build_member_runtime_inputs(self, member: dict[str, Any]) -> tuple[list[str], list[tuple[str, str]], int]:
+        knowledge_policy = str(self.member_access_policy.get("teamSharedKnowledge") or "explicit_only")
+        memory_policy = str(self.member_access_policy.get("teamSharedMemory") or "leader_write_member_read")
+        additional_sections: list[str] = []
+        if knowledge_policy == "members_read" and self.shared_knowledge_block:
+            additional_sections.append(self.shared_knowledge_block)
+        member_memory = self.team_memory_sections if memory_policy == "leader_write_member_read" else []
+        timeout_seconds = int(member.get("maxExecutionTimeoutSeconds") or 300)
+        return additional_sections, member_memory, timeout_seconds
+
+    def _build_child_request(
+        self,
+        member: dict[str, Any],
+        task: str,
+        *,
+        call_index: int,
+    ) -> ChildTaskRequest:
+        agent_id = member["agentId"]
+        agent_name = member["name"]
+        additional_sections, member_memory, timeout_seconds = self._build_member_runtime_inputs(member)
+        session_suffix = f"member:{agent_id}" if call_index == 1 else f"member:{agent_id}:{call_index}"
+        session_key = f"team-test:{self.team['teamId']}:{self.root_run_id}:{session_suffix}"
+        return ChildTaskRequest(
+            task=task,
+            label=f"{self.team['name']} · {agent_name}",
+            tenant_id=str(member.get("tenantId") or self.team.get("tenantId") or "").strip() or None,
+            instance_id=str(
+                member.get("instanceId")
+                or self.team.get("instanceId")
+                or getattr(getattr(getattr(self.agent_runtime, "state", None), "app_agents", None), "instance_id", "")
+            ).strip() or None,
+            principal_kind="team_member",
+            principal_id=agent_id,
+            agent_definition=member,
+            agent_id=agent_id,
+            team_id=self.team["teamId"],
+            thread_id=self.thread_id,
+            session_key=session_key,
+            session_id=session_key,
+            session_title=f"Team Run · {self.team['name']} · {agent_name}",
+            origin_channel=self.root_origin_channel,
+            origin_chat_id=self.root_origin_chat_id,
+            control_scope=RunControlScope.MEMBER,
+            parent_run_id=self.root_run_id,
+            root_run_id=self.root_run_id,
+            spawn_depth=1,
+            timeout_seconds=timeout_seconds,
+            additional_prompt_sections=tuple(additional_sections),
+            include_workspace_memory=False,
+            memory_sections=tuple(member_memory),
+        )
+
+    async def _execute_child_request(
+        self,
+        member: dict[str, Any],
+        handle: ChildTaskHandle,
+    ) -> ChildTaskResult:
+        child_request = handle.request
+
+        async def _project_progress(progress: str, *, tool_hint: bool = False) -> None:
+            message = str(progress or "").strip()
+            if not message:
+                return
+            self.child_runtime.project_handle_progress(
+                handle,
+                status="running",
+                message=message,
+                payload={"toolHint": tool_hint},
+            )
+
+        async def _project_run_event(event_type: str, payload: dict[str, Any]) -> None:
+            if event_type == "model_called":
+                self.child_runtime.project_handle_progress(
+                    handle,
+                    status="running",
+                    message=f"Calling model {payload.get('model')}",
+                    payload={
+                        "stage": "model_called",
+                        "iteration": payload.get("iteration"),
+                        "model": payload.get("model"),
+                    },
+                )
+            elif event_type == "model_result":
+                self.child_runtime.project_handle_progress(
+                    handle,
+                    status="running",
+                    message=f"Model {payload.get('model')} returned",
+                    payload={
+                        "stage": "model_result",
+                        "iteration": payload.get("iteration"),
+                        "model": payload.get("model"),
+                        "toolCallCount": payload.get("toolCallCount"),
+                    },
+                )
+            elif event_type == "tool_called":
+                tool_name = str(payload.get("toolName") or "").strip()
+                self.child_runtime.project_handle_progress(
+                    handle,
+                    status="running",
+                    message=f"Running tool {tool_name}" if tool_name else "Running tool",
+                    payload={
+                        "stage": "tool_called",
+                        "iteration": payload.get("iteration"),
+                        "toolName": tool_name or None,
+                    },
+                )
+            elif event_type == "tool_result":
+                tool_name = str(payload.get("toolName") or "").strip()
+                self.child_runtime.project_handle_progress(
+                    handle,
+                    status="running",
+                    message=f"Tool {tool_name} finished" if tool_name else "Tool finished",
+                    payload={
+                        "stage": "tool_result",
+                        "iteration": payload.get("iteration"),
+                        "toolName": tool_name or None,
+                    },
+                )
+
+        execute_child = getattr(self.agent_runtime, "execute_child_agent_task", None)
+        try:
+            if callable(execute_child):
+                return await execute_child(
+                    child_request,
+                    on_progress=_project_progress,
+                    on_run_event=_project_run_event,
+                )
+
+            run_coro = self.agent_runtime.run_agent_definition(
+                member,
+                task=child_request.task,
+                label=child_request.resolved_label(),
+                session_key=child_request.resolved_session_key(),
+                session_id=child_request.resolved_session_id(),
+                session_title=child_request.session_title,
+                origin_channel=child_request.origin_channel,
+                origin_chat_id=child_request.origin_chat_id,
+                control_scope=child_request.control_scope,
+                team_id=child_request.team_id,
+                thread_id=child_request.thread_id,
+                parent_run_id=child_request.parent_run_id,
+                root_run_id=child_request.root_run_id,
+                spawn_depth=child_request.spawn_depth,
+                additional_prompt_sections=child_request.additional_prompt_sections_as_list() or None,
+                include_workspace_memory=child_request.include_workspace_memory,
+                memory_sections=child_request.memory_sections_as_list(),
+                on_progress=_project_progress,
+                on_run_event=_project_run_event,
+            )
+            timeout_seconds = int(child_request.timeout_seconds or 0)
+            if timeout_seconds > 0:
+                run_result = await asyncio.wait_for(run_coro, timeout=timeout_seconds)
+            else:
+                run_result = await run_coro
+            return ChildTaskResult.from_agent_run(child_request, run_result)
+        except asyncio.TimeoutError:
+            timeout_seconds = int(child_request.timeout_seconds or 0)
+            timeout_text = f"Timeout after {timeout_seconds}s" if timeout_seconds > 0 else "Timed out"
+            return ChildTaskResult(
+                status="timed_out",
+                content=timeout_text,
+                task=child_request.task,
+                label=child_request.resolved_label(),
+                principal_kind=child_request.principal_kind,
+                principal_id=child_request.principal_id or child_request.agent_id,
+                agent_id=child_request.agent_id,
+                team_id=child_request.team_id,
+                thread_id=child_request.thread_id,
+                session_key=child_request.resolved_session_key(),
+                session_id=child_request.resolved_session_id(),
+                origin_channel=child_request.origin_channel,
+                origin_chat_id=child_request.origin_chat_id,
+                metadata={"error": timeout_text, "runStatus": "timed_out"},
+            )
+        except asyncio.CancelledError:
+            return ChildTaskResult(
+                status="cancelled",
+                content="Cancelled",
+                task=child_request.task,
+                label=child_request.resolved_label(),
+                principal_kind=child_request.principal_kind,
+                principal_id=child_request.principal_id or child_request.agent_id,
+                agent_id=child_request.agent_id,
+                team_id=child_request.team_id,
+                thread_id=child_request.thread_id,
+                session_key=child_request.resolved_session_key(),
+                session_id=child_request.resolved_session_id(),
+                origin_channel=child_request.origin_channel,
+                origin_chat_id=child_request.origin_chat_id,
+                metadata={"error": "Cancelled", "runStatus": "cancelled"},
+            )
+        except Exception as exc:
+            return ChildTaskResult(
+                status="error",
+                content=f"Error: {exc}",
+                task=child_request.task,
+                label=child_request.resolved_label(),
+                principal_kind=child_request.principal_kind,
+                principal_id=child_request.principal_id or child_request.agent_id,
+                agent_id=child_request.agent_id,
+                team_id=child_request.team_id,
+                thread_id=child_request.thread_id,
+                session_key=child_request.resolved_session_key(),
+                session_id=child_request.resolved_session_id(),
+                origin_channel=child_request.origin_channel,
+                origin_chat_id=child_request.origin_chat_id,
+                metadata={"error": str(exc), "runStatus": "failed"},
+            )
+
+    async def call_member(self, member: dict[str, Any], task: str) -> str:
+        agent_id = member["agentId"]
+        agent_name = member["name"]
+        if self.tracker.limit_reached:
+            return (
+                f"Error: Maximum member call limit ({self.tracker.max_total_calls}) reached. "
+                f"Please synthesize the results you have and provide a final answer."
+            )
+
+        call_index = self.tracker.next_call_index(agent_id)
+        child_request = self._build_child_request(member, task, call_index=call_index)
+        handle = await self.child_runtime.start(
+            child_request,
+            executor=lambda task_handle: self._execute_child_request(member, task_handle),
+            parent_run_id=self.root_run_id,
+            root_run_id=self.root_run_id,
+            call_index=call_index,
+        )
+        child_result = await self.child_runtime.wait(handle)
+
+        if child_result.status == "timed_out":
+            return f"Error: {agent_name} timed out after {int(child_request.timeout_seconds or 0)} seconds."
+        if child_result.status == "cancelled":
+            return f"Error: {agent_name} execution was cancelled."
+        if child_result.status != "ok":
+            error_text = str((child_result.metadata or {}).get("error") or child_result.content or child_result.status)
+            return f"Error: {agent_name} failed to complete the task: {error_text}"
+
+        run_result = child_result.raw_result or {
+            "run": {
+                "runId": child_result.run_id,
+                "status": (child_result.metadata or {}).get("runStatus") or child_result.status,
+            },
+            "assistantMessage": {"content": child_result.content},
+        }
+
+        self.propose_memory_candidate(
+            root_run_id=self.root_run_id,
+            team=self.team,
+            agent=member,
+            run_result=run_result,
+        )
+        return child_result.content or "(no response)"
+
+
 def _slugify_tool_name(name: str) -> str:
     """Convert agent name to a valid tool function name."""
     slug = re.sub(r"[^a-zA-Z0-9]+", "_", name.strip().lower()).strip("_")
@@ -206,9 +485,24 @@ def create_member_tools(
     """
     tracker = MemberCallTracker(max_total_calls=supervisor_config.max_member_calls_per_run)
     tools: list[StructuredTool] = []
-
-    knowledge_policy = str(member_access_policy.get("teamSharedKnowledge") or "explicit_only")
-    memory_policy = str(member_access_policy.get("teamSharedMemory") or "leader_write_member_read")
+    root_run = runs.get_run(root_run_id)
+    root_origin_channel = str(root_run.get("originChannel") or "web").strip() or "web"
+    root_origin_chat_id = str(root_run.get("originChatId") or team["teamId"]).strip() or team["teamId"]
+    member_runtime = TeamMemberTaskRuntime(
+        team=team,
+        root_run_id=root_run_id,
+        thread_id=thread_id,
+        agent_runtime=agent_runtime,
+        runs=runs,
+        propose_memory_candidate=propose_memory_candidate,
+        tracker=tracker,
+        root_origin_channel=root_origin_channel,
+        root_origin_chat_id=root_origin_chat_id,
+        shared_knowledge_block=shared_knowledge_block,
+        team_memory_sections=team_memory_sections,
+        member_access_policy=member_access_policy,
+        child_runtime=InProcessChildTaskRuntime(projector=ChildTaskProjector(runs=runs)),
+    )
 
     for member in members:
         agent_id = member["agentId"]
@@ -231,110 +525,10 @@ def create_member_tools(
             f"Pass a clear, specific task description."
         )
 
-        member_timeout = int(member.get("maxExecutionTimeoutSeconds") or 300)
-
-        member_additional_sections: list[str] = []
-        if knowledge_policy == "members_read" and shared_knowledge_block:
-            member_additional_sections.append(shared_knowledge_block)
-
-        member_memory = team_memory_sections if memory_policy == "leader_write_member_read" else []
-
-        # Capture variables in closure
         _member = member
-        _agent_id = agent_id
-        _agent_name = agent_name
-        _additional = member_additional_sections
-        _memory = member_memory
-        _timeout = member_timeout
 
-        async def _call_member(
-            task: str,
-            _m=_member,
-            _aid=_agent_id,
-            _aname=_agent_name,
-            _addl=_additional,
-            _mem=_memory,
-            _tout=_timeout,
-        ) -> str:
-            if tracker.limit_reached:
-                return (
-                    f"Error: Maximum member call limit ({tracker.max_total_calls}) reached. "
-                    f"Please synthesize the results you have and provide a final answer."
-                )
-
-            call_index = tracker.next_call_index(_aid)
-            session_suffix = f"member:{_aid}" if call_index == 1 else f"member:{_aid}:{call_index}"
-            session_key = f"team-test:{team['teamId']}:{root_run_id}:{session_suffix}"
-            session_id = session_key
-
-            runs.append_event(
-                root_run_id,
-                "member_scheduled",
-                {"agentId": _aid, "agentName": _aname, "callIndex": call_index},
-            )
-
-            try:
-                run_coro = agent_runtime.run_agent_definition(
-                    _m,
-                    task=task,
-                    label=f"{team['name']} · {_aname}",
-                    session_key=session_key,
-                    session_id=session_id,
-                    session_title=f"Team Run · {team['name']} · {_aname}",
-                    origin_chat_id=team["teamId"],
-                    control_scope=RunControlScope.MEMBER,
-                    team_id=team["teamId"],
-                    thread_id=thread_id,
-                    parent_run_id=root_run_id,
-                    root_run_id=root_run_id,
-                    spawn_depth=1,
-                    additional_prompt_sections=_addl if _addl else None,
-                    include_workspace_memory=False,
-                    memory_sections=_mem,
-                )
-                run_result = await asyncio.wait_for(run_coro, timeout=_tout)
-            except asyncio.TimeoutError:
-                runs.append_event(
-                    root_run_id,
-                    "member_completed",
-                    {"agentId": _aid, "agentName": _aname, "error": f"Timeout after {_tout}s"},
-                )
-                return f"Error: {_aname} timed out after {_tout} seconds."
-            except asyncio.CancelledError:
-                runs.append_event(
-                    root_run_id,
-                    "member_completed",
-                    {"agentId": _aid, "agentName": _aname, "error": "Cancelled"},
-                )
-                return f"Error: {_aname} execution was cancelled."
-            except Exception as exc:
-                runs.append_event(
-                    root_run_id,
-                    "member_completed",
-                    {"agentId": _aid, "agentName": _aname, "error": str(exc)},
-                )
-                return f"Error: {_aname} failed to complete the task: {exc}"
-
-            content = (
-                (run_result.get("assistantMessage") or {}).get("content")
-                or (run_result.get("run", {}).get("resultSummary") or {}).get("content")
-                or "(no response)"
-            )
-
-            runs.append_event(
-                root_run_id,
-                "member_completed",
-                {"agentId": _aid, "agentName": _aname, "runId": run_result["run"]["runId"]},
-            )
-
-            propose_memory_candidate(
-                root_run_id=root_run_id,
-                team=team,
-                agent=_m,
-                run_result=run_result,
-            )
-
-            return content
+        async def _call_member(task: str, _m=_member) -> str:
+            return await member_runtime.call_member(_m, task)
 
         tool = StructuredTool.from_function(
             coroutine=_call_member,
@@ -358,6 +552,63 @@ class TeamRunResult:
 
     final_content: str
     member_run_ids: list[str] = field(default_factory=list)
+    supervisor_snapshot: dict[str, Any] = field(default_factory=dict)
+    team_run_snapshot: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PreparedSupervisorExecution:
+    """Reusable supervisor runtime materialization for one team run."""
+
+    supervisor: dict[str, Any]
+    member_defs: list[dict[str, Any]]
+    runtime_prepared: Any
+    supervisor_llm: NanobotSupervisorLLM
+    member_tools: list[StructuredTool]
+    system_prompt: str
+    supervisor_additional_sections: list[str] = field(default_factory=list)
+    supervisor_memory: list[tuple[str, str]] = field(default_factory=list)
+    team_thread_context_attached: bool = False
+    shared_knowledge_attached: bool = False
+
+    def event_snapshot(self, supervisor_config: SupervisorConfig) -> dict[str, Any]:
+        """Return a compact runtime snapshot for supervisor observability."""
+        tool_policy = getattr(self.runtime_prepared, "tool_policy", None)
+        memory_policy = getattr(self.runtime_prepared, "memory_policy", None)
+        knowledge_policy = getattr(self.runtime_prepared, "knowledge_policy", None)
+        return {
+            "supervisorAgentId": str(self.supervisor.get("agentId") or "").strip() or None,
+            "memberAgentIds": [str(item.get("agentId") or "").strip() for item in self.member_defs if str(item.get("agentId") or "").strip()],
+            "memberToolNames": [tool.name for tool in self.member_tools],
+            "modelName": self.supervisor_llm.model_name,
+            "responseMode": supervisor_config.response_mode,
+            "recursionLimit": supervisor_config.recursion_limit,
+            "knowledgeSectionCount": len(self.supervisor_additional_sections),
+            "memorySectionCount": len(self.supervisor_memory),
+            "runtimePromptFragmentCount": len(getattr(self.runtime_prepared, "runtime_prompt_fragments", []) or []),
+            "runtimeMemoryFragmentCount": len(getattr(self.runtime_prepared, "runtime_memory_fragments", []) or []),
+            "middlewareTrace": list(getattr(self.runtime_prepared, "middleware_stages", []) or []),
+            "toolAllowlist": tool_policy.allowlist_as_list() if tool_policy is not None else [],
+            "mcpServerIds": tool_policy.mcp_server_ids_as_list() if tool_policy is not None else [],
+            "skillIds": tool_policy.skill_ids_as_list() if tool_policy is not None else [],
+            "memoryScope": getattr(memory_policy, "scope", None),
+            "includeWorkspaceMemory": getattr(memory_policy, "include_workspace_memory", None),
+            "knowledgeScope": getattr(knowledge_policy, "scope", None),
+            "knowledgeBindingIds": knowledge_policy.binding_ids_as_list() if knowledge_policy is not None else [],
+            "knowledgeNames": knowledge_policy.names_as_list() if knowledge_policy is not None else [],
+            "knowledgeHitCount": len(getattr(knowledge_policy, "hits", ()) or ()),
+            "teamThreadContextAttached": self.team_thread_context_attached,
+            "sharedKnowledgeAttached": self.shared_knowledge_attached,
+            "systemPromptLength": len(self.system_prompt),
+        }
+
+
+@dataclass
+class PreparedTeamGraph:
+    """Reusable LangGraph preparation result shared by invoke/stream paths."""
+
+    graph: Any
+    supervisor_execution: PreparedSupervisorExecution
 
 
 def _build_supervisor_prompt(
@@ -366,6 +617,7 @@ def _build_supervisor_prompt(
     members: list[dict[str, Any]],
     *,
     supervisor_config: SupervisorConfig,
+    supervisor_additional_sections: list[str] | None = None,
     team_thread_context_block: str | None = None,
     shared_knowledge_block: str | None = None,
     memory_sections: list[tuple[str, str]] | None = None,
@@ -425,6 +677,11 @@ def _build_supervisor_prompt(
         f"5. {response_instruction}"
     )
 
+    for section in supervisor_additional_sections or []:
+        text = str(section or "").strip()
+        if text:
+            sections.append(text)
+
     if team_thread_context_block:
         sections.append(team_thread_context_block)
 
@@ -459,6 +716,255 @@ class LangGraphTeamRunner:
         model_name = config.agents.defaults.model
         return NanobotSupervisorLLM(provider=provider, model_name=model_name)
 
+    def _prepare_supervisor_prompt_context(
+        self,
+        supervisor: dict[str, Any],
+        task: str,
+        team_memory_sections: list[tuple[str, str]],
+    ) -> Any:
+        return self.agent_runtime.prepare_agent_execution(
+            supervisor,
+            task=task,
+            memory_sections=team_memory_sections,
+        )
+
+    def _get_agent_definition(self, agent_id: str, *, tenant_id: str) -> dict[str, Any]:
+        getter = self.agent_runtime.state.app_agents.get_agent
+        try:
+            return getter(agent_id, tenant_id=tenant_id)
+        except TypeError:
+            return getter(agent_id)
+
+    def _prepare_supervisor_execution(
+        self,
+        team: dict[str, Any],
+        task: str,
+        root_run_id: str,
+        thread_id: str,
+        *,
+        supervisor_config: SupervisorConfig,
+        team_thread_context_block: str | None = None,
+        shared_knowledge_block: str | None = None,
+        team_memory_sections: list[tuple[str, str]],
+        member_access_policy: dict[str, Any],
+        propose_memory_candidate: Any,
+    ) -> PreparedSupervisorExecution:
+        tenant_id = str(team.get("tenantId") or "default").strip() or "default"
+        supervisor = self._get_agent_definition(team["supervisorAgentId"], tenant_id=tenant_id)
+        member_defs = [
+            self._get_agent_definition(mid, tenant_id=tenant_id)
+            for mid in (team.get("memberAgentIds") or [])
+        ]
+
+        supervisor_llm = self._build_supervisor_llm(supervisor)
+        member_tools, _ = create_member_tools(
+            members=member_defs,
+            team=team,
+            root_run_id=root_run_id,
+            thread_id=thread_id,
+            agent_runtime=self.agent_runtime,
+            runs=self.runs,
+            propose_memory_candidate=propose_memory_candidate,
+            shared_knowledge_block=shared_knowledge_block,
+            team_memory_sections=team_memory_sections,
+            member_access_policy=member_access_policy,
+            supervisor_config=supervisor_config,
+        )
+        runtime_prepared = self._prepare_supervisor_prompt_context(
+            supervisor,
+            task,
+            team_memory_sections,
+        )
+        system_prompt = _build_supervisor_prompt(
+            team,
+            supervisor,
+            member_defs,
+            supervisor_config=supervisor_config,
+            supervisor_additional_sections=runtime_prepared.runtime_prompt_fragments,
+            team_thread_context_block=team_thread_context_block,
+            shared_knowledge_block=shared_knowledge_block,
+            memory_sections=runtime_prepared.runtime_memory_fragments or None,
+        )
+        return PreparedSupervisorExecution(
+            supervisor=supervisor,
+            member_defs=member_defs,
+            runtime_prepared=runtime_prepared,
+            supervisor_llm=supervisor_llm,
+            member_tools=member_tools,
+            system_prompt=system_prompt,
+            supervisor_additional_sections=list(runtime_prepared.runtime_prompt_fragments),
+            supervisor_memory=list(runtime_prepared.runtime_memory_fragments),
+            team_thread_context_attached=bool(team_thread_context_block),
+            shared_knowledge_attached=bool(shared_knowledge_block),
+        )
+
+    def _prepare_team_graph(
+        self,
+        team: dict[str, Any],
+        task: str,
+        root_run_id: str,
+        thread_id: str,
+        *,
+        supervisor_config: SupervisorConfig,
+        team_thread_context_block: str | None = None,
+        shared_knowledge_block: str | None = None,
+        team_memory_sections: list[tuple[str, str]],
+        member_access_policy: dict[str, Any],
+        propose_memory_candidate: Any,
+    ) -> PreparedTeamGraph:
+        supervisor_execution = self._prepare_supervisor_execution(
+            team,
+            task,
+            root_run_id,
+            thread_id,
+            supervisor_config=supervisor_config,
+            team_thread_context_block=team_thread_context_block,
+            shared_knowledge_block=shared_knowledge_block,
+            team_memory_sections=team_memory_sections,
+            member_access_policy=member_access_policy,
+            propose_memory_candidate=propose_memory_candidate,
+        )
+        graph = create_react_agent(
+            model=supervisor_execution.supervisor_llm,
+            tools=supervisor_execution.member_tools,
+            prompt=supervisor_execution.system_prompt,
+        )
+        return PreparedTeamGraph(
+            graph=graph,
+            supervisor_execution=supervisor_execution,
+        )
+
+    @staticmethod
+    def _extract_final_content(messages: Sequence[BaseMessage]) -> str:
+        for msg in reversed(list(messages)):
+            if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
+                return str(msg.content)
+        return ""
+
+    @staticmethod
+    def _is_recursion_error(exc: Exception) -> bool:
+        exc_name = type(exc).__name__
+        text = str(exc)
+        return "recursion" in exc_name.lower() or "recursion" in text.lower()
+
+    @staticmethod
+    def _build_recursion_limit_result(
+        team_name: str,
+        recursion_limit: int,
+        *,
+        streaming: bool = False,
+    ) -> TeamRunResult:
+        logger.warning(
+            "Team '{}' hit recursion limit{}",
+            team_name,
+            " during streaming" if streaming else "",
+        )
+        suffix = "." if streaming else ". Please try breaking down the task further or increase the limit."
+        return TeamRunResult(
+            final_content=(
+                f"The team supervisor reached its recursion limit "
+                f"({recursion_limit}){suffix}"
+            ),
+        )
+
+    def _build_team_result(
+        self,
+        root_run_id: str,
+        final_content: str,
+        *,
+        prepared: PreparedTeamGraph | None = None,
+        supervisor_config: SupervisorConfig | None = None,
+        team_run_context: dict[str, Any] | None = None,
+    ) -> TeamRunResult:
+        member_run_ids = collect_child_run_ids(self.runs.get_run(root_run_id).get("events") or [])
+        supervisor_snapshot = (
+            prepared.supervisor_execution.event_snapshot(supervisor_config)
+            if prepared is not None and supervisor_config is not None
+            else {}
+        )
+        return TeamRunResult(
+            final_content=final_content,
+            member_run_ids=member_run_ids,
+            supervisor_snapshot=supervisor_snapshot,
+            team_run_snapshot=dict(team_run_context or {}),
+        )
+
+    @staticmethod
+    async def _emit_supervisor_materialized(
+        prepared: PreparedTeamGraph,
+        supervisor_config: SupervisorConfig,
+        on_event: Any = None,
+        *,
+        team_run_context: dict[str, Any] | None = None,
+    ) -> None:
+        if on_event is None:
+            return
+        payload = prepared.supervisor_execution.event_snapshot(supervisor_config)
+        if team_run_context:
+            payload["teamRunContext"] = dict(team_run_context)
+        await on_event(
+            "supervisor_materialized",
+            payload,
+        )
+
+    async def _execute_prepared_graph(
+        self,
+        prepared: PreparedTeamGraph,
+        *,
+        team_name: str,
+        task: str,
+        root_run_id: str,
+        supervisor_config: SupervisorConfig,
+        team_run_context: dict[str, Any] | None = None,
+        on_event: Any = None,
+        stream: bool,
+    ) -> TeamRunResult:
+        await self._emit_supervisor_materialized(
+            prepared,
+            supervisor_config,
+            on_event,
+            team_run_context=team_run_context,
+        )
+
+        final_content = ""
+        try:
+            if stream:
+                async for chunk in prepared.graph.astream(
+                    {"messages": [HumanMessage(content=task)]},
+                    config={"recursion_limit": supervisor_config.recursion_limit},
+                ):
+                    summary = summarize_langgraph_chunk(chunk)
+                    if on_event and summary is not None:
+                        await on_event("supervisor_chunk", summary)
+                    for _, value in chunk.items():
+                        messages = value.get("messages") if isinstance(value, dict) else None
+                        if messages:
+                            candidate = self._extract_final_content(messages)
+                            if candidate:
+                                final_content = candidate
+            else:
+                result = await prepared.graph.ainvoke(
+                    {"messages": [HumanMessage(content=task)]},
+                    config={"recursion_limit": supervisor_config.recursion_limit},
+                )
+                final_content = self._extract_final_content(result.get("messages", []))
+        except Exception as exc:
+            if self._is_recursion_error(exc):
+                return self._build_recursion_limit_result(
+                    team_name,
+                    supervisor_config.recursion_limit,
+                    streaming=stream,
+                )
+            raise
+
+        return self._build_team_result(
+            root_run_id,
+            final_content,
+            prepared=prepared,
+            supervisor_config=supervisor_config,
+            team_run_context=team_run_context,
+        )
+
     async def run(
         self,
         team: dict[str, Any],
@@ -472,106 +978,38 @@ class LangGraphTeamRunner:
         team_memory_sections: list[tuple[str, str]],
         member_access_policy: dict[str, Any],
         propose_memory_candidate: Any,
+        team_run_context: dict[str, Any] | None = None,
+        on_event: Any = None,
     ) -> TeamRunResult:
         """Execute a team run using the LangGraph Supervisor pattern."""
-        supervisor = self.agent_runtime.state.app_agents.get_agent(team["supervisorAgentId"])
-        member_defs = [
-            self.agent_runtime.state.app_agents.get_agent(mid)
-            for mid in (team.get("memberAgentIds") or [])
-        ]
-
-        supervisor_llm = self._build_supervisor_llm(supervisor)
-
-        member_tools, tracker = create_member_tools(
-            members=member_defs,
-            team=team,
-            root_run_id=root_run_id,
-            thread_id=thread_id,
-            agent_runtime=self.agent_runtime,
-            runs=self.runs,
-            propose_memory_candidate=propose_memory_candidate,
-            shared_knowledge_block=shared_knowledge_block,
-            team_memory_sections=team_memory_sections,
-            member_access_policy=member_access_policy,
-            supervisor_config=supervisor_config,
-        )
-
-        # Build memory sections for the supervisor prompt
-        supervisor_memory: list[tuple[str, str]] = []
-        if str(supervisor.get("memoryScope") or "agent_profile") == "workspace_shared":
-            try:
-                workspace_path = self.agent_runtime.state.config.workspace_path
-                memory_file = workspace_path / "memory" / "MEMORY.md"
-                if memory_file.is_file():
-                    ws_content = memory_file.read_text(encoding="utf-8").strip()
-                    if ws_content:
-                        supervisor_memory.append(("Workspace Shared Memory", ws_content))
-            except Exception:
-                logger.debug("Could not read workspace memory for supervisor")
-        supervisor_memory.extend(team_memory_sections)
-
-        system_prompt = _build_supervisor_prompt(
+        prepared = self._prepare_team_graph(
             team,
-            supervisor,
-            member_defs,
+            task,
+            root_run_id,
+            thread_id,
             supervisor_config=supervisor_config,
             team_thread_context_block=team_thread_context_block,
             shared_knowledge_block=shared_knowledge_block,
-            memory_sections=supervisor_memory or None,
-        )
-
-        graph = create_react_agent(
-            model=supervisor_llm,
-            tools=member_tools,
-            prompt=system_prompt,
+            team_memory_sections=team_memory_sections,
+            member_access_policy=member_access_policy,
+            propose_memory_candidate=propose_memory_candidate,
         )
 
         logger.info(
             "Starting LangGraph supervisor for team '{}' with {} members (recursion_limit={})",
             team["name"],
-            len(member_defs),
+            len(prepared.supervisor_execution.member_defs),
             supervisor_config.recursion_limit,
         )
-
-        try:
-            result = await graph.ainvoke(
-                {"messages": [HumanMessage(content=task)]},
-                config={"recursion_limit": supervisor_config.recursion_limit},
-            )
-        except Exception as exc:
-            exc_name = type(exc).__name__
-            if "recursion" in exc_name.lower() or "recursion" in str(exc).lower():
-                logger.warning(
-                    "Team '{}' hit recursion limit ({}): {}",
-                    team["name"],
-                    supervisor_config.recursion_limit,
-                    exc,
-                )
-                return TeamRunResult(
-                    final_content=(
-                        f"The team supervisor reached its recursion limit "
-                        f"({supervisor_config.recursion_limit}). "
-                        f"Please try breaking down the task further or increase the limit."
-                    ),
-                )
-            raise
-
-        final_content = ""
-        for msg in reversed(result.get("messages", [])):
-            if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
-                final_content = str(msg.content)
-                break
-
-        member_run_ids: list[str] = []
-        for event in self.runs.get_run(root_run_id).get("events") or []:
-            if event.get("eventType") == "member_completed":
-                run_id = (event.get("payload") or {}).get("runId")
-                if run_id:
-                    member_run_ids.append(run_id)
-
-        return TeamRunResult(
-            final_content=final_content,
-            member_run_ids=member_run_ids,
+        return await self._execute_prepared_graph(
+            prepared,
+            team_name=team["name"],
+            task=task,
+            root_run_id=root_run_id,
+            supervisor_config=supervisor_config,
+            team_run_context=team_run_context,
+            on_event=on_event,
+            stream=False,
         )
 
     async def run_stream(
@@ -587,6 +1025,7 @@ class LangGraphTeamRunner:
         team_memory_sections: list[tuple[str, str]],
         member_access_policy: dict[str, Any],
         propose_memory_candidate: Any,
+        team_run_context: dict[str, Any] | None = None,
         on_event: Any = None,
     ) -> TeamRunResult:
         """Execute a team run with streaming intermediate results.
@@ -595,98 +1034,31 @@ class LangGraphTeamRunner:
             on_event: Optional async callback ``async def on_event(event_type: str, data: dict)``
                       called for each intermediate event during the run.
         """
-        supervisor = self.agent_runtime.state.app_agents.get_agent(team["supervisorAgentId"])
-        member_defs = [
-            self.agent_runtime.state.app_agents.get_agent(mid)
-            for mid in (team.get("memberAgentIds") or [])
-        ]
-
-        supervisor_llm = self._build_supervisor_llm(supervisor)
-
-        member_tools, tracker = create_member_tools(
-            members=member_defs,
-            team=team,
-            root_run_id=root_run_id,
-            thread_id=thread_id,
-            agent_runtime=self.agent_runtime,
-            runs=self.runs,
-            propose_memory_candidate=propose_memory_candidate,
-            shared_knowledge_block=shared_knowledge_block,
-            team_memory_sections=team_memory_sections,
-            member_access_policy=member_access_policy,
-            supervisor_config=supervisor_config,
-        )
-
-        supervisor_memory: list[tuple[str, str]] = []
-        if str(supervisor.get("memoryScope") or "agent_profile") == "workspace_shared":
-            try:
-                workspace_path = self.agent_runtime.state.config.workspace_path
-                memory_file = workspace_path / "memory" / "MEMORY.md"
-                if memory_file.is_file():
-                    ws_content = memory_file.read_text(encoding="utf-8").strip()
-                    if ws_content:
-                        supervisor_memory.append(("Workspace Shared Memory", ws_content))
-            except Exception:
-                logger.debug("Could not read workspace memory for supervisor")
-        supervisor_memory.extend(team_memory_sections)
-
-        system_prompt = _build_supervisor_prompt(
+        prepared = self._prepare_team_graph(
             team,
-            supervisor,
-            member_defs,
+            task,
+            root_run_id,
+            thread_id,
             supervisor_config=supervisor_config,
             team_thread_context_block=team_thread_context_block,
             shared_knowledge_block=shared_knowledge_block,
-            memory_sections=supervisor_memory or None,
-        )
-
-        graph = create_react_agent(
-            model=supervisor_llm,
-            tools=member_tools,
-            prompt=system_prompt,
+            team_memory_sections=team_memory_sections,
+            member_access_policy=member_access_policy,
+            propose_memory_candidate=propose_memory_candidate,
         )
 
         logger.info(
             "Starting LangGraph supervisor (streaming) for team '{}' with {} members",
             team["name"],
-            len(member_defs),
+            len(prepared.supervisor_execution.member_defs),
         )
-
-        final_content = ""
-        try:
-            async for chunk in graph.astream(
-                {"messages": [HumanMessage(content=task)]},
-                config={"recursion_limit": supervisor_config.recursion_limit},
-            ):
-                if on_event:
-                    await on_event("graph_chunk", chunk)
-                # Extract the latest AI message
-                for key, value in chunk.items():
-                    messages = value.get("messages") if isinstance(value, dict) else None
-                    if messages:
-                        for msg in messages:
-                            if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
-                                final_content = str(msg.content)
-        except Exception as exc:
-            exc_name = type(exc).__name__
-            if "recursion" in exc_name.lower() or "recursion" in str(exc).lower():
-                logger.warning("Team '{}' hit recursion limit during streaming", team["name"])
-                return TeamRunResult(
-                    final_content=(
-                        f"The team supervisor reached its recursion limit "
-                        f"({supervisor_config.recursion_limit})."
-                    ),
-                )
-            raise
-
-        member_run_ids: list[str] = []
-        for event in self.runs.get_run(root_run_id).get("events") or []:
-            if event.get("eventType") == "member_completed":
-                run_id = (event.get("payload") or {}).get("runId")
-                if run_id:
-                    member_run_ids.append(run_id)
-
-        return TeamRunResult(
-            final_content=final_content,
-            member_run_ids=member_run_ids,
+        return await self._execute_prepared_graph(
+            prepared,
+            team_name=team["name"],
+            task=task,
+            root_run_id=root_run_id,
+            supervisor_config=supervisor_config,
+            team_run_context=team_run_context,
+            on_event=on_event,
+            stream=True,
         )

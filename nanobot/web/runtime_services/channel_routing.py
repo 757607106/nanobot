@@ -17,6 +17,7 @@ class RoutingTarget:
     target_type: str  # "agent" or "team"
     target_id: str
     binding_id: str
+    binding_chat_id: str
     metadata: dict[str, Any]
 
 
@@ -68,5 +69,6 @@ class ChannelRoutingService:
             target_type=binding.target_type,
             target_id=binding.target_id,
             binding_id=binding.binding_id,
+            binding_chat_id=binding.channel_chat_id,
             metadata=binding.metadata,
         )

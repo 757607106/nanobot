@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import Request
+from nanobot.platform.tenant_scope import normalize_tenant_id, tenant_id_from_metadata
+from nanobot.web.auth import SESSION_COOKIE_NAME
 
 
 @dataclass
@@ -17,10 +19,67 @@ class TenantContext:
     scopes: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class ControlPlanePrincipal:
+    """Represents the authenticated principal for control-plane requests."""
+
+    principal_kind: str
+    is_platform_admin: bool
+    home_tenant_id: str | None = None
+    effective_tenant_id: str | None = None
+    scopes: list[str] = field(default_factory=list)
+    key_id: str | None = None
+    username: str | None = None
+
+
+def _selected_control_plane_tenant_id(request: Request) -> str | None:
+    """Read an explicit current-tenant selection from request headers."""
+    selected = str(request.headers.get("x-tenant-id") or "").strip()
+    return selected or None
+
+
 def get_tenant_id(request: Request) -> str:
     """Extract tenant_id from request state, defaulting to 'default'."""
     ctx = getattr(request.state, "tenant", None)
-    return ctx.tenant_id if ctx else "default"
+    return normalize_tenant_id(ctx.tenant_id if ctx else None)
+
+
+def get_control_plane_principal(request: Request) -> ControlPlanePrincipal | None:
+    """Return the request-level control-plane principal if available."""
+    principal = getattr(request.state, "control_plane_principal", None)
+    return principal if isinstance(principal, ControlPlanePrincipal) else None
+
+
+def get_control_plane_tenant_id(request: Request) -> str | None:
+    """Return the explicit tenant selected for control-plane operations."""
+    principal = get_control_plane_principal(request)
+    if principal is None:
+        return None
+    selected = str(principal.effective_tenant_id or "").strip()
+    return selected or None
+
+
+def get_tenant_knowledge_service(request: Request) -> Any:
+    """Return a tenant-scoped knowledge service view for the current request."""
+    service = request.app.state.knowledge
+    return service.with_tenant(get_tenant_id(request)) if hasattr(service, "with_tenant") else service
+
+
+def get_tenant_memory_service(request: Request) -> Any:
+    """Return a tenant-scoped memory service view for the current request."""
+    service = request.app.state.memory
+    return service.with_tenant(get_tenant_id(request)) if hasattr(service, "with_tenant") else service
+
+
+def get_tenant_runs_service(request: Request) -> Any:
+    """Return a tenant-scoped run service view for the current request."""
+    service = request.app.state.runs
+    return service.with_tenant(get_tenant_id(request)) if hasattr(service, "with_tenant") else service
+
+
+def get_metadata_tenant_id(metadata: dict[str, Any] | None, default: str = "default") -> str:
+    """Read a tenant id from message metadata with stable fallback behavior."""
+    return tenant_id_from_metadata(metadata, default=default)
 
 
 async def tenant_auth_middleware(request: Request, call_next: Any) -> Any:
@@ -40,6 +99,7 @@ async def tenant_auth_middleware(request: Request, call_next: Any) -> Any:
     - Non-API paths (frontend static files)
     """
     path = request.url.path
+    request.state.control_plane_principal = None
 
     # Only apply API key auth to /api/v1/ paths
     if not path.startswith("/api/v1/"):
@@ -85,10 +145,32 @@ async def tenant_auth_middleware(request: Request, call_next: Any) -> Any:
             key_id=key_id,
             scopes=scopes,
         )
+        request.state.control_plane_principal = ControlPlanePrincipal(
+            principal_kind="tenant_api_key",
+            is_platform_admin=False,
+            home_tenant_id=tenant_id,
+            effective_tenant_id=tenant_id,
+            scopes=list(scopes or []),
+            key_id=key_id,
+        )
         return await call_next(request)
 
     # No API key - default tenant context (cookie auth handled elsewhere)
     request.state.tenant = TenantContext(tenant_id="default")
+    username = None
+    auth = getattr(request.app.state, "auth", None)
+    if auth is not None:
+        username = auth.get_authenticated_user(request.cookies.get(SESSION_COOKIE_NAME))
+    if username:
+        selected_tenant_id = _selected_control_plane_tenant_id(request)
+        request.state.control_plane_principal = ControlPlanePrincipal(
+            principal_kind="platform_admin",
+            is_platform_admin=True,
+            home_tenant_id=selected_tenant_id,
+            effective_tenant_id=selected_tenant_id,
+            scopes=["platform:admin"],
+            username=username,
+        )
     return await call_next(request)
 
 

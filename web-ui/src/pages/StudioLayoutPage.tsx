@@ -9,6 +9,9 @@ const studioRoutes = [
 ]
 
 function resolveActiveKey(pathname: string) {
+  if (pathname.startsWith('/studio/memory/agents/')) {
+    return '/studio/agents'
+  }
   if (pathname === '/studio/memory' || pathname.startsWith('/studio/memory/')) {
     return '/studio/teams'
   }

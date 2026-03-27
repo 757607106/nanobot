@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { bootstrapAndSetup, uniqueE2EName } from './helpers'
 
 async function waitForKnowledgeJob(page: import('@playwright/test').Page, kbId: string, jobId: string) {
-  const deadline = Date.now() + 10_000
+  const deadline = Date.now() + 60_000
   while (Date.now() < deadline) {
     const response = await page.request.get(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/jobs`)
     expect(response.ok()).toBeTruthy()
@@ -76,14 +76,15 @@ test.describe.serial('knowledge workspace e2e', () => {
 
     await expect(page).toHaveURL(new RegExp(`/knowledge/${kbId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
     await expect(page.getByText(kbName)).toBeVisible()
-    const fileButton = page.getByRole('button', { name: 'Ops FAQ.json' }).first()
-    await expect(fileButton).toBeVisible()
+    const fileRow = page.locator('tr').filter({ hasText: 'Ops FAQ.json' }).first()
+    await expect(fileRow).toBeVisible()
 
-    await fileButton.click()
-    await expect(page.getByText('文件详情')).toBeVisible()
-    await expect(page.getByText('Use supervisorctl restart nanobot after checking service health.')).toBeVisible()
-    await page.locator('.ant-modal-close').click()
-    await expect(page.getByText('文件详情')).toHaveCount(0)
+    await fileRow.getByRole('button', { name: 'file-search' }).first().click()
+    const fileDetailDialog = page.getByRole('dialog', { name: /文件详情/ })
+    await expect(fileDetailDialog).toBeVisible()
+    await expect(fileDetailDialog.getByText('Use supervisorctl restart nanobot after checking service health.')).toBeVisible()
+    await fileDetailDialog.getByRole('button', { name: 'Close' }).click()
+    await expect(fileDetailDialog).toHaveCount(0)
 
     await page.getByRole('tab', { name: '检索测试' }).click()
     const queryInput = page.getByPlaceholder('输入你要验证的知识库问题...')

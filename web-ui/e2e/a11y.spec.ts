@@ -2,7 +2,20 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { bootstrapAndSetup } from './helpers'
 
+async function waitForMotionToSettle(page: Page) {
+  for (const selector of ['.app-sider-panel', '.app-content-motion']) {
+    const locator = page.locator(selector).first()
+    if (await locator.count()) {
+      await expect
+        .poll(async () => locator.evaluate((node) => Math.round(Number.parseFloat(getComputedStyle(node).opacity || '1') * 100)))
+        .toBe(100)
+    }
+  }
+  await page.waitForTimeout(100)
+}
+
 async function expectNoSeriousViolations(page: Page) {
+  await waitForMotionToSettle(page)
   const results = await new AxeBuilder({ page }).analyze()
   const blocking = results.violations.filter((item) => item.impact === 'critical' || item.impact === 'serious')
   expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([])

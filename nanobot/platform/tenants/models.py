@@ -24,11 +24,21 @@ class Tenant:
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
 
+    @property
+    def is_active(self) -> bool:
+        return str(self.status or "").strip().lower() == "active"
+
+    @property
+    def is_suspended(self) -> bool:
+        return str(self.status or "").strip().lower() == "suspended"
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "tenantId": self.tenant_id,
             "name": self.name,
             "status": self.status,
+            "isActive": self.is_active,
+            "isSuspended": self.is_suspended,
             "plan": self.plan,
             "settings": self.settings,
             "createdAt": self.created_at,

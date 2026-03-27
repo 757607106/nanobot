@@ -270,6 +270,36 @@ export interface ChannelProbeResult {
   checks: ChannelProbeCheck[]
 }
 
+export interface ChannelAuditEntry {
+  auditId: string
+  tenantId: string
+  instanceId: string
+  channelName: string
+  chatId: string
+  sessionKey: string
+  senderId: string
+  messagePreview: string
+  status: 'resolved' | 'unmatched' | 'dispatched' | 'no_handler' | 'dispatch_error'
+  resolved: boolean
+  resolutionKind: 'none' | 'exact' | 'wildcard' | string
+  bindingId?: string | null
+  targetType?: 'agent' | 'team' | string | null
+  targetId?: string | null
+  messageId?: string | null
+  dispatchRunId?: string | null
+  artifactPath?: string | null
+  responsePreview?: string | null
+  errorMessage?: string | null
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ChannelAuditListResponse {
+  items: ChannelAuditEntry[]
+  limit: number
+}
+
 export interface WhatsAppBindingStatus {
   channelName: 'whatsapp'
   bridgeUrl?: string | null
@@ -452,6 +482,15 @@ export interface AgentTemplateTool {
   description: string
 }
 
+export interface ArtifactRetentionPolicyConfig {
+  enabled?: boolean
+  archiveAfterDays?: number | null
+  deleteAfterDays?: number | null
+  reason?: string | null
+  actionBy?: string | null
+  updatedAt?: string | null
+}
+
 export interface AgentDefinition {
   agentId: string
   tenantId: string
@@ -471,6 +510,7 @@ export interface AgentDefinition {
   knowledgeBindingIds: string[]
   tags: string[]
   memoryScope: string
+  artifactRetentionPolicy?: ArtifactRetentionPolicyConfig | null
   sourceTemplateName?: string | null
   createdAt?: string
   updatedAt?: string
@@ -492,6 +532,7 @@ export interface AgentDefinitionMutationInput {
   knowledgeBindingIds?: string[]
   tags?: string[]
   memoryScope?: string
+  artifactRetentionPolicy?: ArtifactRetentionPolicyConfig | null
   templateName?: string
 }
 
@@ -508,6 +549,7 @@ export interface TeamDefinition {
   tags: string[]
   enabled: boolean
   memberCount: number
+  artifactRetentionPolicy?: ArtifactRetentionPolicyConfig | null
   createdAt?: string
   updatedAt?: string
 }
@@ -521,10 +563,19 @@ export interface TeamDefinitionMutationInput {
   memberAccessPolicy?: Record<string, unknown>
   tags?: string[]
   enabled?: boolean
+  artifactRetentionPolicy?: ArtifactRetentionPolicyConfig | null
 }
 
 export interface TeamMemorySnapshot {
   teamId: string
+  content: string
+  fileName: string
+  candidateCount: number
+  updatedAt?: string
+}
+
+export interface AgentMemorySnapshot {
+  agentId: string
   content: string
   fileName: string
   candidateCount: number
@@ -1010,12 +1061,190 @@ export interface RunCancelResult extends AgentRunSummary {
   taskCancellationSent: boolean
 }
 
+export interface RunArtifactAudit {
+  runId: string
+  tenantId: string
+  instanceId: string
+  artifactPath?: string | null
+  fileName?: string | null
+  storageScope?: string | null
+  storageKey?: string | null
+  isLegacyFallback?: boolean
+  exists: boolean
+  lifecycleStatus?: 'active' | 'quarantined' | 'deleted' | 'missing' | string
+  currentStorageScope?: string | null
+  currentStorageKey?: string | null
+  originalStorageScope?: string | null
+  originalStorageKey?: string | null
+  governanceReason?: string | null
+  governanceActionBy?: string | null
+  governanceUpdatedAt?: string | null
+  canRestore?: boolean
+  retentionPolicy?: RunArtifactRetentionPolicy | null
+}
+
+export interface RunArtifactRetentionPolicy {
+  runId: string
+  tenantId: string
+  instanceId: string
+  artifactPath?: string | null
+  lifecycleStatus?: string | null
+  enabled: boolean
+  basisTimestamp?: string | null
+  archiveAfterDays?: number | null
+  deleteAfterDays?: number | null
+  archiveDueAt?: string | null
+  deleteDueAt?: string | null
+  archiveDue: boolean
+  deleteDue: boolean
+  nextAction?: 'archive' | 'delete' | 'none' | string | null
+  nextActionAt?: string | null
+  canApplyNow: boolean
+  reason?: string | null
+  actionBy?: string | null
+  updatedAt?: string | null
+}
+
+export interface RunArtifactRetentionApplyResult {
+  runId: string
+  applied: boolean
+  action: 'archive' | 'delete' | 'none' | string
+  artifact: RunArtifactAudit
+  retentionPolicy?: RunArtifactRetentionPolicy | null
+}
+
+export interface RunArtifactRetentionSweepResult {
+  tenantId: string
+  instanceId: string
+  evaluated: number
+  applied: number
+  archived: number
+  deleted: number
+  skipped: number
+  items: RunArtifactRetentionApplyResult[]
+}
+
 export interface RunArtifactDetail {
   runId: string
+  tenantId?: string
+  instanceId?: string
   artifactPath: string
   fileName: string
   contentType: string
   content: string
+  audit?: RunArtifactAudit | null
+}
+
+export interface RunBoundaryAudit {
+  runId: string
+  tenantId: string
+  instanceId: string
+  lineage: {
+    kind: string
+    status: string
+    controlScope: string
+    parentRunId?: string | null
+    rootRunId?: string | null
+    threadId?: string | null
+    sessionKey?: string | null
+    spawnDepth?: number
+  }
+  principal: {
+    principalKind?: string | null
+    principalId: string
+    agentId?: string | null
+    teamId?: string | null
+    label?: string | null
+    role?: string | null
+  }
+  channel: {
+    originChannel?: string | null
+    originChatId?: string | null
+    routing?: Record<string, unknown> | null
+  }
+  environment: {
+    workspacePath?: string | null
+    workspaceScope?: string | null
+    sandboxKind?: string | null
+    execWorkingDir?: string | null
+    restrictToWorkspace?: boolean | null
+    execTimeoutSeconds?: number | null
+  }
+  governance: {
+    memoryScope?: string | null
+    knowledgeScope?: string | null
+    knowledgeBindingIds: string[]
+    knowledgeNames: string[]
+    toolAllowlist: string[]
+    mcpServerIds: string[]
+    skillIds: string[]
+  }
+  artifact?: RunArtifactAudit | null
+  eventRefs: {
+    executionContextMaterialized?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+    bindingsResolved?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+    channelDispatchResolved?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+    artifactWritten?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+    artifactQuarantined?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+    artifactArchived?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+    artifactRestored?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+    artifactDeleted?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+    artifactRetentionPolicySet?: {
+      eventId?: number | null
+      runId: string
+      eventType: string
+      payload?: Record<string, unknown>
+      createdAt?: string
+    } | null
+  }
 }
 
 export interface AgentTestRunResult {

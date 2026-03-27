@@ -3,9 +3,33 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from nanobot.agent.middleware import KnowledgeBindingMiddleware
+from nanobot.harness import (
+    ChildTaskRequest,
+    ChildTaskResult,
+    ExecutionContext,
+    ExecutionEnvironmentBinding,
+    ExecutionAssemblyState,
+    ExecutionMiddlewareChain,
+    KnowledgePolicy,
+    KnowledgePolicyMiddleware,
+    MemoryPolicy,
+    MemoryPolicyMiddleware,
+    PromptAssemblyMiddleware,
+    PromptSeedMiddleware,
+    RuntimePromptFragmentsMiddleware,
+    SandboxBinding,
+    SharedWorkspaceProvider,
+    ToolPolicy,
+    ToolPolicyMiddleware,
+    WorkspaceBinding,
+    build_sandbox_provider,
+    resolve_execution_environment,
+)
+from nanobot.agent.middleware import KnowledgeBindingMiddleware, KnowledgeBindingResult
+from nanobot.agent.middleware.knowledge import build_knowledge_prompt_block
 from nanobot.agent.loop import AgentLoop
 from nanobot.agent.skills import SkillsLoader
 from nanobot.providers.registry import find_by_model
@@ -17,11 +41,168 @@ if TYPE_CHECKING:
     from nanobot.web.runtime import WebAppState
 
 
+@dataclass(slots=True)
+class PreparedAgentExecution:
+    """Resolved agent runtime inputs reused across execution surfaces."""
+
+    config: Config
+    knowledge_binding: KnowledgeBindingResult
+    tool_policy: ToolPolicy
+    memory_policy: MemoryPolicy
+    knowledge_policy: KnowledgePolicy
+    runtime_prompt_sections: tuple[str, ...]
+    runtime_memory_sections: tuple[tuple[str, str], ...]
+    system_prompt_override: str | None
+    middleware_trace: tuple[str, ...]
+
+    @property
+    def knowledge_hits(self) -> list[dict[str, Any]]:
+        return self.knowledge_policy.hits_as_list()
+
+    @property
+    def knowledge_names(self) -> list[str]:
+        return self.knowledge_policy.names_as_list()
+
+    @property
+    def effective_tool_allowlist(self) -> list[str]:
+        return self.tool_policy.allowlist_as_list()
+
+    @property
+    def include_workspace_memory(self) -> bool:
+        return self.memory_policy.include_workspace_memory
+
+    @property
+    def memory_sections(self) -> list[tuple[str, str]]:
+        return self.memory_policy.sections_as_list()
+
+    @property
+    def runtime_prompt_fragments(self) -> list[str]:
+        return list(self.runtime_prompt_sections)
+
+    @property
+    def runtime_memory_fragments(self) -> list[tuple[str, str]]:
+        return list(self.runtime_memory_sections)
+
+    @property
+    def middleware_stages(self) -> list[str]:
+        return list(self.middleware_trace)
+
+
 class WebAgentRuntimeService:
     """Runtime helpers for agent definitions inside the collaboration domain."""
 
     def __init__(self, state: WebAppState):
         self.state = state
+
+    def _get_workspace_provider(self):
+        return getattr(self.state, "workspace_provider", None) or SharedWorkspaceProvider()
+
+    def _get_sandbox_provider(self):
+        return getattr(self.state, "sandbox_provider", None) or build_sandbox_provider(self.state.config.tools.exec)
+
+    def _knowledge_service_for_tenant(self, tenant_id: str | None) -> Any | None:
+        service = getattr(self.state, "app_knowledge", None)
+        if service is None:
+            return None
+        return service.with_tenant(tenant_id) if hasattr(service, "with_tenant") else service
+
+    def _memory_service_for_tenant(self, tenant_id: str | None) -> Any | None:
+        service = getattr(self.state, "app_memory", None)
+        if service is None:
+            return None
+        return service.with_tenant(tenant_id) if hasattr(service, "with_tenant") else service
+
+    @staticmethod
+    def _channel_route_event_payload(route_metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+        payload = dict(route_metadata or {})
+        return payload or None
+
+    def resolve_workspace_binding(
+        self,
+        *,
+        workspace,
+        restrict_to_workspace: bool,
+        principal_kind: str,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+        principal_id: str,
+        team_id: str | None = None,
+        thread_id: str | None = None,
+        root_run_id: str | None = None,
+        session_key: str | None = None,
+    ) -> WorkspaceBinding:
+        provider = self._get_workspace_provider()
+        return provider.resolve(
+            workspace=workspace,
+            restrict_to_workspace=restrict_to_workspace,
+            principal_kind=principal_kind,
+            tenant_id=tenant_id,
+            instance_id=instance_id,
+            principal_id=principal_id,
+            team_id=team_id,
+            thread_id=thread_id,
+            root_run_id=root_run_id,
+            session_key=session_key,
+        )
+
+    def resolve_sandbox_binding(
+        self,
+        *,
+        workspace_binding: WorkspaceBinding,
+        exec_config: Any,
+        principal_kind: str,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+        principal_id: str,
+        team_id: str | None = None,
+        thread_id: str | None = None,
+        root_run_id: str | None = None,
+        session_key: str | None = None,
+    ) -> SandboxBinding:
+        provider = self._get_sandbox_provider()
+        return provider.resolve(
+            workspace_binding=workspace_binding,
+            exec_config=exec_config,
+            principal_kind=principal_kind,
+            tenant_id=tenant_id,
+            instance_id=instance_id,
+            principal_id=principal_id,
+            team_id=team_id,
+            thread_id=thread_id,
+            root_run_id=root_run_id,
+            session_key=session_key,
+        )
+
+    def resolve_environment_binding(
+        self,
+        *,
+        workspace,
+        restrict_to_workspace: bool,
+        exec_config: Any,
+        principal_kind: str,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+        principal_id: str,
+        team_id: str | None = None,
+        thread_id: str | None = None,
+        root_run_id: str | None = None,
+        session_key: str | None = None,
+    ) -> ExecutionEnvironmentBinding:
+        return resolve_execution_environment(
+            workspace=workspace,
+            restrict_to_workspace=restrict_to_workspace,
+            exec_config=exec_config,
+            principal_kind=principal_kind,
+            tenant_id=tenant_id,
+            instance_id=instance_id,
+            principal_id=principal_id,
+            team_id=team_id,
+            thread_id=thread_id,
+            root_run_id=root_run_id,
+            session_key=session_key,
+            workspace_provider=self._get_workspace_provider(),
+            sandbox_provider=self._get_sandbox_provider(),
+        )
 
     @staticmethod
     def _agent_test_session_key(agent_id: str, run_id: str) -> str:
@@ -87,8 +268,9 @@ class WebAgentRuntimeService:
         if missing_skills:
             raise ValueError(f"Agent references unknown skills: {', '.join(missing_skills)}")
 
-        if self.state.app_knowledge and agent.get("knowledgeBindingIds"):
-            self.state.app_knowledge.resolve_bound_kbs(list(agent.get("knowledgeBindingIds") or []))
+        knowledge_service = self._knowledge_service_for_tenant(agent.get("tenantId"))
+        if knowledge_service and agent.get("knowledgeBindingIds"):
+            knowledge_service.resolve_bound_kbs(list(agent.get("knowledgeBindingIds") or []))
 
         return invalid_tools, disabled_mcp, missing_skills
 
@@ -119,6 +301,76 @@ class WebAgentRuntimeService:
             sections.append("\n".join(lines))
         return "\n\n".join(sections)
 
+    @staticmethod
+    def _build_knowledge_prompt_block(hits: list[dict[str, Any]]) -> str:
+        return build_knowledge_prompt_block(hits)
+
+    @staticmethod
+    def _normalize_memory_sections(memory_sections: list[tuple[str, str]] | None) -> list[tuple[str, str]]:
+        normalized: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for heading, content in memory_sections or []:
+            title = str(heading or "").strip()
+            body = str(content or "").strip()
+            if not title or not body:
+                continue
+            entry = (title, body)
+            if entry in seen:
+                continue
+            seen.add(entry)
+            normalized.append(entry)
+        return normalized
+
+    def get_workspace_memory_sections(self) -> list[tuple[str, str]]:
+        try:
+            workspace_path = self.state.config.workspace_path
+            memory_file = workspace_path / "memory" / "MEMORY.md"
+            if not memory_file.is_file():
+                return []
+            content = memory_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            return []
+        if not content:
+            return []
+        return [("Workspace Shared Memory", content)]
+
+    def get_agent_profile_memory_sections(self, agent_id: str, *, tenant_id: str | None = None) -> list[tuple[str, str]]:
+        memory_service = self._memory_service_for_tenant(tenant_id)
+        if not memory_service:
+            return []
+        try:
+            snapshot = memory_service.get_agent_memory(agent_id)
+        except Exception:
+            return []
+        content = str(snapshot.get("content") or "").strip()
+        if not content:
+            return []
+        return [("Agent Profile Memory", content)]
+
+    def resolve_agent_memory_context(
+        self,
+        agent: dict[str, Any],
+        *,
+        include_workspace_memory: bool | None = None,
+        memory_sections: list[tuple[str, str]] | None = None,
+    ) -> tuple[bool, list[tuple[str, str]]]:
+        memory_scope = str(agent.get("memoryScope") or "agent_profile")
+        effective_include_workspace_memory = (
+            include_workspace_memory
+            if include_workspace_memory is not None
+            else memory_scope == "workspace_shared"
+        )
+        resolved_sections: list[tuple[str, str]] = []
+        if memory_scope == "agent_profile":
+            resolved_sections.extend(
+                self.get_agent_profile_memory_sections(
+                    str(agent.get("agentId") or ""),
+                    tenant_id=agent.get("tenantId"),
+                )
+            )
+        resolved_sections.extend(memory_sections or [])
+        return effective_include_workspace_memory, self._normalize_memory_sections(resolved_sections)
+
     def _build_agent_config(self, agent: dict[str, Any]) -> Config:
         config = self.state.config.model_copy(deep=True)
         binding = str(agent.get("binding") or "").strip()
@@ -148,6 +400,289 @@ class WebAgentRuntimeService:
         config.tools.mcp_servers = selected_mcp
         return config
 
+    def _build_execution_middleware_chain(self, knowledge_service: Any | None) -> ExecutionMiddlewareChain:
+        return ExecutionMiddlewareChain(
+            (
+                PromptSeedMiddleware(),
+                MemoryPolicyMiddleware(self.resolve_agent_memory_context),
+                KnowledgePolicyMiddleware(knowledge_service),
+                ToolPolicyMiddleware(),
+                RuntimePromptFragmentsMiddleware(self.get_workspace_memory_sections),
+                PromptAssemblyMiddleware(),
+            )
+        )
+
+    def prepare_agent_execution(
+        self,
+        agent: dict[str, Any],
+        *,
+        task: str,
+        additional_prompt_sections: list[str] | None = None,
+        include_workspace_memory: bool | None = None,
+        memory_sections: list[tuple[str, str]] | None = None,
+    ) -> PreparedAgentExecution:
+        """Resolve config, bindings, and prompt state for one agent execution."""
+        resolved_task = str(task or "").strip()
+        if not resolved_task:
+            raise ValueError("content is required.")
+
+        config = self._build_agent_config(agent)
+        self._validate_agent_bindings(agent, config)
+        knowledge_service = self._knowledge_service_for_tenant(agent.get("tenantId"))
+        assembly = self._build_execution_middleware_chain(knowledge_service).apply(
+            ExecutionAssemblyState(
+                agent=agent,
+                task=resolved_task,
+                config=config,
+                additional_prompt_sections=tuple(additional_prompt_sections or []),
+                include_workspace_memory_override=include_workspace_memory,
+                requested_memory_sections=tuple(memory_sections or []),
+            )
+        )
+        knowledge_binding = assembly.knowledge_binding or KnowledgeBindingResult(
+            binding_context=None,
+            extra_tools=[],
+            effective_tool_allowlist=list(agent.get("toolAllowlist", [])),
+            knowledge_hits=[],
+            prompt_sections=[],
+            event_payload={
+                "knowledgeBindingIds": list(agent.get("knowledgeBindingIds") or []),
+                "knowledgeNames": [],
+                "requestedMode": "naive",
+                "effectiveMode": "naive",
+                "hitCount": 0,
+            },
+        )
+        return PreparedAgentExecution(
+            config=config,
+            knowledge_binding=knowledge_binding,
+            tool_policy=assembly.tool_policy,
+            memory_policy=assembly.memory_policy,
+            knowledge_policy=assembly.knowledge_policy,
+            runtime_prompt_sections=tuple(assembly.runtime_prompt_sections),
+            runtime_memory_sections=tuple(assembly.runtime_memory_sections),
+            system_prompt_override=assembly.system_prompt_override,
+            middleware_trace=tuple(assembly.middleware_trace),
+        )
+
+    def materialize_execution_context(
+        self,
+        agent: dict[str, Any],
+        prepared: PreparedAgentExecution,
+        *,
+        label: str | None,
+        session_key: str,
+        session_id: str,
+        session_title: str,
+        origin_chat_id: str,
+        origin_channel: str = "web",
+        control_scope: RunControlScope = RunControlScope.TOP_LEVEL,
+        team_id: str | None = None,
+        parent_run_id: str | None = None,
+        root_run_id: str | None = None,
+        thread_id: str | None = None,
+        spawn_depth: int = 0,
+        workspace_scope: str = "shared",
+        workspace_path: str | None = None,
+        sandbox_kind: str = "local",
+        exec_working_dir: str | None = None,
+        restrict_to_workspace: bool = False,
+        exec_timeout_seconds: int | None = None,
+    ) -> ExecutionContext:
+        """Materialize a first-class execution context from an agent definition."""
+        agent_id = str(agent.get("agentId") or "").strip() or None
+        instance_id = str(
+            agent.get("instanceId")
+            or getattr(getattr(self.state, "app_agents", None), "instance_id", "")
+            or "default"
+        ).strip() or "default"
+        tenant_id = str(agent.get("tenantId") or "default").strip() or "default"
+        knowledge_scope = "bindings" if prepared.knowledge_policy.binding_ids else ("team_shared" if team_id else "workspace")
+        role = "member" if control_scope == RunControlScope.MEMBER else "leader" if control_scope == RunControlScope.LEADER else None
+        principal_kind = "team_member" if control_scope == RunControlScope.MEMBER else "agent"
+        knowledge_policy = KnowledgePolicy(
+            scope=knowledge_scope,
+            binding_ids=prepared.knowledge_policy.binding_ids,
+            names=prepared.knowledge_policy.names,
+            hits=prepared.knowledge_policy.hits,
+            event_payload=prepared.knowledge_policy.event_snapshot(),
+        )
+        return ExecutionContext(
+            tenant_id=tenant_id,
+            instance_id=instance_id,
+            principal_kind=principal_kind,
+            principal_id=agent_id or str(label or agent.get("name") or "agent"),
+            label=str(label or agent.get("name") or "Agent"),
+            agent_id=agent_id,
+            team_id=team_id,
+            role=role,
+            root_run_id=root_run_id,
+            parent_run_id=parent_run_id,
+            session_key=session_key,
+            session_id=session_id,
+            session_title=session_title,
+            thread_id=thread_id,
+            origin_channel=origin_channel,
+            origin_chat_id=origin_chat_id,
+            spawn_depth=spawn_depth,
+            control_scope=control_scope,
+            workspace_path=workspace_path or str(prepared.config.workspace_path),
+            workspace_scope=workspace_scope,
+            sandbox_kind=sandbox_kind,
+            exec_working_dir=exec_working_dir or str(prepared.config.workspace_path),
+            restrict_to_workspace=restrict_to_workspace,
+            exec_timeout_seconds=exec_timeout_seconds or int(prepared.config.tools.exec.timeout),
+            tool_policy=prepared.tool_policy,
+            memory_policy=prepared.memory_policy,
+            knowledge_policy=knowledge_policy,
+        )
+
+    def build_isolated_agent_loop(
+        self,
+        agent: dict[str, Any],
+        *,
+        task: str,
+        additional_prompt_sections: list[str] | None = None,
+        include_workspace_memory: bool | None = None,
+        memory_sections: list[tuple[str, str]] | None = None,
+        bus: Any | None = None,
+        run_registry: Any | None = None,
+        workspace_binding: WorkspaceBinding | None = None,
+        sandbox_binding: SandboxBinding | None = None,
+        prepared: PreparedAgentExecution | None = None,
+    ) -> tuple[AgentLoop, PreparedAgentExecution]:
+        """Construct an agent loop that honors the agent definition's runtime config."""
+        prepared = prepared or self.prepare_agent_execution(
+            agent,
+            task=task,
+            additional_prompt_sections=additional_prompt_sections,
+            include_workspace_memory=include_workspace_memory,
+            memory_sections=memory_sections,
+        )
+        runtime_bus = bus or self.state.bus
+        if runtime_bus is None:
+            raise RuntimeError("Web agent runtime bus is not available.")
+        if workspace_binding is None and sandbox_binding is None:
+            resolved_environment = self.resolve_environment_binding(
+                workspace=prepared.config.workspace_path,
+                restrict_to_workspace=prepared.config.tools.restrict_to_workspace,
+                exec_config=prepared.config.tools.exec,
+                principal_kind="agent",
+                tenant_id=str(agent.get("tenantId") or "default"),
+                instance_id=str(
+                    agent.get("instanceId")
+                    or getattr(getattr(self.state, "app_agents", None), "instance_id", "default")
+                    or "default"
+                ),
+                principal_id=str(agent.get("agentId") or agent.get("name") or "agent"),
+            )
+            resolved_workspace = resolved_environment.workspace
+            resolved_sandbox = resolved_environment.sandbox
+        else:
+            resolved_workspace = workspace_binding or self.resolve_workspace_binding(
+                workspace=prepared.config.workspace_path,
+                restrict_to_workspace=prepared.config.tools.restrict_to_workspace,
+                principal_kind="agent",
+                tenant_id=str(agent.get("tenantId") or "default"),
+                instance_id=str(
+                    agent.get("instanceId")
+                    or getattr(getattr(self.state, "app_agents", None), "instance_id", "default")
+                    or "default"
+                ),
+                principal_id=str(agent.get("agentId") or agent.get("name") or "agent"),
+            )
+            resolved_sandbox = sandbox_binding or self.resolve_sandbox_binding(
+                workspace_binding=resolved_workspace,
+                exec_config=prepared.config.tools.exec,
+                principal_kind="agent",
+                tenant_id=str(agent.get("tenantId") or "default"),
+                instance_id=str(
+                    agent.get("instanceId")
+                    or getattr(getattr(self.state, "app_agents", None), "instance_id", "default")
+                    or "default"
+                ),
+                principal_id=str(agent.get("agentId") or agent.get("name") or "agent"),
+            )
+        isolated_agent = AgentLoop(
+            bus=runtime_bus,
+            provider=self.state.config_runtime.make_provider(prepared.config),
+            workspace=resolved_workspace.path,
+            model=prepared.config.agents.defaults.model,
+            max_iterations=prepared.config.agents.defaults.max_tool_iterations,
+            context_window_tokens=prepared.config.agents.defaults.context_window_tokens,
+            web_search_config=prepared.config.tools.web.search,
+            web_proxy=prepared.config.tools.web.proxy or None,
+            exec_config=prepared.config.tools.exec,
+            cron_service=self.state.cron,
+            restrict_to_workspace=resolved_sandbox.restrict_to_workspace,
+            session_manager=self.state.sessions,
+            mcp_servers=prepared.config.tools.mcp_servers,
+            channels_config=prepared.config.channels,
+            run_registry=run_registry,
+            tool_allowlist=prepared.effective_tool_allowlist,
+            skill_names=list(agent.get("skillIds", [])),
+            system_prompt_override=prepared.system_prompt_override,
+            include_workspace_memory=prepared.include_workspace_memory,
+            memory_sections=prepared.memory_sections,
+            extra_tools=prepared.knowledge_binding.extra_tools,
+            workspace_provider=self._get_workspace_provider(),
+            sandbox_binding=resolved_sandbox,
+            sandbox_provider=self._get_sandbox_provider(),
+        )
+        return isolated_agent, prepared
+
+    async def execute_child_agent_task(
+        self,
+        request: ChildTaskRequest,
+        *,
+        on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
+        on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+    ) -> ChildTaskResult:
+        """Execute a delegated child-agent task via the shared runtime path."""
+        agent = request.agent_definition
+        if agent is None:
+            agent_id = str(request.agent_id or "").strip()
+            if not agent_id:
+                raise ValueError("agent_id or agent_definition is required for child agent tasks.")
+            agent = self.state.app_agents.get_agent(agent_id, tenant_id=request.tenant_id)
+        runs = getattr(self.state, "runs", None)
+        if runs and request.control_scope != RunControlScope.TOP_LEVEL:
+            runs.check_limits(
+                session_key=request.resolved_session_key(),
+                parent_run_id=request.parent_run_id,
+                spawn_depth=request.spawn_depth,
+                tenant_id=request.tenant_id,
+                instance_id=request.instance_id,
+            )
+
+        run_coro = self.run_agent_definition(
+            agent,
+            task=request.task,
+            label=request.resolved_label(),
+            session_key=request.resolved_session_key(),
+            session_id=request.resolved_session_id(),
+            session_title=request.session_title or request.resolved_label(),
+            origin_chat_id=request.origin_chat_id,
+            origin_channel=request.origin_channel,
+            control_scope=request.control_scope,
+            team_id=request.team_id,
+            parent_run_id=request.parent_run_id,
+            root_run_id=request.root_run_id,
+            thread_id=request.thread_id,
+            spawn_depth=request.spawn_depth,
+            additional_prompt_sections=request.additional_prompt_sections_as_list() or None,
+            include_workspace_memory=request.include_workspace_memory,
+            memory_sections=request.memory_sections_as_list() or None,
+            on_progress=on_progress,
+            on_run_event=on_run_event,
+        )
+        timeout_seconds = int(request.timeout_seconds or 0)
+        if timeout_seconds > 0:
+            run_result = await asyncio.wait_for(run_coro, timeout=timeout_seconds)
+        else:
+            run_result = await run_coro
+        return ChildTaskResult.from_agent_run(request, run_result)
+
     async def run_agent_definition(
         self,
         agent: dict[str, Any],
@@ -158,15 +693,19 @@ class WebAgentRuntimeService:
         session_id: str,
         session_title: str,
         origin_chat_id: str,
+        origin_channel: str = "web",
         control_scope: RunControlScope = RunControlScope.TOP_LEVEL,
         team_id: str | None = None,
         parent_run_id: str | None = None,
         root_run_id: str | None = None,
         thread_id: str | None = None,
         spawn_depth: int = 0,
+        route_metadata: dict[str, Any] | None = None,
         additional_prompt_sections: list[str] | None = None,
         include_workspace_memory: bool | None = None,
         memory_sections: list[tuple[str, str]] | None = None,
+        on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
+        on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         if not self.state.agent or not self.state.sessions or not self.state.runs:
             raise RuntimeError("Web agent runtime is not available.")
@@ -175,90 +714,121 @@ class WebAgentRuntimeService:
         if not task:
             raise ValueError("content is required.")
 
-        config = self._build_agent_config(agent)
-        self._validate_agent_bindings(agent, config)
-        effective_include_workspace_memory = (
-            include_workspace_memory
-            if include_workspace_memory is not None
-            else (str(agent.get("memoryScope") or "agent_profile") == "workspace_shared")
-        )
-        knowledge_binding = KnowledgeBindingMiddleware(self.state.app_knowledge).apply(
+        prepared = self.prepare_agent_execution(
             agent,
-            task,
-            base_tool_allowlist=list(agent.get("toolAllowlist", [])),
+            task=task,
+            additional_prompt_sections=additional_prompt_sections,
+            include_workspace_memory=include_workspace_memory,
+            memory_sections=memory_sections,
         )
-        knowledge_hits = knowledge_binding.knowledge_hits
-        effective_tool_allowlist = knowledge_binding.effective_tool_allowlist
-        knowledge_names = list(knowledge_binding.event_payload.get("knowledgeNames") or [])
-        prompt_sections = [str(agent.get("systemPrompt") or "").strip()]
-        prompt_sections.extend(section for section in (additional_prompt_sections or []) if str(section or "").strip())
-        prompt_sections.extend(knowledge_binding.prompt_sections)
-        system_prompt_override = "\n\n".join(section for section in prompt_sections if section)
+        execution_context = self.materialize_execution_context(
+            agent,
+            prepared,
+            label=label,
+            session_key=session_key,
+            session_id=session_id,
+            session_title=session_title,
+            origin_chat_id=origin_chat_id,
+            origin_channel=origin_channel,
+            control_scope=control_scope,
+            team_id=team_id,
+            parent_run_id=parent_run_id,
+            root_run_id=root_run_id,
+            thread_id=thread_id,
+            spawn_depth=spawn_depth,
+        )
+        environment = self.resolve_environment_binding(
+            workspace=prepared.config.workspace_path,
+            restrict_to_workspace=prepared.config.tools.restrict_to_workspace,
+            exec_config=prepared.config.tools.exec,
+            principal_kind=execution_context.principal_kind,
+            tenant_id=execution_context.tenant_id,
+            instance_id=execution_context.instance_id,
+            principal_id=execution_context.principal_id,
+            team_id=execution_context.team_id,
+            thread_id=execution_context.thread_id,
+            root_run_id=execution_context.effective_root_run_id,
+            session_key=execution_context.session_key,
+        )
+        workspace_binding = environment.workspace
+        execution_context.workspace_path = str(workspace_binding.path)
+        execution_context.workspace_scope = workspace_binding.scope
+        sandbox_binding = environment.sandbox
+        execution_context.sandbox_kind = sandbox_binding.kind
+        execution_context.exec_working_dir = str(sandbox_binding.working_dir)
+        execution_context.restrict_to_workspace = sandbox_binding.restrict_to_workspace
+        execution_context.exec_timeout_seconds = sandbox_binding.exec_timeout
+        isolated_agent, _ = self.build_isolated_agent_loop(
+            agent,
+            task=task,
+            additional_prompt_sections=additional_prompt_sections,
+            include_workspace_memory=include_workspace_memory,
+            memory_sections=memory_sections,
+            run_registry=self.state.runs,
+            workspace_binding=workspace_binding,
+            sandbox_binding=sandbox_binding,
+            prepared=prepared,
+        )
+        config = prepared.config
+        knowledge_hits = prepared.knowledge_hits
 
         record = self.state.runs.create_run(
             kind=RunKind.AGENT,
-            label=label or agent["name"],
+            label=execution_context.label,
             task_preview=" ".join(task.split())[:280],
-            agent_id=agent["agentId"],
-            team_id=team_id,
-            thread_id=thread_id,
-            parent_run_id=parent_run_id,
-            root_run_id=root_run_id,
-            session_key=session_key,
-            origin_channel="web",
-            origin_chat_id=origin_chat_id,
-            spawn_depth=spawn_depth,
-            control_scope=control_scope,
-            workspace_path=str(config.workspace_path),
-            memory_scope=agent.get("memoryScope") or "agent_profile",
-            knowledge_scope="bindings" if agent.get("knowledgeBindingIds") else ("team_shared" if team_id else "workspace"),
+            tenant_id=execution_context.tenant_id,
+            instance_id=execution_context.instance_id,
+            agent_id=execution_context.agent_id,
+            team_id=execution_context.team_id,
+            thread_id=execution_context.thread_id,
+            parent_run_id=execution_context.parent_run_id,
+            root_run_id=execution_context.root_run_id,
+            session_key=execution_context.session_key,
+            origin_channel=execution_context.origin_channel,
+            origin_chat_id=execution_context.origin_chat_id,
+            spawn_depth=execution_context.spawn_depth,
+            control_scope=execution_context.control_scope,
+            workspace_path=execution_context.workspace_path,
+            memory_scope=execution_context.memory_policy.scope,
+            knowledge_scope=execution_context.knowledge_policy.scope,
         )
+        execution_context.run_id = record.run_id
+        if not execution_context.root_run_id:
+            execution_context.root_run_id = record.run_id
 
-        session = self.state.sessions.get_or_create(session_key)
+        session = self.state.sessions.get_or_create(execution_context.session_key)
         if not session.metadata.get("title"):
-            session.metadata["title"] = session_title
+            session.metadata["title"] = execution_context.session_title
         self.state.sessions.save(session)
 
         self.state.runs.append_event(
             record.run_id,
+            "execution_context_materialized",
+            execution_context.event_snapshot(),
+        )
+        self.state.runs.append_event(
+            record.run_id,
             "bindings_resolved",
             {
-                "toolAllowlist": effective_tool_allowlist,
-                "mcpServerIds": agent.get("mcpServerIds", []),
-                "skillIds": agent.get("skillIds", []),
-                "knowledgeBindingIds": agent.get("knowledgeBindingIds", []),
-                "knowledgeNames": knowledge_names,
+                "toolAllowlist": execution_context.tool_policy.allowlist_as_list(),
+                "mcpServerIds": execution_context.tool_policy.mcp_server_ids_as_list(),
+                "skillIds": execution_context.tool_policy.skill_ids_as_list(),
+                "knowledgeBindingIds": execution_context.knowledge_policy.binding_ids_as_list(),
+                "knowledgeNames": execution_context.knowledge_policy.names_as_list(),
             },
         )
         self.state.runs.append_event(
             record.run_id,
             "knowledge_retrieved",
-            dict(knowledge_binding.event_payload),
+            execution_context.knowledge_policy.event_snapshot(),
         )
-
-        isolated_agent = AgentLoop(
-            bus=self.state.bus,
-            provider=self.state.config_runtime.make_provider(config),
-            workspace=config.workspace_path,
-            model=config.agents.defaults.model,
-            max_iterations=config.agents.defaults.max_tool_iterations,
-            context_window_tokens=config.agents.defaults.context_window_tokens,
-            web_search_config=config.tools.web.search,
-            web_proxy=config.tools.web.proxy or None,
-            exec_config=config.tools.exec,
-            cron_service=self.state.cron,
-            restrict_to_workspace=config.tools.restrict_to_workspace,
-            session_manager=self.state.sessions,
-            mcp_servers=config.tools.mcp_servers,
-            channels_config=config.channels,
-            run_registry=self.state.runs,
-            tool_allowlist=effective_tool_allowlist,
-            skill_names=list(agent.get("skillIds", [])),
-            system_prompt_override=system_prompt_override,
-            include_workspace_memory=effective_include_workspace_memory,
-            memory_sections=memory_sections,
-            extra_tools=knowledge_binding.extra_tools,
-        )
+        route_payload = self._channel_route_event_payload(route_metadata)
+        if route_payload:
+            self.state.runs.append_event(
+                record.run_id,
+                "channel_dispatch_resolved",
+                route_payload,
+            )
 
         progress_events: list[str] = []
 
@@ -274,42 +844,33 @@ class WebAgentRuntimeService:
                     "toolHint": tool_hint,
                 },
             )
+            if on_progress is not None:
+                await on_progress(progress, tool_hint=tool_hint)
 
         try:
             self.state.runs.start_run(record.run_id)
             response = await isolated_agent.process_direct(
                 content=task,
-                session_key=session_key,
-                channel="web",
-                chat_id=session_id,
+                run_context={"run_event_sink": on_run_event} if on_run_event is not None else None,
+                execution_context=execution_context,
                 on_progress=_on_progress,
-                run_context={
-                    "run_id": record.run_id,
-                    "root_run_id": root_run_id or record.run_id,
-                    "agent_id": agent["agentId"],
-                    "team_id": team_id,
-                    "thread_id": thread_id,
-                    "spawn_depth": spawn_depth,
-                },
             )
             artifact_path = self.state.runs.write_markdown_artifact(
                 record.run_id,
-                title=f"Run Artifact · {label or agent['name']}",
+                title=f"Run Artifact · {execution_context.label}",
                 metadata={
-                    "run_id": record.run_id,
-                    "kind": "agent",
-                    "agent_id": agent["agentId"],
-                    "team_id": team_id,
+                    **execution_context.artifact_metadata(kind="agent"),
+                    "routing_binding_id": (route_payload or {}).get("bindingId"),
+                    "routing_audit_id": (route_payload or {}).get("auditId"),
+                    "routing_target_type": (route_payload or {}).get("targetType"),
+                    "routing_target_id": (route_payload or {}).get("targetId"),
+                    "routing_tenant_id": (route_payload or {}).get("tenantId"),
                     "model": config.agents.defaults.model,
-                    "memory_scope": agent.get("memoryScope") or "agent_profile",
-                    "workspace_memory_included": effective_include_workspace_memory,
-                    "memory_section_count": len(memory_sections or []),
-                    "knowledge_hits": len(knowledge_hits),
                 },
                 sections=[
                     ("Task", task),
                     ("Result", response),
-                    ("Bindings", self._format_bindings_markdown({**agent, "toolAllowlist": effective_tool_allowlist})),
+                    ("Bindings", self._format_bindings_markdown({**agent, "toolAllowlist": execution_context.tool_policy.allowlist_as_list()})),
                     ("Retrieved Knowledge", self._format_knowledge_hits_markdown(knowledge_hits)),
                 ],
             )
@@ -318,8 +879,8 @@ class WebAgentRuntimeService:
                 RunResultSummary(
                     content=response,
                     metadata={
-                        "sessionKey": session_key,
-                        "sessionId": session_id,
+                        "sessionKey": execution_context.session_key,
+                        "sessionId": execution_context.session_id,
                         "progressEventCount": len(progress_events),
                         "knowledgeHitCount": len(knowledge_hits),
                     },
@@ -338,23 +899,23 @@ class WebAgentRuntimeService:
         finally:
             await isolated_agent.close_mcp()
 
-        messages = self._format_messages(session_key, session_id)
+        messages = self._format_messages(execution_context.session_key, execution_context.session_id)
         return {
             "run": self.state.runs.get_run(record.run_id),
-            "session": self._format_session_summary(session_key, session_id),
-            "assistantMessage": self._get_last_assistant_message(session_key, session_id),
+            "session": self._format_session_summary(execution_context.session_key, execution_context.session_id),
+            "assistantMessage": self._get_last_assistant_message(execution_context.session_key, execution_context.session_id),
             "messages": messages,
-            "pendingKnowledgeBindings": list(agent.get("knowledgeBindingIds") or []),
+            "pendingKnowledgeBindings": execution_context.knowledge_policy.binding_ids_as_list(),
             "knowledgeHits": knowledge_hits,
             "appliedBindings": {
-                "toolAllowlist": effective_tool_allowlist,
-                "mcpServerIds": list(agent.get("mcpServerIds") or []),
-                "skillIds": list(agent.get("skillIds") or []),
-                "knowledgeBindingIds": list(agent.get("knowledgeBindingIds") or []),
+                "toolAllowlist": execution_context.tool_policy.allowlist_as_list(),
+                "mcpServerIds": execution_context.tool_policy.mcp_server_ids_as_list(),
+                "skillIds": execution_context.tool_policy.skill_ids_as_list(),
+                "knowledgeBindingIds": execution_context.knowledge_policy.binding_ids_as_list(),
             },
         }
 
-    async def test_run_agent(self, agent_id: str, content: str) -> dict[str, Any]:
+    async def test_run_agent(self, agent_id: str, content: str, *, tenant_id: str | None = None) -> dict[str, Any]:
         if not self.state.agent or not self.state.sessions or not self.state.runs:
             raise RuntimeError("Web agent runtime is not available.")
 
@@ -363,7 +924,7 @@ class WebAgentRuntimeService:
             raise ValueError("content is required.")
 
         try:
-            agent = self.state.app_agents.get_agent(agent_id)
+            agent = self.state.app_agents.get_agent(agent_id, tenant_id=tenant_id)
         except AgentDefinitionNotFoundError as exc:
             raise KeyError(agent_id) from exc
 

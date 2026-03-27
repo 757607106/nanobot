@@ -6,6 +6,7 @@ const mockApi = vi.hoisted(() => ({
   createSession: vi.fn(),
   applyMemoryCandidate: vi.fn(),
   createAgent: vi.fn(),
+  createAgentMemoryCandidate: vi.fn(),
   createTeam: vi.fn(),
   createCalendarEvent: vi.fn(),
   createKnowledgeBase: vi.fn(),
@@ -18,6 +19,7 @@ const mockApi = vi.hoisted(() => ({
   deleteSession: vi.fn(),
   health: vi.fn(),
   getAgent: vi.fn(),
+  getAgentMemory: vi.fn(),
   getAgents: vi.fn(),
   getAuthStatus: vi.fn(),
   bootstrapAuth: vi.fn(),
@@ -28,6 +30,8 @@ const mockApi = vi.hoisted(() => ({
   getCalendarSettings: vi.fn(),
   getChannel: vi.fn(),
   getChannels: vi.fn(),
+  getChannelAudit: vi.fn(),
+  getChannelAuditEntry: vi.fn(),
   getKnowledgeBase: vi.fn(),
   getKnowledgeBases: vi.fn(),
   getKnowledgeFiles: vi.fn(),
@@ -86,6 +90,9 @@ const mockApi = vi.hoisted(() => ({
   getConfigMeta: vi.fn(),
   getRun: vi.fn(),
   getRunArtifact: vi.fn(),
+  getRunArtifactAudit: vi.fn(),
+  getRunArtifactRetentionPolicy: vi.fn(),
+  getRunBoundaryAudit: vi.fn(),
   getRunTree: vi.fn(),
   getRunChildren: vi.fn(),
   getSystemStatus: vi.fn(),
@@ -100,10 +107,18 @@ const mockApi = vi.hoisted(() => ({
   reindexKnowledgeBase: vi.fn(),
   installMarketplaceSkill: vi.fn(),
   importSessionFiles: vi.fn(),
+  quarantineRunArtifact: vi.fn(),
+  archiveRunArtifact: vi.fn(),
+  setRunArtifactRetentionPolicy: vi.fn(),
+  applyRunArtifactRetentionPolicy: vi.fn(),
+  sweepRunArtifactRetention: vi.fn(),
+  restoreRunArtifact: vi.fn(),
+  deleteRunArtifact: vi.fn(),
   testRunAgent: vi.fn(),
   uploadKnowledgeDocuments: vi.fn(),
   uploadSkillZip: vi.fn(),
   updateAgent: vi.fn(),
+  updateAgentMemory: vi.fn(),
   updateTeam: vi.fn(),
   updateKnowledgeBase: vi.fn(),
   updateTeamMemory: vi.fn(),
@@ -954,6 +969,7 @@ import ChannelDetailPage from '../pages/ChannelDetailPage'
 import ChannelsLayoutPage from '../pages/ChannelsLayoutPage'
 import ChannelsPage from '../pages/ChannelsPage'
 import ChatPage from '../pages/ChatPage'
+import ChannelAuditPage from '../pages/ChannelAuditPage'
 import DashboardPage from '../pages/DashboardPage'
 import CronPage from '../pages/CronPage'
 import McpPage from '../pages/McpPage'
@@ -1585,6 +1601,40 @@ function makeTeams() {
   ]
 }
 
+function makeAgentMemory() {
+  return {
+    agentId: 'support-lead',
+    content: 'Keep support summaries terse, evidence-based, and action-oriented.',
+    fileName: 'support-lead.md',
+    candidateCount: 1,
+    updatedAt: '2026-03-14T10:08:00Z',
+  }
+}
+
+function makeAgentMemoryCandidates() {
+  return {
+    total: 1,
+    items: [
+      {
+        candidateId: 'memcand_agent_1',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        scope: 'agent_profile',
+        sourceKind: 'manual_note',
+        title: 'Support Lead candidate',
+        content: 'Prefer numbered remediation steps in operator-facing replies.',
+        teamId: null,
+        agentId: 'support-lead',
+        runId: 'run_123',
+        status: 'proposed',
+        createdAt: '2026-03-14T10:09:00Z',
+        updatedAt: '2026-03-14T10:09:00Z',
+        appliedAt: null,
+      },
+    ],
+  }
+}
+
 function makeValidTemplateTools() {
   return [
     { name: 'read_file', description: 'Read a file from the workspace.' },
@@ -1727,11 +1777,64 @@ describe('web app smoke pages', () => {
     })
     mockApi.getAgents.mockResolvedValue(makeAgents())
     mockApi.getAgent.mockResolvedValue(makeAgents()[0])
+    mockApi.getAgentMemory.mockResolvedValue(makeAgentMemory())
+    mockApi.getAgent.mockResolvedValue(makeAgents()[0])
     mockApi.getCalendarEvents.mockResolvedValue(makeCalendarEvents())
     mockApi.getCalendarJobs.mockResolvedValue(makeCalendarJobs())
     mockApi.getCalendarSettings.mockResolvedValue(makeCalendarSettings())
     mockApi.getChannel.mockResolvedValue(makeChannelDetail())
     mockApi.getChannels.mockResolvedValue(makeChannelsList())
+    mockApi.getChannelAudit.mockResolvedValue({
+      limit: 100,
+      items: [{
+        auditId: 'ca-test-001',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        channelName: 'telegram',
+        chatId: 'chat-42',
+        sessionKey: 'telegram:chat-42',
+        senderId: 'user-42',
+        messagePreview: 'help me please',
+        status: 'dispatched',
+        resolved: true,
+        resolutionKind: 'exact',
+        bindingId: 'cb-test-001',
+        targetType: 'agent',
+        targetId: 'support-lead',
+        messageId: 'msg-42',
+        dispatchRunId: 'run_123',
+        artifactPath: 'default/instance-default/run_123.md',
+        responsePreview: 'Support lead is handling it.',
+        errorMessage: null,
+        metadata: { source: 'routing_proxy' },
+        createdAt: '2026-03-14T10:00:00Z',
+        updatedAt: '2026-03-14T10:00:05Z',
+      }],
+    })
+    mockApi.getChannelAuditEntry.mockResolvedValue({
+      auditId: 'ca-test-001',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      channelName: 'telegram',
+      chatId: 'chat-42',
+      sessionKey: 'telegram:chat-42',
+      senderId: 'user-42',
+      messagePreview: 'help me please',
+      status: 'dispatched',
+      resolved: true,
+      resolutionKind: 'exact',
+      bindingId: 'cb-test-001',
+      targetType: 'agent',
+      targetId: 'support-lead',
+      messageId: 'msg-42',
+      dispatchRunId: 'run_123',
+      artifactPath: 'default/instance-default/run_123.md',
+      responsePreview: 'Support lead is handling it.',
+      errorMessage: null,
+      metadata: { source: 'routing_proxy' },
+      createdAt: '2026-03-14T10:00:00Z',
+      updatedAt: '2026-03-14T10:00:05Z',
+    })
     mockApi.getChannelBindings.mockResolvedValue([{
       bindingId: 'cb-test-001',
       tenantId: 'default',
@@ -2054,26 +2157,31 @@ describe('web app smoke pages', () => {
       candidateCount: 1,
       updatedAt: '2026-03-14T10:10:00Z',
     })
-    mockApi.getMemoryCandidates.mockResolvedValue({
-      total: 1,
-      items: [
-        {
-          candidateId: 'memcand_1',
-          tenantId: 'default',
-          instanceId: 'instance-default',
-          scope: 'team_shared',
-          sourceKind: 'member_result',
-          title: 'Support Team · Research memory',
-          content: 'Always confirm region and customer impact before escalation.',
-          teamId: 'support-team',
-          agentId: 'reviewer-agent',
-          runId: 'run_team_1',
-          status: 'proposed',
-          createdAt: '2026-03-14T10:11:00Z',
-          updatedAt: '2026-03-14T10:11:00Z',
-          appliedAt: null,
-        },
-      ],
+    mockApi.getMemoryCandidates.mockImplementation(async (params?: { agentId?: string; scope?: string }) => {
+      if (params?.scope === 'agent_profile' || params?.agentId) {
+        return makeAgentMemoryCandidates()
+      }
+      return {
+        total: 1,
+        items: [
+          {
+            candidateId: 'memcand_1',
+            tenantId: 'default',
+            instanceId: 'instance-default',
+            scope: 'team_shared',
+            sourceKind: 'member_result',
+            title: 'Support Team · Research memory',
+            content: 'Always confirm region and customer impact before escalation.',
+            teamId: 'support-team',
+            agentId: 'reviewer-agent',
+            runId: 'run_team_1',
+            status: 'proposed',
+            createdAt: '2026-03-14T10:11:00Z',
+            updatedAt: '2026-03-14T10:11:00Z',
+            appliedAt: null,
+          },
+        ],
+      }
     })
     mockApi.applyMemoryCandidate.mockResolvedValue({
       candidateId: 'memcand_1',
@@ -2218,10 +2326,338 @@ describe('web app smoke pages', () => {
     })
     mockApi.getRunArtifact.mockResolvedValue({
       runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
       artifactPath: 'run_123.md',
       fileName: 'run_123.md',
       contentType: 'text/markdown',
       content: '# Run Artifact\n\nKnowledge retrieval completed successfully.\n',
+      audit: {
+        runId: 'run_123',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        artifactPath: 'run_123.md',
+        fileName: 'run_123.md',
+        storageScope: 'tenant_instance_scoped',
+        storageKey: 'tenants/default/instance-default/run_123.md',
+        isLegacyFallback: false,
+        exists: true,
+        lifecycleStatus: 'active',
+        currentStorageScope: 'tenant_instance_scoped',
+        currentStorageKey: 'tenants/default/instance-default/run_123.md',
+        originalStorageScope: 'tenant_instance_scoped',
+        originalStorageKey: 'tenants/default/instance-default/run_123.md',
+        governanceReason: null,
+        governanceActionBy: null,
+        governanceUpdatedAt: '2026-03-14T10:00:06Z',
+        canRestore: false,
+        retentionPolicy: {
+          runId: 'run_123',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          artifactPath: 'run_123.md',
+          lifecycleStatus: 'active',
+          enabled: true,
+          basisTimestamp: '2026-03-14T10:00:06Z',
+          archiveAfterDays: 7,
+          deleteAfterDays: 30,
+          archiveDueAt: '2026-03-21T10:00:06Z',
+          deleteDueAt: '2026-04-13T10:00:06Z',
+          archiveDue: false,
+          deleteDue: false,
+          nextAction: 'none',
+          nextActionAt: null,
+          canApplyNow: false,
+          reason: 'Auto-govern',
+          actionBy: 'control_plane',
+          updatedAt: '2026-03-14T10:00:06Z',
+        },
+      },
+    })
+    mockApi.getRunArtifactAudit.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      artifactPath: 'run_123.md',
+      fileName: 'run_123.md',
+      storageScope: 'tenant_instance_scoped',
+      storageKey: 'tenants/default/instance-default/run_123.md',
+      isLegacyFallback: false,
+      exists: true,
+      lifecycleStatus: 'active',
+      currentStorageScope: 'tenant_instance_scoped',
+      currentStorageKey: 'tenants/default/instance-default/run_123.md',
+      originalStorageScope: 'tenant_instance_scoped',
+      originalStorageKey: 'tenants/default/instance-default/run_123.md',
+      governanceReason: null,
+      governanceActionBy: null,
+      governanceUpdatedAt: '2026-03-14T10:00:06Z',
+      canRestore: false,
+      retentionPolicy: {
+        runId: 'run_123',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        artifactPath: 'run_123.md',
+        lifecycleStatus: 'active',
+        enabled: true,
+        basisTimestamp: '2026-03-14T10:00:06Z',
+        archiveAfterDays: 7,
+        deleteAfterDays: 30,
+        archiveDueAt: '2026-03-21T10:00:06Z',
+        deleteDueAt: '2026-04-13T10:00:06Z',
+        archiveDue: false,
+        deleteDue: false,
+        nextAction: 'none',
+        nextActionAt: null,
+        canApplyNow: false,
+        reason: 'Auto-govern',
+        actionBy: 'control_plane',
+        updatedAt: '2026-03-14T10:00:06Z',
+      },
+    })
+    mockApi.archiveRunArtifact.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      artifactPath: 'run_123.md',
+      fileName: 'run_123.md',
+      storageScope: 'governance_archive',
+      storageKey: 'governance/archive/tenants/default/instance-default/run_123.md',
+      isLegacyFallback: false,
+      exists: true,
+      lifecycleStatus: 'archived',
+      currentStorageScope: 'governance_archive',
+      currentStorageKey: 'governance/archive/tenants/default/instance-default/run_123.md',
+      originalStorageScope: 'tenant_instance_scoped',
+      originalStorageKey: 'tenants/default/instance-default/run_123.md',
+      governanceReason: 'RunsPage artifact governance',
+      governanceActionBy: 'control_plane',
+      governanceUpdatedAt: '2026-03-14T10:00:40Z',
+      canRestore: true,
+    })
+    mockApi.quarantineRunArtifact.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      artifactPath: 'run_123.md',
+      fileName: 'run_123.md',
+      storageScope: 'governance_quarantine',
+      storageKey: 'governance/quarantine/tenants/default/instance-default/run_123.md',
+      isLegacyFallback: false,
+      exists: true,
+      lifecycleStatus: 'quarantined',
+      currentStorageScope: 'governance_quarantine',
+      currentStorageKey: 'governance/quarantine/tenants/default/instance-default/run_123.md',
+      originalStorageScope: 'tenant_instance_scoped',
+      originalStorageKey: 'tenants/default/instance-default/run_123.md',
+      governanceReason: 'RunsPage artifact governance',
+      governanceActionBy: 'control_plane',
+      governanceUpdatedAt: '2026-03-14T10:01:00Z',
+      canRestore: true,
+    })
+    mockApi.restoreRunArtifact.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      artifactPath: 'run_123.md',
+      fileName: 'run_123.md',
+      storageScope: 'tenant_instance_scoped',
+      storageKey: 'tenants/default/instance-default/run_123.md',
+      isLegacyFallback: false,
+      exists: true,
+      lifecycleStatus: 'active',
+      currentStorageScope: 'tenant_instance_scoped',
+      currentStorageKey: 'tenants/default/instance-default/run_123.md',
+      originalStorageScope: 'tenant_instance_scoped',
+      originalStorageKey: 'tenants/default/instance-default/run_123.md',
+      governanceReason: 'RunsPage artifact governance',
+      governanceActionBy: 'control_plane',
+      governanceUpdatedAt: '2026-03-14T10:02:00Z',
+      canRestore: false,
+    })
+    mockApi.deleteRunArtifact.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      artifactPath: 'run_123.md',
+      fileName: 'run_123.md',
+      storageScope: 'governance_deleted',
+      storageKey: 'governance/deleted/tenants/default/instance-default/run_123.md',
+      isLegacyFallback: false,
+      exists: true,
+      lifecycleStatus: 'deleted',
+      currentStorageScope: 'governance_deleted',
+      currentStorageKey: 'governance/deleted/tenants/default/instance-default/run_123.md',
+      originalStorageScope: 'tenant_instance_scoped',
+      originalStorageKey: 'tenants/default/instance-default/run_123.md',
+      governanceReason: 'RunsPage artifact governance',
+      governanceActionBy: 'control_plane',
+      governanceUpdatedAt: '2026-03-14T10:03:00Z',
+      canRestore: true,
+    })
+    mockApi.setRunArtifactRetentionPolicy.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      artifactPath: 'run_123.md',
+      lifecycleStatus: 'active',
+      enabled: true,
+      basisTimestamp: '2026-03-14T10:00:06Z',
+      archiveAfterDays: 7,
+      deleteAfterDays: 30,
+      archiveDueAt: '2026-03-21T10:00:06Z',
+      deleteDueAt: '2026-04-13T10:00:06Z',
+      archiveDue: false,
+      deleteDue: false,
+      nextAction: 'none',
+      nextActionAt: null,
+      canApplyNow: false,
+      reason: 'RunsPage retention policy',
+      actionBy: 'control_plane',
+      updatedAt: '2026-03-14T10:05:00Z',
+    })
+    mockApi.applyRunArtifactRetentionPolicy.mockResolvedValue({
+      runId: 'run_123',
+      applied: false,
+      action: 'none',
+      artifact: {
+        runId: 'run_123',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        artifactPath: 'run_123.md',
+        fileName: 'run_123.md',
+        storageScope: 'tenant_instance_scoped',
+        storageKey: 'tenants/default/instance-default/run_123.md',
+        isLegacyFallback: false,
+        exists: true,
+        lifecycleStatus: 'active',
+        currentStorageScope: 'tenant_instance_scoped',
+        currentStorageKey: 'tenants/default/instance-default/run_123.md',
+        originalStorageScope: 'tenant_instance_scoped',
+        originalStorageKey: 'tenants/default/instance-default/run_123.md',
+        governanceReason: null,
+        governanceActionBy: null,
+        governanceUpdatedAt: '2026-03-14T10:00:06Z',
+        canRestore: false,
+      },
+      retentionPolicy: {
+        runId: 'run_123',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        artifactPath: 'run_123.md',
+        lifecycleStatus: 'active',
+        enabled: true,
+        basisTimestamp: '2026-03-14T10:00:06Z',
+        archiveAfterDays: 7,
+        deleteAfterDays: 30,
+        archiveDueAt: '2026-03-21T10:00:06Z',
+        deleteDueAt: '2026-04-13T10:00:06Z',
+        archiveDue: false,
+        deleteDue: false,
+        nextAction: 'none',
+        nextActionAt: null,
+        canApplyNow: false,
+        reason: 'RunsPage retention policy',
+        actionBy: 'control_plane',
+        updatedAt: '2026-03-14T10:05:00Z',
+      },
+    })
+    mockApi.getRunBoundaryAudit.mockResolvedValue({
+      runId: 'run_123',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      lineage: {
+        kind: 'agent',
+        status: 'succeeded',
+        controlScope: 'top_level',
+        parentRunId: null,
+        rootRunId: 'run_123',
+        threadId: null,
+        sessionKey: 'web:run-session',
+        spawnDepth: 0,
+      },
+      principal: {
+        principalKind: 'agent',
+        principalId: 'support-agent',
+        agentId: 'support-agent',
+        teamId: null,
+        label: 'Support KB validation',
+        role: null,
+      },
+      channel: {
+        originChannel: 'web',
+        originChatId: 'run-session',
+        routing: null,
+      },
+      environment: {
+        workspacePath: '/tmp/workspace',
+        workspaceScope: 'shared',
+        sandboxKind: 'local',
+        execWorkingDir: '/tmp/workspace',
+        restrictToWorkspace: true,
+        execTimeoutSeconds: 30,
+      },
+      governance: {
+        memoryScope: 'agent_profile',
+        knowledgeScope: 'support-kb',
+        knowledgeBindingIds: ['support-kb'],
+        knowledgeNames: ['Support KB'],
+        toolAllowlist: ['read_file'],
+        mcpServerIds: [],
+        skillIds: [],
+      },
+      artifact: {
+        runId: 'run_123',
+        tenantId: 'default',
+        instanceId: 'instance-default',
+        artifactPath: 'run_123.md',
+        fileName: 'run_123.md',
+        storageScope: 'tenant_instance_scoped',
+        storageKey: 'tenants/default/instance-default/run_123.md',
+        isLegacyFallback: false,
+        exists: true,
+        lifecycleStatus: 'active',
+        currentStorageScope: 'tenant_instance_scoped',
+        currentStorageKey: 'tenants/default/instance-default/run_123.md',
+        originalStorageScope: 'tenant_instance_scoped',
+        originalStorageKey: 'tenants/default/instance-default/run_123.md',
+        governanceReason: null,
+        governanceActionBy: null,
+        governanceUpdatedAt: '2026-03-14T10:00:06Z',
+        canRestore: false,
+        retentionPolicy: {
+          runId: 'run_123',
+          tenantId: 'default',
+          instanceId: 'instance-default',
+          artifactPath: 'run_123.md',
+          lifecycleStatus: 'active',
+          enabled: true,
+          basisTimestamp: '2026-03-14T10:00:06Z',
+          archiveAfterDays: 7,
+          deleteAfterDays: 30,
+          archiveDueAt: '2026-03-21T10:00:06Z',
+          deleteDueAt: '2026-04-13T10:00:06Z',
+          archiveDue: false,
+          deleteDue: false,
+          nextAction: 'none',
+          nextActionAt: null,
+          canApplyNow: false,
+          reason: 'Auto-govern',
+          actionBy: 'control_plane',
+          updatedAt: '2026-03-14T10:00:06Z',
+        },
+      },
+      eventRefs: {
+        executionContextMaterialized: null,
+        bindingsResolved: null,
+        channelDispatchResolved: null,
+        artifactWritten: null,
+        artifactQuarantined: null,
+        artifactArchived: null,
+        artifactRestored: null,
+        artifactDeleted: null,
+        artifactRetentionPolicySet: null,
+      },
     })
     mockApi.getRunTree.mockResolvedValue({
       runId: 'run_123',
@@ -2407,6 +2843,8 @@ describe('web app smoke pages', () => {
     mockApi.deleteKnowledgeBase.mockResolvedValue({ deleted: true })
     mockApi.createAgent.mockResolvedValue(makeAgents()[0])
     mockApi.updateAgent.mockResolvedValue(makeAgents()[0])
+    mockApi.updateAgentMemory.mockResolvedValue(makeAgentMemory())
+    mockApi.createAgentMemoryCandidate.mockResolvedValue(makeAgentMemoryCandidates().items[0])
     mockApi.copyAgent.mockResolvedValue({
       ...makeAgents()[0],
       agentId: 'support-lead-copy',
@@ -2876,6 +3314,36 @@ describe('web app smoke pages', () => {
     expect(await screen.findByPlaceholderText('输入员工名称')).toBeInTheDocument()
     expect(screen.getByText('保存员工')).toBeInTheDocument()
     expect(screen.getByText('员工试运行')).toBeInTheDocument()
+    expect(screen.getByText('产物归档天数')).toBeInTheDocument()
+    expect(screen.getByText('产物删除天数')).toBeInTheDocument()
+  })
+
+  it('renders agent memory governance inside the agent drawer', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/agents/support-lead']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/agents/:agentId" element={<AgentsPage />} />
+          <Route path="/studio/memory/agents/:agentId" element={<MemoryAuditPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('员工记忆治理')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '保存员工记忆' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交候选' })).toBeInTheDocument()
+    expect(screen.getByText('Support Lead candidate')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '进入统一记忆审计' }))
+    expect(await screen.findByText('统一记忆审计')).toBeInTheDocument()
+    expect(screen.getByText('员工记忆概览')).toBeInTheDocument()
   })
 
   it('opens the team create drawer on /studio/teams/new', async () => {
@@ -2897,6 +3365,8 @@ describe('web app smoke pages', () => {
 
     expect(await screen.findByText('保存团队')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('输入团队名称')).toBeInTheDocument()
+    expect(screen.getByText('产物归档天数')).toBeInTheDocument()
+    expect(screen.getByText('产物删除天数')).toBeInTheDocument()
   })
 
   it('renders memory audit page with candidate and search panels', async () => {
@@ -2916,12 +3386,42 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('团队记忆审计')).toBeInTheDocument()
+    expect(await screen.findByText('统一记忆审计')).toBeInTheDocument()
     expect((await screen.findAllByText('Support Team')).length).toBeGreaterThan(0)
     expect(screen.getByText('最近对话')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('候选审核'))
     expect(await screen.findByText('候选记录')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('检索取证'))
+    expect(await screen.findByText('记忆检索')).toBeInTheDocument()
+  })
+
+  it('renders agent memory audit page with agent-specific overview panels', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/studio/memory/agents/support-lead']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/studio/memory/agents/:agentId" element={<MemoryAuditPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('统一记忆审计')).toBeInTheDocument()
+    expect((await screen.findAllByText('Support Lead')).length).toBeGreaterThan(0)
+    expect(screen.getByText('员工记忆概览')).toBeInTheDocument()
+    expect(screen.getByText('最近执行')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '返回员工配置' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('候选审核'))
+    expect(await screen.findByText('Support Lead candidate')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('检索取证'))
     expect(await screen.findByText('记忆检索')).toBeInTheDocument()
@@ -2973,6 +3473,7 @@ describe('web app smoke pages', () => {
       >
         <Routes>
           <Route path="/studio/teams/:teamId" element={<TeamsPage />} />
+          <Route path="/studio/memory/:teamId" element={<MemoryAuditPage />} />
         </Routes>
       </MemoryRouter>,
     )
@@ -2988,6 +3489,10 @@ describe('web app smoke pages', () => {
     fireEvent.click(screen.getByText('团队记忆'))
     expect(await screen.findByText('记忆候选')).toBeInTheDocument()
     expect(screen.getByText('保存团队记忆')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '进入统一记忆审计' }))
+    expect(await screen.findByText('统一记忆审计')).toBeInTheDocument()
+    expect(screen.getByText('最近对话')).toBeInTheDocument()
   })
 
   it('renders channel bindings page with list and form', async () => {
@@ -3012,6 +3517,28 @@ describe('web app smoke pages', () => {
     expect(screen.getAllByText('telegram').length).toBeGreaterThan(0)
   })
 
+  it('renders channel audit page with recent entries', async () => {
+    installMatchMedia(false)
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/channels/audit']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/channels/audit" element={<ChannelAuditPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('渠道审计')).toBeInTheDocument()
+    expect(screen.getByText('最近入口事件')).toBeInTheDocument()
+    expect(screen.getByText('Support lead is handling it.')).toBeInTheDocument()
+  })
+
   it('renders runs page with detail and timeline panels', async () => {
     installMatchMedia(false)
 
@@ -3032,8 +3559,12 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('执行记录')).toBeInTheDocument()
     expect(screen.getByText('执行结果')).toBeInTheDocument()
     expect(screen.getByText('执行过程')).toBeInTheDocument()
+    expect(screen.getByText('租户边界审计')).toBeInTheDocument()
     expect(screen.getByText('任务层级结构')).toBeInTheDocument()
     expect(screen.getByText('任务产出归档')).toBeInTheDocument()
+    expect(screen.getByText('7 天后归档 · 30 天后删除')).toBeInTheDocument()
+    expect(screen.getByText('设置保留策略')).toBeInTheDocument()
+    expect(screen.getByText('隔离产物')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB validation').length).toBeGreaterThan(0)
   })
 

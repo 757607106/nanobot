@@ -316,6 +316,9 @@ export default function ChannelBindingsPage() {
             >
               新建绑定
             </Button>
+            <Button icon={<LinkOutlined />} onClick={() => navigate('/channels/audit')}>
+              查看渠道审计
+            </Button>
             <Button icon={<ReloadOutlined />} onClick={loadWorkspace}>
               刷新
             </Button>

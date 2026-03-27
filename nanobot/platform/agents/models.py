@@ -38,6 +38,7 @@ class AgentDefinition:
     team_role_hint: str = ""
     max_execution_timeout_seconds: int = 300
     output_format_hint: str = ""
+    artifact_retention_policy: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
 
@@ -61,6 +62,7 @@ class AgentDefinition:
             "team_role_hint": self.team_role_hint,
             "max_execution_timeout_seconds": self.max_execution_timeout_seconds,
             "output_format_hint": self.output_format_hint,
+            "artifact_retention_policy": self.artifact_retention_policy,
         }
         return json.dumps(payload, ensure_ascii=False)
 
@@ -90,6 +92,7 @@ class AgentDefinition:
             team_role_hint=stored.get("team_role_hint") or "",
             max_execution_timeout_seconds=int(stored.get("max_execution_timeout_seconds") or 300),
             output_format_hint=stored.get("output_format_hint") or "",
+            artifact_retention_policy=dict(stored.get("artifact_retention_policy") or {}),
             created_at=record.get("created_at") or now_iso(),
             updated_at=record.get("updated_at") or now_iso(),
         )
@@ -109,6 +112,7 @@ class AgentDefinition:
         payload["teamRoleHint"] = payload.pop("team_role_hint")
         payload["maxExecutionTimeoutSeconds"] = payload.pop("max_execution_timeout_seconds")
         payload["outputFormatHint"] = payload.pop("output_format_hint")
+        payload["artifactRetentionPolicy"] = payload.pop("artifact_retention_policy")
         payload["createdAt"] = payload.pop("created_at")
         payload["updatedAt"] = payload.pop("updated_at")
         return payload

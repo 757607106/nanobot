@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, App, Button, Card, Empty, Input, InputNumber, Select, Space, Spin, Switch, Tag, Typography } from 'antd'
 import { ArrowLeftOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -59,6 +59,7 @@ export default function McpServerDetailPage() {
   const { serverName } = useParams()
   const [entry, setEntry] = useState<McpServerEntry | null>(null)
   const [draft, setDraft] = useState<DetailDraft | null>(null)
+  const draftRef = useRef<DetailDraft | null>(null)
   const [probe, setProbe] = useState<McpProbeResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -74,6 +75,15 @@ export default function McpServerDetailPage() {
     }
     void loadServer(serverName)
   }, [serverName])
+
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
+
+  function applyDraftPatch(patch: Partial<DetailDraft>) {
+    draftRef.current = draftRef.current ? { ...draftRef.current, ...patch } : draftRef.current
+    setDraft((current) => (current ? { ...current, ...patch } : current))
+  }
 
   async function loadServer(target: string) {
     try {
@@ -137,24 +147,25 @@ export default function McpServerDetailPage() {
   }
 
   async function handleSave(probeAfterSave = false) {
-    if (!serverName || !draft) {
+    const activeDraft = draftRef.current
+    if (!serverName || !activeDraft) {
       return
     }
     try {
       setSaving(true)
       const next = await api.updateMcpServer(serverName, {
-        displayName: draft.displayName.trim() || null,
-        enabled: draft.enabled,
-        type: draft.type,
-        command: draft.command.trim() || null,
-        args: draft.argsText
+        displayName: activeDraft.displayName.trim() || null,
+        enabled: activeDraft.enabled,
+        type: activeDraft.type,
+        command: activeDraft.command.trim() || null,
+        args: activeDraft.argsText
           .split('\n')
           .map((item) => item.trim())
           .filter(Boolean),
-        env: parseJsonMapping(draft.envText, '环境变量'),
-        url: draft.url.trim() || null,
-        headers: parseJsonMapping(draft.headersText, '请求头'),
-        toolTimeout: Number(draft.toolTimeout || 30),
+        env: parseJsonMapping(activeDraft.envText, '环境变量'),
+        url: activeDraft.url.trim() || null,
+        headers: parseJsonMapping(activeDraft.headersText, '请求头'),
+        toolTimeout: Number(activeDraft.toolTimeout || 30),
       })
       if (next.entry) {
         setEntry(next.entry)
@@ -206,6 +217,7 @@ export default function McpServerDetailPage() {
   const probeAlertMessage = probe
     ? (probe.ok ? `${probe.statusLabel} · ${probe.toolCount} 个工具` : probe.error || probe.statusLabel)
     : entry.lastError || null
+  const detailActionBusy = saving || probing || toggling
 
   return (
     <div className="page-stack">
@@ -265,8 +277,9 @@ export default function McpServerDetailPage() {
                 <Text>展示名称</Text>
               </div>
               <Input
+                aria-label="展示名称"
                 value={draft.displayName}
-                onChange={(event) => setDraft({ ...draft, displayName: event.target.value })}
+                onChange={(event) => applyDraftPatch({ displayName: event.target.value })}
                 data-testid={testIds.mcp.detailDisplayName}
               />
             </div>
@@ -275,7 +288,11 @@ export default function McpServerDetailPage() {
               <div>
                 <Text strong>聊天中启用</Text>
               </div>
-              <Switch checked={draft.enabled} onChange={(checked) => setDraft({ ...draft, enabled: checked })} />
+              <Switch
+                aria-label="聊天中启用"
+                checked={draft.enabled}
+                onChange={(checked) => applyDraftPatch({ enabled: checked })}
+              />
             </div>
 
             <div className="config-field-block">
@@ -283,13 +300,14 @@ export default function McpServerDetailPage() {
                 <Text>传输方式</Text>
               </div>
               <Select
+                aria-label="传输方式"
                 value={draft.type}
                 options={[
                   { label: 'stdio', value: 'stdio' },
                   { label: 'SSE', value: 'sse' },
                   { label: 'Streamable HTTP', value: 'streamableHttp' },
                 ]}
-                onChange={(value) => setDraft({ ...draft, type: value as DetailDraft['type'] })}
+                onChange={(value) => applyDraftPatch({ type: value as DetailDraft['type'] })}
               />
             </div>
 
@@ -298,10 +316,11 @@ export default function McpServerDetailPage() {
                 <Text>工具超时（秒）</Text>
               </div>
               <InputNumber
+                aria-label="工具超时（秒）"
                 min={1}
                 value={draft.toolTimeout}
                 style={{ width: '100%' }}
-                onChange={(value) => setDraft({ ...draft, toolTimeout: Number(value || 30) })}
+                onChange={(value) => applyDraftPatch({ toolTimeout: Number(value || 30) })}
               />
             </div>
 
@@ -311,7 +330,11 @@ export default function McpServerDetailPage() {
                   <div className="config-field-label-row">
                     <Text>命令</Text>
                   </div>
-                  <Input value={draft.command} onChange={(event) => setDraft({ ...draft, command: event.target.value })} />
+                  <Input
+                    aria-label="命令"
+                    value={draft.command}
+                    onChange={(event) => applyDraftPatch({ command: event.target.value })}
+                  />
                 </div>
 
                 <div className="config-field-block">
@@ -319,10 +342,11 @@ export default function McpServerDetailPage() {
                     <Text>参数（每行一个）</Text>
                   </div>
                   <Input.TextArea
+                    aria-label="参数（每行一个）"
                     className="config-json-editor"
                     value={draft.argsText}
                     spellCheck={false}
-                    onChange={(event) => setDraft({ ...draft, argsText: event.target.value })}
+                    onChange={(event) => applyDraftPatch({ argsText: event.target.value })}
                     style={{ height: 180, resize: 'none' }}
                   />
                 </div>
@@ -332,10 +356,11 @@ export default function McpServerDetailPage() {
                     <Text>环境变量 JSON</Text>
                   </div>
                   <Input.TextArea
+                    aria-label="环境变量 JSON"
                     className="config-json-editor"
                     value={draft.envText}
                     spellCheck={false}
-                    onChange={(event) => setDraft({ ...draft, envText: event.target.value })}
+                    onChange={(event) => applyDraftPatch({ envText: event.target.value })}
                     style={{ height: 220, resize: 'none' }}
                     data-testid={testIds.mcp.detailEnv}
                   />
@@ -347,7 +372,11 @@ export default function McpServerDetailPage() {
                   <div className="config-field-label-row">
                     <Text>URL</Text>
                   </div>
-                  <Input value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} />
+                  <Input
+                    aria-label="URL"
+                    value={draft.url}
+                    onChange={(event) => applyDraftPatch({ url: event.target.value })}
+                  />
                 </div>
 
                 <div className="config-field-block">
@@ -355,10 +384,11 @@ export default function McpServerDetailPage() {
                     <Text>请求头 JSON</Text>
                   </div>
                   <Input.TextArea
+                    aria-label="请求头 JSON"
                     className="config-json-editor"
                     value={draft.headersText}
                     spellCheck={false}
-                    onChange={(event) => setDraft({ ...draft, headersText: event.target.value })}
+                    onChange={(event) => applyDraftPatch({ headersText: event.target.value })}
                     style={{ height: 220, resize: 'none' }}
                   />
                 </div>
@@ -367,18 +397,29 @@ export default function McpServerDetailPage() {
           </div>
 
           <div className="mcp-detail-action-row">
-            <Button onClick={() => void handleToggle(!entry.enabled)} loading={toggling} data-testid={testIds.mcp.detailToggle}>
+            <Button
+              onClick={() => void handleToggle(!entry.enabled)}
+              loading={toggling}
+              disabled={detailActionBusy}
+              data-testid={testIds.mcp.detailToggle}
+            >
               {entry.enabled ? '立即停用' : '立即启用'}
             </Button>
             <Button
               icon={<SaveOutlined />}
               onClick={() => void handleSave()}
               loading={saving}
+              disabled={detailActionBusy}
               data-testid={testIds.mcp.detailSave}
             >
               保存配置
             </Button>
-            <Button onClick={() => void handleProbe()} loading={probing} data-testid={testIds.mcp.detailProbe}>
+            <Button
+              onClick={() => void handleProbe()}
+              loading={probing}
+              disabled={detailActionBusy}
+              data-testid={testIds.mcp.detailProbe}
+            >
               立即探测
             </Button>
             <Button
@@ -386,6 +427,7 @@ export default function McpServerDetailPage() {
               icon={<SaveOutlined />}
               onClick={() => void handleSave(true)}
               loading={saving || probing}
+              disabled={detailActionBusy}
             >
               保存并探测
             </Button>

@@ -243,6 +243,14 @@ class ExecToolConfig(Base):
 
     timeout: int = 60
     path_append: str = ""
+    sandbox_kind: Literal["local", "docker", "remote"] = "local"
+    docker_image: str = "python:3.12-slim"
+    docker_runtime_workdir: str = "/workspace"
+    docker_network_mode: str = "bridge"
+    docker_mount_policy: Literal["workspace_only", "workspace_and_mounts"] = "workspace_only"
+    docker_mounts: list[str] = Field(default_factory=list)
+    docker_env_allowlist: list[str] = Field(default_factory=list)
+    remote_endpoint: str = ""
 
 
 class MCPServerConfig(Base):

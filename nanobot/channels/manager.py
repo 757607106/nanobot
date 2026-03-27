@@ -11,6 +11,8 @@ from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import Config
+from nanobot.platform.channel_audit import ChannelAuditService
+from nanobot.platform.tenant_scope import tenant_id_from_metadata
 
 if TYPE_CHECKING:
     from nanobot.web.runtime_services.channel_routing import ChannelRoutingService
@@ -29,20 +31,48 @@ class _RoutingBusProxy:
         self,
         inner: MessageBus,
         routing_service: ChannelRoutingService,
+        audit_service: ChannelAuditService | None = None,
         tenant_id: str = "default",
     ):
         self._inner = inner
         self._routing = routing_service
+        self._audit = audit_service
         self._tenant_id = tenant_id
 
     async def publish_inbound(self, msg: InboundMessage) -> None:
+        tenant_id = tenant_id_from_metadata(msg.metadata, default=self._tenant_id)
         target = self._routing.resolve_target(
-            msg.channel, msg.chat_id, tenant_id=self._tenant_id,
+            msg.channel, msg.chat_id, tenant_id=tenant_id,
         )
         if target is not None:
             msg.metadata["_routing_target_type"] = target.target_type
             msg.metadata["_routing_target_id"] = target.target_id
             msg.metadata["_routing_binding_id"] = target.binding_id
+            msg.metadata["_routing_tenant_id"] = tenant_id
+        if self._audit is not None:
+            binding_chat_id = str(getattr(target, "binding_chat_id", "") or "").strip()
+            resolution_kind = "none"
+            if target is not None:
+                resolution_kind = "wildcard" if binding_chat_id == "*" else "exact"
+            audit_entry = self._audit.record_inbound(
+                tenant_id=tenant_id,
+                channel_name=msg.channel,
+                chat_id=msg.chat_id,
+                session_key=msg.session_key,
+                sender_id=msg.sender_id,
+                message_preview=msg.content,
+                resolved=target is not None,
+                resolution_kind=resolution_kind,
+                binding_id=str(getattr(target, "binding_id", "") or "").strip() or None,
+                target_type=str(getattr(target, "target_type", "") or "").strip() or None,
+                target_id=str(getattr(target, "target_id", "") or "").strip() or None,
+                message_id=str((msg.metadata or {}).get("message_id") or "").strip() or None,
+                metadata={
+                    "mediaCount": len(msg.media or []),
+                    "source": "routing_proxy",
+                },
+            )
+            msg.metadata["_routing_audit_id"] = audit_entry["auditId"]
         await self._inner.publish_inbound(msg)
 
     def __getattr__(self, name: str) -> Any:
@@ -65,6 +95,7 @@ class ChannelManager:
         bus: MessageBus,
         *,
         routing_service: ChannelRoutingService | None = None,
+        audit_service: ChannelAuditService | None = None,
         tenant_id: str = "default",
     ):
         self.config = config
@@ -73,7 +104,7 @@ class ChannelManager:
         # that enriches inbound messages with _routing_* metadata.
         if routing_service is not None:
             self.bus: MessageBus | _RoutingBusProxy = _RoutingBusProxy(
-                bus, routing_service, tenant_id,
+                bus, routing_service, audit_service, tenant_id,
             )
             logger.info("Channel routing enabled (tenant={})", tenant_id)
         else:

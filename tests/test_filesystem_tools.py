@@ -1,5 +1,7 @@
 """Tests for enhanced filesystem tools: ReadFileTool, EditFileTool, ListDirTool."""
 
+from pathlib import Path
+
 import pytest
 
 from nanobot.agent.tools.filesystem import (
@@ -63,6 +65,23 @@ class TestReadFileTool:
         result = await tool.execute(path=str(tmp_path / "nope.txt"))
         assert "Error" in result
         assert "not found" in result
+
+    @pytest.mark.asyncio
+    async def test_virtual_workspace_path_maps_back_to_host(self, tmp_path):
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        sample = workspace / "notes.txt"
+        sample.write_text("hello from workspace", encoding="utf-8")
+        tool = ReadFileTool(
+            workspace=workspace,
+            virtual_workspace=Path("/workspace"),
+            allowed_dir=workspace,
+        )
+
+        result = await tool.execute(path="/workspace/notes.txt")
+
+        assert "hello from workspace" in result
+        assert "Error" not in result
 
     @pytest.mark.asyncio
     async def test_char_budget_trims(self, tool, tmp_path):
@@ -136,6 +155,23 @@ class TestEditFileTool:
         f = tmp_path / "a.py"
         f.write_text("hello world", encoding="utf-8")
         result = await tool.execute(path=str(f), old_text="world", new_text="earth")
+        assert "Successfully" in result
+        assert f.read_text() == "hello earth"
+
+    @pytest.mark.asyncio
+    async def test_virtual_workspace_path_maps_back_to_host(self, tmp_path):
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        f = workspace / "a.py"
+        f.write_text("hello world", encoding="utf-8")
+        tool = EditFileTool(
+            workspace=workspace,
+            virtual_workspace=Path("/workspace"),
+            allowed_dir=workspace,
+        )
+
+        result = await tool.execute(path="/workspace/a.py", old_text="world", new_text="earth")
+
         assert "Successfully" in result
         assert f.read_text() == "hello earth"
 

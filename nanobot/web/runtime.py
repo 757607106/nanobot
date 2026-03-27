@@ -93,7 +93,9 @@ class WebAppState:
         self.app_teams = None
         self.app_knowledge = None
         self.app_memory = None
+        self.tenants_service = None
         self.channel_bindings_service = None  # Set by lifespan before channel_runtime.start()
+        self.channel_audit_service = None  # Set by lifespan before channel_runtime.start()
         self.calendar_repo = get_calendar_repository(config.workspace_path)
 
         self.agent_runtime = WebAgentRuntimeService(self)
@@ -108,6 +110,8 @@ class WebAppState:
         self._cron_loop: asyncio.AbstractEventLoop | None = None
         self._cron_thread: threading.Thread | None = None
         self._cron_ready = threading.Event()
+        self._artifact_retention_task: asyncio.Task | None = None
+        self._artifact_retention_sweep_interval_s = 30 * 60
 
         self.config_runtime.rebuild_runtime(config)
         self.schedule_runtime.start_runtime()
@@ -260,11 +264,11 @@ class WebAppState:
     def get_agent_template(self, name: str) -> dict[str, Any]:
         return self.workspace_runtime.get_agent_template(name)
 
-    async def test_agent_run(self, agent_id: str, content: str) -> dict[str, Any]:
-        return await self.agent_runtime.test_run_agent(agent_id, content)
+    async def test_agent_run(self, agent_id: str, content: str, *, tenant_id: str | None = None) -> dict[str, Any]:
+        return await self.agent_runtime.test_run_agent(agent_id, content, tenant_id=tenant_id)
 
-    async def test_team_run(self, team_id: str, content: str) -> dict[str, Any]:
-        return await self.team_runtime.start_team_run(team_id, content)
+    async def test_team_run(self, team_id: str, content: str, *, tenant_id: str | None = None) -> dict[str, Any]:
+        return await self.team_runtime.start_team_run(team_id, content, tenant_id=tenant_id)
 
     def create_agent_template(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.workspace_runtime.create_agent_template(payload)

@@ -18,7 +18,7 @@ from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
 from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.platform.agents import AgentDefinitionStore
-from nanobot.platform.runs import RunControlScope, RunKind
+from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
 from nanobot.providers.base import LLMResponse, ToolCallRequest
 from nanobot.session.manager import SessionManager
 from tests.knowledge_test_utils import FakeRAGEngine
@@ -46,6 +46,31 @@ def _bootstrap_admin(client: TestClient, username: str = AUTH_USERNAME, password
     )
     assert response.status_code == 201
     assert response.json()["data"]["authenticated"] is True
+
+
+def _create_tenant_api_headers(
+    client: TestClient,
+    *,
+    tenant_id: str,
+    name: str,
+) -> dict[str, str]:
+    created = client.post(
+        "/api/v1/tenants",
+        headers={"x-tenant-id": tenant_id},
+        json={"tenantId": tenant_id, "name": name},
+    )
+    assert created.status_code == 201
+    api_key = client.post(
+        f"/api/v1/tenants/{tenant_id}/api-keys",
+        headers={"x-tenant-id": tenant_id},
+        json={"name": f"{name} key"},
+    )
+    assert api_key.status_code == 201
+    raw_key = api_key.json()["data"]["key"]
+    return {
+        "x-api-key": raw_key,
+        "x-tenant-id": tenant_id,
+    }
 
 
 def _write_fixture_mcp_repo(repo_dir, *, package_name: str = "@acme/filesystem-mcp") -> None:
@@ -1534,7 +1559,13 @@ def test_web_api_agent_test_run_executes_and_persists_recent_run(web_client: Tes
 
     async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
         assert model == "openai/gpt-4o-mini"
-        assert {tool["function"]["name"] for tool in tools} == {"read_file", "list_dir"}
+        assert {tool["function"]["name"] for tool in tools} == {
+            "read_file",
+            "list_dir",
+            "list_kbs",
+            "get_mindmap",
+            "query_kb",
+        }
         assert "You are an operations briefing agent." in messages[0]["content"]
         assert "Always summarize findings clearly." in messages[0]["content"]
         assert "supervisorctl restart nanobot" in messages[0]["content"]
@@ -1560,6 +1591,7 @@ def test_web_api_agent_test_run_executes_and_persists_recent_run(web_client: Tes
     assert payload["pendingKnowledgeBindings"] == [kb_id]
     assert len(payload["knowledgeHits"]) >= 1
     assert payload["appliedBindings"]["skillIds"] == ["briefing-skill"]
+    assert any(event["eventType"] == "execution_context_materialized" for event in payload["run"]["events"])
     assert any(event["eventType"] == "bindings_resolved" for event in payload["run"]["events"])
     assert any(event["eventType"] == "knowledge_retrieved" for event in payload["run"]["events"])
     artifact = web_client.get(f"/api/v1/runs/{payload['run']['runId']}/artifact")
@@ -2178,6 +2210,127 @@ def test_web_api_team_thread_reuses_prior_turns(web_client: TestClient, monkeypa
     ]
 
 
+def test_web_api_team_thread_can_scope_by_external_session_key(web_client: TestClient, monkeypatch) -> None:
+    leader = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Scoped Lead",
+            "systemPrompt": "Leader system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert leader.status_code == 201
+
+    member = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Scoped Member",
+            "systemPrompt": "Member system prompt",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+        },
+    )
+    assert member.status_code == 201
+
+    team_created = web_client.post(
+        "/api/v1/teams",
+        json={
+            "name": "Scoped Team",
+            "supervisorAgentId": leader.json()["data"]["agentId"],
+            "memberAgentIds": [member.json()["data"]["agentId"]],
+        },
+    )
+    assert team_created.status_code == 201
+    team_id = team_created.json()["data"]["teamId"]
+
+    provider = web_client.app.state.web.agent.provider
+
+    async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
+        _ = kwargs
+        system = messages[0]["content"]
+        if "How to Work" in system:
+            has_tool_results = any(m.get("role") == "tool" for m in messages)
+            if has_tool_results:
+                if "Topic follow-up" in str(messages):
+                    assert "Previous Team Thread Turns" in system
+                    assert "Scoped first summary" in system
+                    return LLMResponse(content="Scoped follow-up summary", tool_calls=[])
+                return LLMResponse(content="Scoped first summary", tool_calls=[])
+            return LLMResponse(
+                content="",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="tc-1",
+                        name="call_scoped_member",
+                        arguments={"task": "Process topic request"},
+                    ),
+                ],
+            )
+        if "Member system prompt" in system:
+            return LLMResponse(content="Scoped member note", tool_calls=[])
+        raise AssertionError(f"Unexpected prompt: {system}")
+
+    provider.chat_with_retry = fake_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    session_key = "telegram:42:topic:99"
+    asyncio.run(
+        web_client.app.state.web.team_runtime.run_team_sync(
+            team_id,
+            "Topic request",
+            origin_channel="telegram",
+            origin_chat_id="42",
+            session_key=session_key,
+        )
+    )
+    asyncio.run(
+        web_client.app.state.web.team_runtime.run_team_sync(
+            team_id,
+            "Topic follow-up",
+            origin_channel="telegram",
+            origin_chat_id="42",
+            session_key=session_key,
+        )
+    )
+
+    default_thread = web_client.get(f"/api/v1/teams/{team_id}/thread")
+    assert default_thread.status_code == 200
+    assert default_thread.json()["data"]["threadId"] == f"team-thread:{team_id}"
+    assert default_thread.json()["data"]["session"]["messageCount"] == 0
+
+    scoped_thread = web_client.get(
+        f"/api/v1/teams/{team_id}/thread",
+        params={"sessionKey": session_key},
+    )
+    assert scoped_thread.status_code == 200
+    assert scoped_thread.json()["data"]["threadId"] == f"team-thread:{team_id}:{session_key}"
+    assert scoped_thread.json()["data"]["session"]["messageCount"] == 4
+
+    scoped_messages = web_client.get(
+        f"/api/v1/teams/{team_id}/thread/messages",
+        params={"sessionKey": session_key},
+    )
+    assert scoped_messages.status_code == 200
+    assert [item["content"] for item in scoped_messages.json()["data"]["messages"]] == [
+        "Topic request",
+        "Scoped first summary",
+        "Topic follow-up",
+        "Scoped follow-up summary",
+    ]
+
+    other_thread = web_client.get(
+        f"/api/v1/teams/{team_id}/thread/messages",
+        params={"sessionKey": "telegram:42:topic:100"},
+    )
+    assert other_thread.status_code == 200
+    assert other_thread.json()["data"]["total"] == 0
+
+
 def test_web_api_team_memory_scope_and_candidates(web_client: TestClient, monkeypatch) -> None:
     workspace = web_client.app.state.web.config.workspace_path
     memory_dir = workspace / "memory"
@@ -2367,6 +2520,851 @@ def test_web_api_team_memory_scope_and_candidates(web_client: TestClient, monkey
     assert memory_source_payload["sourceType"] == "memory_candidate"
     assert memory_source_payload["sourceId"] == candidate["candidateId"]
     assert "Member memory candidate" in memory_source_payload["content"]
+
+
+def test_web_api_agent_profile_memory_routes_and_runtime(web_client: TestClient, monkeypatch) -> None:
+    workspace = web_client.app.state.web.config.workspace_path
+    memory_dir = workspace / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    (memory_dir / "MEMORY.md").write_text("# Workspace Shared Memory\n\nWORKSPACE SECRET\n", encoding="utf-8")
+
+    created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Profile Agent",
+            "systemPrompt": "You are a profile-aware agent.",
+            "toolAllowlist": ["read_file"],
+            "model": "openai/gpt-4o-mini",
+            "memoryScope": "agent_profile",
+        },
+    )
+    assert created.status_code == 201
+    agent_id = created.json()["data"]["agentId"]
+
+    updated_memory = web_client.put(
+        f"/api/v1/agents/{agent_id}/memory",
+        json={"content": "Agent profile fact: prefer numbered incident checklists."},
+    )
+    assert updated_memory.status_code == 200
+    assert "numbered incident checklists" in updated_memory.json()["data"]["content"]
+
+    fetched_memory = web_client.get(f"/api/v1/agents/{agent_id}/memory")
+    assert fetched_memory.status_code == 200
+    assert "numbered incident checklists" in fetched_memory.json()["data"]["content"]
+    assert fetched_memory.json()["data"]["candidateCount"] == 0
+
+    provider = web_client.app.state.web.agent.provider
+
+    async def fake_chat_with_retry(*, messages, tools, model, **kwargs):
+        _ = tools, kwargs
+        assert model == "openai/gpt-4o-mini"
+        system = messages[0]["content"]
+        assert "Agent Profile Memory" in system
+        assert "prefer numbered incident checklists" in system
+        assert "WORKSPACE SECRET" not in system
+        return LLMResponse(content="Agent profile memory acknowledged.", tool_calls=[])
+
+    provider.chat_with_retry = fake_chat_with_retry
+    monkeypatch.setattr(
+        web_client.app.state.web.config_runtime,
+        "make_provider",
+        lambda config: provider,
+    )
+
+    test_run = web_client.post(
+        f"/api/v1/agents/{agent_id}/test-run",
+        json={"content": "Summarize your operating style."},
+    )
+    assert test_run.status_code == 200
+    assert test_run.json()["data"]["assistantMessage"]["content"] == "Agent profile memory acknowledged."
+
+    search = web_client.post(
+        "/api/v1/memory-search",
+        json={"query": "incident checklists", "agentId": agent_id, "limit": 5, "mode": "keyword"},
+    )
+    assert search.status_code == 200
+    search_payload = search.json()["data"]
+    assert search_payload["effectiveMode"] == "keyword"
+    assert any(item["sourceType"] == "agent_profile" for item in search_payload["items"])
+
+    source = web_client.post(
+        "/api/v1/memory-get",
+        json={"sourceType": "agent_profile", "sourceId": agent_id, "agentId": agent_id},
+    )
+    assert source.status_code == 200
+    source_payload = source.json()["data"]
+    assert source_payload["sourceType"] == "agent_profile"
+    assert source_payload["sourceId"] == agent_id
+    assert "numbered incident checklists" in source_payload["content"]
+
+
+def test_web_api_agent_profile_memory_candidates_governance(web_client: TestClient) -> None:
+    created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Candidate Agent",
+            "systemPrompt": "You keep stable operating preferences.",
+            "memoryScope": "agent_profile",
+        },
+    )
+    assert created.status_code == 201
+    agent_id = created.json()["data"]["agentId"]
+
+    proposed = web_client.post(
+        f"/api/v1/agents/{agent_id}/memory-candidates",
+        json={
+            "title": "Incident style preference",
+            "content": "Prefer terse numbered remediation steps.",
+            "sourceKind": "manual_note",
+        },
+    )
+    assert proposed.status_code == 201
+    candidate = proposed.json()["data"]
+    assert candidate["scope"] == "agent_profile"
+    assert candidate["agentId"] == agent_id
+    assert candidate["status"] == "proposed"
+
+    listed = web_client.get(
+        "/api/v1/memory-candidates",
+        params={"agentId": agent_id, "scope": "agent_profile", "status": "proposed"},
+    )
+    assert listed.status_code == 200
+    listed_payload = listed.json()["data"]
+    assert listed_payload["total"] == 1
+    assert listed_payload["items"][0]["candidateId"] == candidate["candidateId"]
+
+    candidate_source = web_client.post(
+        "/api/v1/memory-get",
+        json={"sourceType": "memory_candidate", "sourceId": candidate["candidateId"], "agentId": agent_id},
+    )
+    assert candidate_source.status_code == 200
+    assert candidate_source.json()["data"]["metadata"]["agentId"] == agent_id
+
+    search = web_client.post(
+        "/api/v1/memory-search",
+        json={"query": "numbered remediation steps", "agentId": agent_id, "limit": 10, "mode": "hybrid"},
+    )
+    assert search.status_code == 200
+    assert any(item["sourceType"] == "memory_candidate" for item in search.json()["data"]["items"])
+
+    applied = web_client.post(f"/api/v1/memory-candidates/{candidate['candidateId']}/apply")
+    assert applied.status_code == 200
+    assert applied.json()["data"]["status"] == "applied"
+
+    memory = web_client.get(f"/api/v1/agents/{agent_id}/memory")
+    assert memory.status_code == 200
+    memory_payload = memory.json()["data"]
+    assert memory_payload["candidateCount"] == 0
+    assert "Prefer terse numbered remediation steps." in memory_payload["content"]
+
+
+def test_web_api_tenant_scoped_knowledge_and_agent_memory(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-a",
+        name="Tenant A",
+    )
+
+    created_kb = web_client.post(
+        "/api/v1/knowledge-bases",
+        headers=tenant_headers,
+        json={
+            "name": "Tenant Support KB",
+            "description": "Tenant-scoped support docs",
+        },
+    )
+    assert created_kb.status_code == 201
+    kb_payload = created_kb.json()["data"]
+    assert kb_payload["tenantId"] == "tenant-a"
+
+    tenant_kbs = web_client.get("/api/v1/knowledge-bases", headers=tenant_headers)
+    assert tenant_kbs.status_code == 200
+    assert tenant_kbs.json()["data"][0]["kbId"] == kb_payload["kbId"]
+
+    default_kbs = web_client.get("/api/v1/knowledge-bases")
+    assert default_kbs.status_code == 200
+    assert default_kbs.json()["data"] == []
+
+    created_agent = web_client.post(
+        "/api/v1/agents",
+        headers=tenant_headers,
+        json={
+            "name": "Tenant Profile Agent",
+            "systemPrompt": "You are tenant scoped.",
+            "memoryScope": "agent_profile",
+        },
+    )
+    assert created_agent.status_code == 201
+    agent_id = created_agent.json()["data"]["agentId"]
+    assert created_agent.json()["data"]["tenantId"] == "tenant-a"
+
+    updated_memory = web_client.put(
+        f"/api/v1/agents/{agent_id}/memory",
+        headers=tenant_headers,
+        json={"content": "Tenant-only memory fact."},
+    )
+    assert updated_memory.status_code == 200
+
+    fetched_memory = web_client.get(
+        f"/api/v1/agents/{agent_id}/memory",
+        headers=tenant_headers,
+    )
+    assert fetched_memory.status_code == 200
+    assert "Tenant-only memory fact." in fetched_memory.json()["data"]["content"]
+
+    missing_default = web_client.get(f"/api/v1/agents/{agent_id}/memory")
+    assert missing_default.status_code == 404
+    assert missing_default.json()["error"]["code"] == "AGENT_NOT_FOUND"
+
+
+def test_web_api_tenant_scoped_channel_bindings(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-routing",
+        name="Tenant Routing",
+    )
+
+    created_agent = web_client.post(
+        "/api/v1/agents",
+        headers=tenant_headers,
+        json={
+            "name": "Tenant Routed Agent",
+            "systemPrompt": "You route tenant messages.",
+        },
+    )
+    assert created_agent.status_code == 201
+    agent_id = created_agent.json()["data"]["agentId"]
+
+    created_binding = web_client.post(
+        "/api/v1/channel-bindings",
+        headers=tenant_headers,
+        json={
+            "channelName": "telegram",
+            "channelChatId": "chat-tenant-a",
+            "targetType": "agent",
+            "targetId": agent_id,
+        },
+    )
+    assert created_binding.status_code == 201
+    binding_payload = created_binding.json()["data"]
+    assert binding_payload["tenantId"] == "tenant-routing"
+
+    resolved_tenant = web_client.post(
+        "/api/v1/channel-bindings/resolve",
+        headers=tenant_headers,
+        json={"channelName": "telegram", "chatId": "chat-tenant-a"},
+    )
+    assert resolved_tenant.status_code == 200
+    resolved_payload = resolved_tenant.json()["data"]
+    assert resolved_payload["resolved"] is True
+    assert resolved_payload["binding"]["targetId"] == agent_id
+
+    resolved_default = web_client.post(
+        "/api/v1/channel-bindings/resolve",
+        json={"channelName": "telegram", "chatId": "chat-tenant-a"},
+    )
+    assert resolved_default.status_code == 200
+    assert resolved_default.json()["data"] == {"binding": None, "resolved": False}
+
+    default_list = web_client.get("/api/v1/channel-bindings")
+    assert default_list.status_code == 200
+    assert default_list.json()["data"] == []
+
+
+def test_web_api_tenant_scoped_channel_audit(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-channel-audit",
+        name="Tenant Channel Audit",
+    )
+
+    created = web_client.app.state.channel_audit_service.record_inbound(
+        tenant_id="tenant-channel-audit",
+        channel_name="telegram",
+        chat_id="chat-audit",
+        session_key="telegram:chat-audit",
+        sender_id="user-audit",
+        message_preview="Need help",
+        resolved=True,
+        resolution_kind="exact",
+        binding_id="cb-audit",
+        target_type="agent",
+        target_id="agent-audit",
+    )
+    web_client.app.state.channel_audit_service.record_inbound(
+        tenant_id="default",
+        channel_name="telegram",
+        chat_id="chat-default",
+        session_key="telegram:chat-default",
+        sender_id="user-default",
+        message_preview="Default tenant message",
+        resolved=False,
+    )
+
+    listing = web_client.get("/api/v1/channel-audit", headers=tenant_headers)
+    assert listing.status_code == 200
+    payload = listing.json()["data"]
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["auditId"] == created["auditId"]
+
+    detail = web_client.get(f"/api/v1/channel-audit/{created['auditId']}", headers=tenant_headers)
+    assert detail.status_code == 200
+    assert detail.json()["data"]["tenantId"] == "tenant-channel-audit"
+
+    missing_default = web_client.get(f"/api/v1/channel-audit/{created['auditId']}")
+    assert missing_default.status_code == 404
+    assert missing_default.json()["error"]["code"] == "CHANNEL_AUDIT_NOT_FOUND"
+
+
+def test_web_api_tenant_control_plane_rejects_api_keys(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-control-plane",
+        name="Tenant Control Plane",
+    )
+
+    forbidden_list = web_client.get("/api/v1/tenants", headers=tenant_headers)
+    assert forbidden_list.status_code == 403
+    assert forbidden_list.json()["error"]["code"] == "TENANT_CONTROL_PLANE_FORBIDDEN"
+
+    forbidden_detail = web_client.get("/api/v1/tenants/tenant-control-plane", headers=tenant_headers)
+    assert forbidden_detail.status_code == 403
+    assert forbidden_detail.json()["error"]["code"] == "TENANT_CONTROL_PLANE_FORBIDDEN"
+
+
+def test_web_api_tenant_control_plane_requires_explicit_cookie_selection(web_client: TestClient) -> None:
+    missing_selection = web_client.get("/api/v1/tenants")
+    assert missing_selection.status_code == 403
+    assert missing_selection.json()["error"]["code"] == "TENANT_CONTEXT_REQUIRED"
+
+    selected = web_client.get("/api/v1/tenants", headers={"x-tenant-id": "tenant-console"})
+    assert selected.status_code == 200
+    assert selected.json()["data"] == []
+
+    mismatch = web_client.get(
+        "/api/v1/tenants/tenant-console-target",
+        headers={"x-tenant-id": "tenant-console"},
+    )
+    assert mismatch.status_code == 403
+    assert mismatch.json()["error"]["code"] == "TENANT_CONTEXT_MISMATCH"
+
+
+def test_web_api_tenant_control_plane_audit_and_suspended_api_keys_are_blocked(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-audit",
+        name="Tenant Audit",
+    )
+
+    audit_before = web_client.get(
+        "/api/v1/tenants/tenant-audit/audit",
+        headers={"x-tenant-id": "tenant-audit"},
+    )
+    assert audit_before.status_code == 200
+    audit_payload = audit_before.json()["data"]
+    assert audit_payload["tenantId"] == "tenant-audit"
+    assert audit_payload["isActive"] is True
+    assert audit_payload["isSuspended"] is False
+    assert audit_payload["apiKeyCount"] == 1
+    assert audit_payload["artifactRetentionPolicy"]["tenantId"] == "tenant-audit"
+
+    suspended = web_client.put(
+        "/api/v1/tenants/tenant-audit",
+        headers={"x-tenant-id": "tenant-audit"},
+        json={"status": "suspended"},
+    )
+    assert suspended.status_code == 200
+    assert suspended.json()["data"]["status"] == "suspended"
+    assert suspended.json()["data"]["isSuspended"] is True
+
+    blocked = web_client.get("/api/v1/agents", headers=tenant_headers)
+    assert blocked.status_code == 401
+    assert blocked.json()["error"] == "Invalid or expired API key."
+
+    audit_after = web_client.get(
+        "/api/v1/tenants/tenant-audit/audit",
+        headers={"x-tenant-id": "tenant-audit"},
+    )
+    assert audit_after.status_code == 200
+    assert audit_after.json()["data"]["status"] == "suspended"
+    assert audit_after.json()["data"]["isActive"] is False
+    assert audit_after.json()["data"]["isSuspended"] is True
+
+
+def test_web_api_tenant_scoped_runs_artifacts_and_boundary_audit(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-runs",
+        name="Tenant Runs",
+    )
+
+    run = web_client.app.state.runs.create_run(
+        kind=RunKind.AGENT,
+        label="Tenant audited run",
+        task_preview="Inspect tenant-aware run access",
+        tenant_id="tenant-runs",
+        agent_id="agent-tenant-audit",
+        session_key="agent:audit:telegram:chat-42",
+        origin_channel="telegram",
+        origin_chat_id="chat-42",
+        workspace_path="/tmp/tenant-runs/workspace",
+        memory_scope="agent_profile",
+        knowledge_scope="bindings",
+    )
+    web_client.app.state.runs.append_event(
+        run.run_id,
+        "execution_context_materialized",
+        {
+            "principalKind": "agent",
+            "principalId": "agent-tenant-audit",
+            "label": "Tenant Audit Agent",
+            "workspacePath": "/tmp/tenant-runs/workspace",
+            "workspaceScope": "agent",
+            "sandboxKind": "local",
+            "execWorkingDir": "/tmp/tenant-runs/workspace",
+            "restrictToWorkspace": True,
+            "execTimeoutSeconds": 30,
+        },
+    )
+    web_client.app.state.runs.append_event(
+        run.run_id,
+        "bindings_resolved",
+        {
+            "toolAllowlist": ["read_file"],
+            "knowledgeBindingIds": ["kb-tenant-audit"],
+            "knowledgeNames": ["Tenant Audit KB"],
+            "mcpServerIds": [],
+            "skillIds": [],
+        },
+    )
+    web_client.app.state.runs.append_event(
+        run.run_id,
+        "channel_dispatch_resolved",
+        {
+            "tenantId": "tenant-runs",
+            "bindingId": "cb-tenant-runs",
+            "targetType": "agent",
+            "targetId": "agent-tenant-audit",
+            "channelName": "telegram",
+            "chatId": "chat-42",
+            "sessionKey": "agent:audit:telegram:chat-42",
+        },
+    )
+    web_client.app.state.runs.start_run(run.run_id)
+    artifact_path = web_client.app.state.runs.write_markdown_artifact(
+        run.run_id,
+        title="Tenant audited run",
+        sections=[("Summary", "Tenant audit artifact body.")],
+    )
+    web_client.app.state.runs.complete_run(
+        run.run_id,
+        RunResultSummary(content="Tenant audit artifact body."),
+        artifact_path=artifact_path,
+    )
+
+    tenant_list = web_client.get("/api/v1/runs", headers=tenant_headers)
+    assert tenant_list.status_code == 200
+    assert tenant_list.json()["data"]["items"][0]["runId"] == run.run_id
+
+    default_list = web_client.get("/api/v1/runs")
+    assert default_list.status_code == 200
+    assert default_list.json()["data"]["items"] == []
+
+    detail = web_client.get(f"/api/v1/runs/{run.run_id}", headers=tenant_headers)
+    assert detail.status_code == 200
+    assert detail.json()["data"]["tenantId"] == "tenant-runs"
+
+    detail_default = web_client.get(f"/api/v1/runs/{run.run_id}")
+    assert detail_default.status_code == 404
+    assert detail_default.json()["error"]["code"] == "RUN_NOT_FOUND"
+
+    artifact = web_client.get(f"/api/v1/runs/{run.run_id}/artifact", headers=tenant_headers)
+    assert artifact.status_code == 200
+    artifact_payload = artifact.json()["data"]
+    assert artifact_payload["tenantId"] == "tenant-runs"
+    assert artifact_payload["audit"]["storageScope"] == "tenant_instance_scoped"
+    assert "Tenant audit artifact body." in artifact_payload["content"]
+
+    artifact_default = web_client.get(f"/api/v1/runs/{run.run_id}/artifact")
+    assert artifact_default.status_code == 404
+    assert artifact_default.json()["error"]["code"] == "RUN_NOT_FOUND"
+
+    boundary = web_client.get(f"/api/v1/runs/{run.run_id}/boundary-audit", headers=tenant_headers)
+    assert boundary.status_code == 200
+    boundary_payload = boundary.json()["data"]
+    assert boundary_payload["channel"]["routing"]["bindingId"] == "cb-tenant-runs"
+    assert boundary_payload["environment"]["workspaceScope"] == "agent"
+    assert boundary_payload["artifact"]["storageScope"] == "tenant_instance_scoped"
+
+    boundary_default = web_client.get(f"/api/v1/runs/{run.run_id}/boundary-audit")
+    assert boundary_default.status_code == 404
+    assert boundary_default.json()["error"]["code"] == "RUN_NOT_FOUND"
+
+
+def test_web_api_tenant_scoped_artifact_lifecycle_governance(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-artifact-gov",
+        name="Tenant Artifact Governance",
+    )
+
+    run = web_client.app.state.runs.create_run(
+        kind=RunKind.AGENT,
+        label="Tenant governed artifact",
+        task_preview="Govern artifact lifecycle",
+        tenant_id="tenant-artifact-gov",
+        agent_id="agent-artifact",
+        session_key="agent:artifact:telegram:chat-7",
+    )
+    web_client.app.state.runs.start_run(run.run_id)
+    artifact_path = web_client.app.state.runs.write_markdown_artifact(
+        run.run_id,
+        title="Tenant governed artifact",
+        sections=[("Summary", "Governed content.")],
+    )
+    web_client.app.state.runs.complete_run(
+        run.run_id,
+        RunResultSummary(content="Governed content."),
+        artifact_path=artifact_path,
+    )
+
+    quarantined = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/quarantine",
+        headers=tenant_headers,
+        json={"reason": "manual review"},
+    )
+    assert quarantined.status_code == 200
+    assert quarantined.json()["data"]["lifecycleStatus"] == "quarantined"
+
+    audit = web_client.get(f"/api/v1/runs/{run.run_id}/artifact/audit", headers=tenant_headers)
+    assert audit.status_code == 200
+    assert audit.json()["data"]["lifecycleStatus"] == "quarantined"
+
+    archived = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/archive",
+        headers=tenant_headers,
+        json={"reason": "archive before delete"},
+    )
+    assert archived.status_code == 409
+
+    restored_from_quarantine = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/restore",
+        headers=tenant_headers,
+        json={"reason": "resume review"},
+    )
+    assert restored_from_quarantine.status_code == 200
+    assert restored_from_quarantine.json()["data"]["lifecycleStatus"] == "active"
+
+    archived = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/archive",
+        headers=tenant_headers,
+        json={"reason": "archive before delete"},
+    )
+    assert archived.status_code == 200
+    assert archived.json()["data"]["lifecycleStatus"] == "archived"
+
+    policy = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/policy",
+        headers=tenant_headers,
+        json={"archiveAfterDays": None, "deleteAfterDays": 0, "reason": "auto cleanup"},
+    )
+    assert policy.status_code == 200
+    assert policy.json()["data"]["nextAction"] == "delete"
+
+    applied = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/retention/apply",
+        headers=tenant_headers,
+        json={},
+    )
+    assert applied.status_code == 200
+    assert applied.json()["data"]["applied"] is True
+    assert applied.json()["data"]["action"] == "delete"
+
+    deleted = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/delete",
+        headers=tenant_headers,
+        json={"reason": "cleanup"},
+    )
+    assert deleted.status_code == 409
+
+    missing_artifact = web_client.get(f"/api/v1/runs/{run.run_id}/artifact", headers=tenant_headers)
+    assert missing_artifact.status_code == 404
+    assert missing_artifact.json()["error"]["code"] == "RUN_ARTIFACT_NOT_FOUND"
+
+    restored = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/restore",
+        headers=tenant_headers,
+        json={"reason": "restore"},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["data"]["lifecycleStatus"] == "active"
+
+    cleared_policy = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/policy",
+        headers=tenant_headers,
+        json={"archiveAfterDays": None, "deleteAfterDays": None, "reason": "clear policy"},
+    )
+    assert cleared_policy.status_code == 200
+    assert cleared_policy.json()["data"]["enabled"] is False
+
+    restored_artifact = web_client.get(f"/api/v1/runs/{run.run_id}/artifact", headers=tenant_headers)
+    assert restored_artifact.status_code == 200
+    assert restored_artifact.json()["data"]["audit"]["lifecycleStatus"] == "active"
+    assert restored_artifact.json()["data"]["audit"]["retentionPolicy"]["enabled"] is False
+
+    missing_default = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/delete",
+        json={"reason": "wrong tenant"},
+    )
+    assert missing_default.status_code == 404
+    assert missing_default.json()["error"]["code"] == "RUN_NOT_FOUND"
+
+
+def test_web_api_tenant_scoped_artifact_retention_sweep(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-artifact-sweep",
+        name="Tenant Artifact Sweep",
+    )
+
+    run = web_client.app.state.runs.create_run(
+        kind=RunKind.AGENT,
+        label="Tenant retention sweep artifact",
+        task_preview="Sweep artifact retention",
+        tenant_id="tenant-artifact-sweep",
+        agent_id="agent-artifact-sweep",
+        session_key="agent:artifact:telegram:chat-8",
+    )
+    web_client.app.state.runs.start_run(run.run_id)
+    artifact_path = web_client.app.state.runs.write_markdown_artifact(
+        run.run_id,
+        title="Tenant retention sweep artifact",
+        sections=[("Summary", "Sweep me.")],
+    )
+    web_client.app.state.runs.complete_run(
+        run.run_id,
+        RunResultSummary(content="Sweep me."),
+        artifact_path=artifact_path,
+    )
+    web_client.app.state.runs.set_artifact_retention_policy(
+        run.run_id,
+        archive_after_days=0,
+        delete_after_days=14,
+        reason="scheduled archive",
+    )
+
+    swept = web_client.post(
+        "/api/v1/runs/artifacts/retention/sweep",
+        headers=tenant_headers,
+        json={"limit": 20},
+    )
+    assert swept.status_code == 200
+    payload = swept.json()["data"]
+    assert payload["evaluated"] == 1
+    assert payload["applied"] == 1
+    assert payload["archived"] == 1
+    assert payload["deleted"] == 0
+    assert payload["items"][0]["runId"] == run.run_id
+    assert payload["items"][0]["action"] == "archive"
+
+
+def test_web_api_tenant_default_artifact_retention_policy(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-default-retention",
+        name="Tenant Default Retention",
+    )
+    cookie_tenant_headers = {"x-tenant-id": "tenant-default-retention"}
+
+    updated_policy = web_client.put(
+        "/api/v1/tenants/tenant-default-retention/artifact-retention-policy",
+        headers=cookie_tenant_headers,
+        json={
+            "archiveAfterDays": 0,
+            "deleteAfterDays": 21,
+            "reason": "tenant baseline",
+        },
+    )
+    assert updated_policy.status_code == 200
+    assert updated_policy.json()["data"]["enabled"] is True
+    assert updated_policy.json()["data"]["archiveAfterDays"] == 0
+
+    policy = web_client.get(
+        "/api/v1/tenants/tenant-default-retention/artifact-retention-policy",
+        headers=cookie_tenant_headers,
+    )
+    assert policy.status_code == 200
+    assert policy.json()["data"]["deleteAfterDays"] == 21
+
+    run = web_client.app.state.runs.create_run(
+        kind=RunKind.AGENT,
+        label="Tenant default retention artifact",
+        task_preview="Inherit tenant default retention",
+        tenant_id="tenant-default-retention",
+        agent_id="agent-tenant-default-retention",
+        session_key="agent:artifact:telegram:chat-9",
+    )
+    web_client.app.state.runs.start_run(run.run_id)
+    artifact_path = web_client.app.state.runs.write_markdown_artifact(
+        run.run_id,
+        title="Tenant default retention artifact",
+        sections=[("Summary", "Tenant default governed content.")],
+    )
+    web_client.app.state.runs.complete_run(
+        run.run_id,
+        RunResultSummary(content="Tenant default governed content."),
+        artifact_path=artifact_path,
+    )
+
+    audit = web_client.get(f"/api/v1/runs/{run.run_id}/artifact/audit", headers=tenant_headers)
+    assert audit.status_code == 200
+    assert audit.json()["data"]["retentionPolicy"]["enabled"] is True
+    assert audit.json()["data"]["retentionPolicy"]["source"] == "tenant_default"
+    assert audit.json()["data"]["retentionPolicy"]["nextAction"] == "archive"
+
+    applied = web_client.post(
+        f"/api/v1/runs/{run.run_id}/artifact/retention/apply",
+        headers=tenant_headers,
+        json={},
+    )
+    assert applied.status_code == 200
+    assert applied.json()["data"]["applied"] is True
+    assert applied.json()["data"]["action"] == "archive"
+
+    archived_audit = web_client.get(f"/api/v1/runs/{run.run_id}/artifact/audit", headers=tenant_headers)
+    assert archived_audit.status_code == 200
+    assert archived_audit.json()["data"]["lifecycleStatus"] == "archived"
+
+
+def test_web_api_agent_template_artifact_retention_policy_inherited_by_run_audit(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-agent-template-retention",
+        name="Agent Template Retention",
+    )
+
+    created = web_client.post(
+        "/api/v1/agents",
+        headers=tenant_headers,
+        json={
+            "name": "Retention Agent",
+            "systemPrompt": "Keep retention tidy.",
+            "artifactRetentionPolicy": {
+                "archiveAfterDays": 2,
+                "deleteAfterDays": 9,
+            },
+        },
+    )
+    assert created.status_code == 201
+    agent = created.json()["data"]
+    assert agent["artifactRetentionPolicy"]["archiveAfterDays"] == 2
+    assert agent["artifactRetentionPolicy"]["deleteAfterDays"] == 9
+
+    run = web_client.app.state.runs.create_run(
+        kind=RunKind.AGENT,
+        label="Agent template retention artifact",
+        task_preview="Inherit agent template retention",
+        tenant_id="tenant-agent-template-retention",
+        agent_id=agent["agentId"],
+        session_key="agent:artifact:telegram:chat-agent-template",
+    )
+    web_client.app.state.runs.start_run(run.run_id)
+    artifact_path = web_client.app.state.runs.write_markdown_artifact(
+        run.run_id,
+        title="Agent template retention artifact",
+        sections=[("Summary", "Agent template governed content.")],
+    )
+    web_client.app.state.runs.complete_run(
+        run.run_id,
+        RunResultSummary(content="Agent template governed content."),
+        artifact_path=artifact_path,
+    )
+
+    audit = web_client.get(f"/api/v1/runs/{run.run_id}/artifact/audit", headers=tenant_headers)
+    assert audit.status_code == 200
+    retention = audit.json()["data"]["retentionPolicy"]
+    assert retention["enabled"] is True
+    assert retention["source"] == "agent_template"
+    assert retention["archiveAfterDays"] == 2
+    assert retention["deleteAfterDays"] == 9
+
+
+def test_web_api_team_template_artifact_retention_policy_inherited_by_run_audit(web_client: TestClient) -> None:
+    tenant_headers = _create_tenant_api_headers(
+        web_client,
+        tenant_id="tenant-team-template-retention",
+        name="Team Template Retention",
+    )
+
+    leader = web_client.post(
+        "/api/v1/agents",
+        headers=tenant_headers,
+        json={
+            "name": "Template Leader",
+            "systemPrompt": "Lead the template team.",
+            "artifactRetentionPolicy": {
+                "archiveAfterDays": 10,
+                "deleteAfterDays": 20,
+            },
+        },
+    )
+    assert leader.status_code == 201
+    member = web_client.post(
+        "/api/v1/agents",
+        headers=tenant_headers,
+        json={
+            "name": "Template Member",
+            "systemPrompt": "Support the template team.",
+        },
+    )
+    assert member.status_code == 201
+
+    created = web_client.post(
+        "/api/v1/teams",
+        headers=tenant_headers,
+        json={
+            "name": "Retention Team",
+            "supervisorAgentId": leader.json()["data"]["agentId"],
+            "memberAgentIds": [member.json()["data"]["agentId"]],
+            "artifactRetentionPolicy": {
+                "archiveAfterDays": 0,
+                "deleteAfterDays": 5,
+            },
+        },
+    )
+    assert created.status_code == 201
+    team = created.json()["data"]
+    assert team["artifactRetentionPolicy"]["archiveAfterDays"] == 0
+    assert team["artifactRetentionPolicy"]["deleteAfterDays"] == 5
+
+    run = web_client.app.state.runs.create_run(
+        kind=RunKind.TEAM,
+        label="Team template retention artifact",
+        task_preview="Inherit team template retention",
+        tenant_id="tenant-team-template-retention",
+        team_id=team["teamId"],
+        agent_id=leader.json()["data"]["agentId"],
+        session_key="team:artifact:telegram:chat-team-template",
+    )
+    web_client.app.state.runs.start_run(run.run_id)
+    artifact_path = web_client.app.state.runs.write_markdown_artifact(
+        run.run_id,
+        title="Team template retention artifact",
+        sections=[("Summary", "Team template governed content.")],
+    )
+    web_client.app.state.runs.complete_run(
+        run.run_id,
+        RunResultSummary(content="Team template governed content."),
+        artifact_path=artifact_path,
+    )
+
+    audit = web_client.get(f"/api/v1/runs/{run.run_id}/artifact/audit", headers=tenant_headers)
+    assert audit.status_code == 200
+    retention = audit.json()["data"]["retentionPolicy"]
+    assert retention["enabled"] is True
+    assert retention["source"] == "team_template"
+    assert retention["archiveAfterDays"] == 0
+    assert retention["deleteAfterDays"] == 5
 
 
 def test_web_api_knowledge_base_crud_upload_and_retrieve(web_client: TestClient) -> None:

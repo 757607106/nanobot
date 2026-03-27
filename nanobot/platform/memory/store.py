@@ -32,6 +32,8 @@ class TeamMemoryStore:
 
         CREATE INDEX IF NOT EXISTS idx_memory_candidates_team
         ON memory_candidates(team_id, status, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_memory_candidates_agent
+        ON memory_candidates(agent_id, status, updated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_memory_candidates_run
         ON memory_candidates(run_id);
         CREATE INDEX IF NOT EXISTS idx_memory_candidates_scope
@@ -120,6 +122,7 @@ class TeamMemoryStore:
         tenant_id: str,
         instance_id: str,
         team_id: str | None = None,
+        agent_id: str | None = None,
         status: str | None = None,
         scope: str | None = None,
         limit: int = 100,
@@ -129,6 +132,9 @@ class TeamMemoryStore:
         if team_id:
             where.append("team_id = ?")
             values.append(team_id)
+        if agent_id:
+            where.append("agent_id = ?")
+            values.append(agent_id)
         if status:
             where.append("status = ?")
             values.append(status)
@@ -156,16 +162,24 @@ class TeamMemoryStore:
         tenant_id: str,
         instance_id: str,
         team_id: str | None = None,
+        agent_id: str | None = None,
         status: str | None = None,
+        scope: str | None = None,
     ) -> int:
         where = ["tenant_id = ?", "instance_id = ?"]
         values: list[Any] = [tenant_id, instance_id]
         if team_id:
             where.append("team_id = ?")
             values.append(team_id)
+        if agent_id:
+            where.append("agent_id = ?")
+            values.append(agent_id)
         if status:
             where.append("status = ?")
             values.append(status)
+        if scope:
+            where.append("scope = ?")
+            values.append(scope)
 
         conn = self._connect()
         row = conn.execute(

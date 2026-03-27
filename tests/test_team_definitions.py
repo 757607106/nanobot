@@ -133,3 +133,35 @@ def test_team_definition_service_validates_agent_membership_and_conflicts(tmp_pa
             },
             tenant_id="default",
         )
+
+
+def test_team_definition_service_rejects_cross_tenant_agent_references(tmp_path) -> None:
+    agent_service = AgentDefinitionService(
+        AgentDefinitionStore(tmp_path / "agents.db"),
+        instance_id="instance-test",
+    )
+    tenant_a_agent = agent_service.create_agent(
+        {
+            "name": "Tenant A Lead",
+            "systemPrompt": "You are Tenant A Lead.",
+        },
+        tenant_id="tenant-a",
+        default_model="deepseek/deepseek-chat",
+        default_tools=["read_file", "write_file"],
+        template_snapshot=None,
+    )
+
+    service = TeamDefinitionService(
+        TeamDefinitionStore(tmp_path / "teams.db"),
+        instance_id="instance-test",
+        agent_lookup=agent_service.require_agent,
+    )
+
+    with pytest.raises(TeamDefinitionValidationError):
+        service.create_team(
+            {
+                "name": "Tenant B Team",
+                "supervisorAgentId": tenant_a_agent["agentId"],
+            },
+            tenant_id="tenant-b",
+        )

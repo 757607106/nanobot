@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING, Any
 
+from nanobot.harness import ChildTaskRequest
+from nanobot.platform.runs import RunControlScope
 from nanobot.agent.tools.base import Tool
 
 if TYPE_CHECKING:
@@ -18,11 +20,11 @@ class SpawnTool(Tool):
         self._session_key = "cli:direct"
         self._run_context: dict[str, Any] = {}
 
-    def set_context(self, channel: str, chat_id: str) -> None:
+    def set_context(self, channel: str, chat_id: str, session_key: str | None = None) -> None:
         """Set the origin context for subagent announcements."""
         self._origin_channel = channel
         self._origin_chat_id = chat_id
-        self._session_key = f"{channel}:{chat_id}"
+        self._session_key = str(session_key or f"{channel}:{chat_id}")
 
     def set_run_context(self, run_context: dict[str, Any] | None) -> None:
         """Attach the current parent run context for lineage tracking."""
@@ -59,6 +61,34 @@ class SpawnTool(Tool):
 
     async def execute(self, task: str, label: str | None = None, **kwargs: Any) -> str:
         """Spawn a subagent to execute the given task."""
+        spawn_child_task = getattr(self._manager, "spawn_child_task", None)
+        if callable(spawn_child_task):
+            return await spawn_child_task(
+                ChildTaskRequest(
+                    task=task,
+                    label=label or "",
+                    tenant_id=self._run_context.get("tenant_id"),
+                    instance_id=self._run_context.get("instance_id"),
+                    principal_kind="subagent",
+                    principal_id=self._run_context.get("agent_id"),
+                    agent_id=self._run_context.get("agent_id"),
+                    team_id=self._run_context.get("team_id"),
+                    thread_id=self._run_context.get("thread_id"),
+                    session_key=self._session_key,
+                    session_id=self._session_key,
+                    session_title=label or task,
+                    origin_channel=self._origin_channel,
+                    origin_chat_id=self._origin_chat_id,
+                    control_scope=(
+                        RunControlScope.CHILD
+                        if self._run_context.get("run_id")
+                        else RunControlScope.TOP_LEVEL
+                    ),
+                    parent_run_id=self._run_context.get("run_id"),
+                    root_run_id=self._run_context.get("root_run_id"),
+                    spawn_depth=int(self._run_context.get("spawn_depth", 0)) + 1,
+                )
+            )
         return await self._manager.spawn(
             task=task,
             label=label,
@@ -70,5 +100,7 @@ class SpawnTool(Tool):
             thread_id=self._run_context.get("thread_id"),
             agent_id=self._run_context.get("agent_id"),
             team_id=self._run_context.get("team_id"),
+            tenant_id=self._run_context.get("tenant_id"),
+            instance_id=self._run_context.get("instance_id"),
             spawn_depth=int(self._run_context.get("spawn_depth", 0)) + 1,
         )

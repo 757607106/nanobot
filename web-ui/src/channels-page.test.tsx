@@ -137,8 +137,8 @@ describe('ChannelsPage', () => {
   it('renders the reference-style channels registry layout', async () => {
     renderPage()
 
-    expect(await screen.findByText('渠道管理')).toBeInTheDocument()
-    expect(screen.getByText('保存投递设置')).toBeInTheDocument()
+    expect(await screen.findByText('消息投递设置')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /保存设置/ })).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
     expect(screen.getByText('Discord')).toBeInTheDocument()
   })

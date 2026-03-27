@@ -5,6 +5,7 @@ import SectionTabs from '../components/SectionTabs'
 const channelsRoutes = [
   { key: '/channels/list', label: '渠道管理', shortLabel: '渠道' },
   { key: '/channels/bindings', label: '消息路由', shortLabel: '路由' },
+  { key: '/channels/audit', label: '渠道审计', shortLabel: '审计' },
 ]
 
 function resolveActiveKey(pathname: string) {

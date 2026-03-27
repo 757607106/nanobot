@@ -22,18 +22,23 @@ test.describe.serial('critical gui flows @critical', () => {
     await login(page, '/system/admin')
     await expect(page).toHaveURL(/\/system\/admin$/)
 
-    await page.getByTestId(testIds.profile.displayName).fill('Console Owner')
-    await page.getByTestId(testIds.profile.email).fill('owner@example.com')
-    await page.getByTestId(testIds.profile.saveProfile).click()
-    await expect(page.getByTestId(testIds.profile.displayName)).toHaveValue('Console Owner')
+    await page.getByRole('button', { name: '编辑资料' }).first().click()
+    const profileDialog = page.getByRole('dialog', { name: '编辑账户资料' })
+    await profileDialog.getByTestId(testIds.profile.displayName).fill('Console Owner')
+    await profileDialog.getByTestId(testIds.profile.email).fill('owner@example.com')
+    await profileDialog.getByRole('button', { name: /保\s*存/ }).click()
+    await expect(profileDialog).toHaveCount(0)
+    await expect(page.locator('.account-admin-user-secondary').filter({ hasText: 'Console Owner' })).toBeVisible()
 
     await page.locator(`[data-testid="${testIds.app.logout}"]:visible`).first().click()
     await expect(page).toHaveURL(/\/login$/)
 
     await login(page, '/system/admin')
     await expect(page).toHaveURL(/\/system\/admin$/)
-    await expect(page.getByTestId(testIds.profile.displayName)).toHaveValue('Console Owner')
-    await expect(page.getByTestId(testIds.profile.email)).toHaveValue('owner@example.com')
+    await page.getByRole('button', { name: '编辑资料' }).first().click()
+    const reopenedProfileDialog = page.getByRole('dialog', { name: '编辑账户资料' })
+    await expect(reopenedProfileDialog.getByTestId(testIds.profile.displayName)).toHaveValue('Console Owner')
+    await expect(reopenedProfileDialog.getByTestId(testIds.profile.email)).toHaveValue('owner@example.com')
   })
 
   test('supports chat upload and deterministic mock replies', async ({ page }) => {
@@ -42,16 +47,21 @@ test.describe.serial('critical gui flows @critical', () => {
     await expect(page).toHaveURL(/\/chat$/)
 
     await page.getByTestId(testIds.chat.newSession).click()
-    await page.getByTestId(testIds.chat.fileInput).setInputFiles(BRIEF_FIXTURE_PATH)
+    const fileChooserPromise = page.waitForEvent('filechooser')
     await page.getByTestId(testIds.chat.uploadFile).click()
+    const fileChooser = await fileChooserPromise
+    await fileChooser.setFiles(BRIEF_FIXTURE_PATH)
     await expect(page.locator('text=/brief\\.txt/').first()).toBeVisible()
 
     await composerInput(page).fill('review the uploaded file')
     await composerSubmit(page).click()
-    await expect(page.getByTestId(testIds.chat.bubbleList)).toContainText('E2E mock 已收到：review the uploaded file')
+    const bubbleList = page.getByTestId(testIds.chat.bubbleList)
+    await expect(bubbleList).toContainText('E2E mock 已收到：[附加文件]')
+    await expect(bubbleList).toContainText(/brief\.txt/)
+    await expect(bubbleList).toContainText('review the uploaded file')
   })
 
-  test('updates MCP detail and shows current tools', async ({ page }) => {
+  test('enables MCP detail and shows current tools', async ({ page }) => {
     await login(page)
     await page.getByTestId(testIds.app.navMcp).click()
     await expect(page).toHaveURL(/\/mcp$/)
@@ -59,14 +69,19 @@ test.describe.serial('critical gui flows @critical', () => {
     await page.getByTestId(`${testIds.mcp.detailLinkPrefix}fixture-mcp`).click()
     await expect(page).toHaveURL(/\/mcp\/fixture-mcp$/)
 
-    await page.getByTestId(testIds.mcp.detailDisplayName).fill('Fixture MCP Ready')
-    await page.getByTestId(testIds.mcp.detailEnv).fill('{\n  "FIXTURE_TOKEN": "demo-token"\n}')
-    await page.getByTestId(testIds.mcp.detailSave).click()
+    const toggleResponsePromise = page.waitForResponse((response) => (
+      response.url().includes('/api/v1/mcp/servers/fixture-mcp/enabled') &&
+      response.request().method() === 'POST'
+    ))
     await page.getByTestId(testIds.mcp.detailToggle).click()
+    const toggleResponse = await toggleResponsePromise
+    expect(toggleResponse.ok()).toBeTruthy()
+    const togglePayload = await toggleResponse.json()
+    expect(togglePayload.data.entry.enabled).toBe(true)
     await expect(page.getByText('fixture_search')).toBeVisible()
     await expect(page.getByText('fixture_read')).toBeVisible()
     await page.getByTestId(testIds.app.navMcp).click()
     await page.getByTestId(`${testIds.mcp.detailLinkPrefix}fixture-mcp`).click()
-    await expect(page.getByTestId(testIds.mcp.detailDisplayName)).toHaveValue('Fixture MCP Ready')
+    await expect(page.getByTestId(testIds.mcp.detailToggle)).toContainText('立即停用')
   })
 })

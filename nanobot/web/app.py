@@ -16,6 +16,7 @@ from nanobot import __version__
 from nanobot.config.loader import get_config_path
 from nanobot.config.schema import Config
 from nanobot.platform.agents import AgentDefinitionService, AgentDefinitionStore
+from nanobot.platform.channel_audit import ChannelAuditService, ChannelAuditStore
 from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBindingStore
 from nanobot.platform.instances import PlatformInstanceService
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
@@ -49,6 +50,7 @@ from nanobot.web.routers import (
     agents_router,
     auth_router,
     channel_bindings_router,
+    channel_audit_router,
     channels_router,
     chat_router,
     knowledge_router,
@@ -103,6 +105,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         TeamMemoryStore(instance.memory_db_path()),
         instance=instance,
         instance_id=instance.id,
+        agent_lookup=agents.require_agent,
         team_lookup=teams.require_team,
     )
     runs = RunService(
@@ -111,22 +114,32 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         artifact_dir=instance.agent_artifacts_dir(),
     )
     tenants_service = TenantService(TenantStore(instance.tenants_db_path()))
+    runs.bind_tenant_settings_loader(lambda tenant_id: tenants_service.get_tenant(tenant_id))
+    runs.bind_definition_policy_loaders(
+        agent_loader=lambda agent_id, tenant_id=None: agents.get_agent(agent_id, tenant_id=tenant_id),
+        team_loader=lambda team_id, tenant_id=None: teams.get_team(team_id, tenant_id=tenant_id),
+    )
     channel_bindings_service = ChannelBindingService(
         ChannelBindingStore(instance.channel_bindings_db_path()),
         instance_id=instance.id,
         agent_lookup=agents.require_agent,
         team_lookup=teams.require_team,
     )
+    channel_audit_service = ChannelAuditService(
+        ChannelAuditStore(instance.channel_audit_db_path()),
+        instance_id=instance.id,
+    )
 
-    def build_team_artifact_sources(team_id: str) -> list[dict[str, Any]]:
+    def build_team_artifact_sources(team_id: str, *, tenant_id: str | None = None) -> list[dict[str, Any]]:
+        scoped_runs = runs.with_tenant(tenant_id) if hasattr(runs, "with_tenant") else runs
         sources: list[dict[str, Any]] = []
-        for run in runs.list_runs(team_id=team_id, limit=50):
+        for run in scoped_runs.list_runs(team_id=team_id, limit=50):
             run_id = str(run.get("runId") or "").strip()
             artifact_path = str(run.get("artifactPath") or "").strip()
             if not run_id or not artifact_path:
                 continue
             try:
-                artifact = runs.get_artifact(run_id)
+                artifact = scoped_runs.get_artifact(run_id)
             except Exception:
                 continue
             content = str(artifact.get("content") or "").strip()
@@ -171,6 +184,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         app.state.setup = setup
         app.state.tenants_service = tenants_service
         app.state.channel_bindings_service = channel_bindings_service
+        app.state.channel_audit_service = channel_audit_service
         try:
             memory.bind_runtime_sources(
                 team_thread_source_loader=app.state.web.team_runtime.get_team_thread_memory_source,
@@ -181,6 +195,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
             app.state.web.app_knowledge = knowledge
             app.state.web.app_memory = memory
             app.state.web.channel_bindings_service = channel_bindings_service
+            app.state.web.channel_audit_service = channel_audit_service
             app.state.web.channel_runtime.start()
             yield
         finally:
@@ -206,6 +221,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.state.setup = setup
     app.state.tenants_service = tenants_service
     app.state.channel_bindings_service = channel_bindings_service
+    app.state.channel_audit_service = channel_audit_service
 
     @app.exception_handler(APIError)
     async def handle_api_error(_request: Request, exc: APIError) -> JSONResponse:
@@ -256,6 +272,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.include_router(setup_router)
     app.include_router(mcp_router)
     app.include_router(channels_router)
+    app.include_router(channel_audit_router)
     app.include_router(channel_bindings_router)
     app.include_router(knowledge_router)
     app.include_router(knowledge_legacy_router)

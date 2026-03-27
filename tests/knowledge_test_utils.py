@@ -32,6 +32,22 @@ class FakeRAGEngine:
         self._docs: dict[str, dict[str, dict[str, str]]] = {}
         self.prepare_calls: list[tuple[str, str]] = []
 
+    async def shutdown_async(self) -> None:
+        return None
+
+    async def reset_kb(self, kb_id: str) -> None:
+        self._docs.pop(kb_id, None)
+
+    async def delete_kb(self, kb_id: str) -> None:
+        self._docs.pop(kb_id, None)
+
+    async def delete_document(self, kb_id: str, doc_id: str) -> None:
+        if kb_id in self._docs:
+            self._docs[kb_id].pop(doc_id, None)
+
+    async def prepare_document_ingest(self, kb_id: str, doc_id: str) -> None:
+        self.prepare_calls.append((kb_id, doc_id))
+
     async def insert_text(
         self,
         kb_id: str,

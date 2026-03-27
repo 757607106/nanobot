@@ -12,6 +12,7 @@ from nanobot.platform.runs.models import (
 )
 from nanobot.platform.runs.service import (
     RunArtifactNotFoundError,
+    RunArtifactLifecycleError,
     RunLimitExceededError,
     RunNotFoundError,
     RunService,
@@ -22,6 +23,7 @@ from nanobot.platform.runs.store import RunStore
 __all__ = [
     "RunControlScope",
     "RunArtifactNotFoundError",
+    "RunArtifactLifecycleError",
     "RunErrorSummary",
     "RunEvent",
     "RunKind",

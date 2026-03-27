@@ -88,6 +88,9 @@ class PlatformInstance:
     def team_memory_dir(self) -> Path:
         return ensure_dir(self.data_dir / "team-memory")
 
+    def agent_memory_dir(self) -> Path:
+        return ensure_dir(self.data_dir / "agent-memory")
+
     def knowledge_files_dir(self) -> Path:
         return ensure_dir(self.data_dir / "knowledge-files")
 
@@ -102,6 +105,9 @@ class PlatformInstance:
 
     def channel_bindings_db_path(self) -> Path:
         return self.data_dir / "web-channel-bindings.db"
+
+    def channel_audit_db_path(self) -> Path:
+        return self.data_dir / "web-channel-audit.db"
 
     def mcp_installs_dir(self) -> Path:
         return ensure_dir(self.data_dir / "mcp-installs")

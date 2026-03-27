@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from nanobot.web.http import APIError, _json_response, _ok
+from nanobot.web.tenant_context import get_tenant_knowledge_service
 from nanobot.web.routers.knowledge import (
     create_knowledge_base,
     create_knowledge_folder,
@@ -39,9 +40,13 @@ from nanobot.web.routers.knowledge_common import _handle_knowledge_error
 router = APIRouter()
 
 
+def _knowledge_service(request: Request):
+    return get_tenant_knowledge_service(request)
+
+
 def _legacy_query_params_payload(request: Request, kb_id: str) -> dict[str, Any]:
-    schema = request.app.state.knowledge.get_query_param_schema(kb_id)
-    current = request.app.state.knowledge.get_query_params(kb_id)
+    schema = _knowledge_service(request).get_query_param_schema(kb_id)
+    current = _knowledge_service(request).get_query_params(kb_id)
     current_options = dict(current.get("options") or {})
     merged_options: list[dict[str, Any]] = []
     for option in list(schema.get("options") or []):
@@ -62,7 +67,7 @@ def _legacy_query_params_payload(request: Request, kb_id: str) -> dict[str, Any]
 
 
 def _legacy_document_detail_payload(request: Request, kb_id: str, doc_id: str) -> dict[str, Any]:
-    detail = request.app.state.knowledge.get_file_detail(kb_id, doc_id)
+    detail = _knowledge_service(request).get_file_detail(kb_id, doc_id)
     file_payload = dict(detail.get("file") or {})
     return {
         **file_payload,
@@ -152,7 +157,7 @@ async def legacy_upload_knowledge_file(
     if not db_id:
         raise APIError(400, "KNOWLEDGE_INVALID", "db_id is required for legacy upload.")
     try:
-        data = request.app.state.knowledge.upload_files(
+        data = _knowledge_service(request).upload_files(
             db_id,
             [
                 {
@@ -190,7 +195,7 @@ def legacy_fetch_knowledge_url_file(
     if not db_id:
         raise APIError(400, "KNOWLEDGE_INVALID", "db_id is required for legacy URL fetch.")
     try:
-        data = request.app.state.knowledge.fetch_url_file(
+        data = _knowledge_service(request).fetch_url_file(
             db_id,
             {
                 "url": payload.get("url"),
@@ -222,7 +227,7 @@ def legacy_add_documents(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        data = request.app.state.knowledge.ingest_files(
+        data = _knowledge_service(request).ingest_files(
             db_id,
             {
                 "items": payload.get("items") or [],
@@ -383,7 +388,7 @@ def legacy_update_query_params(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        request.app.state.knowledge.update_query_params(db_id, payload)
+        _knowledge_service(request).update_query_params(db_id, payload)
         data = {"message": "success", "data": payload}
     except Exception as exc:
         _handle_knowledge_error(exc)
@@ -393,7 +398,7 @@ def legacy_update_query_params(
 @router.get("/api/knowledge/databases/{db_id}/sample-questions")
 def legacy_get_sample_questions(request: Request, db_id: str) -> JSONResponse:
     try:
-        data = request.app.state.knowledge.get_sample_questions(db_id)
+        data = _knowledge_service(request).get_sample_questions(db_id)
     except Exception as exc:
         _handle_knowledge_error(exc)
     return _json_response(
@@ -416,7 +421,7 @@ def legacy_generate_sample_questions(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> JSONResponse:
     try:
-        data = request.app.state.knowledge.generate_sample_questions(db_id, count=int(payload.get("count") or 10))
+        data = _knowledge_service(request).generate_sample_questions(db_id, count=int(payload.get("count") or 10))
     except Exception as exc:
         _handle_knowledge_error(exc)
     return _json_response(
@@ -515,8 +520,8 @@ def legacy_delete_evaluation_result(request: Request, db_id: str, task_id: str) 
 @router.get("/api/mindmap/databases/{db_id}/files")
 def legacy_mindmap_files(request: Request, db_id: str) -> JSONResponse:
     try:
-        kb = request.app.state.knowledge.get_knowledge_base(db_id)
-        files = request.app.state.knowledge.list_files(db_id)["items"]
+        kb = _knowledge_service(request).get_knowledge_base(db_id)
+        files = _knowledge_service(request).list_files(db_id)["items"]
     except Exception as exc:
         _handle_knowledge_error(exc)
     return _json_response(
@@ -555,7 +560,7 @@ def legacy_generate_mindmap(
 def legacy_list_graphs(request: Request) -> JSONResponse:
     try:
         graphs = []
-        for kb in request.app.state.knowledge.list_knowledge_bases(enabled=True):
+        for kb in _knowledge_service(request).list_knowledge_bases(enabled=True):
             stats = kb.get("stats") or {}
             graphs.append(
                 {
@@ -588,7 +593,7 @@ def legacy_get_subgraph(
     max_nodes: int = Query(default=100, ge=1, le=1000),
 ) -> JSONResponse:
     try:
-        data = request.app.state.knowledge.get_graph(
+        data = _knowledge_service(request).get_graph(
             db_id,
             node_label=node_label,
             max_depth=max_depth,
@@ -605,7 +610,7 @@ def legacy_get_graph_labels(
     db_id: str = Query(...),
 ) -> JSONResponse:
     try:
-        data = request.app.state.knowledge.get_graph_labels(db_id)
+        data = _knowledge_service(request).get_graph_labels(db_id)
     except Exception as exc:
         _handle_knowledge_error(exc)
     return _json_response(200, _ok(data))
@@ -617,7 +622,7 @@ def legacy_get_graph_stats(
     db_id: str = Query(...),
 ) -> JSONResponse:
     try:
-        data = request.app.state.knowledge.get_graph_stats(db_id)
+        data = _knowledge_service(request).get_graph_stats(db_id)
     except Exception as exc:
         _handle_knowledge_error(exc)
     return _json_response(200, _ok(data))

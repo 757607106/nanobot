@@ -10,11 +10,18 @@ from nanobot.agent.tools.base import Tool
 def _resolve_path(
     path: str,
     workspace: Path | None = None,
+    virtual_workspace: Path | None = None,
     allowed_dir: Path | None = None,
     extra_allowed_dirs: list[Path] | None = None,
 ) -> Path:
     """Resolve path against workspace (if relative) and enforce directory restriction."""
     p = Path(path).expanduser()
+    if p.is_absolute() and workspace and virtual_workspace:
+        try:
+            relative = p.resolve().relative_to(virtual_workspace.resolve())
+            p = workspace / relative
+        except Exception:
+            pass
     if not p.is_absolute() and workspace:
         p = workspace / p
     resolved = p.resolve()
@@ -39,15 +46,17 @@ class _FsTool(Tool):
     def __init__(
         self,
         workspace: Path | None = None,
+        virtual_workspace: Path | None = None,
         allowed_dir: Path | None = None,
         extra_allowed_dirs: list[Path] | None = None,
     ):
         self._workspace = workspace
+        self._virtual_workspace = virtual_workspace
         self._allowed_dir = allowed_dir
         self._extra_allowed_dirs = extra_allowed_dirs
 
     def _resolve(self, path: str) -> Path:
-        return _resolve_path(path, self._workspace, self._allowed_dir, self._extra_allowed_dirs)
+        return _resolve_path(path, self._workspace, self._virtual_workspace, self._allowed_dir, self._extra_allowed_dirs)
 
 
 # ---------------------------------------------------------------------------

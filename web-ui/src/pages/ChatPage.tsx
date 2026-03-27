@@ -552,7 +552,6 @@ export default function ChatPage() {
 
       return {
         key: info.id,
-        role: item.role,
         placement: isUser ? 'end' : 'start',
         loading:
           isAssistant &&
@@ -975,10 +974,12 @@ export default function ChatPage() {
           ) : (
             <div className="conversation-list-shell">
               <Conversations
+                aria-label="聊天会话列表"
                 className="conversation-list"
                 items={conversationItems}
                 activeKey={currentSessionId ?? undefined}
                 classNames={{ item: 'conversation-list-item' }}
+                tabIndex={0}
                 groupable={{
                   title: (group) => <span className="conversation-group-title">{group}</span>,
                 }}

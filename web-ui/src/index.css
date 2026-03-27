@@ -2197,6 +2197,12 @@ a {
   height: 100%;
 }
 
+.conversation-list:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--nb-accent) 70%, white 30%);
+  outline-offset: 4px;
+  border-radius: 24px;
+}
+
 .conversation-copy {
   display: flex;
   flex-direction: column;
@@ -2215,6 +2221,11 @@ a {
   color: var(--nb-muted);
   font-size: var(--nb-text-xs);
   line-height: 1.4;
+}
+
+.theme-light .conversation-summary,
+.theme-light .conversation-group-title {
+  color: #6f544c !important;
 }
 
 .conversation-list .ant-x-conversations-item,
@@ -5971,8 +5982,8 @@ textarea.config-json-editor.ant-input {
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
-  --nb-ink: #5d4037;
-  --nb-muted: #8d7369;
+  --nb-ink: #4a322b;
+  --nb-muted: #6f544c;
   --nb-surface: rgba(249, 245, 241, 0.74);
   --nb-surface-strong: rgba(252, 249, 246, 0.9);
   --nb-surface-dark: rgba(82, 63, 56, 0.92);
@@ -6018,17 +6029,17 @@ textarea.config-json-editor.ant-input {
   --nb-page-hero-subtext: var(--nb-muted);
   --nb-page-hero-chip-bg: rgba(255, 255, 255, 0.46);
   --nb-page-hero-chip-border: rgba(120, 97, 88, 0.12);
-  --nb-page-hero-chip-text: #77584e;
+  --nb-page-hero-chip-text: #66493f;
   --nb-page-hero-stat-bg: rgba(255, 255, 255, 0.42);
   --nb-page-hero-stat-border: rgba(120, 97, 88, 0.12);
-  --nb-page-hero-stat-muted: #947a71;
+  --nb-page-hero-stat-muted: #74584f;
   --nb-page-hero-action-bg: rgba(255, 255, 255, 0.42);
   --nb-page-hero-action-text: var(--nb-ink);
   --nb-page-hero-action-border: rgba(120, 97, 88, 0.12);
   --nb-page-hero-danger-text: #9f5b4f;
   --nb-page-hero-danger-border: rgba(159, 91, 79, 0.16);
   --nb-note-bg: rgba(255, 255, 255, 0.46);
-  --nb-note-text: #876d64;
+  --nb-note-text: #6f544c;
   --nb-conversation-active-bg: linear-gradient(180deg, rgba(232, 193, 193, 0.26), rgba(232, 193, 193, 0.18));
   --nb-conversation-active-border: rgba(157, 111, 111, 0.18);
   --nb-conversation-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
@@ -6038,7 +6049,7 @@ textarea.config-json-editor.ant-input {
     var(--nb-card-texture);
   --nb-progress-strip-bg: rgba(255, 255, 255, 0.42);
   --nb-progress-strip-border: rgba(120, 97, 88, 0.12);
-  --nb-progress-title: #7a5a51;
+  --nb-progress-title: #65483f;
   --nb-progress-pill-bg: rgba(255, 255, 255, 0.5);
   --nb-progress-pill-border: rgba(120, 97, 88, 0.12);
   --nb-progress-pill-text: var(--nb-ink);
@@ -6056,7 +6067,7 @@ textarea.config-json-editor.ant-input {
   --nb-composer-border: rgba(120, 97, 88, 0.12);
   --nb-quick-chip-bg: rgba(255, 255, 255, 0.38);
   --nb-quick-chip-border: rgba(120, 97, 88, 0.12);
-  --nb-quick-chip-text: #72584f;
+  --nb-quick-chip-text: #5f433b;
   --nb-quick-chip-hover-bg: rgba(232, 193, 193, 0.2);
   --nb-quick-chip-hover-border: rgba(157, 111, 111, 0.18);
   --nb-quick-chip-hover-text: var(--nb-rose-text);
@@ -6079,12 +6090,12 @@ textarea.config-json-editor.ant-input {
   --nb-brand-chip-bg: rgba(255, 255, 255, 0.42);
   --nb-brand-chip-border: rgba(120, 97, 88, 0.12);
   --nb-brand-copy-text: var(--nb-ink);
-  --nb-sidebar-status-text: #856c63;
+  --nb-sidebar-status-text: #684c43;
   --nb-nav-hover-bg: rgba(232, 193, 193, 0.14);
   --nb-nav-selected-bg: linear-gradient(180deg, rgba(232, 193, 193, 0.42), rgba(232, 193, 193, 0.24));
   --nb-nav-selected-border: rgba(157, 111, 111, 0.18);
-  --nb-nav-title: var(--nb-ink);
-  --nb-nav-summary: var(--nb-muted);
+  --nb-nav-title: #4a322b;
+  --nb-nav-summary: #6a5147;
   --nb-nav-icon: #6f544c;
   --nb-nav-selected-text: var(--nb-rose-text);
   --nb-sidebar-footer-mono-bg: rgba(255, 255, 255, 0.28);
@@ -6096,7 +6107,7 @@ textarea.config-json-editor.ant-input {
   --nb-chat-focus-border: rgba(120, 97, 88, 0.12);
   --nb-chat-focus-stat-bg: rgba(255, 255, 255, 0.44);
   --nb-chat-focus-stat-border: rgba(120, 97, 88, 0.12);
-  --nb-chat-focus-stat-label: #8f756b;
+  --nb-chat-focus-stat-label: #6f544c;
   --nb-scroll-thumb: rgba(157, 111, 111, 0.24);
   --nb-scroll-thumb-hover: rgba(157, 111, 111, 0.34);
   --nb-user-avatar-bg: linear-gradient(135deg, #ffc27f 0%, #ff9f43 100%);
@@ -6140,11 +6151,92 @@ textarea.config-json-editor.ant-input {
   --nb-state-warning-text: #b4760d;
   --nb-state-warning-border: color-mix(in srgb, #F39C12 32%, #ffffff 68%);
   --nb-state-muted-bg: rgba(255, 255, 255, 0.28);
-  --nb-state-muted-text: var(--nb-muted);
+  --nb-state-muted-text: #6f544c;
   --nb-state-muted-border: color-mix(in srgb, var(--nb-card-subtle-border) 82%, #ffffff 18%);
   --nb-state-accent-bg: color-mix(in srgb, var(--nb-rose) 78%, #ffffff 22%);
   --nb-state-accent-text: var(--nb-rose-text);
   --nb-state-accent-border: var(--nb-rose-border);
+}
+
+:root:not([data-theme='dark']) .nav-section-label {
+  color: #6a5147 !important;
+}
+
+:root:not([data-theme='dark']) .nav-item-title {
+  color: #5d4037 !important;
+}
+
+:root:not([data-theme='dark']) .section-kicker {
+  color: #9a4f10;
+}
+
+:root:not([data-theme='dark']) .page-stack .ant-empty-description,
+:root:not([data-theme='dark']) .page-card .ant-empty-description {
+  color: #6a5147 !important;
+}
+
+.theme-light .nav-section-label {
+  color: #6a5147 !important;
+}
+
+.theme-light .nav-item-title {
+  color: #5d4037 !important;
+}
+
+.theme-light .section-kicker,
+.theme-light .page-stack .ant-empty-description,
+.theme-light .page-card .ant-empty-description {
+  color: #6a5147 !important;
+}
+
+:root:not([data-theme='dark']) .config-card-header .page-section-title h4.ant-typography,
+:root:not([data-theme='dark']) .config-card-header .page-section-title h5.ant-typography {
+  color: #3f2b24 !important;
+}
+
+:root:not([data-theme='dark']) .page-meta-card span {
+  color: #5d4037 !important;
+}
+
+:root:not([data-theme='dark']) .page-meta-card strong {
+  color: #2f211b !important;
+}
+
+.theme-light .config-card-header .page-section-title h4.ant-typography,
+.theme-light .config-card-header .page-section-title h5.ant-typography {
+  color: #3f2b24 !important;
+}
+
+.theme-light .page-meta-card span {
+  color: #5d4037 !important;
+}
+
+.theme-light .page-meta-card strong {
+  color: #2f211b !important;
+}
+
+.nav-section-label.ant-typography {
+  color: var(--nb-nav-summary) !important;
+}
+
+.config-card-header .page-section-title h4.ant-typography,
+.config-card-header .page-section-title h5.ant-typography,
+.channel-flag-card .ant-typography,
+.channel-flag-card .ant-typography strong,
+.page-meta-card span,
+.page-meta-card strong {
+  color: var(--nb-ink) !important;
+}
+
+.page-meta-card span {
+  color: var(--nb-muted) !important;
+}
+
+.config-card-header .ant-tag,
+.tag-cloud .ant-tag {
+  color: #5a4138 !important;
+  border-color: rgba(120, 97, 88, 0.18) !important;
+  background: rgba(255, 255, 255, 0.58) !important;
 }
 
 :root[data-theme='dark'] {

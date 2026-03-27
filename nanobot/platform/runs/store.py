@@ -297,12 +297,20 @@ class RunStore:
     def count_runs(
         self,
         *,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
         statuses: tuple[str, ...] | None = None,
         session_key: str | None = None,
         parent_run_id: str | None = None,
     ) -> int:
         where: list[str] = []
         values: list[object] = []
+        if tenant_id is not None:
+            where.append("tenant_id = ?")
+            values.append(tenant_id)
+        if instance_id is not None:
+            where.append("instance_id = ?")
+            values.append(instance_id)
         if statuses:
             placeholders = ", ".join("?" for _ in statuses)
             where.append(f"status IN ({placeholders})")

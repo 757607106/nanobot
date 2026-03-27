@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from nanobot.platform.channel_bindings.models import ChannelBinding, now_iso
 from nanobot.platform.channel_bindings.store import ChannelBindingStore
+from nanobot.platform.tenant_scope import call_with_tenant
 
 
 class ChannelBindingNotFoundError(KeyError):
@@ -51,20 +52,20 @@ class ChannelBindingService:
     def _generate_binding_id(self) -> str:
         return f"cb-{secrets.token_hex(8)}"
 
-    def _validate_target(self, target_type: str, target_id: str) -> None:
+    def _validate_target(self, target_type: str, target_id: str, *, tenant_id: str | None = None) -> None:
         if target_type not in _ALLOWED_TARGET_TYPES:
             allowed = ", ".join(sorted(_ALLOWED_TARGET_TYPES))
             raise ChannelBindingValidationError(f"targetType must be one of: {allowed}.")
         if target_type == "agent" and self.agent_lookup:
             try:
-                self.agent_lookup(target_id)
+                call_with_tenant(self.agent_lookup, target_id, tenant_id=tenant_id or "")
             except Exception as exc:
                 raise ChannelBindingValidationError(
                     f"Agent '{target_id}' does not exist."
                 ) from exc
         elif target_type == "team" and self.team_lookup:
             try:
-                self.team_lookup(target_id)
+                call_with_tenant(self.team_lookup, target_id, tenant_id=tenant_id or "")
             except Exception as exc:
                 raise ChannelBindingValidationError(
                     f"Team '{target_id}' does not exist."
@@ -116,7 +117,7 @@ class ChannelBindingService:
             required=True,
             field_name="targetId",
         )
-        self._validate_target(target_type, target_id)
+        self._validate_target(target_type, target_id, tenant_id=tenant_id)
 
         priority = int(payload.get("priority") or 0)
         enabled_raw = payload.get("enabled")
@@ -176,7 +177,7 @@ class ChannelBindingService:
                 field_name="targetId",
             )
 
-        self._validate_target(target_type, target_id)
+        self._validate_target(target_type, target_id, tenant_id=tenant_id)
 
         updated = replace(
             existing,

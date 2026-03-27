@@ -8,8 +8,13 @@ from pydantic import BaseModel
 
 from nanobot.platform.memory import MemoryCandidateNotFoundError, MemoryCandidateValidationError
 from nanobot.web.http import APIError, _json_response, _ok
+from nanobot.web.tenant_context import get_tenant_memory_service
 
 router = APIRouter()
+
+
+def _memory_service(request: Request):
+    return get_tenant_memory_service(request)
 
 
 class TeamMemoryUpdateRequest(BaseModel):
@@ -19,6 +24,7 @@ class TeamMemoryUpdateRequest(BaseModel):
 class MemorySearchRequest(BaseModel):
     query: str
     teamId: str | None = None
+    agentId: str | None = None
     limit: int = 10
     mode: str = "hybrid"
 
@@ -27,12 +33,13 @@ class MemoryGetRequest(BaseModel):
     sourceType: str
     sourceId: str
     teamId: str | None = None
+    agentId: str | None = None
 
 
 @router.get("/api/v1/teams/{team_id}/memory")
 def get_team_memory(request: Request, team_id: str) -> JSONResponse:
     try:
-        data = request.app.state.memory.get_team_memory(team_id)
+        data = _memory_service(request).get_team_memory(team_id)
     except MemoryCandidateValidationError as exc:
         raise APIError(400, "TEAM_MEMORY_INVALID", str(exc)) from exc
     return _json_response(200, _ok(data))
@@ -45,7 +52,7 @@ def update_team_memory(
     payload: TeamMemoryUpdateRequest,
 ) -> JSONResponse:
     try:
-        data = request.app.state.memory.update_team_memory(team_id, payload.content)
+        data = _memory_service(request).update_team_memory(team_id, payload.content)
     except MemoryCandidateValidationError as exc:
         raise APIError(400, "TEAM_MEMORY_INVALID", str(exc)) from exc
     return _json_response(200, _ok(data))
@@ -55,13 +62,15 @@ def update_team_memory(
 def list_memory_candidates(
     request: Request,
     team_id: str | None = Query(default=None, alias="teamId"),
+    agent_id: str | None = Query(default=None, alias="agentId"),
     status: str | None = Query(default=None),
     scope: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
 ) -> JSONResponse:
     try:
-        items = request.app.state.memory.list_candidates(
+        items = _memory_service(request).list_candidates(
             team_id=team_id,
+            agent_id=agent_id,
             status=status,
             scope=scope,
             limit=limit,
@@ -77,9 +86,10 @@ def search_memory(
     payload: MemorySearchRequest,
 ) -> JSONResponse:
     try:
-        data = request.app.state.memory.search(
+        data = _memory_service(request).search(
             query=payload.query,
             team_id=payload.teamId,
+            agent_id=payload.agentId,
             limit=payload.limit,
             mode=payload.mode,
         )
@@ -94,10 +104,11 @@ def get_memory_source(
     payload: MemoryGetRequest,
 ) -> JSONResponse:
     try:
-        data = request.app.state.memory.get_memory_source(
+        data = _memory_service(request).get_memory_source(
             source_type=payload.sourceType,
             source_id=payload.sourceId,
             team_id=payload.teamId,
+            agent_id=payload.agentId,
         )
     except MemoryCandidateValidationError as exc:
         raise APIError(400, "MEMORY_GET_INVALID", str(exc)) from exc
@@ -109,7 +120,7 @@ def get_memory_source(
 @router.post("/api/v1/memory-candidates/{candidate_id}/apply")
 def apply_memory_candidate(request: Request, candidate_id: str) -> JSONResponse:
     try:
-        data = request.app.state.memory.apply_candidate(candidate_id)
+        data = _memory_service(request).apply_candidate(candidate_id)
     except MemoryCandidateNotFoundError as exc:
         raise APIError(404, "MEMORY_CANDIDATE_NOT_FOUND", "Memory candidate not found.") from exc
     return _json_response(200, _ok(data))
@@ -118,7 +129,7 @@ def apply_memory_candidate(request: Request, candidate_id: str) -> JSONResponse:
 @router.post("/api/v1/memory-candidates/{candidate_id}/reject")
 def reject_memory_candidate(request: Request, candidate_id: str) -> JSONResponse:
     try:
-        data = request.app.state.memory.reject_candidate(candidate_id)
+        data = _memory_service(request).reject_candidate(candidate_id)
     except MemoryCandidateNotFoundError as exc:
         raise APIError(404, "MEMORY_CANDIDATE_NOT_FOUND", "Memory candidate not found.") from exc
     return _json_response(200, _ok(data))

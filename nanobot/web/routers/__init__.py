@@ -2,6 +2,7 @@
 
 from nanobot.web.routers.agents import router as agents_router
 from nanobot.web.routers.auth import router as auth_router
+from nanobot.web.routers.channel_audit import router as channel_audit_router
 from nanobot.web.routers.channel_bindings import router as channel_bindings_router
 from nanobot.web.routers.channels import router as channels_router
 from nanobot.web.routers.chat import router as chat_router
@@ -21,6 +22,7 @@ __all__ = [
     "auth_router",
     "agents_router",
     "channel_bindings_router",
+    "channel_audit_router",
     "chat_router",
     "channels_router",
     "knowledge_router",

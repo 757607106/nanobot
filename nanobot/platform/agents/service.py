@@ -6,6 +6,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from nanobot.platform.artifact_retention import normalize_artifact_retention_policy
 from nanobot.platform.agents.models import AgentDefinition, now_iso
 from nanobot.platform.agents.store import AgentDefinitionStore
 
@@ -221,6 +222,11 @@ class AgentDefinitionService:
             self._get_value(payload, "outputFormatHint", "output_format_hint"),
             field_name="outputFormatHint",
         )
+        artifact_retention_policy = normalize_artifact_retention_policy(
+            self._get_value(payload, "artifactRetentionPolicy", "artifact_retention_policy"),
+            error_cls=AgentDefinitionValidationError,
+            default_action_by="agent_template",
+        )
 
         now = now_iso()
         return AgentDefinition(
@@ -246,6 +252,7 @@ class AgentDefinitionService:
             team_role_hint=team_role_hint,
             max_execution_timeout_seconds=max_execution_timeout_seconds,
             output_format_hint=output_format_hint,
+            artifact_retention_policy=artifact_retention_policy,
             created_at=now,
             updated_at=now,
         )
@@ -273,6 +280,7 @@ class AgentDefinitionService:
                 payload, "maxExecutionTimeoutSeconds", "max_execution_timeout_seconds",
             ),
             "output_format_hint": self._get_value(payload, "outputFormatHint", "output_format_hint"),
+            "artifact_retention_policy": self._get_value(payload, "artifactRetentionPolicy", "artifact_retention_policy"),
         }
 
         name = existing.name
@@ -341,6 +349,13 @@ class AgentDefinitionService:
             output_format_hint=existing.output_format_hint
             if updates["output_format_hint"] is None
             else self._normalize_text(updates["output_format_hint"], field_name="outputFormatHint"),
+            artifact_retention_policy=existing.artifact_retention_policy
+            if updates["artifact_retention_policy"] is None
+            else normalize_artifact_retention_policy(
+                updates["artifact_retention_policy"],
+                error_cls=AgentDefinitionValidationError,
+                default_action_by="agent_template",
+            ),
             updated_at=now_iso(),
         )
 

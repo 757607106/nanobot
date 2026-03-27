@@ -32,6 +32,7 @@ const SystemLayoutPage = lazy(() => import('./pages/SystemLayoutPage'))
 const SystemPage = lazy(() => import('./pages/SystemPage'))
 const ValidationPage = lazy(() => import('./pages/ValidationPage'))
 const ChannelBindingsPage = lazy(() => import('./pages/ChannelBindingsPage'))
+const ChannelAuditPage = lazy(() => import('./pages/ChannelAuditPage'))
 const ChannelsLayoutPage = lazy(() => import('./pages/ChannelsLayoutPage'))
 
 function RouteFallback() {
@@ -239,6 +240,7 @@ export function AppRoutes() {
           <Route path="bindings" element={withRouteSuspense(<ChannelBindingsPage />)} />
           <Route path="bindings/new" element={withRouteSuspense(<ChannelBindingsPage />)} />
           <Route path="bindings/:bindingId" element={withRouteSuspense(<ChannelBindingsPage />)} />
+          <Route path="audit" element={withRouteSuspense(<ChannelAuditPage />)} />
         </Route>
         <Route path="channels/:channelName" element={withRouteSuspense(<ChannelDetailPage />)} />
         <Route path="models" element={withRouteSuspense(<ModelsPage />)} />
@@ -254,6 +256,7 @@ export function AppRoutes() {
           <Route path="teams/new" element={withRouteSuspense(<TeamsPage />)} />
           <Route path="teams/:teamId" element={withRouteSuspense(<TeamsPage />)} />
           <Route path="memory" element={withRouteSuspense(<MemoryAuditPage />)} />
+          <Route path="memory/agents/:agentId" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route path="memory/:teamId" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route
             path="runs"

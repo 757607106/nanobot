@@ -8,6 +8,7 @@ import secrets
 from dataclasses import replace
 from typing import Any
 
+from nanobot.platform.artifact_retention import normalize_artifact_retention_policy
 from nanobot.platform.tenants.models import ApiKey, Tenant, now_iso
 from nanobot.platform.tenants.store import TenantStore
 
@@ -90,6 +91,18 @@ class TenantService:
             raise TenantNotFoundError(tenant_id)
         return tenant.to_dict()
 
+    def get_tenant_audit(self, tenant_id: str) -> dict[str, Any]:
+        tenant = self.store.get_tenant(tenant_id)
+        if tenant is None:
+            raise TenantNotFoundError(tenant_id)
+        api_keys = self.store.list_api_keys(tenant_id)
+        policy = self.get_artifact_retention_policy(tenant_id)
+        payload = tenant.to_dict()
+        payload["apiKeyCount"] = len(api_keys)
+        payload["activeApiKeyCount"] = sum(1 for key in api_keys if key.enabled)
+        payload["artifactRetentionPolicy"] = policy
+        return payload
+
     def list_tenants(self) -> list[dict[str, Any]]:
         return [t.to_dict() for t in self.store.list_tenants()]
 
@@ -110,6 +123,42 @@ class TenantService:
         if result is None:
             raise TenantNotFoundError(tenant_id)
         return result.to_dict()
+
+    def get_artifact_retention_policy(self, tenant_id: str) -> dict[str, Any]:
+        tenant = self.store.get_tenant(tenant_id)
+        if tenant is None:
+            raise TenantNotFoundError(tenant_id)
+        settings = tenant.settings if isinstance(tenant.settings, dict) else {}
+        policy = normalize_artifact_retention_policy(
+            settings.get("artifactRetention") or {},
+            error_cls=TenantValidationError,
+            default_action_by="tenant_admin",
+        )
+        policy["tenantId"] = tenant.tenant_id
+        return policy
+
+    def update_artifact_retention_policy(self, tenant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        existing = self.store.get_tenant(tenant_id)
+        if existing is None:
+            raise TenantNotFoundError(tenant_id)
+        settings = dict(existing.settings or {})
+        settings["artifactRetention"] = {
+            **normalize_artifact_retention_policy(
+                payload,
+                error_cls=TenantValidationError,
+                default_action_by="tenant_admin",
+            ),
+            "updatedAt": now_iso(),
+        }
+        updated = replace(
+            existing,
+            settings=settings,
+            updated_at=now_iso(),
+        )
+        result = self.store.update_tenant(updated)
+        if result is None:
+            raise TenantNotFoundError(tenant_id)
+        return self.get_artifact_retention_policy(tenant_id)
 
     def delete_tenant(self, tenant_id: str) -> bool:
         if not self.store.delete_tenant(tenant_id):
@@ -164,6 +213,9 @@ class TenantService:
         key_hash = _hash_key(raw_key)
         api_key = self.store.get_api_key_by_hash(key_hash)
         if api_key is None:
+            return None
+        tenant = self.store.get_tenant(api_key.tenant_id)
+        if tenant is None or not tenant.is_active:
             return None
         if not api_key.enabled:
             return None

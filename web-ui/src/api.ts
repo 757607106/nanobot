@@ -1,12 +1,18 @@
 import type {
   AgentDefinition,
   AgentDefinitionMutationInput,
+  AgentMemorySnapshot,
   AgentRunListResponse,
   AgentRunSummary,
   AgentRunTreeNode,
   AgentTestRunResult,
   RunCancelResult,
+  RunArtifactAudit,
+  RunArtifactRetentionApplyResult,
+  RunArtifactRetentionPolicy,
+  RunArtifactRetentionSweepResult,
   RunArtifactDetail,
+  RunBoundaryAudit,
   AgentTemplateTool,
   AuthStatus,
   CalendarEvent,
@@ -14,6 +20,8 @@ import type {
   CalendarSettings,
   ChannelBinding,
   ChannelBindingMutationInput,
+  ChannelAuditEntry,
+  ChannelAuditListResponse,
   ChannelDetailResponse,
   ChannelListResponse,
   ChannelProbeResult,
@@ -119,7 +127,7 @@ function notifyAuthRequired() {
 }
 
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
-  const { skipJsonContentType, ...fetchOptions } = options ?? {}
+  const { skipJsonContentType, cache, ...fetchOptions } = options ?? {}
   const headers = skipJsonContentType
     ? { ...(options?.headers ?? {}) }
     : {
@@ -128,6 +136,7 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
       }
   const response = await fetch(`${API_BASE}${path}`, {
     headers,
+    cache: cache ?? 'no-store',
     credentials: 'include',
     ...fetchOptions,
   })
@@ -377,6 +386,24 @@ export const api = {
     }),
 
   // Channel Bindings
+  getChannelAudit: (params?: {
+    limit?: number
+    channelName?: string
+    chatId?: string
+    status?: string
+    query?: string
+  }) => {
+    const search = new URLSearchParams()
+    if (params?.limit) search.set('limit', String(params.limit))
+    if (params?.channelName) search.set('channelName', params.channelName)
+    if (params?.chatId) search.set('chatId', params.chatId)
+    if (params?.status) search.set('status', params.status)
+    if (params?.query) search.set('query', params.query)
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request<ChannelAuditListResponse>(`/channel-audit${suffix}`)
+  },
+  getChannelAuditEntry: (auditId: string) =>
+    request<ChannelAuditEntry>(`/channel-audit/${encodeURIComponent(auditId)}`),
   getChannelBindings: () => request<ChannelBinding[]>('/channel-bindings'),
   getChannelBinding: (bindingId: string) => request<ChannelBinding>(`/channel-bindings/${encodeURIComponent(bindingId)}`),
   createChannelBinding: (payload: ChannelBindingMutationInput) =>
@@ -753,6 +780,8 @@ export const api = {
     return request<AgentDefinition[]>(`/agents${search ? `?${search}` : ''}`)
   },
   getAgent: (agentId: string) => request<AgentDefinition>(`/agents/${encodeURIComponent(agentId)}`),
+  getAgentMemory: (agentId: string) =>
+    request<AgentMemorySnapshot>(`/agents/${encodeURIComponent(agentId)}/memory`),
   createAgent: (payload: AgentDefinitionMutationInput) =>
     request<AgentDefinition>('/agents', {
       method: 'POST',
@@ -761,6 +790,19 @@ export const api = {
   updateAgent: (agentId: string, payload: Partial<AgentDefinitionMutationInput>) =>
     request<AgentDefinition>(`/agents/${encodeURIComponent(agentId)}`, {
       method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  updateAgentMemory: (agentId: string, content: string) =>
+    request<AgentMemorySnapshot>(`/agents/${encodeURIComponent(agentId)}/memory`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+  createAgentMemoryCandidate: (
+    agentId: string,
+    payload: { content: string; title?: string; sourceKind?: string; runId?: string | null },
+  ) =>
+    request<MemoryCandidate>(`/agents/${encodeURIComponent(agentId)}/memory-candidates`, {
+      method: 'POST',
       body: JSON.stringify(payload),
     }),
   deleteAgent: (agentId: string) =>
@@ -831,6 +873,7 @@ export const api = {
     }),
   getMemoryCandidates: (params?: {
     teamId?: string
+    agentId?: string
     status?: string
     scope?: string
     limit?: number
@@ -838,6 +881,9 @@ export const api = {
     const query = new URLSearchParams()
     if (params?.teamId) {
       query.set('teamId', params.teamId)
+    }
+    if (params?.agentId) {
+      query.set('agentId', params.agentId)
     }
     if (params?.status) {
       query.set('status', params.status)
@@ -859,12 +905,12 @@ export const api = {
     request<MemoryCandidate>(`/memory-candidates/${encodeURIComponent(candidateId)}/reject`, {
       method: 'POST',
     }),
-  searchMemory: (payload: { query: string; teamId?: string; limit?: number; mode?: string }) =>
+  searchMemory: (payload: { query: string; teamId?: string; agentId?: string; limit?: number; mode?: string }) =>
     request<MemorySearchResult>('/memory-search', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
-  getMemorySource: (payload: { sourceType: string; sourceId: string; teamId?: string }) =>
+  getMemorySource: (payload: { sourceType: string; sourceId: string; teamId?: string; agentId?: string }) =>
     request<MemorySourceDetail>('/memory-get', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -914,6 +960,49 @@ export const api = {
   getRun: (runId: string) => request<AgentRunSummary>(`/runs/${encodeURIComponent(runId)}`),
   getRunTree: (runId: string) => request<AgentRunTreeNode>(`/runs/${encodeURIComponent(runId)}/tree`),
   getRunArtifact: (runId: string) => request<RunArtifactDetail>(`/runs/${encodeURIComponent(runId)}/artifact`),
+  getRunArtifactAudit: (runId: string) => request<RunArtifactAudit>(`/runs/${encodeURIComponent(runId)}/artifact/audit`),
+  getRunArtifactRetentionPolicy: (runId: string) =>
+    request<RunArtifactRetentionPolicy>(`/runs/${encodeURIComponent(runId)}/artifact/policy`),
+  setRunArtifactRetentionPolicy: (
+    runId: string,
+    payload: { archiveAfterDays?: number | null; deleteAfterDays?: number | null; reason?: string | null },
+  ) =>
+    request<RunArtifactRetentionPolicy>(`/runs/${encodeURIComponent(runId)}/artifact/policy`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  applyRunArtifactRetentionPolicy: (runId: string, payload?: { now?: string; reason?: string | null }) =>
+    request<RunArtifactRetentionApplyResult>(`/runs/${encodeURIComponent(runId)}/artifact/retention/apply`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
+  sweepRunArtifactRetention: (payload?: { now?: string; limit?: number }) =>
+    request<RunArtifactRetentionSweepResult>('/runs/artifacts/retention/sweep', {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
+  archiveRunArtifact: (runId: string, reason?: string) =>
+    request<RunArtifactAudit>(`/runs/${encodeURIComponent(runId)}/artifact/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  quarantineRunArtifact: (runId: string, reason?: string) =>
+    request<RunArtifactAudit>(`/runs/${encodeURIComponent(runId)}/artifact/quarantine`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  restoreRunArtifact: (runId: string, reason?: string) =>
+    request<RunArtifactAudit>(`/runs/${encodeURIComponent(runId)}/artifact/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  deleteRunArtifact: (runId: string, reason?: string) =>
+    request<RunArtifactAudit>(`/runs/${encodeURIComponent(runId)}/artifact/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  getRunBoundaryAudit: (runId: string) =>
+    request<RunBoundaryAudit>(`/runs/${encodeURIComponent(runId)}/boundary-audit`),
   getRunChildren: (runId: string) =>
     request<AgentRunListResponse>(`/runs/${encodeURIComponent(runId)}/children`),
   cancelRun: (runId: string) =>

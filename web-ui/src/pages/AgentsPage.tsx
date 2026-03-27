@@ -33,6 +33,7 @@ import {
 import { motion } from 'framer-motion'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
+import { artifactRetentionPolicyToForm, buildArtifactRetentionPolicyInput } from '../artifactRetention'
 import DevOnly from '../components/DevOnly'
 import { useDevMode } from '../devMode'
 import { getModelSuggestions } from '../modelCatalog'
@@ -49,12 +50,14 @@ import { formatDateTimeZh } from '../locale'
 import type {
   AgentDefinition,
   AgentDefinitionMutationInput,
+  AgentMemorySnapshot,
   AgentRunSummary,
   AgentTemplateTool,
   ConfigData,
   ConfigMeta,
   InstalledSkill,
   KnowledgeBaseDefinition,
+  MemoryCandidate,
   McpServerEntry,
 } from '../types'
 
@@ -77,6 +80,8 @@ interface AgentFormState {
   knowledgeBindingIds: string[]
   tags: string[]
   memoryScope: string
+  artifactArchiveAfterDays: string
+  artifactDeleteAfterDays: string
 }
 
 function createEmptyForm(): AgentFormState {
@@ -102,10 +107,13 @@ function createEmptyForm(): AgentFormState {
     knowledgeBindingIds: [],
     tags: [],
     memoryScope: 'agent_profile',
+    artifactArchiveAfterDays: '',
+    artifactDeleteAfterDays: '',
   }
 }
 
 function agentToForm(agent: AgentDefinition): AgentFormState {
+  const artifactRetention = artifactRetentionPolicyToForm(agent.artifactRetentionPolicy)
   return {
     name: agent.name,
     description: agent.description,
@@ -122,6 +130,8 @@ function agentToForm(agent: AgentDefinition): AgentFormState {
     knowledgeBindingIds: [...agent.knowledgeBindingIds],
     tags: [...agent.tags],
     memoryScope: agent.memoryScope || 'agent_profile',
+    artifactArchiveAfterDays: artifactRetention.archiveAfterDays,
+    artifactDeleteAfterDays: artifactRetention.deleteAfterDays,
   }
 }
 
@@ -153,6 +163,10 @@ function toPayload(form: AgentFormState): AgentDefinitionMutationInput {
     knowledgeBindingIds: [...form.knowledgeBindingIds],
     tags: [...form.tags],
     memoryScope: form.memoryScope,
+    artifactRetentionPolicy: buildArtifactRetentionPolicyInput(
+      form.artifactArchiveAfterDays,
+      form.artifactDeleteAfterDays,
+    ),
   }
 }
 
@@ -183,6 +197,16 @@ function statusColor(status: AgentRunSummary['status']) {
   }
 }
 
+const memoryScopeOptions = [
+  { value: 'agent_profile', label: '仅员工自身' },
+  { value: 'team_shared', label: '团队共享' },
+  { value: 'workspace_shared', label: '工作区共享' },
+]
+
+function memoryScopeLabel(scope: string) {
+  return memoryScopeOptions.find((item) => item.value === scope)?.label || scope
+}
+
 export default function AgentsPage() {
   const { message } = App.useApp()
   const location = useLocation()
@@ -198,18 +222,26 @@ export default function AgentsPage() {
   const [mcpServers, setMcpServers] = useState<McpServerEntry[]>([])
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
   const [currentAgent, setCurrentAgent] = useState<AgentDefinition | null>(null)
+  const [agentMemory, setAgentMemory] = useState<AgentMemorySnapshot | null>(null)
+  const [agentMemoryCandidates, setAgentMemoryCandidates] = useState<MemoryCandidate[]>([])
   const [recentRuns, setRecentRuns] = useState<AgentRunSummary[]>([])
   const [form, setForm] = useState<AgentFormState>(() => createEmptyForm())
+  const [agentMemoryDraft, setAgentMemoryDraft] = useState('')
+  const [agentCandidateDraft, setAgentCandidateDraft] = useState('')
   const [testPrompt, setTestPrompt] = useState('请基于当前配置，给我一个可执行的任务处理方案。')
   const [lastResult, setLastResult] = useState<string | null>(null)
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [loadingMemory, setLoadingMemory] = useState(false)
   const [loadingRuns, setLoadingRuns] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [savingMemory, setSavingMemory] = useState(false)
+  const [creatingMemoryCandidate, setCreatingMemoryCandidate] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [copying, setCopying] = useState(false)
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [memoryError, setMemoryError] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [globalConfig, setGlobalConfig] = useState<ConfigData | null>(null)
@@ -226,6 +258,10 @@ export default function AgentsPage() {
     }
     if (!selectedAgentId) {
       setCurrentAgent(null)
+      setAgentMemory(null)
+      setAgentMemoryCandidates([])
+      setAgentMemoryDraft('')
+      setAgentCandidateDraft('')
       setRecentRuns([])
       setLastResult(null)
       setForm(createEmptyForm())
@@ -233,6 +269,7 @@ export default function AgentsPage() {
       return
     }
     void loadAgentDetail(selectedAgentId)
+    void loadAgentMemoryGovernance(selectedAgentId)
     void loadRecentRuns(selectedAgentId)
     setIsDrawerOpen(true)
   }, [agents, isCreateRoute, loadingWorkspace, selectedAgentId])
@@ -373,6 +410,28 @@ export default function AgentsPage() {
     }
   }
 
+  async function loadAgentMemoryGovernance(nextAgentId: string) {
+    try {
+      setLoadingMemory(true)
+      const [snapshot, candidates] = await Promise.all([
+        api.getAgentMemory(nextAgentId),
+        api.getMemoryCandidates({
+          agentId: nextAgentId,
+          scope: 'agent_profile',
+          limit: 50,
+        }),
+      ])
+      setAgentMemory(snapshot)
+      setAgentMemoryDraft(snapshot.content || '')
+      setAgentMemoryCandidates(candidates.items)
+      setMemoryError(null)
+    } catch (loadError) {
+      setMemoryError(getErrorMessage(loadError, '加载员工记忆失败'))
+    } finally {
+      setLoadingMemory(false)
+    }
+  }
+
   function updateForm<K extends keyof AgentFormState>(key: K, value: AgentFormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
   }
@@ -454,7 +513,15 @@ export default function AgentsPage() {
   }
 
   async function handleSave() {
-    const payload = toPayload(form)
+    let payload: AgentDefinitionMutationInput
+    try {
+      payload = toPayload(form)
+    } catch (payloadError) {
+      const nextError = getErrorMessage(payloadError, '产物保留策略无效')
+      setError(nextError)
+      message.error(nextError)
+      return
+    }
     if (!payload.name) {
       const nextError = '员工名称不能为空。'
       setError(nextError)
@@ -483,6 +550,7 @@ export default function AgentsPage() {
       await loadWorkspace()
       navigate(`/studio/agents/${saved.agentId}`, { replace: true })
       await loadAgentDetail(saved.agentId)
+      await loadAgentMemoryGovernance(saved.agentId)
       await loadRecentRuns(saved.agentId)
     } catch (saveError) {
       const nextError = getErrorMessage(saveError, '保存 Agent 失败')
@@ -556,6 +624,76 @@ export default function AgentsPage() {
       setRunError(getErrorMessage(testError, '测试运行失败'))
     } finally {
       setTesting(false)
+    }
+  }
+
+  async function handleSaveAgentMemory() {
+    if (!currentAgent) {
+      setMemoryError('请先保存员工，再维护其长期记忆。')
+      return
+    }
+    try {
+      setSavingMemory(true)
+      const snapshot = await api.updateAgentMemory(currentAgent.agentId, agentMemoryDraft)
+      setAgentMemory(snapshot)
+      setAgentMemoryDraft(snapshot.content || '')
+      message.success('员工记忆已保存')
+      await loadAgentMemoryGovernance(currentAgent.agentId)
+    } catch (saveError) {
+      setMemoryError(getErrorMessage(saveError, '保存员工记忆失败'))
+    } finally {
+      setSavingMemory(false)
+    }
+  }
+
+  async function handleCreateAgentMemoryCandidate() {
+    if (!currentAgent) {
+      setMemoryError('请先保存员工，再提交记忆候选。')
+      return
+    }
+    if (!agentCandidateDraft.trim()) {
+      setMemoryError('请输入候选记忆内容。')
+      return
+    }
+    try {
+      setCreatingMemoryCandidate(true)
+      await api.createAgentMemoryCandidate(currentAgent.agentId, {
+        content: agentCandidateDraft.trim(),
+        sourceKind: 'manual_note',
+      })
+      setAgentCandidateDraft('')
+      message.success('员工记忆候选已提交')
+      await loadAgentMemoryGovernance(currentAgent.agentId)
+    } catch (createError) {
+      setMemoryError(getErrorMessage(createError, '提交员工记忆候选失败'))
+    } finally {
+      setCreatingMemoryCandidate(false)
+    }
+  }
+
+  async function handleApplyAgentMemoryCandidate(candidateId: string) {
+    if (!currentAgent) {
+      return
+    }
+    try {
+      await api.applyMemoryCandidate(candidateId)
+      message.success('候选已应用到员工记忆')
+      await loadAgentMemoryGovernance(currentAgent.agentId)
+    } catch (applyError) {
+      setMemoryError(getErrorMessage(applyError, '应用员工记忆候选失败'))
+    }
+  }
+
+  async function handleRejectAgentMemoryCandidate(candidateId: string) {
+    if (!currentAgent) {
+      return
+    }
+    try {
+      await api.rejectMemoryCandidate(candidateId)
+      message.success('候选已忽略')
+      await loadAgentMemoryGovernance(currentAgent.agentId)
+    } catch (rejectError) {
+      setMemoryError(getErrorMessage(rejectError, '忽略员工记忆候选失败'))
     }
   }
 
@@ -871,12 +1009,29 @@ export default function AgentsPage() {
                         <Select
                           value={form.memoryScope}
                           onChange={(value) => updateForm('memoryScope', value)}
-                          options={[
-                            { value: 'agent_profile', label: '仅员工自身' },
-                            { value: 'team_shared', label: '团队共享' },
-                            { value: 'workspace_shared', label: '工作区共享' },
-                          ]}
+                          options={memoryScopeOptions}
                         />
+                      </div>
+                      <div className="studio-form-field">
+                        <Text type="secondary">产物归档天数</Text>
+                        <Input
+                          value={form.artifactArchiveAfterDays}
+                          onChange={(event) => updateForm('artifactArchiveAfterDays', event.target.value)}
+                          placeholder="留空表示不归档"
+                        />
+                      </div>
+                      <div className="studio-form-field">
+                        <Text type="secondary">产物删除天数</Text>
+                        <Input
+                          value={form.artifactDeleteAfterDays}
+                          onChange={(event) => updateForm('artifactDeleteAfterDays', event.target.value)}
+                          placeholder="留空表示不删除"
+                        />
+                      </div>
+                      <div className="studio-form-field studio-form-field-span-2">
+                        <Text type="secondary">
+                          留空时回退到租户默认策略；只填写删除天数时，会直接按删除策略治理产物。
+                        </Text>
                       </div>
                       <DevOnly>
                         <div className="studio-form-field">
@@ -907,6 +1062,125 @@ export default function AgentsPage() {
                 </Button>
               </Space>
             </div>
+          </Card>
+
+          <Card className="config-panel-card studio-agent-run-card">
+            <div className="config-card-header">
+              <div className="page-section-title">
+                <Typography.Title level={4}>员工记忆治理</Typography.Title>
+              </div>
+              <Space wrap>
+                {currentAgent ? <Tag color="blue">{memoryScopeLabel(form.memoryScope)}</Tag> : null}
+                <Tag color="purple">
+                  {agentMemory?.candidateCount ?? agentMemoryCandidates.filter((item) => item.status === 'proposed').length} 待处理
+                </Tag>
+              </Space>
+            </div>
+
+            {memoryError ? <Alert type="error" showIcon message={memoryError} /> : null}
+
+            {!currentAgent ? (
+              <Empty image={false} description="先保存员工，再治理其长期记忆。" />
+            ) : (
+              <>
+                <div className="studio-form-grid">
+                  <div className="studio-form-field studio-form-field-span-2">
+                    <Text type="secondary">员工长期记忆</Text>
+                    <TextArea
+                      value={agentMemoryDraft}
+                      onChange={(event) => setAgentMemoryDraft(event.target.value)}
+                      rows={6}
+                      placeholder="这里存放该员工稳定可复用的偏好、规范和工作习惯。"
+                    />
+                    <Space wrap>
+                      <Text type="secondary">
+                        {agentMemory?.updatedAt ? `最近更新：${formatDateTimeZh(agentMemory.updatedAt)}` : '未保存'}
+                      </Text>
+                      <Tag>{currentAgent.agentId}</Tag>
+                    </Space>
+                  </div>
+                </div>
+
+                <div className="studio-form-actions">
+                  <Space wrap>
+                    <Button icon={<ReloadOutlined />} onClick={() => void loadAgentMemoryGovernance(currentAgent.agentId)} loading={loadingMemory}>
+                      刷新记忆
+                    </Button>
+                    <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSaveAgentMemory()} loading={savingMemory}>
+                      保存员工记忆
+                    </Button>
+                    <Button onClick={() => navigate(`/studio/memory/agents/${currentAgent.agentId}`)}>
+                      进入统一记忆审计
+                    </Button>
+                  </Space>
+                </div>
+
+                <div className="studio-runs-header">
+                  <Typography.Title level={5}>提交候选</Typography.Title>
+                </div>
+
+                <div className="studio-form-field">
+                  <Text type="secondary">候选内容</Text>
+                  <TextArea
+                    value={agentCandidateDraft}
+                    onChange={(event) => setAgentCandidateDraft(event.target.value)}
+                    rows={4}
+                    placeholder="先把可能有价值的稳定偏好提成候选，再决定是否应用到员工记忆。"
+                  />
+                </div>
+
+                <div className="studio-form-actions">
+                  <Button onClick={() => void handleCreateAgentMemoryCandidate()} loading={creatingMemoryCandidate}>
+                    提交候选
+                  </Button>
+                </div>
+
+                <div className="studio-runs-header">
+                  <Typography.Title level={5}>候选记录</Typography.Title>
+                </div>
+
+                {loadingMemory && agentMemoryCandidates.length === 0 ? (
+                  <div className="center-box">
+                    <Spin />
+                  </div>
+                ) : agentMemoryCandidates.length === 0 ? (
+                  <Empty image={false} description="暂无员工记忆候选" />
+                ) : (
+                  <div className="studio-run-list">
+                    {agentMemoryCandidates.map((candidate) => (
+                      <div key={candidate.candidateId} className="studio-run-list-item" style={{ marginBottom: '12px' }}>
+                        <div className="studio-run-list-copy">
+                          <div className="studio-run-list-head">
+                            <strong>{candidate.title}</strong>
+                            <Tag color={candidate.status === 'applied' ? 'success' : candidate.status === 'rejected' ? 'default' : 'processing'}>
+                              {candidate.status}
+                            </Tag>
+                          </div>
+                          <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
+                            {candidate.content}
+                          </Paragraph>
+                          <Text type="secondary">
+                            {candidate.sourceKind} · {candidate.updatedAt ? formatDateTimeZh(candidate.updatedAt) : '未记录时间'}
+                          </Text>
+                          <Space wrap>
+                            {candidate.status === 'proposed' ? (
+                              <Button size="small" onClick={() => void handleApplyAgentMemoryCandidate(candidate.candidateId)}>
+                                应用到员工记忆
+                              </Button>
+                            ) : null}
+                            {candidate.status === 'proposed' ? (
+                              <Button size="small" danger onClick={() => void handleRejectAgentMemoryCandidate(candidate.candidateId)}>
+                                忽略
+                              </Button>
+                            ) : null}
+                          </Space>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </Card>
 
           <Card className="config-panel-card studio-agent-run-card">

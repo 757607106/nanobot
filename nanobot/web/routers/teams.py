@@ -62,9 +62,22 @@ def get_team(request: Request, team_id: str) -> JSONResponse:
 
 
 @router.get("/api/v1/teams/{team_id}/thread")
-def get_team_thread(request: Request, team_id: str) -> JSONResponse:
+def get_team_thread(
+    request: Request,
+    team_id: str,
+    origin_channel: str = Query(default="web", alias="originChannel"),
+    origin_chat_id: str | None = Query(default=None, alias="originChatId"),
+    session_key: str | None = Query(default=None, alias="sessionKey"),
+) -> JSONResponse:
     try:
-        data = request.app.state.web.team_runtime.get_team_thread_summary(team_id)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.web.team_runtime.get_team_thread_summary(
+            team_id,
+            tenant_id=tenant_id,
+            origin_channel=origin_channel,
+            origin_chat_id=origin_chat_id,
+            session_key=session_key,
+        )
     except TeamDefinitionNotFoundError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     return _json_response(200, _ok(data))
@@ -75,9 +88,20 @@ def get_team_thread_messages(
     request: Request,
     team_id: str,
     limit: int = Query(default=40, ge=1, le=200),
+    origin_channel: str = Query(default="web", alias="originChannel"),
+    origin_chat_id: str | None = Query(default=None, alias="originChatId"),
+    session_key: str | None = Query(default=None, alias="sessionKey"),
 ) -> JSONResponse:
     try:
-        data = request.app.state.web.team_runtime.get_team_thread_messages(team_id, limit=limit)
+        tenant_id = get_tenant_id(request)
+        data = request.app.state.web.team_runtime.get_team_thread_messages(
+            team_id,
+            tenant_id=tenant_id,
+            limit=limit,
+            origin_channel=origin_channel,
+            origin_chat_id=origin_chat_id,
+            session_key=session_key,
+        )
     except TeamDefinitionNotFoundError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     return _json_response(200, _ok(data))
@@ -156,7 +180,11 @@ async def run_team(
     payload: TeamRunRequest,
 ) -> JSONResponse:
     try:
-        data = await request.app.state.web.test_team_run(team_id, payload.content)
+        data = await request.app.state.web.test_team_run(
+            team_id,
+            payload.content,
+            tenant_id=get_tenant_id(request),
+        )
     except KeyError as exc:
         raise APIError(404, "TEAM_NOT_FOUND", "Team not found.") from exc
     except ValueError as exc:
@@ -175,6 +203,7 @@ async def retry_team_run(
         data = await request.app.state.web.team_runtime.retry_team_run(
             team_id,
             run_id,
+            tenant_id=get_tenant_id(request),
             append_context=payload.appendContext,
         )
     except KeyError as exc:

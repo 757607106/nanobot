@@ -8,6 +8,8 @@ import threading
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from loguru import logger
+
 from nanobot.agent.tools.cron import CronTool
 from nanobot.cron.types import CronJob, CronPayload, CronSchedule
 from nanobot.services.calendar_reminder import CalendarReminderService
@@ -18,6 +20,9 @@ if TYPE_CHECKING:
 
 class WebScheduleRuntimeService:
     """Encapsulates cron and calendar business logic."""
+
+    _ARTIFACT_RETENTION_SWEEP_LIMIT = 500
+    _MIN_ARTIFACT_RETENTION_INTERVAL_S = 60
 
     def __init__(self, state: WebAppState):
         self.state = state
@@ -52,6 +57,7 @@ class WebScheduleRuntimeService:
         if not self.state._cron_ready.wait(timeout=5):
             raise RuntimeError("Failed to start cron runtime.")
         self.run_coro(self.state.cron.start())
+        self.call(self._start_system_tasks_in_loop)
 
     def call(self, func, *args, **kwargs):
         if self.state._cron_loop is None:
@@ -82,10 +88,13 @@ class WebScheduleRuntimeService:
             return
 
         try:
+            self.call(self._stop_system_tasks_in_loop)
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to stop system schedule tasks cleanly")
+
+        try:
             self.call(self.state.cron.stop)
         except Exception:  # noqa: BLE001
-            from loguru import logger
-
             logger.exception("Failed to stop cron service cleanly")
 
         loop.call_soon_threadsafe(loop.stop)
@@ -94,6 +103,107 @@ class WebScheduleRuntimeService:
 
         self.state._cron_loop = None
         self.state._cron_thread = None
+
+    def _start_system_tasks_in_loop(self) -> None:
+        task = self.state._artifact_retention_task
+        if task is not None and not task.done():
+            return
+        self.state._artifact_retention_task = asyncio.create_task(
+            self._artifact_retention_worker(),
+            name="nanobot-artifact-retention",
+        )
+
+    def _stop_system_tasks_in_loop(self) -> None:
+        task = self.state._artifact_retention_task
+        self.state._artifact_retention_task = None
+        if task is not None and not task.done():
+            task.cancel()
+
+    def _artifact_retention_tenant_ids(self) -> list[str]:
+        runs = getattr(self.state, "runs", None)
+        tenant_ids: set[str] = set()
+        default_tenant = str(getattr(runs, "tenant_id", "default") or "default").strip() or "default"
+        tenant_ids.add(default_tenant)
+        tenants_service = getattr(self.state, "tenants_service", None)
+        if tenants_service is None:
+            return sorted(tenant_ids)
+        try:
+            for tenant in tenants_service.list_tenants():
+                tenant_id = str(tenant.get("tenantId") or "").strip()
+                if tenant_id:
+                    tenant_ids.add(tenant_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to enumerate tenants for artifact retention sweep")
+        return sorted(tenant_ids)
+
+    def _run_artifact_retention_sweep(self) -> dict[str, Any]:
+        runs = getattr(self.state, "runs", None)
+        if runs is None:
+            return {
+                "tenants": [],
+                "evaluated": 0,
+                "applied": 0,
+                "archived": 0,
+                "deleted": 0,
+                "skipped": 0,
+                "errors": 0,
+            }
+        aggregate = {
+            "tenants": [],
+            "evaluated": 0,
+            "applied": 0,
+            "archived": 0,
+            "deleted": 0,
+            "skipped": 0,
+            "errors": 0,
+        }
+        for tenant_id in self._artifact_retention_tenant_ids():
+            try:
+                scoped_runs = runs.with_tenant(tenant_id) if hasattr(runs, "with_tenant") else runs
+                result = scoped_runs.sweep_artifact_retention(
+                    limit=self._ARTIFACT_RETENTION_SWEEP_LIMIT,
+                    action_by="artifact_retention_scheduler",
+                )
+                aggregate["tenants"].append(
+                    {
+                        "tenantId": tenant_id,
+                        "evaluated": result.get("evaluated", 0),
+                        "applied": result.get("applied", 0),
+                        "archived": result.get("archived", 0),
+                        "deleted": result.get("deleted", 0),
+                    }
+                )
+                aggregate["evaluated"] += int(result.get("evaluated", 0) or 0)
+                aggregate["applied"] += int(result.get("applied", 0) or 0)
+                aggregate["archived"] += int(result.get("archived", 0) or 0)
+                aggregate["deleted"] += int(result.get("deleted", 0) or 0)
+                aggregate["skipped"] += int(result.get("skipped", 0) or 0)
+            except Exception:  # noqa: BLE001
+                aggregate["errors"] += 1
+                logger.exception("Artifact retention sweep failed for tenant {}", tenant_id)
+        if aggregate["applied"] > 0:
+            logger.info(
+                "Artifact retention sweep applied {} actions (archived={}, deleted={}) across {} tenants",
+                aggregate["applied"],
+                aggregate["archived"],
+                aggregate["deleted"],
+                len(aggregate["tenants"]),
+            )
+        return aggregate
+
+    async def _artifact_retention_worker(self) -> None:
+        interval_s = max(
+            self._MIN_ARTIFACT_RETENTION_INTERVAL_S,
+            int(getattr(self.state, "_artifact_retention_sweep_interval_s", 30 * 60) or 30 * 60),
+        )
+        try:
+            while True:
+                await asyncio.sleep(interval_s)
+                self._run_artifact_retention_sweep()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            logger.exception("Artifact retention worker crashed")
 
     async def handle_cron_job(self, job: CronJob) -> str | None:
         if self.state.agent is None:

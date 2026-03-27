@@ -13,14 +13,26 @@ from nanobot.platform.agents import (
     AgentDefinitionNotFoundError,
     AgentDefinitionValidationError,
 )
+from nanobot.platform.memory import MemoryCandidateValidationError
 from nanobot.web.http import APIError, _json_response, _ok
-from nanobot.web.tenant_context import get_tenant_id
+from nanobot.web.tenant_context import get_tenant_id, get_tenant_memory_service
 
 router = APIRouter()
 
 
 class AgentTestRunRequest(BaseModel):
     content: str
+
+
+class AgentMemoryUpdateRequest(BaseModel):
+    content: str
+
+
+class AgentMemoryCandidateCreateRequest(BaseModel):
+    title: str | None = None
+    content: str
+    sourceKind: str = "manual_note"
+    runId: str | None = None
 
 
 def _default_tools(request: Request) -> list[str]:
@@ -80,6 +92,19 @@ def get_agent(request: Request, agent_id: str) -> JSONResponse:
     return _json_response(200, _ok(data))
 
 
+@router.get("/api/v1/agents/{agent_id}/memory")
+def get_agent_memory(request: Request, agent_id: str) -> JSONResponse:
+    try:
+        tenant_id = get_tenant_id(request)
+        request.app.state.agents.get_agent(agent_id, tenant_id=tenant_id)
+        data = get_tenant_memory_service(request).get_agent_memory(agent_id)
+    except AgentDefinitionNotFoundError as exc:
+        raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
+    except MemoryCandidateValidationError as exc:
+        raise APIError(400, "AGENT_MEMORY_INVALID", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
 @router.put("/api/v1/agents/{agent_id}")
 def update_agent(
     request: Request,
@@ -96,6 +121,49 @@ def update_agent(
     except AgentDefinitionValidationError as exc:
         raise APIError(400, "AGENT_VALIDATION_ERROR", str(exc)) from exc
     return _json_response(200, _ok(data))
+
+
+@router.put("/api/v1/agents/{agent_id}/memory")
+def update_agent_memory(
+    request: Request,
+    agent_id: str,
+    payload: AgentMemoryUpdateRequest,
+) -> JSONResponse:
+    try:
+        tenant_id = get_tenant_id(request)
+        request.app.state.agents.get_agent(agent_id, tenant_id=tenant_id)
+        data = get_tenant_memory_service(request).update_agent_memory(agent_id, payload.content)
+    except AgentDefinitionNotFoundError as exc:
+        raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
+    except MemoryCandidateValidationError as exc:
+        raise APIError(400, "AGENT_MEMORY_INVALID", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/agents/{agent_id}/memory-candidates")
+def create_agent_memory_candidate(
+    request: Request,
+    agent_id: str,
+    payload: AgentMemoryCandidateCreateRequest,
+) -> JSONResponse:
+    try:
+        tenant_id = get_tenant_id(request)
+        agent = request.app.state.agents.get_agent(agent_id, tenant_id=tenant_id)
+        title = str(payload.title or "").strip() or f"{agent['name']} candidate"
+        data = get_tenant_memory_service(request).create_candidate(
+            scope="agent_profile",
+            team_id=None,
+            agent_id=agent_id,
+            run_id=payload.runId,
+            source_kind=payload.sourceKind,
+            title=title,
+            content=payload.content,
+        )
+    except AgentDefinitionNotFoundError as exc:
+        raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
+    except MemoryCandidateValidationError as exc:
+        raise APIError(400, "AGENT_MEMORY_CANDIDATE_INVALID", str(exc)) from exc
+    return _json_response(201, _ok(data))
 
 
 @router.delete("/api/v1/agents/{agent_id}")
@@ -153,7 +221,11 @@ async def test_run_agent(
     payload: AgentTestRunRequest,
 ) -> JSONResponse:
     try:
-        data = await request.app.state.web.test_agent_run(agent_id, payload.content)
+        data = await request.app.state.web.test_agent_run(
+            agent_id,
+            payload.content,
+            tenant_id=get_tenant_id(request),
+        )
     except KeyError as exc:
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     except ValueError as exc:

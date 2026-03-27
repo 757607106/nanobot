@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -269,21 +269,18 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('默认运行')).toBeInTheDocument()
+    expect(await screen.findByText('模型供应商')).toBeInTheDocument()
     expect(screen.getAllByText('模型供应商').length).toBeGreaterThan(0)
-    expect(screen.getByText('默认运行')).toBeInTheDocument()
-    expect(screen.getByText('快速预设')).toBeInTheDocument()
-    expect(screen.getByText('当前默认供应商')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /新增绑定/i }).length).toBeGreaterThan(0)
+    expect(screen.getByPlaceholderText('搜索供应商...')).toBeInTheDocument()
+    expect(screen.getByText('Moonshot')).toBeInTheDocument()
+    expect(screen.getByText('DeepSeek')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /Agent 覆盖/i }))
+    await user.click(screen.getByText('Moonshot'))
 
-    expect(await screen.findByText('自定义 Agent 工作台')).toBeInTheDocument()
-    expect(screen.getByText('自定义 Agent 总览')).toBeInTheDocument()
-    expect(screen.getByText('平台配置和角色配置已经拆开')).toBeInTheDocument()
-    expect(screen.getByText('已自定义 Agent')).toBeInTheDocument()
-    expect(screen.getByText('继承全局的 Agent')).toBeInTheDocument()
-    expect(screen.getAllByText('中文写作').length).toBeGreaterThan(0)
+    expect(await screen.findByText('云端供应商全局凭据')).toBeInTheDocument()
+    expect(screen.getByText('已注册模型')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '获取模型列表' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /添加模型/ })).toBeInTheDocument()
   })
 
   it('applies a preset and saves the expected config payload', async () => {
@@ -291,14 +288,22 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('默认运行')
-    await user.click(screen.getByRole('button', { name: /Moonshot/i }))
-    await user.click(screen.getByRole('button', { name: /Kimi 国内/i }))
+    await screen.findByText('模型供应商')
+    await user.click(screen.getByText('Moonshot'))
+    await screen.findByText('云端供应商全局凭据')
+    await user.click(screen.getByRole('button', { name: /添加模型/ }))
+    await screen.findByText('添加模型资源')
+    await user.type(screen.getByLabelText('模型 ID'), 'kimi-k2.5')
+    await user.type(screen.getByLabelText('模型展示名称'), 'Kimi 国内')
+    await user.click(screen.getByRole('button', { name: '确认登记' }))
+    const kimiCnRow = (await screen.findByText('Kimi 国内')).closest('tr')
+    expect(kimiCnRow).not.toBeNull()
+    await user.click(within(kimiCnRow as HTMLTableRowElement).getByText('设为默认'))
 
-    expect(screen.getAllByDisplayValue('kimi-k2.5').length).toBeGreaterThan(0)
-    expect(screen.getByDisplayValue('https://api.moonshot.cn/v1')).toBeInTheDocument()
+    await user.clear(screen.getByPlaceholderText('https://api.moonshot.ai/v1'))
+    await user.type(screen.getByPlaceholderText('https://api.moonshot.ai/v1'), 'https://api.moonshot.cn/v1')
 
-    await user.click(screen.getByRole('button', { name: /保存全部/i }))
+    await user.click(screen.getByRole('button', { name: /保存所有配置/ }))
 
     await waitFor(() => {
       expect(mockApi.updateConfig).toHaveBeenCalledTimes(1)
@@ -306,10 +311,12 @@ describe('ModelsPage', () => {
 
     const savedConfig = mockApi.updateConfig.mock.calls[0][0]
     expect(savedConfig.agents.defaults.provider).toBe('moonshot')
-    expect(savedConfig.agents.defaults.binding).toBe('kimi-cn')
+    expect(savedConfig.agents.defaults.binding).toBe('kimi-k2-5')
     expect(savedConfig.agents.defaults.model).toBe('kimi-k2.5')
     expect(savedConfig.providers.moonshot.apiBase).toBe('https://api.moonshot.cn/v1')
-    expect(savedConfig.modelBindings['kimi-cn'].apiBase).toBe('https://api.moonshot.cn/v1')
+    expect(savedConfig.modelBindings['kimi-k2-5'].label).toBe('Kimi 国内')
+    expect(savedConfig.modelBindings['kimi-k2-5'].provider).toBe('moonshot')
+    expect(savedConfig.modelBindings['kimi-k2-5'].model).toBe('kimi-k2.5')
   })
 
   it('tests the selected binding with current api credentials', async () => {
@@ -317,22 +324,27 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('默认运行')
-    await user.click(screen.getByRole('button', { name: /Moonshot/i }))
-    await user.click(screen.getByRole('button', { name: /Kimi 国内/i }))
-    await user.click(screen.getByRole('button', { name: '检测连接' }))
+    await screen.findByText('模型供应商')
+    await user.click(screen.getByText('Moonshot'))
+    await screen.findByText('云端供应商全局凭据')
+    await user.clear(screen.getByPlaceholderText('https://api.moonshot.ai/v1'))
+    await user.type(screen.getByPlaceholderText('https://api.moonshot.ai/v1'), 'https://api.moonshot.cn/v1')
+    await user.click(screen.getByRole('button', { name: /测试连接/ }))
+    await screen.findByText('测试模型连接')
+    await user.type(screen.getByLabelText('测试模型 ID'), 'kimi-k2.5')
+    await user.click(screen.getByRole('button', { name: '开始测试' }))
 
     await waitFor(() => {
       expect(mockApi.testModelBinding).toHaveBeenCalledTimes(1)
     })
 
     expect(mockApi.testModelBinding.mock.calls[0][0]).toMatchObject({
-      bindingName: 'kimi-cn',
+      bindingName: 'temp-test-binding',
       provider: 'moonshot',
       model: 'kimi-k2.5',
       apiBase: 'https://api.moonshot.cn/v1',
     })
-    expect(await screen.findByText(/检测通过 · 120 ms/)).toBeInTheDocument()
+    expect(await screen.findByText(/测试通过/)).toBeInTheDocument()
   })
 
   it('fetches remote model ids for the selected binding', async () => {
@@ -340,21 +352,20 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('默认运行')
-    await user.click(screen.getByRole('button', { name: /Moonshot/i }))
-    await user.click(screen.getByRole('button', { name: /Kimi 国内/i }))
-    await user.click(screen.getByRole('button', { name: /获取模型/i }))
+    await screen.findByText('模型供应商')
+    await user.click(screen.getByText('Moonshot'))
+    await screen.findByText('云端供应商全局凭据')
+    await user.click(screen.getByRole('button', { name: '获取模型列表' }))
 
     await waitFor(() => {
       expect(mockApi.fetchModelBindingModels).toHaveBeenCalledTimes(1)
     })
 
     expect(mockApi.fetchModelBindingModels.mock.calls[0][0]).toMatchObject({
-      bindingName: 'kimi-cn',
       provider: 'moonshot',
-      apiBase: 'https://api.moonshot.cn/v1',
+      apiBase: 'https://api.moonshot.ai/v1',
     })
-    expect((await screen.findAllByText('已获取 2 个模型')).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: 'kimi-k2-0905-preview' })).toBeInTheDocument()
+    expect(await screen.findByText('远端模型列表')).toBeInTheDocument()
+    expect(screen.getByText('kimi-k2-0905-preview')).toBeInTheDocument()
   })
 })

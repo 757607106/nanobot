@@ -19,8 +19,9 @@ class ContextBuilder:
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md"]
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
 
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, *, virtual_workspace_path: Path | str | None = None):
         self.workspace = workspace
+        self.virtual_workspace_path = Path(virtual_workspace_path) if virtual_workspace_path is not None else workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
 
@@ -79,7 +80,11 @@ Skills with available="false" need dependencies installed first - you can try in
 
     def _get_identity(self) -> str:
         """Get the core identity section."""
-        workspace_path = str(self.workspace.expanduser().resolve())
+        workspace_path = (
+            str(self.virtual_workspace_path.expanduser())
+            if self.virtual_workspace_path != self.workspace
+            else str(self.workspace.expanduser().resolve())
+        )
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
 

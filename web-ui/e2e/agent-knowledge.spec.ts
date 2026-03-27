@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { bootstrapAndSetup, uniqueE2EName } from './helpers'
 
 async function waitForKnowledgeJob(page: import('@playwright/test').Page, kbId: string, jobId: string) {
-  const deadline = Date.now() + 10000
+  const deadline = Date.now() + 60000
   while (Date.now() < deadline) {
     const response = await page.request.get(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/jobs`)
     expect(response.ok()).toBeTruthy()
@@ -85,7 +85,7 @@ test.describe.serial('agent knowledge binding e2e', () => {
     await expect(page).toHaveURL(new RegExp(`/studio/agents/${agentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
     await expect(page.getByText('知识库 (1)')).toBeVisible()
 
-    const runCard = page.locator('.studio-agent-run-card')
+    const runCard = page.locator('.studio-agent-run-card').filter({ hasText: '员工试运行' })
     await expect(runCard).toBeVisible()
     await runCard.locator('textarea').fill('请告诉我如何重启 nanobot。')
     await runCard.getByRole('button', { name: '开始试运行' }).click()

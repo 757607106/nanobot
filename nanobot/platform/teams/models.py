@@ -77,6 +77,7 @@ class TeamDefinition:
     tags: list[str] = field(default_factory=list)
     enabled: bool = True
     team_thread_enabled: bool = True
+    artifact_retention_policy: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
 
@@ -90,6 +91,7 @@ class TeamDefinition:
             "member_access_policy": self.member_access_policy,
             "tags": self.tags,
             "team_thread_enabled": self.team_thread_enabled,
+            "artifact_retention_policy": self.artifact_retention_policy,
         }
         return json.dumps(payload, ensure_ascii=False)
 
@@ -116,6 +118,7 @@ class TeamDefinition:
             tags=list(stored.get("tags") or []),
             enabled=bool(record.get("enabled", True)),
             team_thread_enabled=bool(stored.get("team_thread_enabled", True)),
+            artifact_retention_policy=dict(stored.get("artifact_retention_policy") or {}),
             created_at=record.get("created_at") or now_iso(),
             updated_at=record.get("updated_at") or now_iso(),
         )
@@ -135,6 +138,7 @@ class TeamDefinition:
             "tags": self.tags,
             "enabled": self.enabled,
             "teamThreadEnabled": self.team_thread_enabled,
+            "artifactRetentionPolicy": self.artifact_retention_policy,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
             "memberCount": 1 + len(self.member_agent_ids),

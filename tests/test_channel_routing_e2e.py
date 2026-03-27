@@ -23,6 +23,7 @@ from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.dispatch import ChannelMessageDispatcher
 from nanobot.channels.manager import _RoutingBusProxy
+from nanobot.platform.channel_audit import ChannelAuditService, ChannelAuditStore
 from nanobot.platform.channel_bindings.models import ChannelBinding, now_iso
 from nanobot.platform.channel_bindings.service import (
     ChannelBindingConflictError,
@@ -66,8 +67,13 @@ def bus() -> MessageBus:
 
 
 @pytest.fixture
-def proxy(bus: MessageBus, routing: ChannelRoutingService) -> _RoutingBusProxy:
-    return _RoutingBusProxy(bus, routing, tenant_id="default")
+def audit_service(tmp_path: Path) -> ChannelAuditService:
+    return ChannelAuditService(ChannelAuditStore(tmp_path / "channel-audit.db"), instance_id="default")
+
+
+@pytest.fixture
+def proxy(bus: MessageBus, routing: ChannelRoutingService, audit_service: ChannelAuditService) -> _RoutingBusProxy:
+    return _RoutingBusProxy(bus, routing, audit_service=audit_service, tenant_id="default")
 
 
 def _make_msg(
@@ -92,6 +98,7 @@ def _create_binding(
     chat_id: str = "*",
     target_type: str = "agent",
     target_id: str = "agent-13",
+    tenant_id: str = "default",
     priority: int = 0,
     enabled: bool = True,
 ) -> dict:
@@ -104,7 +111,7 @@ def _create_binding(
             "priority": priority,
             "enabled": enabled,
         },
-        tenant_id="default",
+        tenant_id=tenant_id,
     )
 
 
@@ -115,6 +122,24 @@ def _create_binding(
 
 class TestChannelBindingService:
     """Unit tests for the ChannelBindingService layer."""
+
+    def test_create_validates_target_with_tenant_scope(self, store: ChannelBindingStore) -> None:
+        captured: dict[str, str | None] = {}
+
+        def _lookup(target_id: str, *, tenant_id: str | None = None) -> None:
+            captured["target_id"] = target_id
+            captured["tenant_id"] = tenant_id
+
+        service = ChannelBindingService(store, instance_id="default", agent_lookup=_lookup)
+
+        created = _create_binding(
+            service,
+            target_id="agent-tenant",
+            tenant_id="tenant-a",
+        )
+
+        assert created["tenantId"] == "tenant-a"
+        assert captured == {"target_id": "agent-tenant", "tenant_id": "tenant-a"}
 
     def test_create_and_list(self, service: ChannelBindingService) -> None:
         created = _create_binding(service, channel="qq", chat_id="*", target_id="agent-13")
@@ -238,6 +263,7 @@ class TestRoutingBusProxy:
         service: ChannelBindingService,
         bus: MessageBus,
         proxy: _RoutingBusProxy,
+        audit_service: ChannelAuditService,
     ) -> None:
         binding = _create_binding(service, channel="qq", chat_id="*", target_id="agent-13")
         msg = _make_msg(channel="qq", chat_id="group_123")
@@ -248,12 +274,44 @@ class TestRoutingBusProxy:
         assert received.metadata["_routing_target_type"] == "agent"
         assert received.metadata["_routing_target_id"] == "agent-13"
         assert received.metadata["_routing_binding_id"] == binding["bindingId"]
+        assert received.metadata["_routing_audit_id"].startswith("ca-")
         # original metadata preserved
         assert received.metadata["message_id"] == "test_msg_1"
+        audit = audit_service.get_entry(received.metadata["_routing_audit_id"], tenant_id="default")
+        assert audit["status"] == "resolved"
+        assert audit["resolutionKind"] == "wildcard"
+
+    @pytest.mark.asyncio
+    async def test_proxy_uses_message_tenant_metadata_for_resolution(
+        self,
+        service: ChannelBindingService,
+        bus: MessageBus,
+        proxy: _RoutingBusProxy,
+        audit_service: ChannelAuditService,
+    ) -> None:
+        _create_binding(service, channel="qq", chat_id="*", target_id="default-agent", tenant_id="default")
+        tenant_binding = _create_binding(
+            service,
+            channel="qq",
+            chat_id="*",
+            target_id="tenant-agent",
+            tenant_id="tenant-a",
+        )
+        msg = _make_msg(channel="qq", chat_id="group_123")
+        msg.metadata["tenantId"] = "tenant-a"
+
+        await proxy.publish_inbound(msg)
+
+        received = await asyncio.wait_for(bus.consume_inbound(), timeout=2.0)
+        assert received.metadata["_routing_target_id"] == "tenant-agent"
+        assert received.metadata["_routing_binding_id"] == tenant_binding["bindingId"]
+        assert received.metadata["_routing_tenant_id"] == "tenant-a"
+        audit = audit_service.get_entry(received.metadata["_routing_audit_id"], tenant_id="tenant-a")
+        assert audit["tenantId"] == "tenant-a"
 
     @pytest.mark.asyncio
     async def test_proxy_no_match_no_metadata(
-        self, bus: MessageBus, proxy: _RoutingBusProxy,
+        self, bus: MessageBus, proxy: _RoutingBusProxy, audit_service: ChannelAuditService,
     ) -> None:
         msg = _make_msg(channel="telegram", chat_id="unknown_chat")
 
@@ -262,6 +320,8 @@ class TestRoutingBusProxy:
         received = await asyncio.wait_for(bus.consume_inbound(), timeout=2.0)
         assert "_routing_target_type" not in received.metadata
         assert "_routing_target_id" not in received.metadata
+        audit = audit_service.get_entry(received.metadata["_routing_audit_id"], tenant_id="default")
+        assert audit["status"] == "unmatched"
 
     @pytest.mark.asyncio
     async def test_proxy_exact_match_over_wildcard(

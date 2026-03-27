@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-import re
 import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
@@ -14,11 +12,16 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 from loguru import logger
 
 from nanobot.agent.context import ContextBuilder
+from nanobot.agent.execution import (
+    ToolLoopHooks,
+    build_workspace_tool_registry,
+    format_tool_hint,
+    run_tool_loop,
+    strip_think,
+)
 from nanobot.agent.memory import MemoryConsolidator
+from nanobot.agent.subagent_protocol import build_subagent_followup_prompt, parse_subagent_result_metadata
 from nanobot.agent.subagent import SubagentManager
-from nanobot.agent.tools.cron import CronTool
-from nanobot.agent.skills import BUILTIN_SKILLS_DIR
-from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from nanobot.agent.tools.knowledge import (
     KnowledgeBindingContext,
     build_knowledge_binding_context,
@@ -27,18 +30,25 @@ from nanobot.agent.tools.knowledge import (
 from nanobot.agent.tools.base import Tool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.agent.tools.shell import ExecTool
-from nanobot.agent.tools.spawn import SpawnTool
-from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.chat_payload import normalize_chat_attachments
+from nanobot.harness.events import (
+    build_model_called_payload,
+    build_model_result_payload,
+    build_tool_called_payload,
+    build_tool_result_payload,
+)
+from nanobot.harness.environment import resolve_execution_environment
+from nanobot.harness.sandbox import LocalSandboxProvider, SandboxBinding, build_sandbox_provider
+from nanobot.harness.workspace import WorkspaceBinding
 from nanobot.providers.base import LLMProvider
 from nanobot.session.manager import Session, SessionManager
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ChannelsConfig, ExecToolConfig, WebSearchConfig
     from nanobot.cron.service import CronService
+    from nanobot.harness import ExecutionContext
     from nanobot.platform.runs import RunService
 
 
@@ -83,6 +93,9 @@ class AgentLoop:
         knowledge_binding_context: KnowledgeBindingContext | None = None,
         knowledge_service: Any | None = None,
         bound_knowledge_ids: list[str] | None = None,
+        workspace_provider: Any | None = None,
+        sandbox_binding: SandboxBinding | None = None,
+        sandbox_provider: Any | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig, WebSearchConfig
 
@@ -107,8 +120,23 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self._sandbox_provider = sandbox_provider or build_sandbox_provider(self.exec_config)
+        if sandbox_binding is not None:
+            self.sandbox_binding = sandbox_binding
+        else:
+            self.sandbox_binding = resolve_execution_environment(
+                workspace=workspace,
+                restrict_to_workspace=restrict_to_workspace,
+                exec_config=self.exec_config,
+                principal_kind="agent",
+                tenant_id=getattr(run_registry, "tenant_id", "default"),
+                instance_id=getattr(run_registry, "instance_id", "default"),
+                workspace_provider=workspace_provider,
+                sandbox_provider=self._sandbox_provider,
+            ).sandbox
 
-        self.context = ContextBuilder(workspace)
+        virtual_workspace_path = str(getattr(self.sandbox_binding, "runtime_workdir", workspace) or workspace)
+        self.context = ContextBuilder(workspace, virtual_workspace_path=virtual_workspace_path)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -121,6 +149,8 @@ class AgentLoop:
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
             run_registry=run_registry,
+            workspace_provider=workspace_provider,
+            sandbox_provider=self._sandbox_provider,
         )
 
         self._running = False
@@ -133,12 +163,14 @@ class AgentLoop:
         if self._knowledge_binding_context is not None:
             self._extra_tools.extend(get_common_kb_tools(self._knowledge_binding_context))
         self._mcp_servers = mcp_servers or {}
+        self._run_registry = run_registry
         self._mcp_stack: AsyncExitStack | None = None
         self._mcp_connected = False
         self._mcp_connecting = False
         self._active_tasks: dict[str, list[asyncio.Task]] = {}  # session_key -> tasks
         self._background_tasks: list[asyncio.Task] = []
         self._processing_lock = asyncio.Lock()
+        self._register_default_tools()
         self.memory_consolidator = MemoryConsolidator(
             workspace=workspace,
             provider=provider,
@@ -148,47 +180,111 @@ class AgentLoop:
             build_messages=self.context.build_messages,
             get_tool_definitions=self.tools.get_definitions,
         )
-        self._register_default_tools()
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
-        allowed_dir = self.workspace if self.restrict_to_workspace else None
-
-        def _register(name: str, tool) -> None:
-            if self.tool_allowlist is not None and name not in self.tool_allowlist:
-                return
-            self.tools.register(tool)
-
-        extra_read = [BUILTIN_SKILLS_DIR] if allowed_dir else None
-        read_tool = ReadFileTool(
+        self.tools = build_workspace_tool_registry(
             workspace=self.workspace,
-            allowed_dir=allowed_dir,
-            extra_allowed_dirs=extra_read,
-        )
-        _register(read_tool.name, read_tool)
-        for cls in (WriteFileTool, EditFileTool, ListDirTool):
-            tool = cls(workspace=self.workspace, allowed_dir=allowed_dir)
-            _register(tool.name, tool)
-        exec_tool = ExecTool(
-            working_dir=str(self.workspace),
-            timeout=self.exec_config.timeout,
             restrict_to_workspace=self.restrict_to_workspace,
-            path_append=self.exec_config.path_append,
+            exec_timeout=self.exec_config.timeout,
+            exec_path_append=self.exec_config.path_append,
+            web_search_config=self.web_search_config,
+            web_proxy=self.web_proxy,
+            sandbox_binding=self.sandbox_binding,
+            sandbox_provider=self._sandbox_provider,
+            tool_allowlist=self.tool_allowlist,
+            message_send_callback=self.bus.publish_outbound,
+            spawn_manager=self.subagents,
+            cron_service=self.cron_service,
+            extra_tools=self._extra_tools,
         )
-        _register(exec_tool.name, exec_tool)
-        web_search_tool = WebSearchTool(config=self.web_search_config, proxy=self.web_proxy)
-        _register(web_search_tool.name, web_search_tool)
-        web_fetch_tool = WebFetchTool(proxy=self.web_proxy)
-        _register(web_fetch_tool.name, web_fetch_tool)
-        message_tool = MessageTool(send_callback=self.bus.publish_outbound)
-        _register(message_tool.name, message_tool)
-        spawn_tool = SpawnTool(manager=self.subagents)
-        _register(spawn_tool.name, spawn_tool)
-        if self.cron_service:
-            cron_tool = CronTool(self.cron_service)
-            _register(cron_tool.name, cron_tool)
-        for tool in self._extra_tools:
-            _register(tool.name, tool)
+
+    @staticmethod
+    def _strip_think(text: str | None) -> str | None:
+        """Backward-compatible wrapper around shared hidden-thought stripping."""
+        return strip_think(text)
+
+    @staticmethod
+    def _tool_hint(tool_calls: list) -> str:
+        """Backward-compatible wrapper around shared tool-hint formatting."""
+        return format_tool_hint(tool_calls)
+
+    async def _run_agent_loop(
+        self,
+        initial_messages: list[dict],
+        on_progress: Callable[..., Awaitable[None]] | None = None,
+        run_context: dict[str, Any] | None = None,
+    ) -> tuple[str | None, list[str], list[dict]]:
+        """Run the agent iteration loop."""
+        hooks = self._build_tool_loop_hooks(run_context)
+        result = await run_tool_loop(
+            provider=self.provider,
+            model=self.model,
+            tools=self.tools,
+            context=self.context,
+            initial_messages=initial_messages,
+            max_iterations=self.max_iterations,
+            on_progress=on_progress,
+            hooks=hooks,
+        )
+        return result.final_content, result.tools_used, result.messages
+
+    def _build_tool_loop_hooks(self, run_context: dict[str, Any] | None) -> ToolLoopHooks | None:
+        if self._run_registry is None:
+            return None
+        run_id = str((run_context or {}).get("run_id") or "").strip()
+        if not run_id:
+            return None
+        run_event_sink = (run_context or {}).get("run_event_sink")
+
+        async def _before_model(*, iteration: int, messages: list[dict[str, Any]], model: str, **_: Any) -> None:
+            payload = build_model_called_payload(
+                iteration=iteration,
+                model=model,
+                message_count=len(messages),
+            )
+            self._run_registry.append_event(run_id, "model_called", payload)
+            if run_event_sink is not None:
+                await run_event_sink("model_called", payload)
+
+        async def _after_model(*, iteration: int, response: Any, model: str, **_: Any) -> None:
+            payload = build_model_result_payload(
+                iteration=iteration,
+                model=model,
+                finish_reason=getattr(response, "finish_reason", None),
+                tool_call_count=len(getattr(response, "tool_calls", []) or []),
+                has_visible_content=bool(strip_think(getattr(response, "content", None))),
+            )
+            self._run_registry.append_event(run_id, "model_result", payload)
+            if run_event_sink is not None:
+                await run_event_sink("model_result", payload)
+
+        async def _before_tool(*, iteration: int, tool_call: Any, **_: Any) -> None:
+            payload = build_tool_called_payload(
+                iteration=iteration,
+                tool_name=tool_call.name,
+                arguments=tool_call.arguments,
+            )
+            self._run_registry.append_event(run_id, "tool_called", payload)
+            if run_event_sink is not None:
+                await run_event_sink("tool_called", payload)
+
+        async def _after_tool(*, iteration: int, tool_call: Any, result: str, **_: Any) -> None:
+            payload = build_tool_result_payload(
+                iteration=iteration,
+                tool_name=tool_call.name,
+                result=result,
+            )
+            self._run_registry.append_event(run_id, "tool_result", payload)
+            if run_event_sink is not None:
+                await run_event_sink("tool_result", payload)
+
+        return ToolLoopHooks(
+            before_model=_before_model,
+            after_model=_after_model,
+            before_tool=_before_tool,
+            after_tool=_after_tool,
+        )
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -216,6 +312,7 @@ class AgentLoop:
         self,
         channel: str,
         chat_id: str,
+        session_key: str | None = None,
         message_id: str | None = None,
         run_context: dict[str, Any] | None = None,
     ) -> None:
@@ -224,101 +321,30 @@ class AgentLoop:
             if tool := self.tools.get(name):
                 if name == "message" and hasattr(tool, "set_context"):
                     tool.set_context(channel, chat_id, *([message_id] if message_id else []))
+                elif name == "spawn" and hasattr(tool, "set_context"):
+                    tool.set_context(channel, chat_id, session_key=session_key)
                 elif hasattr(tool, "set_context"):
                     tool.set_context(channel, chat_id)
                 if name == "spawn" and hasattr(tool, "set_run_context"):
                     tool.set_run_context(run_context)
 
     @staticmethod
-    def _strip_think(text: str | None) -> str | None:
-        """Remove <think>…</think> blocks that some models embed in content."""
-        if not text:
-            return None
-        return re.sub(r"<think>[\s\S]*?</think>", "", text).strip() or None
-
-    @staticmethod
-    def _tool_hint(tool_calls: list) -> str:
-        """Format tool calls as concise hint, e.g. 'web_search("query")'."""
-        def _fmt(tc):
-            args = (tc.arguments[0] if isinstance(tc.arguments, list) else tc.arguments) or {}
-            val = next(iter(args.values()), None) if isinstance(args, dict) else None
-            if not isinstance(val, str):
-                return tc.name
-            return f'{tc.name}("{val[:40]}…")' if len(val) > 40 else f'{tc.name}("{val}")'
-        return ", ".join(_fmt(tc) for tc in tool_calls)
-
-    async def _run_agent_loop(
-        self,
-        initial_messages: list[dict],
-        on_progress: Callable[..., Awaitable[None]] | None = None,
-    ) -> tuple[str | None, list[str], list[dict]]:
-        """Run the agent iteration loop."""
-        messages = initial_messages
-        iteration = 0
-        final_content = None
-        tools_used: list[str] = []
-
-        while iteration < self.max_iterations:
-            iteration += 1
-
-            tool_defs = self.tools.get_definitions()
-
-            response = await self.provider.chat_with_retry(
-                messages=messages,
-                tools=tool_defs,
-                model=self.model,
+    def _resolve_system_target(msg: InboundMessage) -> tuple[str, str, str]:
+        """Resolve the real parent session for a system-originated event."""
+        subagent_result = parse_subagent_result_metadata(msg.metadata)
+        if subagent_result is not None:
+            return (
+                subagent_result["originChannel"],
+                subagent_result["originChatId"],
+                subagent_result["sessionKey"],
             )
+        if ":" in msg.chat_id:
+            channel, chat_id = msg.chat_id.split(":", 1)
+        else:
+            channel, chat_id = "cli", msg.chat_id
+        key = msg.session_key if msg.session_key != f"{msg.channel}:{msg.chat_id}" else f"{channel}:{chat_id}"
+        return channel, chat_id, key
 
-            if response.has_tool_calls:
-                if on_progress:
-                    thought = self._strip_think(response.content)
-                    if thought:
-                        await on_progress(thought)
-                    tool_hint = self._tool_hint(response.tool_calls)
-                    tool_hint = self._strip_think(tool_hint)
-                    await on_progress(tool_hint, tool_hint=True)
-
-                tool_call_dicts = [
-                    tc.to_openai_tool_call()
-                    for tc in response.tool_calls
-                ]
-                messages = self.context.add_assistant_message(
-                    messages, response.content, tool_call_dicts,
-                    reasoning_content=response.reasoning_content,
-                    thinking_blocks=response.thinking_blocks,
-                )
-
-                for tool_call in response.tool_calls:
-                    tools_used.append(tool_call.name)
-                    args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
-                    logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
-                    result = await self.tools.execute(tool_call.name, tool_call.arguments)
-                    messages = self.context.add_tool_result(
-                        messages, tool_call.id, tool_call.name, result
-                    )
-            else:
-                clean = self._strip_think(response.content)
-                # Don't persist error responses to session history — they can
-                # poison the context and cause permanent 400 loops (#1303).
-                if response.finish_reason == "error":
-                    logger.error("LLM returned error: {}", (clean or "")[:200])
-                    final_content = clean or "Sorry, I encountered an error calling the AI model."
-                    break
-                messages = self.context.add_assistant_message(
-                    messages, clean, reasoning_content=response.reasoning_content,
-                    thinking_blocks=response.thinking_blocks,
-                )
-                final_content = clean
-                break
-
-        if final_content is None and iteration >= self.max_iterations:
-            logger.warning("Max iterations ({}) reached", self.max_iterations)
-            final_content = (
-                f"I reached the maximum number of tool call iterations ({self.max_iterations}) "
-                "without completing the task. You can try breaking the task into smaller steps."
-            )
-
-        return final_content, tools_used, messages
 
     async def run(self) -> None:
         """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
@@ -441,19 +467,30 @@ class AgentLoop:
         """Process a single inbound message and return the response."""
         # System messages: parse origin from chat_id ("channel:chat_id")
         if msg.channel == "system":
-            channel, chat_id = (msg.chat_id.split(":", 1) if ":" in msg.chat_id
-                                else ("cli", msg.chat_id))
+            channel, chat_id, key = self._resolve_system_target(msg)
             logger.info("Processing system message from {}", msg.sender_id)
-            key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
             await self.memory_consolidator.maybe_consolidate_by_tokens(session)
-            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"), run_context=run_context)
+            self._set_tool_context(
+                channel,
+                chat_id,
+                session_key=key,
+                message_id=msg.metadata.get("message_id"),
+                run_context=run_context,
+            )
             history = session.get_history(max_messages=0)
-            # Subagent results should be assistant role, other system messages use user role
-            current_role = "assistant" if msg.sender_id == "subagent" else "user"
+            subagent_result = parse_subagent_result_metadata(msg.metadata)
+            if subagent_result is not None:
+                current_message = build_subagent_followup_prompt(subagent_result)
+                current_role = "user"
+                skip = 2 + len(history)
+            else:
+                current_message = msg.content
+                current_role = "assistant" if msg.sender_id == "subagent" else "user"
+                skip = 1 + len(history)
             messages = self.context.build_messages(
                 history=history,
-                current_message=msg.content,
+                current_message=current_message,
                 skill_names=self.skill_names,
                 extra_system_prompt=self.system_prompt_override,
                 include_workspace_memory=self.include_workspace_memory,
@@ -462,8 +499,8 @@ class AgentLoop:
                 chat_id=chat_id,
                 current_role=current_role,
             )
-            final_content, _, all_msgs = await self._run_agent_loop(messages)
-            self._save_turn(session, all_msgs, 1 + len(history))
+            final_content, _, all_msgs = await self._run_agent_loop(messages, run_context=run_context)
+            self._save_turn(session, all_msgs, skip)
             self.sessions.save(session)
             self._schedule_background(self.memory_consolidator.maybe_consolidate_by_tokens(session))
             return OutboundMessage(channel=channel, chat_id=chat_id,
@@ -501,7 +538,13 @@ class AgentLoop:
             )
         await self.memory_consolidator.maybe_consolidate_by_tokens(session)
 
-        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"), run_context=run_context)
+        self._set_tool_context(
+            msg.channel,
+            msg.chat_id,
+            session_key=key,
+            message_id=msg.metadata.get("message_id"),
+            run_context=run_context,
+        )
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
@@ -527,7 +570,9 @@ class AgentLoop:
             ))
 
         final_content, _, all_msgs = await self._run_agent_loop(
-            initial_messages, on_progress=on_progress or _bus_progress,
+            initial_messages,
+            on_progress=on_progress or _bus_progress,
+            run_context=run_context,
         )
 
         if final_content is None:
@@ -613,14 +658,24 @@ class AgentLoop:
         chat_id: str = "direct",
         on_progress: Callable[[str], Awaitable[None]] | None = None,
         run_context: dict[str, Any] | None = None,
+        execution_context: "ExecutionContext | None" = None,
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
+        merged_run_context = dict(run_context or {})
+        if execution_context is not None:
+            session_key = str(execution_context.session_key or session_key)
+            channel = str(execution_context.origin_channel or channel)
+            chat_id = str(execution_context.session_id or chat_id)
+            merged_run_context = {
+                **execution_context.to_agent_loop_run_context(),
+                **merged_run_context,
+            }
         msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
         response = await self._process_message(
             msg,
             session_key=session_key,
             on_progress=on_progress,
-            run_context=run_context,
+            run_context=merged_run_context or None,
         )
         return response.content if response else ""

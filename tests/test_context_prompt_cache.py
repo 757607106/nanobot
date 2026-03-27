@@ -71,3 +71,13 @@ def test_runtime_context_is_separate_untrusted_user_message(tmp_path) -> None:
     assert "Channel: cli" in user_content
     assert "Chat ID: direct" in user_content
     assert "Return exactly: OK" in user_content
+
+
+def test_system_prompt_uses_virtual_workspace_path(tmp_path) -> None:
+    workspace = _make_workspace(tmp_path)
+    builder = ContextBuilder(workspace, virtual_workspace_path="/workspace")
+
+    prompt = builder.build_system_prompt()
+
+    assert "Your workspace is at: /workspace" in prompt
+    assert str(workspace) not in prompt

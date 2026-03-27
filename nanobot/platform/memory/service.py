@@ -1,7 +1,8 @@
-"""Service layer for team shared memory and candidate updates."""
+"""Service layer for collaboration memory scopes and candidate updates."""
 
 from __future__ import annotations
 
+import inspect
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Any, Callable
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.memory.models import MemoryCandidate, now_iso
 from nanobot.platform.memory.store import TeamMemoryStore
+from nanobot.platform.tenant_scope import call_with_tenant, clone_service_with_overrides
 from nanobot.platform.search_scoring import (
     build_preview,
     normalize_mode,
@@ -29,7 +31,7 @@ class MemoryCandidateValidationError(ValueError):
 
 
 class TeamMemoryService:
-    """Manage team shared memory files and candidate memory updates."""
+    """Manage workspace, team, and agent-profile memory files plus candidates."""
 
     def __init__(
         self,
@@ -38,6 +40,7 @@ class TeamMemoryService:
         instance: PlatformInstance,
         instance_id: str,
         tenant_id: str = "default",
+        agent_lookup: Callable[[str], Any] | None = None,
         team_lookup: Callable[[str], Any] | None = None,
         team_thread_source_loader: Callable[[str], dict[str, Any] | None] | None = None,
         team_artifact_sources_loader: Callable[[str], list[dict[str, Any]]] | None = None,
@@ -46,6 +49,7 @@ class TeamMemoryService:
         self.instance = instance
         self.instance_id = instance_id
         self.tenant_id = tenant_id
+        self.agent_lookup = agent_lookup
         self.team_lookup = team_lookup
         self.team_thread_source_loader = team_thread_source_loader
         self.team_artifact_sources_loader = team_artifact_sources_loader
@@ -63,6 +67,13 @@ class TeamMemoryService:
     def _next_candidate_id() -> str:
         return f"memcand_{uuid.uuid4().hex[:12]}"
 
+    def with_tenant(self, tenant_id: str | None) -> TeamMemoryService:
+        """Return a lightweight tenant-scoped view over the shared memory service."""
+        normalized = str(tenant_id or "default").strip() or "default"
+        if normalized == self.tenant_id:
+            return self
+        return clone_service_with_overrides(self, tenant_id=normalized)
+
     @staticmethod
     def _normalize_text(value: Any, *, field_name: str = "value", required: bool = False) -> str:
         text = str(value or "").strip()
@@ -75,13 +86,26 @@ class TeamMemoryService:
         if self.team_lookup is None:
             return normalized
         try:
-            self.team_lookup(normalized)
+            call_with_tenant(self.team_lookup, normalized, tenant_id=self.tenant_id)
         except Exception as exc:  # pragma: no cover - defensive wrapper around injected lookup
             raise MemoryCandidateValidationError(f"teamId '{normalized}' does not exist.") from exc
         return normalized
 
+    def _require_agent(self, agent_id: str) -> str:
+        normalized = self._normalize_text(agent_id, field_name="agentId", required=True)
+        if self.agent_lookup is None:
+            return normalized
+        try:
+            call_with_tenant(self.agent_lookup, normalized, tenant_id=self.tenant_id)
+        except Exception as exc:  # pragma: no cover - defensive wrapper around injected lookup
+            raise MemoryCandidateValidationError(f"agentId '{normalized}' does not exist.") from exc
+        return normalized
+
     def _team_memory_path(self, team_id: str) -> Path:
         return self.instance.team_memory_dir() / f"{safe_filename(team_id)}.md"
+
+    def _agent_memory_path(self, agent_id: str) -> Path:
+        return self.instance.agent_memory_dir() / f"{safe_filename(agent_id)}.md"
 
     def _workspace_memory_path(self) -> Path:
         return self.instance.workspace_path() / "memory" / "MEMORY.md"
@@ -124,19 +148,104 @@ class TeamMemoryService:
             "updatedAt": updated_at,
         }
 
+    def get_agent_memory(self, agent_id: str) -> dict[str, Any]:
+        agent_id = self._require_agent(agent_id)
+        path = self._agent_memory_path(agent_id)
+        content = path.read_text(encoding="utf-8") if path.exists() else ""
+        updated_at = now_iso()
+        if path.exists():
+            updated_at = datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat().replace("+00:00", "Z")
+        return {
+            "agentId": agent_id,
+            "content": content,
+            "fileName": path.name,
+            "candidateCount": self.store.count(
+                tenant_id=self.tenant_id,
+                instance_id=self.instance_id,
+                agent_id=agent_id,
+                status="proposed",
+                scope="agent_profile",
+            ),
+            "updatedAt": updated_at,
+        }
+
+    @staticmethod
+    def _sort_candidates(items: list[MemoryCandidate]) -> list[MemoryCandidate]:
+        return sorted(
+            items,
+            key=lambda item: (item.updated_at, item.created_at, item.candidate_id),
+            reverse=True,
+        )
+
+    def _list_candidate_records(
+        self,
+        *,
+        team_id: str | None = None,
+        agent_id: str | None = None,
+        status: str | None = None,
+        scope: str | None = None,
+        limit: int = 100,
+    ) -> list[MemoryCandidate]:
+        if team_id and agent_id and not scope:
+            merged: dict[str, MemoryCandidate] = {}
+            for item in self.store.list_all(
+                tenant_id=self.tenant_id,
+                instance_id=self.instance_id,
+                team_id=team_id,
+                status=status,
+                limit=limit,
+            ):
+                merged[item.candidate_id] = item
+            for item in self.store.list_all(
+                tenant_id=self.tenant_id,
+                instance_id=self.instance_id,
+                agent_id=agent_id,
+                status=status,
+                limit=limit,
+            ):
+                merged[item.candidate_id] = item
+            return self._sort_candidates(list(merged.values()))[:limit]
+        return self.store.list_all(
+            tenant_id=self.tenant_id,
+            instance_id=self.instance_id,
+            team_id=team_id,
+            agent_id=agent_id,
+            status=status,
+            scope=scope,
+            limit=limit,
+        )
+
     @staticmethod
     def _team_id_from_thread_id(thread_id: str) -> str | None:
         normalized = str(thread_id or "").strip()
         if normalized.startswith("team-thread:"):
-            team_id = normalized.split(":", 1)[1].strip()
+            parts = normalized.split(":")
+            team_id = parts[1].strip() if len(parts) > 1 else ""
             return team_id or None
         return None
 
-    def _load_team_thread_source(self, team_id: str) -> dict[str, Any] | None:
+    @staticmethod
+    def _loader_supports_kwarg(loader: Callable[..., Any], kwarg: str) -> bool:
+        try:
+            signature = inspect.signature(loader)
+        except (TypeError, ValueError):
+            return False
+        for parameter in signature.parameters.values():
+            if parameter.kind == inspect.Parameter.VAR_KEYWORD:
+                return True
+        return kwarg in signature.parameters
+
+    def _load_team_thread_source(self, team_id: str, *, source_id: str | None = None) -> dict[str, Any] | None:
         if self.team_thread_source_loader is None:
             return None
         try:
-            source = self.team_thread_source_loader(team_id)
+            loader = self.team_thread_source_loader
+            kwargs: dict[str, Any] = {}
+            if source_id and self._loader_supports_kwarg(loader, "source_id"):
+                kwargs["source_id"] = source_id
+            if self._loader_supports_kwarg(loader, "tenant_id"):
+                kwargs["tenant_id"] = self.tenant_id
+            source = loader(team_id, **kwargs)
         except Exception:  # pragma: no cover - injected runtime loader
             return None
         if not isinstance(source, dict):
@@ -156,7 +265,11 @@ class TeamMemoryService:
         if self.team_artifact_sources_loader is None:
             return []
         try:
-            sources = self.team_artifact_sources_loader(team_id)
+            loader = self.team_artifact_sources_loader
+            kwargs: dict[str, Any] = {}
+            if self._loader_supports_kwarg(loader, "tenant_id"):
+                kwargs["tenant_id"] = self.tenant_id
+            sources = loader(team_id, **kwargs)
         except Exception:  # pragma: no cover - injected runtime loader
             return []
         normalized_sources: list[dict[str, Any]] = []
@@ -184,10 +297,12 @@ class TeamMemoryService:
         source_type: str,
         source_id: str,
         team_id: str | None = None,
+        agent_id: str | None = None,
     ) -> dict[str, Any]:
         normalized_type = self._normalize_text(source_type, field_name="sourceType", required=True)
         normalized_id = self._normalize_text(source_id, field_name="sourceId", required=True)
         normalized_team_id = self._require_team(team_id) if team_id else None
+        normalized_agent_id = self._require_agent(agent_id) if agent_id else None
 
         if normalized_type == "workspace_memory":
             path = self._workspace_memory_path()
@@ -211,11 +326,22 @@ class TeamMemoryService:
                 "metadata": {"fileName": snapshot["fileName"], "updatedAt": snapshot["updatedAt"]},
             }
 
+        if normalized_type == "agent_profile":
+            agent_key = normalized_agent_id or normalized_id
+            snapshot = self.get_agent_memory(agent_key)
+            return {
+                "sourceType": normalized_type,
+                "sourceId": agent_key,
+                "title": f"Agent Profile Memory · {agent_key}",
+                "content": snapshot["content"],
+                "metadata": {"fileName": snapshot["fileName"], "updatedAt": snapshot["updatedAt"]},
+            }
+
         if normalized_type == "team_thread":
             team_key = normalized_team_id or self._team_id_from_thread_id(normalized_id)
             if not team_key:
                 raise MemoryCandidateValidationError("teamId is required for sourceType 'team_thread'.")
-            source = self._load_team_thread_source(team_key)
+            source = self._load_team_thread_source(team_key, source_id=normalized_id)
             if source is None:
                 raise MemoryCandidateValidationError("Requested team thread source is not available.")
             return source
@@ -251,6 +377,7 @@ class TeamMemoryService:
         *,
         query: str,
         team_id: str | None = None,
+        agent_id: str | None = None,
         limit: int = 10,
         mode: str | None = None,
     ) -> dict[str, Any]:
@@ -260,6 +387,7 @@ class TeamMemoryService:
         if not tokens:
             raise MemoryCandidateValidationError("query is required.")
         normalized_team_id = self._require_team(team_id) if team_id else None
+        normalized_agent_id = self._require_agent(agent_id) if agent_id else None
 
         sources: list[dict[str, Any]] = []
         workspace_path = self._workspace_memory_path()
@@ -289,14 +417,55 @@ class TeamMemoryService:
             if thread_source is not None:
                 sources.append(thread_source)
             sources.extend(self._load_team_artifact_sources(normalized_team_id))
-        for candidate in self.store.list_all(
-            tenant_id=self.tenant_id,
-            instance_id=self.instance_id,
-            team_id=normalized_team_id,
-            status=None,
-            scope="team_shared" if normalized_team_id else None,
-            limit=200,
-        ):
+        if normalized_agent_id:
+            agent_snapshot = self.get_agent_memory(normalized_agent_id)
+            if agent_snapshot["content"]:
+                sources.append(
+                    {
+                        "sourceType": "agent_profile",
+                        "sourceId": normalized_agent_id,
+                        "title": f"Agent Profile Memory · {normalized_agent_id}",
+                        "content": agent_snapshot["content"],
+                        "metadata": {"updatedAt": agent_snapshot["updatedAt"]},
+                    }
+                )
+        candidate_records: list[MemoryCandidate] = []
+        if normalized_team_id:
+            candidate_records.extend(
+                self.store.list_all(
+                    tenant_id=self.tenant_id,
+                    instance_id=self.instance_id,
+                    team_id=normalized_team_id,
+                    status=None,
+                    scope="team_shared",
+                    limit=200,
+                )
+            )
+        if normalized_agent_id:
+            candidate_records.extend(
+                self.store.list_all(
+                    tenant_id=self.tenant_id,
+                    instance_id=self.instance_id,
+                    agent_id=normalized_agent_id,
+                    status=None,
+                    scope="agent_profile",
+                    limit=200,
+                )
+            )
+        if not normalized_team_id and not normalized_agent_id:
+            candidate_records.extend(
+                self.store.list_all(
+                    tenant_id=self.tenant_id,
+                    instance_id=self.instance_id,
+                    status=None,
+                    limit=200,
+                )
+            )
+        seen_candidate_ids: set[str] = set()
+        for candidate in self._sort_candidates(candidate_records):
+            if candidate.candidate_id in seen_candidate_ids:
+                continue
+            seen_candidate_ids.add(candidate.candidate_id)
             # Applied candidates are already merged into team shared memory; searching them again
             # creates duplicate hits with no extra value.
             if candidate.status != "proposed":
@@ -352,6 +521,13 @@ class TeamMemoryService:
         path.write_text(normalized.rstrip() + ("\n" if normalized else ""), encoding="utf-8")
         return self.get_team_memory(team_id)
 
+    def update_agent_memory(self, agent_id: str, content: str) -> dict[str, Any]:
+        agent_id = self._require_agent(agent_id)
+        normalized = self._normalize_text(content)
+        path = self._agent_memory_path(agent_id)
+        path.write_text(normalized.rstrip() + ("\n" if normalized else ""), encoding="utf-8")
+        return self.get_agent_memory(agent_id)
+
     def create_candidate(
         self,
         *,
@@ -370,6 +546,11 @@ class TeamMemoryService:
         normalized_source_kind = self._normalize_text(source_kind, field_name="sourceKind", required=True)
         normalized_title = self._normalize_text(title, field_name="title", required=True)
         normalized_team_id = self._require_team(team_id) if team_id else None
+        normalized_agent_id = self._require_agent(agent_id) if agent_id else None
+        if normalized_scope == "team_shared" and not normalized_team_id:
+            raise MemoryCandidateValidationError("teamId is required for scope 'team_shared'.")
+        if normalized_scope == "agent_profile" and not normalized_agent_id:
+            raise MemoryCandidateValidationError("agentId is required for scope 'agent_profile'.")
         candidate = MemoryCandidate(
             candidate_id=self._next_candidate_id(),
             tenant_id=self.tenant_id,
@@ -379,7 +560,7 @@ class TeamMemoryService:
             title=normalized_title,
             content=normalized_content,
             team_id=normalized_team_id,
-            agent_id=self._normalize_text(agent_id) or None,
+            agent_id=normalized_agent_id,
             run_id=self._normalize_text(run_id) or None,
         )
         return self.store.create(candidate).to_dict()
@@ -388,19 +569,20 @@ class TeamMemoryService:
         self,
         *,
         team_id: str | None = None,
+        agent_id: str | None = None,
         status: str | None = None,
         scope: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         normalized_team_id = self._require_team(team_id) if team_id else None
+        normalized_agent_id = self._require_agent(agent_id) if agent_id else None
         normalized_status = self._normalize_text(status) or None
         normalized_scope = self._normalize_text(scope) or None
         return [
             candidate.to_dict()
-            for candidate in self.store.list_all(
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
+            for candidate in self._list_candidate_records(
                 team_id=normalized_team_id,
+                agent_id=normalized_agent_id,
                 status=normalized_status,
                 scope=normalized_scope,
                 limit=limit,
@@ -418,6 +600,12 @@ class TeamMemoryService:
         candidate = self.require_candidate(candidate_id)
         if candidate.scope == "team_shared" and candidate.team_id:
             path = self._team_memory_path(candidate.team_id)
+            existing = path.read_text(encoding="utf-8").rstrip() if path.exists() else ""
+            entry = self._format_candidate_entry(candidate)
+            next_content = f"{existing}\n\n{entry}".strip() + "\n"
+            path.write_text(next_content, encoding="utf-8")
+        elif candidate.scope == "agent_profile" and candidate.agent_id:
+            path = self._agent_memory_path(candidate.agent_id)
             existing = path.read_text(encoding="utf-8").rstrip() if path.exists() else ""
             entry = self._format_candidate_entry(candidate)
             next_content = f"{existing}\n\n{entry}".strip() + "\n"

@@ -19,6 +19,7 @@ from nanobot.config.loader import save_config, set_config_path
 from nanobot.config.schema import Config
 from nanobot.providers.base import LLMProvider, LLMResponse
 from nanobot.web.api import create_app
+from tests.knowledge_test_utils import FakeRAGEngine
 
 
 def _runtime_dir() -> Path:
@@ -137,6 +138,7 @@ def _patch_runtime(app) -> None:
     import litellm
 
     provider = DeterministicKnowledgeProvider()
+    fake_rag = FakeRAGEngine()
 
     async def fake_aembedding(**kwargs):
         texts = list(kwargs.get("input") or [])
@@ -159,10 +161,10 @@ def _patch_runtime(app) -> None:
     litellm.acompletion = fake_acompletion  # type: ignore[assignment]
 
     app.state.knowledge._embed_texts = _fake_embed  # type: ignore[method-assign]
+    app.state.knowledge.rag_engine = fake_rag  # type: ignore[assignment]
     app.state.web.app_knowledge._embed_texts = _fake_embed  # type: ignore[attr-defined]
+    app.state.web.app_knowledge.rag_engine = fake_rag  # type: ignore[assignment]
     app.state.web.config_runtime.make_provider = lambda config: provider
-    _patch_rag_engine(app.state.knowledge, provider)
-    _patch_rag_engine(app.state.web.app_knowledge, provider)
 
 
 def build_app():
