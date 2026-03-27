@@ -53,6 +53,14 @@ class WecomChannel(BaseChannel):
     def default_config(cls) -> dict[str, Any]:
         return WecomConfig().model_dump(by_alias=True)
 
+    @classmethod
+    def is_available(cls) -> bool:
+        return WECOM_AVAILABLE
+
+    @classmethod
+    def unavailable_reason(cls) -> str | None:
+        return "WeCom SDK not installed. Run: pip install nanobot-ai[wecom]"
+
     def __init__(self, config: Any, bus: MessageBus):
         if isinstance(config, dict):
             config = WecomConfig.model_validate(config)

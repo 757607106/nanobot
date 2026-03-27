@@ -33,6 +33,9 @@ def load_channel_class(module_name: str) -> type[BaseChannel]:
     for attr in dir(mod):
         obj = getattr(mod, attr)
         if isinstance(obj, type) and issubclass(obj, _Base) and obj is not _Base:
+            if not obj.is_available():
+                reason = obj.unavailable_reason() or f"{obj.display_name} dependencies not installed"
+                raise ImportError(reason)
             return obj
     raise ImportError(f"No BaseChannel subclass in nanobot.channels.{module_name}")
 

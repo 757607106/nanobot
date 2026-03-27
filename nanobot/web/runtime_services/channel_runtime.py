@@ -144,39 +144,43 @@ class WebChannelRuntimeService:
 
     async def _start_pipeline(self) -> None:
         """Build all routing components and run them until cancelled."""
-        config = self.state.config
-        bindings = self.state.channel_bindings_service
-
-        routing_service = ChannelRoutingService(bindings)
-        self._bus = MessageBus()
-
-        dispatcher = ChannelMessageDispatcher(
-            self._bus,
-            agent_handler=self._agent_handler,
-            team_handler=self._team_handler,
-        )
-
-        provider = self.state.config_runtime.make_provider(config)
-        self._agent = AgentLoop(
-            bus=self._bus,
-            provider=provider,
-            workspace=config.workspace_path,
-            model=config.agents.defaults.model,
-            max_iterations=config.agents.defaults.max_tool_iterations,
-            context_window_tokens=config.agents.defaults.context_window_tokens,
-            web_search_config=config.tools.web.search,
-            web_proxy=config.tools.web.proxy or None,
-            exec_config=config.tools.exec,
-            restrict_to_workspace=config.tools.restrict_to_workspace,
-            session_manager=self.state.sessions,
-            mcp_servers=config.tools.mcp_servers,
-            channels_config=config.channels,
-            channel_dispatcher=dispatcher,
-        )
-
         try:
+            config = self.state.config
+            bindings = self.state.channel_bindings_service
+
+            routing_service = ChannelRoutingService(bindings)
+            self._bus = MessageBus()
+
+            dispatcher = ChannelMessageDispatcher(
+                self._bus,
+                agent_handler=self._agent_handler,
+                team_handler=self._team_handler,
+                audit_service=self.state.channel_audit_service,
+            )
+
+            provider = self.state.config_runtime.make_provider(config)
+            self._agent = AgentLoop(
+                bus=self._bus,
+                provider=provider,
+                workspace=config.workspace_path,
+                model=config.agents.defaults.model,
+                max_iterations=config.agents.defaults.max_tool_iterations,
+                context_window_tokens=config.agents.defaults.context_window_tokens,
+                web_search_config=config.tools.web.search,
+                web_proxy=config.tools.web.proxy or None,
+                exec_config=config.tools.exec,
+                restrict_to_workspace=config.tools.restrict_to_workspace,
+                session_manager=self.state.sessions,
+                mcp_servers=config.tools.mcp_servers,
+                channels_config=config.channels,
+                channel_dispatcher=dispatcher,
+            )
+
             self._channel_manager = ChannelManager(
-                config, self._bus, routing_service=routing_service,
+                config,
+                self._bus,
+                routing_service=routing_service,
+                audit_service=self.state.channel_audit_service,
             )
             logger.info("Channel routing pipeline ready — starting agent loop and channels")
             await asyncio.gather(

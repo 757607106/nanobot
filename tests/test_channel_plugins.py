@@ -173,6 +173,16 @@ def test_discover_all_builtin_shadows_plugin():
     assert result["telegram"] is not _FakeTelegram
 
 
+def test_load_channel_class_skips_unavailable_builtin(monkeypatch):
+    from nanobot.channels import qq as qq_module
+    from nanobot.channels.registry import load_channel_class
+
+    monkeypatch.setattr(qq_module, "QQ_AVAILABLE", False)
+
+    with pytest.raises(ImportError, match="qq-botpy"):
+        load_channel_class("qq")
+
+
 # ---------------------------------------------------------------------------
 # Manager _init_channels with dict config (plugin scenario)
 # ---------------------------------------------------------------------------

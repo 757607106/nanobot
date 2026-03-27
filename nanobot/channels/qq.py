@@ -71,6 +71,14 @@ class QQChannel(BaseChannel):
     def default_config(cls) -> dict[str, Any]:
         return QQConfig().model_dump(by_alias=True)
 
+    @classmethod
+    def is_available(cls) -> bool:
+        return QQ_AVAILABLE
+
+    @classmethod
+    def unavailable_reason(cls) -> str | None:
+        return "QQ dependencies not installed. Run: pip install qq-botpy"
+
     def __init__(self, config: Any, bus: MessageBus):
         if isinstance(config, dict):
             config = QQConfig.model_validate(config)

@@ -176,6 +176,14 @@ class DingTalkChannel(BaseChannel):
     def default_config(cls) -> dict[str, Any]:
         return DingTalkConfig().model_dump(by_alias=True)
 
+    @classmethod
+    def is_available(cls) -> bool:
+        return DINGTALK_AVAILABLE
+
+    @classmethod
+    def unavailable_reason(cls) -> str | None:
+        return "DingTalk SDK not installed. Run: pip install dingtalk-stream"
+
     def __init__(self, config: Any, bus: MessageBus):
         if isinstance(config, dict):
             config = DingTalkConfig.model_validate(config)

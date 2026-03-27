@@ -133,6 +133,16 @@ class BaseChannel(ABC):
         """Return default config for onboard. Override in plugins to auto-populate config.json."""
         return {"enabled": False}
 
+    @classmethod
+    def is_available(cls) -> bool:
+        """Return whether the channel can run in the current environment."""
+        return True
+
+    @classmethod
+    def unavailable_reason(cls) -> str | None:
+        """Return a human-readable reason when the channel is unavailable."""
+        return None
+
     @property
     def is_running(self) -> bool:
         """Check if the channel is running."""
