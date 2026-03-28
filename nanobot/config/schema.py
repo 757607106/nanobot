@@ -352,6 +352,44 @@ class Config(BaseSettings):
             return None
         return dict(extra_headers)
 
+    def _merge_provider_material(
+        self,
+        provider_name: str | None,
+        preferred: ProviderConfig | ModelBindingConfig | None,
+    ) -> ProviderConfig | None:
+        """Merge binding overrides with provider-level fallback material."""
+        resolved_name = str(provider_name or "").strip()
+        provider = getattr(self.providers, resolved_name, None) if resolved_name else None
+        if preferred is None and provider is None:
+            return None
+        source = preferred or provider
+        if source is None:
+            return None
+
+        api_key = str(getattr(source, "api_key", None) or "").strip()
+        if not api_key and provider is not None:
+            api_key = str(getattr(provider, "api_key", None) or "").strip()
+
+        api_base = normalize_api_base_url(
+            resolved_name or None,
+            getattr(source, "api_base", None),
+        )
+        if not api_base and provider is not None:
+            api_base = normalize_api_base_url(
+                resolved_name or None,
+                getattr(provider, "api_base", None),
+            )
+
+        extra_headers = self._copy_headers(getattr(source, "extra_headers", None))
+        if not extra_headers and provider is not None:
+            extra_headers = self._copy_headers(getattr(provider, "extra_headers", None))
+
+        return ProviderConfig(
+            api_key=api_key,
+            api_base=api_base,
+            extra_headers=extra_headers,
+        )
+
     @staticmethod
     def _infer_binding_capability_type(
         model: str | None,
@@ -675,9 +713,12 @@ class Config(BaseSettings):
             if provider is None:
                 continue
             binding = projection[1]
-            provider.api_key = binding.api_key
-            provider.api_base = normalize_api_base_url(spec.name, binding.api_base)
-            provider.extra_headers = self._copy_headers(binding.extra_headers)
+            merged = self._merge_provider_material(spec.name, binding)
+            if merged is None:
+                continue
+            provider.api_key = merged.api_key
+            provider.api_base = merged.api_base
+            provider.extra_headers = merged.extra_headers
 
         return self
 
@@ -703,8 +744,8 @@ class Config(BaseSettings):
 
     def get_provider(self, model: str | None = None) -> ProviderConfig | None:
         """Get matched provider config (api_key, api_base, extra_headers). Falls back to first available."""
-        p, _ = self._match_provider(model)
-        return p
+        p, name = self._match_provider(model)
+        return self._merge_provider_material(name, p)
 
     def get_provider_name(self, model: str | None = None) -> str | None:
         """Get the registry name of the matched provider (e.g. "deepseek", "openrouter")."""
@@ -720,7 +761,8 @@ class Config(BaseSettings):
         """Get API base URL for the given model. Applies default URLs for gateway/local providers."""
         from nanobot.providers.registry import find_by_name
 
-        p, name = self._match_provider(model)
+        p = self.get_provider(model)
+        name = self.get_provider_name(model)
         if p and p.api_base:
             return p.api_base
         # Only gateways get a default api_base here. Standard providers

@@ -40,6 +40,7 @@ from nanobot.web.frontend import (
 )
 from nanobot.web.http import APIError, _err, _json_response
 from nanobot.web.routers import (
+    agent_chat_router,
     agents_router,
     auth_router,
     channel_bindings_router,
@@ -221,6 +222,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.middleware("http")(tenant_auth_middleware)
 
     app.include_router(agents_router)
+    app.include_router(agent_chat_router)
     app.include_router(auth_router)
     app.include_router(setup_router)
     app.include_router(mcp_router)

@@ -1,6 +1,7 @@
 import json
 
 from nanobot.config.loader import load_config, save_config
+from nanobot.config.schema import Config
 
 
 def test_load_config_keeps_max_tokens_and_tracks_legacy_memory_window(tmp_path) -> None:
@@ -127,3 +128,48 @@ def test_onboard_refresh_backfills_missing_channel_fields(tmp_path, monkeypatch)
     assert result.exit_code == 0
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     assert saved["channels"]["qq"]["msgFormat"] == "plain"
+
+
+def test_config_preserves_provider_material_when_binding_inherits_it() -> None:
+    config = Config.model_validate(
+        {
+            "providers": {
+                "dashscope": {
+                    "apiKey": "sk-provider-key",
+                    "apiBase": "https://dashscope.example.com/compatible-mode/v1",
+                    "extraHeaders": {"X-Test": "provider"},
+                }
+            },
+            "modelBindings": {
+                "qwen-max": {
+                    "provider": "dashscope",
+                    "label": "Qwen Max",
+                    "model": "qwen-max",
+                    "apiKey": "",
+                    "apiBase": "",
+                    "extraHeaders": {},
+                }
+            },
+            "agents": {
+                "defaults": {
+                    "provider": "dashscope",
+                    "binding": "qwen-max",
+                    "model": "qwen-max",
+                }
+            },
+        }
+    )
+
+    assert config.providers.dashscope.api_key == "sk-provider-key"
+    assert config.providers.dashscope.api_base == "https://dashscope.example.com/compatible-mode/v1"
+    assert config.providers.dashscope.extra_headers == {"X-Test": "provider"}
+    assert config.model_bindings["qwen-max"].api_key == ""
+
+    matched = config.get_provider("qwen-max")
+
+    assert matched is not None
+    assert matched.api_key == "sk-provider-key"
+    assert matched.api_base == "https://dashscope.example.com/compatible-mode/v1"
+    assert matched.extra_headers == {"X-Test": "provider"}
+    assert config.get_api_key("qwen-max") == "sk-provider-key"
+    assert config.get_api_base("qwen-max") == "https://dashscope.example.com/compatible-mode/v1"

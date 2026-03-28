@@ -60,6 +60,14 @@ function hasProviderMaterial(config: ProviderConfig | ModelBinding | undefined) 
   )
 }
 
+function hasTextValue(value: string | null | undefined) {
+  return Boolean(String(value || '').trim())
+}
+
+function hasHeadersValue(headers: Record<string, string> | null | undefined) {
+  return Boolean(headers && Object.keys(headers).length > 0)
+}
+
 function projectProviderConfigs(
   bindings: Record<string, ModelBinding>,
   current: Record<string, ProviderConfig>,
@@ -78,10 +86,11 @@ function projectProviderConfigs(
       continue
     }
 
+    const currentProvider = current[providerName]
     projected[providerName] = {
-      apiKey: preferred.apiKey,
-      apiBase: preferred.apiBase ?? null,
-      extraHeaders: preferred.extraHeaders ?? {},
+      apiKey: hasTextValue(currentProvider?.apiKey) ? currentProvider?.apiKey || '' : preferred.apiKey,
+      apiBase: hasTextValue(currentProvider?.apiBase) ? currentProvider?.apiBase ?? null : preferred.apiBase ?? null,
+      extraHeaders: hasHeadersValue(currentProvider?.extraHeaders) ? currentProvider?.extraHeaders ?? {} : preferred.extraHeaders ?? {},
     }
   }
   return projected

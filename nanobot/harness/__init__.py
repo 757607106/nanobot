@@ -41,6 +41,7 @@ from .sandbox import (
     build_sandbox_provider,
 )
 from .workspace import (
+    AgentThreadWorkspaceProvider,
     AgentWorkspaceProvider,
     SharedWorkspaceProvider,
     TenantScopedWorkspaceProvider,
@@ -75,6 +76,7 @@ __all__ = [
     "ToolPolicy",
     "ToolPolicyMiddleware",
     "QueryKnowledgeBaseTool",
+    "AgentThreadWorkspaceProvider",
     "AgentWorkspaceProvider",
     "SharedWorkspaceProvider",
     "TenantScopedWorkspaceProvider",

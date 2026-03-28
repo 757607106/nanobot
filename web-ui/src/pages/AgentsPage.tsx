@@ -28,6 +28,7 @@ import {
   AppstoreOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
+  MessageOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -834,6 +835,11 @@ export default function AgentsPage() {
         styles={{ body: { padding: 0 } }}
         extra={
           <Space>
+            {currentAgent && (
+              <Button icon={<MessageOutlined />} onClick={() => navigate(`/studio/agents/${currentAgent.agentId}/chat`)}>
+                进入会话
+              </Button>
+            )}
             {currentAgent && (
               <Button icon={<CopyOutlined />} onClick={() => void handleCopy()} loading={copying}>
                 复制

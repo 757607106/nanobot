@@ -18,69 +18,82 @@ import {
 const API_BASE = '/api/v1'
 const XREQUEST_PLACEHOLDER_URL = `${API_BASE}/chat/sessions/__provider__`
 
-async function fetchChatStream(
-  _baseURL: RequestInfo | URL,
-  options: XRequestOptions<ChatRequestInput, SSEOutput, ChatMessage>,
-) {
-  const requestParams = options.params ?? {}
+export interface NanobotChatProviderOptions {
+  buildMessagesPath?: (requestParams: Partial<ChatRequestInput>) => string
+}
+
+function buildDefaultMessagesPath(requestParams: Partial<ChatRequestInput>) {
   const sessionId = String(requestParams.sessionId || '').trim()
-  const query = String(requestParams.query || '').trim()
+  return `${API_BASE}/chat/sessions/${encodeURIComponent(sessionId)}/messages?stream=1`
+}
 
-  if (!sessionId) {
-    throw new Error('sessionId is required')
-  }
+function createFetchChatStream(
+  buildMessagesPath: (requestParams: Partial<ChatRequestInput>) => string,
+) {
+  return async (
+    _baseURL: RequestInfo | URL,
+    options: XRequestOptions<ChatRequestInput, SSEOutput, ChatMessage>,
+  ) => {
+    const requestParams = options.params ?? {}
+    const sessionId = String(requestParams.sessionId || '').trim()
+    const query = String(requestParams.query || '').trim()
 
-  if (!query) {
-    throw new Error('query is required')
-  }
+    if (!sessionId) {
+      throw new Error('sessionId is required')
+    }
 
-  const response = await fetch(`${API_BASE}/chat/sessions/${encodeURIComponent(sessionId)}/messages?stream=1`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers ?? {}),
-    },
-    credentials: 'include',
-    signal: options.signal,
-    body: JSON.stringify({
-      content: query,
-      displayContent: requestParams.displayContent,
-      attachments: requestParams.attachments || [],
-    }),
-  })
+    if (!query) {
+      throw new Error('query is required')
+    }
 
-  if (!response.ok) {
-    let message = '流式请求失败'
-    let code: string | undefined
-    let details: unknown
+    const response = await fetch(buildMessagesPath(requestParams), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers ?? {}),
+      },
+      credentials: 'include',
+      signal: options.signal,
+      body: JSON.stringify({
+        content: query,
+        displayContent: requestParams.displayContent,
+        attachments: requestParams.attachments || [],
+      }),
+    })
 
-    try {
-      const payload = (await response.json()) as {
-        error?: {
-          message?: string
-          code?: string
-          details?: unknown
-        } | null
+    if (!response.ok) {
+      let message = '流式请求失败'
+      let code: string | undefined
+      let details: unknown
+
+      try {
+        const payload = (await response.json()) as {
+          error?: {
+            message?: string
+            code?: string
+            details?: unknown
+          } | null
+        }
+        message = payload.error?.message || message
+        code = payload.error?.code
+        details = payload.error?.details
+      } catch {
+        // Ignore JSON parsing failures and keep the fallback message.
       }
-      message = payload.error?.message || message
-      code = payload.error?.code
-      details = payload.error?.details
-    } catch {
-      // Ignore JSON parsing failures and keep the fallback message.
+
+      if (response.status === 401 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nanobot:auth-required'))
+      }
+
+      throw new ApiError(message, response.status, code, details)
     }
 
-    if (response.status === 401 && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('nanobot:auth-required'))
+    if (!response.body) {
+      throw new ApiError('流式请求失败', response.status)
     }
 
-    throw new ApiError(message, response.status, code, details)
+    return response
   }
-
-  if (!response.body) {
-    throw new ApiError('流式请求失败', response.status)
-  }
-
-  return response
 }
 
 function getStreamEvents(info: TransformMessage<ChatMessage, SSEOutput>) {
@@ -99,11 +112,12 @@ function getStreamEvents(info: TransformMessage<ChatMessage, SSEOutput>) {
 }
 
 export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatRequestInput, SSEOutput> {
-  constructor() {
+  constructor(options: NanobotChatProviderOptions = {}) {
+    const buildMessagesPath = options.buildMessagesPath || buildDefaultMessagesPath
     super({
       request: XRequest(XREQUEST_PLACEHOLDER_URL, {
         manual: true,
-        fetch: fetchChatStream,
+        fetch: createFetchChatStream(buildMessagesPath),
       }),
     })
   }
@@ -171,6 +185,6 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
   }
 }
 
-export function createNanobotChatProvider() {
-  return new NanobotChatProvider()
+export function createNanobotChatProvider(options: NanobotChatProviderOptions = {}) {
+  return new NanobotChatProvider(options)
 }

@@ -189,6 +189,63 @@ class AgentWorkspaceProvider:
 
 
 @dataclass(slots=True)
+class AgentThreadWorkspaceProvider:
+    """Resolve a tenant/instance/agent/thread-scoped workspace path."""
+
+    scope: str = "agent_thread"
+    base_dir: str = ".nanobot/workspaces/tenants"
+    force_restrict_to_workspace: bool = True
+    agent_segment: str = "agents"
+    thread_segment: str = "threads"
+
+    def resolve(
+        self,
+        *,
+        workspace: Path,
+        restrict_to_workspace: bool,
+        principal_kind: str,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+        principal_id: str | None = None,
+        thread_id: str | None = None,
+        root_run_id: str | None = None,
+        session_key: str | None = None,
+    ) -> WorkspaceBinding:
+        base_path = Path(self.base_dir)
+        resolved_base = base_path if base_path.is_absolute() else workspace / base_path
+        resolved_tenant = _sanitize_workspace_segment(str(tenant_id or "default"))
+        resolved_instance = _sanitize_workspace_segment(str(instance_id or "default"))
+        resolved_agent = _sanitize_workspace_segment(
+            str(principal_id or principal_kind or "agent")
+        )
+        resolved_thread = _sanitize_workspace_segment(
+            str(thread_id or session_key or root_run_id or "default")
+        )
+        resolved_path = (
+            resolved_base
+            / resolved_tenant
+            / resolved_instance
+            / self.agent_segment
+            / resolved_agent
+            / self.thread_segment
+            / resolved_thread
+        )
+        resolved_path.mkdir(parents=True, exist_ok=True)
+        return WorkspaceBinding(
+            path=resolved_path,
+            scope=self.scope,
+            restrict_to_workspace=self.force_restrict_to_workspace or restrict_to_workspace,
+            tenant_id=tenant_id,
+            instance_id=instance_id,
+            principal_kind=principal_kind,
+            principal_id=principal_id,
+            thread_id=thread_id,
+            root_run_id=root_run_id,
+            session_key=session_key,
+        )
+
+
+@dataclass(slots=True)
 class TenantScopedWorkspaceProvider:
     """Rebase any workspace provider under a tenant/instance-scoped directory."""
 

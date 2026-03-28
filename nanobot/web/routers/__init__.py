@@ -1,5 +1,6 @@
 """Domain routers for the nanobot Web UI."""
 
+from nanobot.web.routers.agent_chat import router as agent_chat_router
 from nanobot.web.routers.agents import router as agents_router
 from nanobot.web.routers.auth import router as auth_router
 from nanobot.web.routers.channel_audit import router as channel_audit_router
@@ -18,6 +19,7 @@ from nanobot.web.routers.tenants import router as tenants_router
 from nanobot.web.routers.workspace import router as workspace_router
 
 __all__ = [
+    "agent_chat_router",
     "auth_router",
     "agents_router",
     "channel_bindings_router",

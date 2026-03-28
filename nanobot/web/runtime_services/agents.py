@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from nanobot.harness import (
@@ -309,9 +310,13 @@ class WebAgentRuntimeService:
             normalized.append(entry)
         return normalized
 
-    def get_workspace_memory_sections(self) -> list[tuple[str, str]]:
+    @staticmethod
+    def get_workspace_memory_sections_for_path(
+        workspace_path: Path,
+        *,
+        heading: str = "Workspace Shared Memory",
+    ) -> list[tuple[str, str]]:
         try:
-            workspace_path = self.state.config.workspace_path
             memory_file = workspace_path / "memory" / "MEMORY.md"
             if not memory_file.is_file():
                 return []
@@ -320,7 +325,13 @@ class WebAgentRuntimeService:
             return []
         if not content:
             return []
-        return [("Workspace Shared Memory", content)]
+        return [(heading, content)]
+
+    def get_workspace_memory_sections(self) -> list[tuple[str, str]]:
+        try:
+            return self.get_workspace_memory_sections_for_path(self.state.config.workspace_path)
+        except Exception:
+            return []
 
     def get_agent_profile_memory_sections(self, agent_id: str, *, tenant_id: str | None = None) -> list[tuple[str, str]]:
         memory_service = self._memory_service_for_tenant(tenant_id)
@@ -390,14 +401,21 @@ class WebAgentRuntimeService:
         config.tools.mcp_servers = selected_mcp
         return config
 
-    def _build_execution_middleware_chain(self, knowledge_service: Any | None) -> ExecutionMiddlewareChain:
+    def _build_execution_middleware_chain(
+        self,
+        knowledge_service: Any | None,
+        *,
+        workspace_memory_resolver: Callable[[], list[tuple[str, str]]] | None = None,
+    ) -> ExecutionMiddlewareChain:
         return ExecutionMiddlewareChain(
             (
                 PromptSeedMiddleware(),
                 MemoryPolicyMiddleware(self.resolve_agent_memory_context),
                 KnowledgePolicyMiddleware(knowledge_service),
                 ToolPolicyMiddleware(),
-                RuntimePromptFragmentsMiddleware(self.get_workspace_memory_sections),
+                RuntimePromptFragmentsMiddleware(
+                    workspace_memory_resolver or self.get_workspace_memory_sections
+                ),
                 PromptAssemblyMiddleware(),
             )
         )
@@ -410,6 +428,7 @@ class WebAgentRuntimeService:
         additional_prompt_sections: list[str] | None = None,
         include_workspace_memory: bool | None = None,
         memory_sections: list[tuple[str, str]] | None = None,
+        workspace_memory_resolver: Callable[[], list[tuple[str, str]]] | None = None,
     ) -> PreparedAgentExecution:
         """Resolve config, bindings, and prompt state for one agent execution."""
         resolved_task = str(task or "").strip()
@@ -419,7 +438,10 @@ class WebAgentRuntimeService:
         config = self._build_agent_config(agent)
         self._validate_agent_bindings(agent, config)
         knowledge_service = self._knowledge_service_for_tenant(agent.get("tenantId"))
-        assembly = self._build_execution_middleware_chain(knowledge_service).apply(
+        assembly = self._build_execution_middleware_chain(
+            knowledge_service,
+            workspace_memory_resolver=workspace_memory_resolver,
+        ).apply(
             ExecutionAssemblyState(
                 agent=agent,
                 task=resolved_task,
@@ -534,6 +556,7 @@ class WebAgentRuntimeService:
         workspace_binding: WorkspaceBinding | None = None,
         sandbox_binding: SandboxBinding | None = None,
         prepared: PreparedAgentExecution | None = None,
+        workspace_memory_resolver: Callable[[], list[tuple[str, str]]] | None = None,
     ) -> tuple[AgentLoop, PreparedAgentExecution]:
         """Construct an agent loop that honors the agent definition's runtime config."""
         prepared = prepared or self.prepare_agent_execution(
@@ -542,6 +565,7 @@ class WebAgentRuntimeService:
             additional_prompt_sections=additional_prompt_sections,
             include_workspace_memory=include_workspace_memory,
             memory_sections=memory_sections,
+            workspace_memory_resolver=workspace_memory_resolver,
         )
         runtime_bus = bus or self.state.bus
         if runtime_bus is None:
@@ -634,6 +658,10 @@ class WebAgentRuntimeService:
         additional_prompt_sections: list[str] | None = None,
         include_workspace_memory: bool | None = None,
         memory_sections: list[tuple[str, str]] | None = None,
+        workspace_memory_resolver: Callable[[], list[tuple[str, str]]] | None = None,
+        workspace_binding: WorkspaceBinding | None = None,
+        sandbox_binding: SandboxBinding | None = None,
+        prepared: PreparedAgentExecution | None = None,
         on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
         on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
@@ -644,12 +672,13 @@ class WebAgentRuntimeService:
         if not task:
             raise ValueError("content is required.")
 
-        prepared = self.prepare_agent_execution(
+        prepared = prepared or self.prepare_agent_execution(
             agent,
             task=task,
             additional_prompt_sections=additional_prompt_sections,
             include_workspace_memory=include_workspace_memory,
             memory_sections=memory_sections,
+            workspace_memory_resolver=workspace_memory_resolver,
         )
         execution_context = self.materialize_execution_context(
             agent,
@@ -665,22 +694,25 @@ class WebAgentRuntimeService:
             root_run_id=root_run_id,
             thread_id=thread_id,
         )
-        environment = self.resolve_environment_binding(
-            workspace=prepared.config.workspace_path,
-            restrict_to_workspace=prepared.config.tools.restrict_to_workspace,
-            exec_config=prepared.config.tools.exec,
-            principal_kind=execution_context.principal_kind,
-            tenant_id=execution_context.tenant_id,
-            instance_id=execution_context.instance_id,
-            principal_id=execution_context.principal_id,
-            thread_id=execution_context.thread_id,
-            root_run_id=execution_context.effective_root_run_id,
-            session_key=execution_context.session_key,
-        )
-        workspace_binding = environment.workspace
+        if workspace_binding is None or sandbox_binding is None:
+            environment = self.resolve_environment_binding(
+                workspace=prepared.config.workspace_path,
+                restrict_to_workspace=prepared.config.tools.restrict_to_workspace,
+                exec_config=prepared.config.tools.exec,
+                principal_kind=execution_context.principal_kind,
+                tenant_id=execution_context.tenant_id,
+                instance_id=execution_context.instance_id,
+                principal_id=execution_context.principal_id,
+                thread_id=execution_context.thread_id,
+                root_run_id=execution_context.effective_root_run_id,
+                session_key=execution_context.session_key,
+            )
+            workspace_binding = workspace_binding or environment.workspace
+            sandbox_binding = sandbox_binding or environment.sandbox
+        assert workspace_binding is not None
+        assert sandbox_binding is not None
         execution_context.workspace_path = str(workspace_binding.path)
         execution_context.workspace_scope = workspace_binding.scope
-        sandbox_binding = environment.sandbox
         execution_context.sandbox_kind = sandbox_binding.kind
         execution_context.exec_working_dir = str(sandbox_binding.working_dir)
         execution_context.restrict_to_workspace = sandbox_binding.restrict_to_workspace
@@ -695,6 +727,7 @@ class WebAgentRuntimeService:
             workspace_binding=workspace_binding,
             sandbox_binding=sandbox_binding,
             prepared=prepared,
+            workspace_memory_resolver=workspace_memory_resolver,
         )
         config = prepared.config
         knowledge_hits = prepared.knowledge_hits

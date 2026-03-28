@@ -1346,6 +1346,200 @@ def test_web_api_session_files_are_scoped_to_session(web_client: TestClient) -> 
     assert sessions.json()["data"]["items"][0]["fileCount"] == 1
 
 
+def test_web_api_agent_sessions_are_namespaced_per_agent(web_client: TestClient) -> None:
+    first_agent = web_client.post(
+        "/api/v1/agents",
+        json={"name": "Ops Alpha", "systemPrompt": "You are Alpha."},
+    )
+    second_agent = web_client.post(
+        "/api/v1/agents",
+        json={"name": "Ops Beta", "systemPrompt": "You are Beta."},
+    )
+    assert first_agent.status_code == 201
+    assert second_agent.status_code == 201
+    first_agent_id = first_agent.json()["data"]["agentId"]
+    second_agent_id = second_agent.json()["data"]["agentId"]
+
+    first_session = web_client.post(
+        f"/api/v1/agents/{first_agent_id}/sessions",
+        json={"title": "Alpha Inbox"},
+    )
+    second_session = web_client.post(
+        f"/api/v1/agents/{second_agent_id}/sessions",
+        json={"title": "Beta Inbox"},
+    )
+    assert first_session.status_code == 201
+    assert second_session.status_code == 201
+
+    first_list = web_client.get(f"/api/v1/agents/{first_agent_id}/sessions")
+    second_list = web_client.get(f"/api/v1/agents/{second_agent_id}/sessions")
+    assert first_list.status_code == 200
+    assert second_list.status_code == 200
+    assert [item["id"] for item in first_list.json()["data"]["items"]] == [first_session.json()["data"]["id"]]
+    assert [item["id"] for item in second_list.json()["data"]["items"]] == [second_session.json()["data"]["id"]]
+
+
+def test_web_api_agent_session_files_are_isolated_to_agent_workspace(web_client: TestClient) -> None:
+    created_agent = web_client.post(
+        "/api/v1/agents",
+        json={"name": "Workspace Agent", "systemPrompt": "Use your own workspace."},
+    )
+    assert created_agent.status_code == 201
+    agent_id = created_agent.json()["data"]["agentId"]
+
+    first_session = web_client.post(
+        f"/api/v1/agents/{agent_id}/sessions",
+        json={"title": "First Agent Session"},
+    )
+    second_session = web_client.post(
+        f"/api/v1/agents/{agent_id}/sessions",
+        json={"title": "Second Agent Session"},
+    )
+    assert first_session.status_code == 201
+    assert second_session.status_code == 201
+    first_session_id = first_session.json()["data"]["id"]
+    second_session_id = second_session.json()["data"]["id"]
+
+    uploaded = web_client.post(
+        f"/api/v1/agents/{agent_id}/sessions/{first_session_id}/uploads",
+        files={"file": ("brief.txt", b"agent session file", "text/plain")},
+    )
+    assert uploaded.status_code == 201
+    payload = uploaded.json()["data"]
+    uploaded_file = payload["uploadedFile"]
+    uploaded_path = Path(uploaded_file["path"])
+    assert uploaded_file["relativePath"].startswith("uploads/")
+    assert uploaded_path.exists()
+    assert f"/agents/{agent_id}/threads/{first_session_id}/uploads/" in uploaded_path.as_posix()
+
+    listed_first = web_client.get(f"/api/v1/agents/{agent_id}/sessions/{first_session_id}/files")
+    listed_second = web_client.get(f"/api/v1/agents/{agent_id}/sessions/{second_session_id}/files")
+    assert listed_first.status_code == 200
+    assert listed_second.status_code == 200
+    assert len(listed_first.json()["data"]) == 1
+    assert listed_second.json()["data"] == []
+
+
+def test_web_api_agent_session_mutations_cover_rename_file_remove_and_delete(web_client: TestClient) -> None:
+    created_agent = web_client.post(
+        "/api/v1/agents",
+        json={"name": "Mutable Agent", "systemPrompt": "Stay isolated."},
+    )
+    assert created_agent.status_code == 201
+    agent_id = created_agent.json()["data"]["agentId"]
+
+    created_session = web_client.post(
+        f"/api/v1/agents/{agent_id}/sessions",
+        json={"title": "Original Agent Session"},
+    )
+    assert created_session.status_code == 201
+    session_id = created_session.json()["data"]["id"]
+
+    renamed = web_client.patch(
+        f"/api/v1/agents/{agent_id}/sessions/{session_id}",
+        json={"title": "Renamed Agent Session"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["data"]["title"] == "Renamed Agent Session"
+
+    uploaded = web_client.post(
+        f"/api/v1/agents/{agent_id}/sessions/{session_id}/uploads",
+        files={"file": ("note.txt", b"agent file content", "text/plain")},
+    )
+    assert uploaded.status_code == 201
+    uploaded_file = uploaded.json()["data"]["uploadedFile"]
+
+    removed = web_client.request(
+        "DELETE",
+        f"/api/v1/agents/{agent_id}/sessions/{session_id}/files",
+        json={"relativePath": uploaded_file["relativePath"]},
+    )
+    assert removed.status_code == 200
+    assert removed.json()["data"]["sessionFiles"] == []
+
+    deleted = web_client.delete(f"/api/v1/agents/{agent_id}/sessions/{session_id}")
+    assert deleted.status_code == 200
+    assert deleted.json()["data"]["deleted"] is True
+
+    listed = web_client.get(f"/api/v1/agents/{agent_id}/sessions")
+    assert listed.status_code == 200
+    assert listed.json()["data"]["items"] == []
+
+
+def test_web_api_agent_chat_dispatch_uses_isolated_runtime(
+    web_client: TestClient,
+    monkeypatch,
+) -> None:
+    created_agent = web_client.post(
+        "/api/v1/agents",
+        json={"name": "Dispatch Agent", "systemPrompt": "Work inside your own session."},
+    )
+    assert created_agent.status_code == 201
+    agent_id = created_agent.json()["data"]["agentId"]
+
+    created_session = web_client.post(
+        f"/api/v1/agents/{agent_id}/sessions",
+        json={"title": "Dispatch Session"},
+    )
+    assert created_session.status_code == 201
+    session_id = created_session.json()["data"]["id"]
+
+    async def fake_run_agent_definition(
+        agent,
+        *,
+        task,
+        session_key,
+        session_id: str,
+        thread_id,
+        workspace_binding,
+        sandbox_binding,
+        workspace_memory_resolver,
+        on_progress,
+        **kwargs,
+    ):
+        _ = sandbox_binding, kwargs
+        assert agent["agentId"] == agent_id
+        assert task == "Summarize this isolated session."
+        assert session_key == f"agent:{agent_id}:session:{session_id}"
+        assert thread_id == session_id
+        assert workspace_binding.scope == "agent_thread"
+        assert f"/agents/{agent_id}/threads/{session_id}" in workspace_binding.path.as_posix()
+        memory_dir = workspace_binding.path / "memory"
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        (memory_dir / "MEMORY.md").write_text("SESSION SECRET", encoding="utf-8")
+        assert workspace_memory_resolver() == [("Agent Workspace Memory", "SESSION SECRET")]
+        await on_progress("isolated agent workspace ready")
+        return {
+            "assistantMessage": {
+                "role": "assistant",
+                "content": "Agent session reply",
+                "createdAt": datetime.now().isoformat(),
+            },
+            "session": {
+                "id": session_id,
+                "sessionId": session_id,
+                "title": "Dispatch Session",
+                "messageCount": 2,
+                "fileCount": 0,
+            },
+            "messages": [],
+            "knowledgeHits": [],
+        }
+
+    monkeypatch.setattr(
+        web_client.app.state.web.agent_runtime,
+        "run_agent_definition",
+        fake_run_agent_definition,
+    )
+
+    dispatched = web_client.post(
+        f"/api/v1/agents/{agent_id}/sessions/{session_id}/messages",
+        json={"content": "Summarize this isolated session."},
+    )
+    assert dispatched.status_code == 200
+    assert dispatched.json()["data"]["content"] == "Agent session reply"
+
+
 def test_web_api_chat_workspace_snapshot(web_client: TestClient) -> None:
     web_client.app.state.web.config.tools.mcp_servers["filesystem"] = MCPServerConfig(
         enabled=True,

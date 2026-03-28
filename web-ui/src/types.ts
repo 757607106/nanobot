@@ -56,6 +56,7 @@ export interface ChatMessage {
 
 export interface ChatRequestInput {
   sessionId: string
+  agentId?: string
   query: string
   displayContent?: string
   attachments?: ChatAttachmentRef[]

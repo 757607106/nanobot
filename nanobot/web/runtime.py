@@ -20,6 +20,7 @@ from nanobot.services.calendar_reminder import CalendarReminderService
 from nanobot.session.manager import SessionManager
 from nanobot.storage.calendar_repository import get_calendar_repository
 from nanobot.web.runtime_services import (
+    WebAgentChatRuntimeService,
     WebAgentRuntimeService,
     WebChatRuntimeService,
     WebConfigRuntimeService,
@@ -97,6 +98,7 @@ class WebAppState:
         self.calendar_repo = get_calendar_repository(config.workspace_path)
 
         self.agent_runtime = WebAgentRuntimeService(self)
+        self.agent_chat_runtime = WebAgentChatRuntimeService(self)
         self.chat_runtime = WebChatRuntimeService(self)
         self.schedule_runtime = WebScheduleRuntimeService(self)
         self.workspace_runtime = WebWorkspaceRuntimeService(self, DOCUMENT_DEFINITIONS)
@@ -129,17 +131,93 @@ class WebAppState:
     def create_session(self, title: str | None = None) -> dict[str, Any]:
         return self.chat_runtime.create_session(title)
 
+    def list_agent_sessions(
+        self,
+        agent_id: str,
+        *,
+        tenant_id: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        return self.agent_chat_runtime.list_sessions(
+            agent_id,
+            tenant_id=tenant_id,
+            page=page,
+            page_size=page_size,
+        )
+
+    def create_agent_session(
+        self,
+        agent_id: str,
+        *,
+        tenant_id: str | None = None,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        return self.agent_chat_runtime.create_session(agent_id, tenant_id=tenant_id, title=title)
+
     def rename_session(self, session_id: str, title: str) -> dict[str, Any]:
         return self.chat_runtime.rename_session(session_id, title)
+
+    def rename_agent_session(
+        self,
+        agent_id: str,
+        session_id: str,
+        title: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self.agent_chat_runtime.rename_session(
+            agent_id,
+            session_id,
+            title,
+            tenant_id=tenant_id,
+        )
 
     def delete_session(self, session_id: str) -> bool:
         return self.chat_runtime.delete_session(session_id)
 
+    def delete_agent_session(
+        self,
+        agent_id: str,
+        session_id: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> bool:
+        return self.agent_chat_runtime.delete_session(agent_id, session_id, tenant_id=tenant_id)
+
     def get_messages(self, session_id: str, limit: int = 200) -> list[dict[str, Any]]:
         return self.chat_runtime.get_messages(session_id, limit)
 
+    def get_agent_messages(
+        self,
+        agent_id: str,
+        session_id: str,
+        *,
+        tenant_id: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        return self.agent_chat_runtime.get_messages(
+            agent_id,
+            session_id,
+            tenant_id=tenant_id,
+            limit=limit,
+        )
+
     def get_last_assistant_message(self, session_id: str) -> dict[str, Any] | None:
         return self.chat_runtime.get_last_assistant_message(session_id)
+
+    def get_last_agent_assistant_message(
+        self,
+        agent_id: str,
+        session_id: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        return self.agent_chat_runtime.get_last_assistant_message(
+            agent_id,
+            session_id,
+            tenant_id=tenant_id,
+        )
 
     def upload_chat_file(self, file_name: str, content: bytes) -> dict[str, Any]:
         return self.chat_runtime.upload_chat_file(file_name, content)
@@ -147,8 +225,34 @@ class WebAppState:
     def upload_chat_file_to_session(self, session_id: str, file_name: str, content: bytes) -> dict[str, Any]:
         return self.chat_runtime.upload_chat_file_to_session(session_id, file_name, content)
 
+    def upload_agent_chat_file_to_session(
+        self,
+        agent_id: str,
+        session_id: str,
+        file_name: str,
+        content: bytes,
+        *,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self.agent_chat_runtime.upload_chat_file_to_session(
+            agent_id,
+            session_id,
+            file_name,
+            content,
+            tenant_id=tenant_id,
+        )
+
     def get_session_files(self, session_id: str) -> list[dict[str, Any]]:
         return self.chat_runtime.get_session_files(session_id)
+
+    def get_agent_session_files(
+        self,
+        agent_id: str,
+        session_id: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.agent_chat_runtime.get_session_files(agent_id, session_id, tenant_id=tenant_id)
 
     def import_session_files(
         self,
@@ -157,8 +261,38 @@ class WebAppState:
     ) -> list[dict[str, Any]]:
         return self.chat_runtime.import_session_files(session_id, attachments)
 
+    def import_agent_session_files(
+        self,
+        agent_id: str,
+        session_id: str,
+        attachments: list[dict[str, Any]] | None,
+        *,
+        tenant_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.agent_chat_runtime.import_session_files(
+            agent_id,
+            session_id,
+            attachments,
+            tenant_id=tenant_id,
+        )
+
     def remove_session_file(self, session_id: str, relative_path: str) -> list[dict[str, Any]]:
         return self.chat_runtime.remove_session_file(session_id, relative_path)
+
+    def remove_agent_session_file(
+        self,
+        agent_id: str,
+        session_id: str,
+        relative_path: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.agent_chat_runtime.remove_session_file(
+            agent_id,
+            session_id,
+            relative_path,
+            tenant_id=tenant_id,
+        )
 
     def get_chat_workspace(self) -> dict[str, Any]:
         return self.chat_runtime.get_chat_workspace()
@@ -190,6 +324,27 @@ class WebAppState:
             session_id,
             content,
             on_progress,
+            display_content=display_content,
+            attachments=attachments,
+        )
+
+    async def chat_with_agent(
+        self,
+        agent_id: str,
+        session_id: str,
+        content: str,
+        on_progress,
+        *,
+        tenant_id: str | None = None,
+        display_content: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return await self.agent_chat_runtime.chat(
+            agent_id,
+            session_id,
+            content,
+            on_progress,
+            tenant_id=tenant_id,
             display_content=display_content,
             attachments=attachments,
         )

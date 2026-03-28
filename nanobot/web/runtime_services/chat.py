@@ -93,7 +93,8 @@ class WebChatRuntimeService:
             "uploadedAt": uploaded_at,
         }
 
-    def resolve_workspace_file(self, relative_path: str) -> dict[str, Any]:
+    @classmethod
+    def resolve_workspace_file_in_root(cls, workspace_root: Path, relative_path: str) -> dict[str, Any]:
         raw_relative_path = str(relative_path or "").strip()
         if not raw_relative_path:
             raise ValueError("File path is required.")
@@ -105,7 +106,7 @@ class WebChatRuntimeService:
             except ValueError as exc:
                 raise ValueError("File must stay inside the workspace.") from exc
 
-        workspace_root = self.state.config.workspace_path.resolve()
+        workspace_root = workspace_root.resolve()
         resolved = (workspace_root / candidate).resolve()
         try:
             resolved.relative_to(workspace_root)
@@ -115,7 +116,10 @@ class WebChatRuntimeService:
         if not resolved.exists() or not resolved.is_file():
             raise ValueError("Referenced file does not exist.")
 
-        return self.format_upload_item(resolved, workspace_root)
+        return cls.format_upload_item(resolved, workspace_root)
+
+    def resolve_workspace_file(self, relative_path: str) -> dict[str, Any]:
+        return self.resolve_workspace_file_in_root(self.state.config.workspace_path, relative_path)
 
     @staticmethod
     def collect_message_attachment_refs(session: Session) -> list[dict[str, Any]]:

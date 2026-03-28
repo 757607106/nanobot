@@ -295,21 +295,49 @@ export const api = {
     }),
   getSessions: (page = 1, pageSize = 20) =>
     request<SessionListResponse>(`/chat/sessions?page=${page}&pageSize=${pageSize}`),
+  listAgentSessions: (agentId: string, page = 1, pageSize = 20) =>
+    request<SessionListResponse>(
+      `/agents/${encodeURIComponent(agentId)}/sessions?page=${page}&pageSize=${pageSize}`,
+    ),
   getChatWorkspace: () => request<ChatWorkspaceData>('/chat/workspace'),
   getSessionFiles: (sessionId: string) => request<ChatUploadItem[]>(`/chat/sessions/${sessionId}/files`),
+  getAgentSessionFiles: (agentId: string, sessionId: string) =>
+    request<ChatUploadItem[]>(`/agents/${encodeURIComponent(agentId)}/sessions/${sessionId}/files`),
   uploadSessionChatFile: (sessionId: string, formData: FormData) =>
     request<ChatSessionFilesMutationResult>(`/chat/sessions/${sessionId}/uploads`, {
       method: 'POST',
       body: formData,
       skipJsonContentType: true,
     }),
+  uploadAgentSessionChatFile: (agentId: string, sessionId: string, formData: FormData) =>
+    request<ChatSessionFilesMutationResult>(
+      `/agents/${encodeURIComponent(agentId)}/sessions/${sessionId}/uploads`,
+      {
+        method: 'POST',
+        body: formData,
+        skipJsonContentType: true,
+      },
+    ),
   importSessionFiles: (sessionId: string, attachments: ChatUploadItem[]) =>
     request<ChatSessionFilesMutationResult>(`/chat/sessions/${sessionId}/files/import`, {
       method: 'POST',
       body: JSON.stringify({ attachments }),
     }),
+  importAgentSessionFiles: (agentId: string, sessionId: string, attachments: ChatUploadItem[]) =>
+    request<ChatSessionFilesMutationResult>(
+      `/agents/${encodeURIComponent(agentId)}/sessions/${sessionId}/files/import`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ attachments }),
+      },
+    ),
   createSession: (title?: string) =>
     request<SessionSummary>('/chat/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
+  createAgentSession: (agentId: string, title?: string) =>
+    request<SessionSummary>(`/agents/${encodeURIComponent(agentId)}/sessions`, {
       method: 'POST',
       body: JSON.stringify({ title }),
     }),
@@ -318,12 +346,33 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ title }),
     }),
+  renameAgentSession: (agentId: string, sessionId: string, title: string) =>
+    request<SessionSummary>(`/agents/${encodeURIComponent(agentId)}/sessions/${sessionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    }),
   deleteSession: (sessionId: string) =>
     request<{ deleted: boolean }>(`/chat/sessions/${sessionId}`, {
       method: 'DELETE',
     }),
+  deleteAgentSession: (agentId: string, sessionId: string) =>
+    request<{ deleted: boolean }>(`/agents/${encodeURIComponent(agentId)}/sessions/${sessionId}`, {
+      method: 'DELETE',
+    }),
   getMessages: (sessionId: string, limit = 200) =>
     request<ChatMessage[]>(`/chat/sessions/${sessionId}/messages?limit=${limit}`),
+  getAgentMessages: (agentId: string, sessionId: string, limit = 200) =>
+    request<ChatMessage[]>(
+      `/agents/${encodeURIComponent(agentId)}/sessions/${sessionId}/messages?limit=${limit}`,
+    ),
+  removeAgentSessionFile: (agentId: string, sessionId: string, relativePath: string) =>
+    request<ChatSessionFilesMutationResult>(
+      `/agents/${encodeURIComponent(agentId)}/sessions/${sessionId}/files`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify({ relativePath }),
+      },
+    ),
   getConfig: () => request<ConfigData>('/config'),
   getConfigMeta: () => request<ConfigMeta>('/config/meta'),
   testModelBinding: (payload: {
