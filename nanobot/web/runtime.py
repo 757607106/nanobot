@@ -16,7 +16,6 @@ from nanobot.config.schema import Config
 from nanobot.cron.service import CronService
 from nanobot.platform.instances import PlatformInstance, PlatformInstanceService
 from nanobot.platform.runs import RunService
-from nanobot.services.agent_templates import AgentTemplateManager
 from nanobot.services.calendar_reminder import CalendarReminderService
 from nanobot.session.manager import SessionManager
 from nanobot.storage.calendar_repository import get_calendar_repository
@@ -28,6 +27,7 @@ from nanobot.web.runtime_services import (
     WebWorkspaceRuntimeService,
 )
 from nanobot.web.runtime_services.channel_runtime import WebChannelRuntimeService
+from nanobot.web.services.agent_templates import AgentTemplateManager
 
 DOCUMENT_DEFINITIONS: dict[str, dict[str, Any]] = {
     "AGENTS.md": {

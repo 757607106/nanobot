@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
 
 import numpy as np
@@ -38,9 +39,15 @@ class _FakeLightRAG:
         *,
         doc_status: _FakeDocStatusStore,
         query_error: Exception | None = None,
+        ready: bool = True,
     ) -> None:
         self.doc_status = doc_status
         self._query_error = query_error
+        self._storages_status = SimpleNamespace(name="INITIALIZED" if ready else "CREATED")
+        self.chunk_entity_relation_graph = SimpleNamespace(
+            _storage_lock=(object() if ready else None),
+            storage_updated=(object() if ready else None),
+        )
 
     async def aquery_data(self, query_text: str, query_param):
         if self._query_error is not None:
@@ -65,22 +72,26 @@ class _FakeRag:
         self.insert_calls: list[tuple[tuple, dict]] = []
         self.process_calls: list[tuple[tuple, dict]] = []
         self.init_calls = 0
+        self.parse_cache = None
         self.lightrag = None
         if ready:
             self.lightrag = self._make_lightrag()
+            self.parse_cache = object()
 
-    def _make_lightrag(self) -> _FakeLightRAG:
+    def _make_lightrag(self, *, ready: bool = True) -> _FakeLightRAG:
         return _FakeLightRAG(
             doc_status=_FakeDocStatusStore(
                 by_id=self._status_by_id,
                 by_file_path=self._status_by_file_path,
             ),
             query_error=self._query_error,
+            ready=ready,
         )
 
     async def _ensure_lightrag_initialized(self):
         self.init_calls += 1
         self.lightrag = self._make_lightrag()
+        self.parse_cache = object()
         return {"success": True}
 
     async def insert_content_list(self, *args, **kwargs):
@@ -263,6 +274,25 @@ class _HardFailInsertRag:
         raise RuntimeError("boom")
 
 
+class _SlowInitRag(_FakeRag):
+    async def _ensure_lightrag_initialized(self):
+        self.init_calls += 1
+        await asyncio.sleep(0.01)
+        self.lightrag = self._make_lightrag()
+        self.parse_cache = object()
+        return {"success": True}
+
+
+class _BrokenReadyRag(_FakeRag):
+    def __init__(self) -> None:
+        super().__init__(ready=False)
+        self.lightrag = self._make_lightrag(ready=False)
+
+    async def _ensure_lightrag_initialized(self):
+        self.init_calls += 1
+        return {"success": True}
+
+
 @pytest.mark.asyncio
 async def test_rag_engine_ensure_instance_initializes_lightrag(monkeypatch) -> None:
     engine = RAGEngine(storage_root=Path("/tmp/test-rag-engine-ready"), default_model="openai/gpt-4o-mini")
@@ -275,6 +305,44 @@ async def test_rag_engine_ensure_instance_initializes_lightrag(monkeypatch) -> N
     assert rag is fake_rag
     assert rag.lightrag is not None
     assert fake_rag.init_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_rag_engine_ensure_instance_serializes_concurrent_initialization(monkeypatch, tmp_path) -> None:
+    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
+    fake_rag = _SlowInitRag()
+
+    monkeypatch.setattr(engine, "_get_or_create_instance", AsyncMock(return_value=fake_rag))
+
+    first, second = await asyncio.gather(
+        engine.ensure_instance("kb-concurrent"),
+        engine.ensure_instance("kb-concurrent"),
+    )
+
+    assert first is fake_rag
+    assert second is fake_rag
+    assert fake_rag.init_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_rag_engine_ensure_instance_recreates_incomplete_lightrag(monkeypatch, tmp_path) -> None:
+    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
+    broken_rag = _BrokenReadyRag()
+    fresh_rag = _FakeRag(ready=True)
+
+    monkeypatch.setattr(
+        engine,
+        "_get_or_create_instance",
+        AsyncMock(side_effect=[broken_rag, fresh_rag]),
+    )
+    reset_mock = AsyncMock()
+    monkeypatch.setattr(engine, "reset_kb", reset_mock)
+
+    rag = await engine.ensure_instance("kb-recover")
+
+    assert rag is fresh_rag
+    assert broken_rag.init_calls == 1
+    reset_mock.assert_awaited_once_with("kb-recover")
 
 
 @pytest.mark.asyncio

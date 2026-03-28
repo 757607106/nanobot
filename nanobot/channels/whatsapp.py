@@ -257,7 +257,7 @@ def _ensure_bridge_setup() -> Path:
     Returns the bridge directory. Raises RuntimeError if npm is not found
     or bridge cannot be built.
     """
-    from nanobot.config.paths import get_bridge_install_dir
+    from nanobot.config.paths import find_bridge_source_dir, get_bridge_install_dir
 
     user_bridge = get_bridge_install_dir()
 
@@ -268,16 +268,7 @@ def _ensure_bridge_setup() -> Path:
     if not npm_path:
         raise RuntimeError("npm not found. Please install Node.js >= 18.")
 
-    # Find source bridge
-    current_file = Path(__file__)
-    pkg_bridge = current_file.parent.parent / "bridge"
-    src_bridge = current_file.parent.parent.parent / "bridge"
-
-    source = None
-    if (pkg_bridge / "package.json").exists():
-        source = pkg_bridge
-    elif (src_bridge / "package.json").exists():
-        source = src_bridge
+    source = find_bridge_source_dir()
 
     if not source:
         raise RuntimeError(

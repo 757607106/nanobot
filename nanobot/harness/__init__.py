@@ -8,6 +8,16 @@ from .events import (
     build_tool_result_payload,
     preview_text,
 )
+from .knowledge import (
+    KnowledgeBindingContext,
+    KnowledgeBindingMiddleware,
+    KnowledgeBindingResult,
+    QueryKnowledgeBaseTool,
+    build_knowledge_binding_context,
+    build_knowledge_policy_block,
+    build_knowledge_prompt_block,
+    get_common_kb_tools,
+)
 from .middleware import (
     ExecutionAssemblyState,
     ExecutionMiddlewareError,
@@ -20,6 +30,7 @@ from .middleware import (
     RuntimePromptFragmentsMiddleware,
     ToolPolicyMiddleware,
 )
+from .runtime_tools import build_workspace_tool_registry, format_tool_hint
 from .sandbox import (
     DockerSandboxProvider,
     LocalSandboxProvider,
@@ -45,6 +56,9 @@ __all__ = [
     "ExecutionMiddleware",
     "ExecutionMiddlewareChain",
     "ExecutionMiddlewareError",
+    "KnowledgeBindingContext",
+    "KnowledgeBindingMiddleware",
+    "KnowledgeBindingResult",
     "KnowledgePolicy",
     "KnowledgePolicyMiddleware",
     "DockerSandboxProvider",
@@ -60,6 +74,7 @@ __all__ = [
     "SandboxProvider",
     "ToolPolicy",
     "ToolPolicyMiddleware",
+    "QueryKnowledgeBaseTool",
     "AgentWorkspaceProvider",
     "SharedWorkspaceProvider",
     "TenantScopedWorkspaceProvider",
@@ -70,6 +85,12 @@ __all__ = [
     "build_model_result_payload",
     "build_tool_called_payload",
     "build_tool_result_payload",
+    "build_knowledge_binding_context",
+    "build_knowledge_policy_block",
+    "build_knowledge_prompt_block",
+    "build_workspace_tool_registry",
+    "format_tool_hint",
+    "get_common_kb_tools",
     "preview_text",
     "resolve_execution_environment",
     "build_sandbox_provider",

@@ -57,6 +57,26 @@ def get_bridge_install_dir() -> Path:
     return Path.home() / ".nanobot" / "bridge"
 
 
+def find_bridge_source_dir() -> Path | None:
+    """Locate the bundled WhatsApp bridge source directory.
+
+    Prefer the standardized ``whatsapp_bridge`` directory but keep a fallback
+    to the historical ``bridge`` name so dev and installed environments remain
+    compatible during the rename.
+    """
+    current_file = Path(__file__).resolve()
+    candidates = (
+        current_file.parent.parent / "whatsapp_bridge",
+        current_file.parent.parent.parent / "whatsapp_bridge",
+        current_file.parent.parent / "bridge",
+        current_file.parent.parent.parent / "bridge",
+    )
+    for candidate in candidates:
+        if (candidate / "package.json").exists():
+            return candidate
+    return None
+
+
 def get_legacy_sessions_dir() -> Path:
     """Return the legacy global session directory used for migration fallback."""
     return Path.home() / ".nanobot" / "sessions"

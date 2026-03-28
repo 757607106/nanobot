@@ -132,10 +132,10 @@
     <th><p align="center">📚 Personal Knowledge Assistant</p></th>
   </tr>
   <tr>
-    <td align="center"><p align="center"><img src="case/search.gif" width="180" height="400"></p></td>
-    <td align="center"><p align="center"><img src="case/code.gif" width="180" height="400"></p></td>
-    <td align="center"><p align="center"><img src="case/scedule.gif" width="180" height="400"></p></td>
-    <td align="center"><p align="center"><img src="case/memory.gif" width="180" height="400"></p></td>
+    <td align="center"><p align="center"><img src="docs/assets/showcase/search.gif" width="180" height="400"></p></td>
+    <td align="center"><p align="center"><img src="docs/assets/showcase/code.gif" width="180" height="400"></p></td>
+    <td align="center"><p align="center"><img src="docs/assets/showcase/schedule.gif" width="180" height="400"></p></td>
+    <td align="center"><p align="center"><img src="docs/assets/showcase/memory.gif" width="180" height="400"></p></td>
   </tr>
   <tr>
     <td align="center">Discovery • Insights • Trends</td>
@@ -1680,24 +1680,21 @@ If you edit the `.service` file itself, run `systemctl --user daemon-reload` bef
 ## 📁 Project Structure
 
 ```
-nanobot/
-├── agent/          # 🧠 Core agent logic
-│   ├── loop.py     #    Agent loop (LLM ↔ tool execution)
-│   ├── context.py  #    Prompt builder
-│   ├── memory.py   #    Persistent memory
-│   ├── skills.py   #    Skills loader
-│   ├── subagent.py #    Background task execution
-│   └── tools/      #    Built-in tools (incl. spawn)
-├── skills/         # 🎯 Bundled skills (github, weather, tmux...)
-├── channels/       # 📱 Chat channel integrations (supports plugins)
-├── bus/            # 🚌 Message routing
-├── cron/           # ⏰ Scheduled tasks
-├── heartbeat/      # 💓 Proactive wake-up
-├── providers/      # 🤖 LLM providers (OpenRouter, etc.)
-├── session/        # 💬 Conversation sessions
-├── config/         # ⚙️ Configuration
-└── cli/            # 🖥️ Commands
+.
+├── nanobot/                    # Python backend
+│   ├── agent/                 # Upstream-aligned agent core
+│   ├── harness/               # Local runtime assembly and execution extensions
+│   ├── platform/              # Persistent domain services and stores
+│   ├── web/                   # FastAPI app, routers, web services, runtime services
+│   ├── channels/              # Chat channel adapters and dispatch
+│   ├── providers/             # Model/provider backends
+│   └── cli/                   # CLI entrypoints
+├── web-ui/                    # React control plane
+├── tests/                     # Domain-organized test suite
+└── docs/engineering/PROJECT_STRUCTURE.md
 ```
+
+See [docs/engineering/PROJECT_STRUCTURE.md](./docs/engineering/PROJECT_STRUCTURE.md) for module boundaries, naming rules, and test layout conventions.
 
 ## 🤝 Contribute & Roadmap
 

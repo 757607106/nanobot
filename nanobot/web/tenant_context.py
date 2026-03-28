@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import Request
 from nanobot.platform.tenant_scope import normalize_tenant_id, tenant_id_from_metadata
-from nanobot.web.auth import SESSION_COOKIE_NAME
+from nanobot.web.services.auth import SESSION_COOKIE_NAME
 
 
 @dataclass

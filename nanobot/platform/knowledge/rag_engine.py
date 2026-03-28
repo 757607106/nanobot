@@ -449,70 +449,104 @@ class RAGEngine:
         if kb_id in self._instances and self._instance_runtime_keys.get(kb_id) == runtime_key:
             return self._instances[kb_id]
 
-        async with self._get_lock(kb_id):
-            runtime = self._kb_runtime_config(kb_id)
-            runtime_key = self._runtime_cache_key(runtime)
-            if kb_id in self._instances and self._instance_runtime_keys.get(kb_id) == runtime_key:
-                return self._instances[kb_id]
-            if kb_id in self._instances:
-                await self.reset_kb(kb_id)
+        runtime = self._kb_runtime_config(kb_id)
+        runtime_key = self._runtime_cache_key(runtime)
+        if kb_id in self._instances and self._instance_runtime_keys.get(kb_id) == runtime_key:
+            return self._instances[kb_id]
+        if kb_id in self._instances:
+            await self.reset_kb(kb_id)
 
-            if not _check_rag_anything():
-                raise RuntimeError(
-                    "raganything or lightrag is not installed. "
-                    "Install with: pip install raganything lightrag-hku"
-                )
-
-            from raganything import RAGAnything, RAGAnythingConfig
-
-            working_dir = self._kb_working_dir(kb_id)
-            working_dir.mkdir(parents=True, exist_ok=True)
-
-            config = RAGAnythingConfig(
-                working_dir=str(working_dir),
-                parser="docling",
-                parse_method="auto",
-                enable_image_processing=True,
-                enable_table_processing=True,
-                enable_equation_processing=True,
+        if not _check_rag_anything():
+            raise RuntimeError(
+                "raganything or lightrag is not installed. "
+                "Install with: pip install raganything lightrag-hku"
             )
 
-            rag = RAGAnything(
-                config=config,
-                llm_model_func=self._build_llm_func(runtime),
-                vision_model_func=self._build_vision_func(runtime),
-                embedding_func=self._build_embedding_func(runtime),
-                lightrag_kwargs={
-                    **self._build_lightrag_kwargs(kb_id),
-                    "llm_model_name": str(runtime.get("llm_model") or self._default_model or "").strip(),
-                },
-            )
-            # nanobot pre-parses documents before indexing and only uses direct
-            # content insertion, so external parser binary checks are dead weight.
-            if hasattr(rag, "_parser_installation_checked"):
-                rag._parser_installation_checked = True
+        from raganything import RAGAnything, RAGAnythingConfig
 
-            self._instances[kb_id] = rag
-            self._instance_runtime_keys[kb_id] = runtime_key
-            logger.info("RAGEngine: created RAGAnything instance for kb_id={}", kb_id)
-            return rag
+        working_dir = self._kb_working_dir(kb_id)
+        working_dir.mkdir(parents=True, exist_ok=True)
+
+        config = RAGAnythingConfig(
+            working_dir=str(working_dir),
+            parser="docling",
+            parse_method="auto",
+            enable_image_processing=True,
+            enable_table_processing=True,
+            enable_equation_processing=True,
+        )
+
+        rag = RAGAnything(
+            config=config,
+            llm_model_func=self._build_llm_func(runtime),
+            vision_model_func=self._build_vision_func(runtime),
+            embedding_func=self._build_embedding_func(runtime),
+            lightrag_kwargs={
+                **self._build_lightrag_kwargs(kb_id),
+                "llm_model_name": str(runtime.get("llm_model") or self._default_model or "").strip(),
+            },
+        )
+        # nanobot pre-parses documents before indexing and only uses direct
+        # content insertion, so external parser binary checks are dead weight.
+        if hasattr(rag, "_parser_installation_checked"):
+            rag._parser_installation_checked = True
+
+        self._instances[kb_id] = rag
+        self._instance_runtime_keys[kb_id] = runtime_key
+        logger.info("RAGEngine: created RAGAnything instance for kb_id={}", kb_id)
+        return rag
+
+    @staticmethod
+    def _lightrag_readiness(rag: Any) -> tuple[bool, str]:
+        """Check whether a cached RAGAnything instance is safe to use."""
+        lightrag = getattr(rag, "lightrag", None)
+        if lightrag is None:
+            return False, "LightRAG instance missing"
+
+        status = str(getattr(getattr(lightrag, "_storages_status", None), "name", "") or "").upper()
+        if status != "INITIALIZED":
+            return False, f"LightRAG storages status is {status or 'UNKNOWN'}"
+
+        graph_storage = getattr(lightrag, "chunk_entity_relation_graph", None)
+        if graph_storage is not None:
+            if getattr(graph_storage, "_storage_lock", None) is None:
+                return False, "graph storage lock missing"
+            if getattr(graph_storage, "storage_updated", None) is None:
+                return False, "graph storage update flag missing"
+
+        if getattr(rag, "parse_cache", None) is None:
+            return False, "parse cache missing"
+
+        return True, ""
 
     async def _ensure_ready(self, kb_id: str):
         """Return an initialized RAGAnything instance with LightRAG storages ready."""
-        rag = await self._get_or_create_instance(kb_id)
-        if getattr(rag, "lightrag", None) is not None:
-            return rag
+        async with self._get_lock(kb_id):
+            last_error = "Unknown initialization error."
+            for attempt in range(2):
+                rag = await self._get_or_create_instance(kb_id)
+                ready, detail = self._lightrag_readiness(rag)
+                if ready:
+                    return rag
 
-        with self._storage_env_scope():
-            init = await rag._ensure_lightrag_initialized()
-        if not isinstance(init, dict) or not init.get("success"):
-            self._instances.pop(kb_id, None)
-            detail = init.get("error") if isinstance(init, dict) else "Unknown initialization error."
-            raise RuntimeError(f"RAGAnything initialization failed for kb_id={kb_id}: {detail}")
-        if getattr(rag, "lightrag", None) is None:
-            self._instances.pop(kb_id, None)
-            raise RuntimeError(f"RAGAnything did not expose a LightRAG instance for kb_id={kb_id}.")
-        return rag
+                with self._storage_env_scope():
+                    init = await rag._ensure_lightrag_initialized()
+
+                ready, detail = self._lightrag_readiness(rag)
+                if isinstance(init, dict) and init.get("success") and ready:
+                    return rag
+
+                init_error = init.get("error") if isinstance(init, dict) else None
+                last_error = str(init_error or detail or "Unknown initialization error.")
+                logger.warning(
+                    "RAGEngine: LightRAG was not ready for kb_id={} after init attempt {}: {}",
+                    kb_id,
+                    attempt + 1,
+                    last_error,
+                )
+                await self.reset_kb(kb_id)
+
+            raise RuntimeError(f"RAGAnything initialization failed for kb_id={kb_id}: {last_error}")
 
     # ------------------------------------------------------------------
     # LLM / Embedding / Vision function builders

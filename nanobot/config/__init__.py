@@ -2,6 +2,7 @@
 
 from nanobot.config.loader import get_config_path, load_config
 from nanobot.config.paths import (
+    find_bridge_source_dir,
     get_bridge_install_dir,
     get_cli_history_path,
     get_cron_dir,
@@ -28,5 +29,6 @@ __all__ = [
     "is_default_workspace",
     "get_cli_history_path",
     "get_bridge_install_dir",
+    "find_bridge_source_dir",
     "get_legacy_sessions_dir",
 ]

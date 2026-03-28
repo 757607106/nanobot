@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from nanobot.platform.instances import PlatformInstance, coerce_instance
-from nanobot.web.mcp_registry import WebMCPRegistryManager
+from nanobot.web.services.mcp_registry import WebMCPRegistryManager
 
 
 class MCPRepositoryService:

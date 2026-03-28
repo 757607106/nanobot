@@ -235,12 +235,11 @@ class WebWhatsAppBindingService:
         return bridge_dir
 
     def _bridge_source_dir(self) -> Path:
-        pkg_bridge = Path(__file__).resolve().parent.parent / "bridge"
-        src_bridge = Path(__file__).resolve().parent.parent.parent / "bridge"
-        if (pkg_bridge / "package.json").exists():
-            return pkg_bridge
-        if (src_bridge / "package.json").exists():
-            return src_bridge
+        from nanobot.config.paths import find_bridge_source_dir
+
+        source = find_bridge_source_dir()
+        if source is not None:
+            return source
         raise RuntimeError("未找到 WhatsApp bridge 源码目录。")
 
     def _start_log_thread_locked(self) -> None:

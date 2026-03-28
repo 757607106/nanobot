@@ -146,7 +146,7 @@
 - `nanobot/web/routers/chat.py`
 - `nanobot/web/runtime.py`
 - `nanobot/web/runtime_services/chat.py`
-- `tests/test_web_api.py`
+- `tests/web/test_api.py`
 
 ## 9. 更新记录
 
@@ -162,7 +162,7 @@
 - 补充 smoke 测试的 Ant Design X mock，确保新聊天工作台可被稳定渲染
 - 执行 `npm run typecheck`
 - 执行 `npm run test:smoke`
-- 执行 `python3 -m pytest tests/test_web_api.py -k "chat_upload_and_dispatch or chat_workspace_snapshot or health_and_session_crud"`
+- 执行 `python3 -m pytest tests/web/test_api.py -k "chat_upload_and_dispatch or chat_workspace_snapshot or health_and_session_crud"`
 
 ### 2026-03-16
 

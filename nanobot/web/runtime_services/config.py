@@ -12,15 +12,12 @@ from nanobot.agent.loop import AgentLoop
 from nanobot.config.schema import Config, ModelBindingConfig, normalize_api_base_url
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.bus.queue import MessageBus
-from nanobot.providers.base import GenerationSettings
-from nanobot.providers.custom_provider import CustomProvider
-from nanobot.providers.litellm_provider import LiteLLMProvider
-from nanobot.providers.openai_codex_provider import OpenAICodexProvider
+from nanobot.providers.factory import make_provider_from_config
 from nanobot.providers.registry import PROVIDERS, find_by_name
-from nanobot.services.agent_templates import AgentTemplateManager
 from nanobot.session.manager import SessionManager
 from nanobot.storage.calendar_repository import get_calendar_repository
 from nanobot.utils.helpers import sync_workspace_templates
+from nanobot.web.services.agent_templates import AgentTemplateManager
 
 if TYPE_CHECKING:
     from nanobot.web.runtime import WebAppState
@@ -33,50 +30,7 @@ class WebConfigRuntimeService:
         self.state = state
 
     def make_provider(self, config: Config):
-        model = config.agents.defaults.model
-        provider_name = config.get_provider_name(model)
-        provider_cfg = config.get_provider(model)
-
-        if provider_name == "openai_codex" or model.startswith("openai-codex/"):
-            provider = OpenAICodexProvider(default_model=model)
-        elif provider_name == "custom":
-            provider = CustomProvider(
-                api_key=(provider_cfg.api_key if provider_cfg and provider_cfg.api_key else "no-key"),
-                api_base=config.get_api_base(model) or "http://localhost:8000/v1",
-                default_model=model,
-            )
-        elif provider_name == "azure_openai":
-            if provider_cfg and provider_cfg.api_key and provider_cfg.api_base:
-                from nanobot.providers.azure_openai_provider import AzureOpenAIProvider
-
-                provider = AzureOpenAIProvider(
-                    api_key=provider_cfg.api_key,
-                    api_base=provider_cfg.api_base,
-                    default_model=model,
-                )
-            else:
-                provider = LiteLLMProvider(
-                    api_key=None,
-                    api_base=None,
-                    default_model=model,
-                    provider_name=provider_name,
-                )
-        else:
-            provider = LiteLLMProvider(
-                api_key=provider_cfg.api_key if provider_cfg and provider_cfg.api_key else None,
-                api_base=config.get_api_base(model),
-                default_model=model,
-                extra_headers=provider_cfg.extra_headers if provider_cfg else None,
-                provider_name=provider_name,
-            )
-
-        defaults = config.agents.defaults
-        provider.generation = GenerationSettings(
-            temperature=defaults.temperature,
-            max_tokens=defaults.max_tokens,
-            reasoning_effort=defaults.reasoning_effort,
-        )
-        return provider
+        return make_provider_from_config(config)
 
     def rebuild_runtime(self, config: Config) -> None:
         sync_workspace_templates(config.workspace_path)
