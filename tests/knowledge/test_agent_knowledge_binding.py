@@ -6,10 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from nanobot.agent.loop import AgentLoop
-from nanobot.agent.middleware import KnowledgeBindingMiddleware
 from nanobot.agent.tools.base import Tool
-from nanobot.agent.tools.knowledge import QueryKnowledgeBaseTool, build_knowledge_binding_context
 from nanobot.config.schema import Config, MCPServerConfig, ModelBindingConfig
+from nanobot.harness import KnowledgeBindingMiddleware, QueryKnowledgeBaseTool, build_knowledge_binding_context
 from nanobot.web.runtime_services import channel_runtime as channel_runtime_module
 from nanobot.web.runtime_services.agents import WebAgentRuntimeService
 from nanobot.web.runtime_services.channel_runtime import WebChannelRuntimeService

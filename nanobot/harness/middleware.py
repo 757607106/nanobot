@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from nanobot.agent.middleware import KnowledgeBindingMiddleware, KnowledgeBindingResult
-
 from .context import KnowledgePolicy, MemoryPolicy, ToolPolicy
+from .knowledge import KnowledgeBindingMiddleware, KnowledgeBindingResult
 
 if TYPE_CHECKING:
     from nanobot.config.schema import Config

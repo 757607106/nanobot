@@ -11,6 +11,8 @@ from nanobot.harness import (
     ExecutionEnvironmentBinding,
     ExecutionAssemblyState,
     ExecutionMiddlewareChain,
+    KnowledgeBindingMiddleware,
+    KnowledgeBindingResult,
     KnowledgePolicy,
     KnowledgePolicyMiddleware,
     MemoryPolicy,
@@ -26,8 +28,6 @@ from nanobot.harness import (
     build_sandbox_provider,
     resolve_execution_environment,
 )
-from nanobot.agent.middleware import KnowledgeBindingMiddleware, KnowledgeBindingResult
-from nanobot.agent.middleware.knowledge import build_knowledge_prompt_block
 from nanobot.agent.loop import AgentLoop
 from nanobot.agent.skills import SkillsLoader
 from nanobot.providers.registry import find_by_model
@@ -292,10 +292,6 @@ class WebAgentRuntimeService:
                 lines.append(body)
             sections.append("\n".join(lines))
         return "\n\n".join(sections)
-
-    @staticmethod
-    def _build_knowledge_prompt_block(hits: list[dict[str, Any]]) -> str:
-        return build_knowledge_prompt_block(hits)
 
     @staticmethod
     def _normalize_memory_sections(memory_sections: list[tuple[str, str]] | None) -> list[tuple[str, str]]:

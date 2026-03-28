@@ -13,14 +13,16 @@ from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
 from nanobot.config.schema import Config, MCPServerConfig, ModelBindingConfig
 from nanobot.web.api import WebAppState
-from nanobot.web.auth import WebAuthManager
-from nanobot.web.channel_testing import WebChannelTestService
-from nanobot.web.mcp_registry import WebMCPRegistryManager
-from nanobot.web.mcp_repository import MCPRepositoryService
-from nanobot.web.mcp_servers import MCPServerService
-from nanobot.web.operations import WebOperationsService
 from nanobot.web.runtime_services.agents import WebAgentRuntimeService
-from nanobot.web.setup import WebSetupManager
+from nanobot.web.services import (
+    MCPRepositoryService,
+    MCPServerService,
+    WebAuthManager,
+    WebChannelTestService,
+    WebMCPRegistryManager,
+    WebOperationsService,
+    WebSetupManager,
+)
 
 
 def _make_service_config(tmp_path, monkeypatch) -> tuple[Config, Path]:
@@ -251,7 +253,7 @@ def test_web_channel_test_service_probes_telegram_without_http_route(tmp_path, m
       assert url.endswith("/getMe")
       return FakeResponse()
 
-  monkeypatch.setattr("nanobot.web.channel_testing.httpx.AsyncClient", FakeAsyncClient)
+  monkeypatch.setattr("nanobot.web.services.channel_testing.httpx.AsyncClient", FakeAsyncClient)
 
   service = WebChannelTestService()
   result = asyncio.run(service.probe_channel(config=config, channel_name="telegram"))
@@ -297,10 +299,10 @@ def test_web_channel_test_service_probes_qq_without_http_route(tmp_path, monkeyp
       return FakeResponse()
 
   monkeypatch.setattr(
-    "nanobot.web.channel_testing.importlib.util.find_spec",
+    "nanobot.web.services.channel_testing.importlib.util.find_spec",
     lambda name: object() if name == "botpy" else None,
   )
-  monkeypatch.setattr("nanobot.web.channel_testing.httpx.AsyncClient", FakeAsyncClient)
+  monkeypatch.setattr("nanobot.web.services.channel_testing.httpx.AsyncClient", FakeAsyncClient)
 
   service = WebChannelTestService()
   result = asyncio.run(service.probe_channel(config=config, channel_name="qq"))
@@ -316,7 +318,7 @@ def test_web_channel_test_service_reports_wecom_preflight_without_http_route(tmp
   config.channels.wecom.secret = "wecom-secret"
 
   monkeypatch.setattr(
-    "nanobot.web.channel_testing.importlib.util.find_spec",
+    "nanobot.web.services.channel_testing.importlib.util.find_spec",
     lambda name: object() if name == "wecom_aibot_sdk" else None,
   )
 

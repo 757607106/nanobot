@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from nanobot.web.auth import (
+from nanobot.web.services.auth import (
     SESSION_COOKIE_NAME,
     SESSION_MAX_AGE_SECONDS,
     AuthAlreadyInitializedError,

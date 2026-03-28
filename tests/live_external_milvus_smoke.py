@@ -17,8 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from nanobot.agent.tools.knowledge import QueryKnowledgeBaseTool, build_knowledge_binding_context
 from nanobot.config.loader import load_config, save_config
+from nanobot.harness import QueryKnowledgeBaseTool, build_knowledge_binding_context
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.knowledge.service import KnowledgeBaseService

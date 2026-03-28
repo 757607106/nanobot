@@ -13,7 +13,7 @@ from nanobot.utils.helpers import build_status_content
 
 
 async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
-    """Cancel all active tasks and subagents for the session."""
+    """Cancel all active tasks for the session."""
     loop = ctx.loop
     msg = ctx.msg
     tasks = loop._active_tasks.pop(msg.session_key, [])
@@ -23,9 +23,7 @@ async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
             await t
         except (asyncio.CancelledError, Exception):
             pass
-    sub_cancelled = await loop.subagents.cancel_by_session(msg.session_key)
-    total = cancelled + sub_cancelled
-    content = f"Stopped {total} task(s)." if total else "No active task to stop."
+    content = f"Stopped {cancelled} task(s)." if cancelled else "No active task to stop."
     return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content=content)
 
 

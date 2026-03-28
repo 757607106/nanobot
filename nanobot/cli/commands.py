@@ -380,7 +380,7 @@ def _make_provider(config: Config):
 
     Routing is driven by ``ProviderSpec.backend`` in the registry.
     """
-    from nanobot.providers.base import GenerationSettings
+    from nanobot.providers.factory import make_provider_from_config
     from nanobot.providers.registry import find_by_name
 
     model = config.agents.defaults.model
@@ -404,42 +404,7 @@ def _make_provider(config: Config):
             console.print("Set one in ~/.nanobot/config.json under providers section")
             raise typer.Exit(1)
 
-    # --- instantiation by backend ---
-    if backend == "openai_codex":
-        from nanobot.providers.openai_codex_provider import OpenAICodexProvider
-        provider = OpenAICodexProvider(default_model=model)
-    elif backend == "azure_openai":
-        from nanobot.providers.azure_openai_provider import AzureOpenAIProvider
-        provider = AzureOpenAIProvider(
-            api_key=p.api_key,
-            api_base=p.api_base,
-            default_model=model,
-        )
-    elif backend == "anthropic":
-        from nanobot.providers.anthropic_provider import AnthropicProvider
-        provider = AnthropicProvider(
-            api_key=p.api_key if p else None,
-            api_base=config.get_api_base(model),
-            default_model=model,
-            extra_headers=p.extra_headers if p else None,
-        )
-    else:
-        from nanobot.providers.openai_compat_provider import OpenAICompatProvider
-        provider = OpenAICompatProvider(
-            api_key=p.api_key if p else None,
-            api_base=config.get_api_base(model),
-            default_model=model,
-            extra_headers=p.extra_headers if p else None,
-            spec=spec,
-        )
-
-    defaults = config.agents.defaults
-    provider.generation = GenerationSettings(
-        temperature=defaults.temperature,
-        max_tokens=defaults.max_tokens,
-        reasoning_effort=defaults.reasoning_effort,
-    )
-    return provider
+    return make_provider_from_config(config)
 
 
 def _load_runtime_config(config: str | None = None, workspace: str | None = None) -> Config:
@@ -1038,7 +1003,7 @@ def _get_bridge_dir() -> Path:
     import subprocess
 
     # User's bridge location
-    from nanobot.config.paths import get_bridge_install_dir
+    from nanobot.config.paths import find_bridge_source_dir, get_bridge_install_dir
 
     user_bridge = get_bridge_install_dir()
 
@@ -1052,15 +1017,7 @@ def _get_bridge_dir() -> Path:
         console.print("[red]npm not found. Please install Node.js >= 18.[/red]")
         raise typer.Exit(1)
 
-    # Find source bridge: first check package data, then source dir
-    pkg_bridge = Path(__file__).parent.parent / "bridge"  # nanobot/bridge (installed)
-    src_bridge = Path(__file__).parent.parent.parent / "bridge"  # repo root/bridge (dev)
-
-    source = None
-    if (pkg_bridge / "package.json").exists():
-        source = pkg_bridge
-    elif (src_bridge / "package.json").exists():
-        source = src_bridge
+    source = find_bridge_source_dir()
 
     if not source:
         console.print("[red]Bridge source not found.[/red]")

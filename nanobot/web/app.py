@@ -24,8 +24,6 @@ from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.memory import MemoryService, MemoryStore
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.platform.tenants import TenantService, TenantStore
-from nanobot.web.auth import SESSION_COOKIE_NAME, WebAuthManager
-from nanobot.web.channel_testing import WebChannelTestService
 from nanobot.web.channels import WebChannelService
 from nanobot.web.frontend import (
     _frontend_dev_is_ready,
@@ -41,10 +39,6 @@ from nanobot.web.frontend import (
     _run_static_server as _frontend_run_static_server,
 )
 from nanobot.web.http import APIError, _err, _json_response
-from nanobot.web.mcp_registry import WebMCPRegistryManager
-from nanobot.web.mcp_repository import MCPRepositoryService
-from nanobot.web.mcp_servers import MCPServerService
-from nanobot.web.operations import WebOperationsService
 from nanobot.web.routers import (
     agents_router,
     auth_router,
@@ -64,9 +58,18 @@ from nanobot.web.routers import (
     workspace_router,
 )
 from nanobot.web.runtime import WebAppState
-from nanobot.web.setup import WebSetupManager
+from nanobot.web.services import (
+    SESSION_COOKIE_NAME,
+    MCPRepositoryService,
+    MCPServerService,
+    WebAuthManager,
+    WebChannelTestService,
+    WebMCPRegistryManager,
+    WebOperationsService,
+    WebSetupManager,
+    WebWhatsAppBindingService,
+)
 from nanobot.web.tenant_context import tenant_auth_middleware
-from nanobot.web.whatsapp_binding import WebWhatsAppBindingService
 
 
 def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:

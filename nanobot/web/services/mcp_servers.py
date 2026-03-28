@@ -17,7 +17,7 @@ import httpx
 
 from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.platform.instances import PlatformInstance, coerce_instance
-from nanobot.web.mcp_registry import WebMCPRegistryManager
+from nanobot.web.services.mcp_registry import WebMCPRegistryManager
 
 
 class MCPServerService:

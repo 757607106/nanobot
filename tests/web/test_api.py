@@ -23,7 +23,7 @@ from nanobot.providers.base import LLMResponse, ToolCallRequest
 from nanobot.session.manager import SessionManager
 from tests.knowledge_test_utils import FakeRAGEngine
 from nanobot.web.api import create_app, run_server
-from nanobot.web import operations as web_operations
+from nanobot.web.services import operations as web_operations
 
 AUTH_USERNAME = "admin"
 AUTH_PASSWORD = "bootstrap-pass-123"

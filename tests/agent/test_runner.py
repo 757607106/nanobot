@@ -18,9 +18,7 @@ def _make_loop(tmp_path):
     provider.get_default_model.return_value = "test-model"
 
     with patch("nanobot.agent.loop.ContextBuilder"), \
-         patch("nanobot.agent.loop.SessionManager"), \
-         patch("nanobot.agent.loop.SubagentManager") as MockSubMgr:
-        MockSubMgr.return_value.cancel_by_session = AsyncMock(return_value=0)
+         patch("nanobot.agent.loop.SessionManager"):
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path)
     return loop
 
@@ -308,28 +306,34 @@ async def test_loop_stream_filter_handles_think_only_prefix_without_crashing(tmp
 
 
 @pytest.mark.asyncio
-async def test_subagent_max_iterations_announces_existing_fallback(tmp_path, monkeypatch):
-    from nanobot.agent.subagent import SubagentManager
-    from nanobot.bus.queue import MessageBus
+async def test_loop_executes_tool_calls_concurrently(tmp_path):
+    loop = _make_loop(tmp_path)
+    tool_calls = [
+        ToolCallRequest(id="call_1", name="list_dir", arguments={"path": "."}),
+        ToolCallRequest(id="call_2", name="read_file", arguments={"path": "README.md"}),
+    ]
+    calls = iter([
+        LLMResponse(content="working", tool_calls=tool_calls),
+        LLMResponse(content="done", tool_calls=[]),
+    ])
+    loop.provider.chat_with_retry = AsyncMock(side_effect=lambda *a, **kw: next(calls))
+    loop.tools.get_definitions = MagicMock(return_value=[])
 
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    provider.chat_with_retry = AsyncMock(return_value=LLMResponse(
-        content="working",
-        tool_calls=[ToolCallRequest(id="call_1", name="list_dir", arguments={})],
-    ))
-    mgr = SubagentManager(provider=provider, workspace=tmp_path, bus=bus)
-    mgr._announce_result = AsyncMock()
+    active = 0
+    max_active = 0
 
-    async def fake_execute(self, name, arguments):
-        return "tool result"
+    async def execute(name: str, arguments: dict):
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        await asyncio.sleep(0.05)
+        active -= 1
+        return f"{name} ok"
 
-    monkeypatch.setattr("nanobot.agent.tools.registry.ToolRegistry.execute", fake_execute)
+    loop.tools.execute = AsyncMock(side_effect=execute)
 
-    await mgr._run_subagent("sub-1", "do task", "label", {"channel": "test", "chat_id": "c1"})
+    final_content, tools_used, _ = await loop._run_agent_loop([])
 
-    mgr._announce_result.assert_awaited_once()
-    args = mgr._announce_result.await_args.args
-    assert args[3] == "Task completed but no final response was generated."
-    assert args[5] == "ok"
+    assert final_content == "done"
+    assert tools_used == ["list_dir", "read_file"]
+    assert max_active == 2

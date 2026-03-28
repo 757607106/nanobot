@@ -1,6 +1,7 @@
-"""Knowledge-base tools for agent runs with bound knowledge bases."""
+"""Knowledge-bound runtime helpers that extend the official agent core."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -251,3 +252,110 @@ class QueryKnowledgeBaseTool(_KnowledgeToolBase):
                     f"- {item.get('src_id')} -> {item.get('tgt_id')}: {str(item.get('description') or '').strip()}"
                 )
         return "\n\n".join(lines)
+
+
+def build_knowledge_prompt_block(hits: list[dict[str, Any]]) -> str:
+    if not hits:
+        return ""
+    sections = [
+        "# Retrieved Knowledge",
+        "Use the following evidence only when it is relevant to the user's request.",
+        "Prefer citing the source title or URL in plain language when you rely on it.",
+    ]
+    for index, hit in enumerate(hits, start=1):
+        citation = hit.get("citation") or {}
+        label = citation.get("title") or hit.get("title") or f"Chunk {index}"
+        source_uri = citation.get("sourceUri")
+        source_type = citation.get("sourceType") or "knowledge"
+        header = f"## Evidence {index}: {label}"
+        meta = f"Source Type: {source_type}"
+        if source_uri:
+            meta += f"\nSource URI: {source_uri}"
+        sections.append(f"{header}\n{meta}\n\n{hit.get('content', '').strip()}")
+    return "\n\n".join(sections)
+
+
+def build_knowledge_policy_block() -> str:
+    return "\n".join(
+        [
+            "# Knowledge Policy",
+            "You have bound knowledge bases.",
+            "When knowledge evidence exists, answer from that evidence.",
+            "When retrieval or query_kb returns no evidence, explicitly say no matching information was found in the bound knowledge base.",
+            "Do not fill gaps with general knowledge.",
+        ]
+    )
+
+
+def build_bound_knowledge_tools(
+    knowledge_service: Any | None,
+    bound_kb_ids: list[str] | tuple[str, ...] | None,
+) -> tuple[KnowledgeBindingContext | None, list[Tool]]:
+    binding_context = build_knowledge_binding_context(knowledge_service, bound_kb_ids)
+    return binding_context, get_common_kb_tools(binding_context)
+
+
+@dataclass(slots=True)
+class KnowledgeBindingResult:
+    binding_context: KnowledgeBindingContext | None
+    extra_tools: list[Tool]
+    effective_tool_allowlist: list[str]
+    knowledge_hits: list[dict[str, Any]]
+    prompt_sections: list[str]
+    event_payload: dict[str, Any]
+
+
+class KnowledgeBindingMiddleware:
+    """Resolve agent knowledge bindings into extra tools, prompt blocks, and events."""
+
+    def __init__(self, knowledge_service: Any | None) -> None:
+        self.knowledge_service = knowledge_service
+
+    def apply(
+        self,
+        agent: dict[str, Any],
+        task: str,
+        *,
+        base_tool_allowlist: list[str] | None = None,
+    ) -> KnowledgeBindingResult:
+        binding_ids = list(agent.get("knowledgeBindingIds") or [])
+        binding_context, extra_tools = build_bound_knowledge_tools(self.knowledge_service, binding_ids)
+        effective_tool_allowlist = (
+            binding_context.extend_tool_allowlist(base_tool_allowlist)
+            if binding_context is not None
+            else list(base_tool_allowlist or [])
+        )
+
+        knowledge_result: dict[str, Any] = {"hits": [], "requestedMode": "naive", "effectiveMode": "naive"}
+        prompt_sections: list[str] = []
+        if binding_context is not None and binding_context.has_bindings:
+            prompt_sections.append(build_knowledge_policy_block())
+        if self.knowledge_service and binding_context is not None and binding_context.has_bindings:
+            knowledge_result = self.knowledge_service.retrieve(
+                kb_ids=list(binding_context.bound_kb_ids),
+                query=str(task or ""),
+                limit=6,
+                requested_mode="naive",
+            )
+
+        knowledge_hits = list(knowledge_result.get("hits") or [])
+        prompt_block = build_knowledge_prompt_block(knowledge_hits)
+        if prompt_block:
+            prompt_sections.append(prompt_block)
+
+        knowledge_names = list(getattr(binding_context, "knowledges", []) or [])
+        event_payload = {
+            "knowledgeBindingIds": binding_ids,
+            "knowledgeNames": knowledge_names,
+            "requestedMode": knowledge_result.get("requestedMode"),
+            "effectiveMode": knowledge_result.get("effectiveMode"),
+            "hitCount": len(knowledge_hits),
+        }
+        return KnowledgeBindingResult(
+            binding_context=binding_context,
+            extra_tools=extra_tools,
+            effective_tool_allowlist=effective_tool_allowlist,
+            knowledge_hits=knowledge_hits,
+            prompt_sections=prompt_sections,
+            event_payload=event_payload,
+        )

@@ -3,27 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import time
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
 from nanobot.agent.context import ContextBuilder
-from nanobot.agent.execution import (
-    ToolLoopHooks,
-    build_workspace_tool_registry,
-    format_tool_hint,
-    run_tool_loop,
-    strip_think,
-)
+from nanobot.agent.hook import AgentHook, AgentHookContext
 from nanobot.agent.memory import MemoryConsolidator
-from nanobot.agent.tools.knowledge import (
-    KnowledgeBindingContext,
-    build_knowledge_binding_context,
-    get_common_kb_tools,
-)
+from nanobot.agent.runner import AgentRunSpec, AgentRunner
 from nanobot.agent.tools.base import Tool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
@@ -38,10 +30,11 @@ from nanobot.harness.events import (
     build_tool_result_payload,
 )
 from nanobot.harness.environment import resolve_execution_environment
-from nanobot.harness.sandbox import LocalSandboxProvider, SandboxBinding, build_sandbox_provider
-from nanobot.harness.workspace import WorkspaceBinding
+from nanobot.harness.sandbox import SandboxBinding, build_sandbox_provider
+from nanobot.harness.runtime_tools import build_workspace_tool_registry, format_tool_hint
 from nanobot.providers.base import LLMProvider
 from nanobot.session.manager import Session, SessionManager
+from nanobot.utils.helpers import strip_think
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ChannelsConfig, ExecToolConfig, WebSearchConfig
@@ -50,17 +43,127 @@ if TYPE_CHECKING:
     from nanobot.platform.runs import RunService
 
 
-class _NullSubagentManager:
-    """Compatibility shim for builds that intentionally disable subagents."""
+class _AgentLoopHook(AgentHook):
+    """Bridge shared runner hooks into nanobot's platform-specific behaviors."""
 
-    async def cancel_by_session(self, _session_key: str) -> int:
-        return 0
+    def __init__(
+        self,
+        *,
+        model: str,
+        run_registry: "RunService | None",
+        run_context: dict[str, Any] | None,
+        on_progress: Callable[..., Awaitable[None]] | None,
+        on_stream: Callable[[str], Awaitable[None]] | None,
+        on_stream_end: Callable[..., Awaitable[None]] | None,
+        set_tool_context: Callable[[str, str, str | None], None],
+        channel: str,
+        chat_id: str,
+        message_id: str | None,
+    ) -> None:
+        self._model = model
+        self._run_registry = run_registry
+        self._run_id = str((run_context or {}).get("run_id") or "").strip()
+        self._run_event_sink = (run_context or {}).get("run_event_sink")
+        self._on_progress = on_progress
+        self._on_stream = on_stream
+        self._on_stream_end = on_stream_end
+        self._set_tool_context = set_tool_context
+        self._channel = channel
+        self._chat_id = chat_id
+        self._message_id = message_id
+        self._stream_buffer = ""
+        self._reported_model_iterations: set[int] = set()
 
-    def get_running_count(self) -> int:
-        return 0
+    def wants_streaming(self) -> bool:
+        return self._on_stream is not None
 
+    async def before_iteration(self, context: AgentHookContext) -> None:
+        self._stream_buffer = ""
+        payload = build_model_called_payload(
+            iteration=self._iteration(context),
+            model=self._model,
+            message_count=len(context.messages),
+        )
+        await self._emit_event("model_called", payload)
 
-SubagentManager = _NullSubagentManager
+    async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+        if self._on_stream is None:
+            return
+        previous = strip_think(self._stream_buffer or "") or ""
+        self._stream_buffer += delta
+        current = strip_think(self._stream_buffer) or ""
+        incremental = current[len(previous):]
+        if incremental:
+            await self._on_stream(incremental)
+
+    async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
+        await self._emit_model_result(context)
+        self._stream_buffer = ""
+        if self._on_stream_end is not None:
+            await self._on_stream_end(resuming=resuming)
+
+    async def before_execute_tools(self, context: AgentHookContext) -> None:
+        await self._emit_model_result(context)
+        if self._on_progress is not None:
+            if self._on_stream is None:
+                thought = strip_think(getattr(context.response, "content", None) or "")
+                if thought:
+                    await self._on_progress(thought)
+            tool_hint = format_tool_hint(context.tool_calls)
+            if tool_hint:
+                await self._on_progress(tool_hint, tool_hint=True)
+        for tool_call in context.tool_calls:
+            args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
+            logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
+        self._set_tool_context(self._channel, self._chat_id, self._message_id)
+        for tool_call in context.tool_calls:
+            payload = build_tool_called_payload(
+                iteration=self._iteration(context),
+                tool_name=tool_call.name,
+                arguments=tool_call.arguments,
+            )
+            await self._emit_event("tool_called", payload)
+
+    async def after_iteration(self, context: AgentHookContext) -> None:
+        await self._emit_model_result(context)
+        if not context.tool_calls:
+            return
+        for tool_call, result in zip(context.tool_calls, context.tool_results):
+            payload = build_tool_result_payload(
+                iteration=self._iteration(context),
+                tool_name=tool_call.name,
+                result=result,
+            )
+            await self._emit_event("tool_result", payload)
+
+    def finalize_content(self, context: AgentHookContext, content: str | None) -> str | None:
+        if not content:
+            return None
+        return strip_think(content) or None
+
+    @staticmethod
+    def _iteration(context: AgentHookContext) -> int:
+        return context.iteration + 1
+
+    async def _emit_model_result(self, context: AgentHookContext) -> None:
+        if context.response is None or context.iteration in self._reported_model_iterations:
+            return
+        payload = build_model_result_payload(
+            iteration=self._iteration(context),
+            model=self._model,
+            finish_reason=getattr(context.response, "finish_reason", None),
+            tool_call_count=len(context.tool_calls),
+            has_visible_content=bool(strip_think(getattr(context.response, "content", None) or "")),
+        )
+        self._reported_model_iterations.add(context.iteration)
+        await self._emit_event("model_result", payload)
+
+    async def _emit_event(self, event_type: str, payload: dict[str, Any]) -> None:
+        if self._run_registry is None or not self._run_id:
+            return
+        self._run_registry.append_event(self._run_id, event_type, payload)
+        if self._run_event_sink is not None:
+            await self._run_event_sink(event_type, payload)
 
 
 class AgentLoop:
@@ -101,9 +204,6 @@ class AgentLoop:
         memory_sections: list[tuple[str, str]] | None = None,
         channel_dispatcher: Any | None = None,
         extra_tools: list[Tool] | None = None,
-        knowledge_binding_context: KnowledgeBindingContext | None = None,
-        knowledge_service: Any | None = None,
-        bound_knowledge_ids: list[str] | None = None,
         workspace_provider: Any | None = None,
         sandbox_binding: SandboxBinding | None = None,
         sandbox_provider: Any | None = None,
@@ -155,20 +255,14 @@ class AgentLoop:
         )
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
+        self.runner = AgentRunner(provider)
         self.commands = CommandRouter()
         register_builtin_commands(self.commands)
-        self.subagents = _NullSubagentManager()
         self._running = False
         self._start_time = time.time()
         self._last_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0}
         self._channel_dispatcher = channel_dispatcher
-        self._knowledge_binding_context = knowledge_binding_context or build_knowledge_binding_context(
-            knowledge_service,
-            bound_knowledge_ids,
-        )
         self._extra_tools = list(extra_tools or [])
-        if self._knowledge_binding_context is not None:
-            self._extra_tools.extend(get_common_kb_tools(self._knowledge_binding_context))
         self._mcp_servers = mcp_servers or {}
         self._run_registry = run_registry
         self._mcp_stack: AsyncExitStack | None = None
@@ -176,7 +270,13 @@ class AgentLoop:
         self._mcp_connecting = False
         self._active_tasks: dict[str, list[asyncio.Task]] = {}  # session_key -> tasks
         self._background_tasks: list[asyncio.Task] = []
-        self._processing_lock = asyncio.Lock()
+        self._session_locks: dict[str, asyncio.Lock] = {}
+        max_concurrent_requests = int(os.environ.get("NANOBOT_MAX_CONCURRENT_REQUESTS", "3"))
+        self._concurrency_gate: asyncio.Semaphore | None = (
+            asyncio.Semaphore(max_concurrent_requests)
+            if max_concurrent_requests > 0
+            else None
+        )
         self._register_default_tools()
         self.memory_consolidator = MemoryConsolidator(
             workspace=workspace,
@@ -211,7 +311,7 @@ class AgentLoop:
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
         """Backward-compatible wrapper around shared hidden-thought stripping."""
-        return strip_think(text)
+        return strip_think(text) or None
 
     @staticmethod
     def _tool_hint(tool_calls: list) -> str:
@@ -224,94 +324,44 @@ class AgentLoop:
         on_progress: Callable[..., Awaitable[None]] | None = None,
         on_stream: Callable[[str], Awaitable[None]] | None = None,
         on_stream_end: Callable[..., Awaitable[None]] | None = None,
+        *,
+        channel: str = "cli",
+        chat_id: str = "direct",
+        message_id: str | None = None,
         run_context: dict[str, Any] | None = None,
     ) -> tuple[str | None, list[str], list[dict]]:
-        """Run the agent iteration loop."""
-        stream_buffer = ""
+        """Run the agent iteration loop.
 
-        async def _stream_delta(delta: str) -> None:
-            nonlocal stream_buffer
-            if on_stream is None:
-                return
-            previous = strip_think(stream_buffer) or ""
-            stream_buffer += delta
-            current = strip_think(stream_buffer) or ""
-            incremental = current[len(previous):]
-            if incremental:
-                await on_stream(incremental)
-
-        hooks = self._build_tool_loop_hooks(run_context)
-        result = await run_tool_loop(
-            provider=self.provider,
+        ``resuming=True`` in ``on_stream_end`` means tool calls follow;
+        ``resuming=False`` means the final response has completed.
+        """
+        hook = _AgentLoopHook(
             model=self.model,
-            tools=self.tools,
-            context=self.context,
-            initial_messages=initial_messages,
-            max_iterations=self.max_iterations,
+            run_registry=self._run_registry,
+            run_context=run_context,
             on_progress=on_progress,
-            on_stream=_stream_delta if on_stream is not None else None,
+            on_stream=on_stream,
             on_stream_end=on_stream_end,
-            hooks=hooks,
+            set_tool_context=self._set_tool_context,
+            channel=channel,
+            chat_id=chat_id,
+            message_id=message_id,
         )
+        result = await self.runner.run(AgentRunSpec(
+            initial_messages=initial_messages,
+            tools=self.tools,
+            model=self.model,
+            max_iterations=self.max_iterations,
+            hook=hook,
+            error_message="Sorry, I encountered an error calling the AI model.",
+            concurrent_tools=True,
+        ))
         self._last_usage = result.usage or {"prompt_tokens": 0, "completion_tokens": 0}
+        if result.stop_reason == "max_iterations":
+            logger.warning("Max iterations ({}) reached", self.max_iterations)
+        elif result.stop_reason == "error":
+            logger.error("LLM returned error: {}", (result.final_content or "")[:200])
         return result.final_content, result.tools_used, result.messages
-
-    def _build_tool_loop_hooks(self, run_context: dict[str, Any] | None) -> ToolLoopHooks | None:
-        if self._run_registry is None:
-            return None
-        run_id = str((run_context or {}).get("run_id") or "").strip()
-        if not run_id:
-            return None
-        run_event_sink = (run_context or {}).get("run_event_sink")
-
-        async def _before_model(*, iteration: int, messages: list[dict[str, Any]], model: str, **_: Any) -> None:
-            payload = build_model_called_payload(
-                iteration=iteration,
-                model=model,
-                message_count=len(messages),
-            )
-            self._run_registry.append_event(run_id, "model_called", payload)
-            if run_event_sink is not None:
-                await run_event_sink("model_called", payload)
-
-        async def _after_model(*, iteration: int, response: Any, model: str, **_: Any) -> None:
-            payload = build_model_result_payload(
-                iteration=iteration,
-                model=model,
-                finish_reason=getattr(response, "finish_reason", None),
-                tool_call_count=len(getattr(response, "tool_calls", []) or []),
-                has_visible_content=bool(strip_think(getattr(response, "content", None))),
-            )
-            self._run_registry.append_event(run_id, "model_result", payload)
-            if run_event_sink is not None:
-                await run_event_sink("model_result", payload)
-
-        async def _before_tool(*, iteration: int, tool_call: Any, **_: Any) -> None:
-            payload = build_tool_called_payload(
-                iteration=iteration,
-                tool_name=tool_call.name,
-                arguments=tool_call.arguments,
-            )
-            self._run_registry.append_event(run_id, "tool_called", payload)
-            if run_event_sink is not None:
-                await run_event_sink("tool_called", payload)
-
-        async def _after_tool(*, iteration: int, tool_call: Any, result: str, **_: Any) -> None:
-            payload = build_tool_result_payload(
-                iteration=iteration,
-                tool_name=tool_call.name,
-                result=result,
-            )
-            self._run_registry.append_event(run_id, "tool_result", payload)
-            if run_event_sink is not None:
-                await run_event_sink("tool_result", payload)
-
-        return ToolLoopHooks(
-            before_model=_before_model,
-            after_model=_after_model,
-            before_tool=_before_tool,
-            after_tool=_after_tool,
-        )
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -335,14 +385,7 @@ class AgentLoop:
         finally:
             self._mcp_connecting = False
 
-    def _set_tool_context(
-        self,
-        channel: str,
-        chat_id: str,
-        session_key: str | None = None,
-        message_id: str | None = None,
-        run_context: dict[str, Any] | None = None,
-    ) -> None:
+    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
         """Update context for all tools that need routing info."""
         for name in ("message", "cron"):
             if tool := self.tools.get(name):
@@ -394,19 +437,15 @@ class AgentLoop:
             task.add_done_callback(lambda t, k=msg.session_key: self._active_tasks.get(k, []) and self._active_tasks[k].remove(t) if t in self._active_tasks.get(k, []) else None)
 
     async def _dispatch(self, msg: InboundMessage) -> None:
-        """Process a message under the global lock.
-
-        If a ``channel_dispatcher`` is configured and the message carries
-        ``_routing_target_type`` metadata, dispatch via the channel
-        dispatcher instead of the default agent processing pipeline.
-        """
-        # Check for channel routing metadata
+        """Process a message: per-session serial, cross-session concurrent."""
         if self._channel_dispatcher is not None:
             handled = await self._channel_dispatcher.dispatch(msg)
             if handled:
                 return
 
-        async with self._processing_lock:
+        lock = self._session_locks.setdefault(msg.session_key, asyncio.Lock())
+        gate = self._concurrency_gate or nullcontext()
+        async with lock, gate:
             try:
                 on_stream = on_stream_end = None
                 if (msg.metadata or {}).get("_wants_stream"):
@@ -502,16 +541,8 @@ class AgentLoop:
             logger.info("Processing system message from {}", msg.sender_id)
             session = self.sessions.get_or_create(key)
             await self.memory_consolidator.maybe_consolidate_by_tokens(session)
-            self._set_tool_context(
-                channel,
-                chat_id,
-                session_key=key,
-                message_id=msg.metadata.get("message_id"),
-                run_context=run_context,
-            )
             history = session.get_history(max_messages=0)
             current_message = msg.content
-            current_role = "assistant" if msg.sender_id == "subagent" else "user"
             skip = 1 + len(history)
             messages = self.context.build_messages(
                 history=history,
@@ -522,10 +553,13 @@ class AgentLoop:
                 memory_sections=self.memory_sections,
                 channel=channel,
                 chat_id=chat_id,
-                current_role=current_role,
+                current_role="user",
             )
             final_content, _, all_msgs = await self._run_agent_loop(
                 messages,
+                channel=channel,
+                chat_id=chat_id,
+                message_id=msg.metadata.get("message_id"),
                 run_context=run_context,
             )
             self._save_turn(session, all_msgs, skip)
@@ -547,13 +581,6 @@ class AgentLoop:
 
         await self.memory_consolidator.maybe_consolidate_by_tokens(session)
 
-        self._set_tool_context(
-            msg.channel,
-            msg.chat_id,
-            session_key=key,
-            message_id=msg.metadata.get("message_id"),
-            run_context=run_context,
-        )
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
@@ -583,6 +610,9 @@ class AgentLoop:
             on_progress=on_progress or _bus_progress,
             on_stream=on_stream,
             on_stream_end=on_stream_end,
+            channel=msg.channel,
+            chat_id=msg.chat_id,
+            message_id=msg.metadata.get("message_id"),
             run_context=run_context,
         )
 

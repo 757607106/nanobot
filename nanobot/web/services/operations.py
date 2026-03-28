@@ -13,8 +13,8 @@ from typing import Any
 from nanobot.config.schema import Config
 from nanobot.platform.instances import PlatformInstance, coerce_instance
 from nanobot.providers.registry import PROVIDERS
-from nanobot.web.mcp_registry import WebMCPRegistryManager
-from nanobot.web.setup import WebSetupManager
+from nanobot.web.services.mcp_registry import WebMCPRegistryManager
+from nanobot.web.services.setup import WebSetupManager
 
 ACTION_DEFINITIONS = {
     "restart": {
