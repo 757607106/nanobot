@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -31,6 +31,7 @@ class ToolLoopResult:
     tools_used: list[str]
     messages: list[dict[str, Any]]
     iterations: int
+    usage: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -44,10 +45,17 @@ class ToolLoopHooks:
 
 
 def strip_think(text: str | None) -> str | None:
-    """Remove hidden `<think>` blocks from visible content."""
+    """Remove hidden `<think>` blocks from visible content.
+
+    Streaming providers may emit an opening ``<think>`` block in one chunk and
+    the closing tag in a later chunk, so we also drop any still-open trailing
+    block from the accumulated buffer.
+    """
     if not text:
         return None
-    return re.sub(r"<think>[\s\S]*?</think>", "", text).strip() or None
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", text)
+    cleaned = re.sub(r"<think>[\s\S]*$", "", cleaned)
+    return cleaned.strip() or None
 
 
 def format_tool_hint(tool_calls: list[ToolCallRequest]) -> str:
@@ -86,10 +94,12 @@ def build_workspace_tool_registry(
     web_proxy: str | None,
     sandbox_binding: Any | None = None,
     sandbox_provider: Any | None = None,
+    exec_enabled: bool = True,
     tool_allowlist: set[str] | list[str] | tuple[str, ...] | None = None,
     message_send_callback: Callable[..., Awaitable[None]] | None = None,
     cron_service: Any | None = None,
     extra_tools: list[Tool] | None = None,
+    timezone: str | None = None,
 ) -> ToolRegistry:
     """Build the standard workspace-scoped tool registry."""
     registry = ToolRegistry()
@@ -122,23 +132,24 @@ def build_workspace_tool_registry(
     for tool_cls in (WriteFileTool, EditFileTool, ListDirTool):
         _register(tool_cls(workspace=workspace, virtual_workspace=Path(resolved_runtime_workdir), allowed_dir=allowed_dir))
 
-    _register(ExecTool(
-        working_dir=str(resolved_working_dir),
-        host_working_dir=str(resolved_host_workspace),
-        runtime_workdir=resolved_runtime_workdir,
-        timeout=resolved_timeout,
-        restrict_to_workspace=resolved_restrict,
-        path_append=resolved_path_append,
-        sandbox_executor=sandbox_executor,
-        env=dict(getattr(sandbox_binding, "env", {}) or {}),
-    ))
+    if exec_enabled:
+        _register(ExecTool(
+            working_dir=str(resolved_working_dir),
+            host_working_dir=str(resolved_host_workspace),
+            runtime_workdir=resolved_runtime_workdir,
+            timeout=resolved_timeout,
+            restrict_to_workspace=resolved_restrict,
+            path_append=resolved_path_append,
+            sandbox_executor=sandbox_executor,
+            env=dict(getattr(sandbox_binding, "env", {}) or {}),
+        ))
     _register(WebSearchTool(config=web_search_config, proxy=web_proxy))
     _register(WebFetchTool(proxy=web_proxy))
 
     if message_send_callback is not None:
         _register(MessageTool(send_callback=message_send_callback))
     if cron_service is not None:
-        _register(CronTool(cron_service))
+        _register(CronTool(cron_service, default_timezone=timezone or "UTC"))
     for tool in extra_tools or []:
         _register(tool)
     return registry
@@ -153,6 +164,8 @@ async def run_tool_loop(
     initial_messages: list[dict[str, Any]],
     max_iterations: int,
     on_progress: Callable[..., Awaitable[None]] | None = None,
+    on_stream: Callable[[str], Awaitable[None]] | None = None,
+    on_stream_end: Callable[..., Awaitable[None]] | None = None,
     on_tool_call: Callable[[ToolCallRequest], Any] | None = None,
     on_tool_result: Callable[[ToolCallRequest, str], Any] | None = None,
     hooks: ToolLoopHooks | None = None,
@@ -164,6 +177,7 @@ async def run_tool_loop(
     final_content = None
     tools_used: list[str] = []
     prefix = f"{log_prefix} " if log_prefix else ""
+    usage = {"prompt_tokens": 0, "completion_tokens": 0}
 
     while iteration < max_iterations:
         iteration += 1
@@ -174,11 +188,24 @@ async def run_tool_loop(
             model=model,
         )
 
-        response = await provider.chat_with_retry(
-            messages=messages,
-            tools=tools.get_definitions(),
-            model=model,
-        )
+        if on_stream is not None:
+            response = await provider.chat_stream_with_retry(
+                messages=messages,
+                tools=tools.get_definitions(),
+                model=model,
+                on_content_delta=on_stream,
+            )
+        else:
+            response = await provider.chat_with_retry(
+                messages=messages,
+                tools=tools.get_definitions(),
+                model=model,
+            )
+        raw_usage = response.usage or {}
+        usage = {
+            "prompt_tokens": int(raw_usage.get("prompt_tokens", 0) or 0),
+            "completion_tokens": int(raw_usage.get("completion_tokens", 0) or 0),
+        }
         await _maybe_call(
             hooks.after_model if hooks else None,
             iteration=iteration,
@@ -189,12 +216,15 @@ async def run_tool_loop(
 
         if response.has_tool_calls:
             if on_progress:
-                thought = strip_think(response.content)
-                if thought:
-                    await on_progress(thought)
+                if on_stream is None:
+                    thought = strip_think(response.content)
+                    if thought:
+                        await on_progress(thought)
                 tool_hint = strip_think(format_tool_hint(response.tool_calls))
                 if tool_hint:
                     await on_progress(tool_hint, tool_hint=True)
+            if on_stream is not None and on_stream_end is not None:
+                await on_stream_end(resuming=True)
 
             tool_call_dicts = [tool_call.to_openai_tool_call() for tool_call in response.tool_calls]
             messages = context.add_assistant_message(
@@ -230,6 +260,8 @@ async def run_tool_loop(
         if response.finish_reason == "error":
             logger.error("{}LLM returned error: {}", prefix, (clean or "")[:200])
             final_content = clean or "Sorry, I encountered an error calling the AI model."
+            if on_stream is not None and on_stream_end is not None:
+                await on_stream_end(resuming=False)
             break
 
         messages = context.add_assistant_message(
@@ -239,6 +271,8 @@ async def run_tool_loop(
             thinking_blocks=response.thinking_blocks,
         )
         final_content = clean
+        if on_stream is not None and on_stream_end is not None:
+            await on_stream_end(resuming=False)
         break
 
     if final_content is None and iteration >= max_iterations:
@@ -247,10 +281,13 @@ async def run_tool_loop(
             f"I reached the maximum number of tool call iterations ({max_iterations}) "
             "without completing the task. You can try breaking the task into smaller steps."
         )
+        if on_stream is not None and on_stream_end is not None:
+            await on_stream_end(resuming=False)
 
     return ToolLoopResult(
         final_content=final_content,
         tools_used=tools_used,
         messages=messages,
         iterations=iteration,
+        usage=usage,
     )

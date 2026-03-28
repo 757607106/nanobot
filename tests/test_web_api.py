@@ -327,11 +327,13 @@ def test_web_api_channels_list_detail_and_update(tmp_path, monkeypatch) -> None:
         assert listed_payload["delivery"] == {
             "sendProgress": True,
             "sendToolHints": False,
+            "sendMaxRetries": 3,
         }
         items = {item["name"]: item for item in listed_payload["items"]}
         assert items["telegram"]["status"] == "enabled"
         assert items["telegram"]["configured"] is True
         assert items["discord"]["status"] == "unconfigured"
+        assert items["weixin"]["status"] == "unconfigured"
 
         detail = client.get("/api/v1/channels/telegram")
         assert detail.status_code == 200
@@ -339,6 +341,13 @@ def test_web_api_channels_list_detail_and_update(tmp_path, monkeypatch) -> None:
         assert detail_payload["channel"]["name"] == "telegram"
         assert detail_payload["config"]["token"] == "tg-token"
         assert detail_payload["config"]["allowFrom"] == ["alice"]
+
+        weixin_detail = client.get("/api/v1/channels/weixin")
+        assert weixin_detail.status_code == 200
+        weixin_payload = weixin_detail.json()["data"]
+        assert weixin_payload["channel"]["name"] == "weixin"
+        assert weixin_payload["config"]["enabled"] is False
+        assert weixin_payload["config"]["allowFrom"] == []
 
         update_channel = client.put(
             "/api/v1/channels/telegram",
@@ -364,6 +373,7 @@ def test_web_api_channels_list_detail_and_update(tmp_path, monkeypatch) -> None:
         assert update_delivery.json()["data"]["delivery"] == {
             "sendProgress": False,
             "sendToolHints": True,
+            "sendMaxRetries": 3,
         }
 
         missing_channel = client.get("/api/v1/channels/not-real")

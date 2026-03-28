@@ -6,7 +6,7 @@ from typing import Any
 
 from nanobot.config.schema import ChannelsConfig, Config
 
-GLOBAL_CHANNEL_KEYS = {"sendProgress", "sendToolHints"}
+GLOBAL_CHANNEL_KEYS = {"sendProgress", "sendToolHints", "sendMaxRetries"}
 DEFAULT_CHANNELS_PAYLOAD = ChannelsConfig().model_dump(mode="json", by_alias=True)
 CHANNEL_NAMES = [name for name in DEFAULT_CHANNELS_PAYLOAD if name not in GLOBAL_CHANNEL_KEYS]
 
@@ -20,6 +20,7 @@ CHANNEL_REQUIRED_FIELDS: dict[str, list[str]] = {
     "feishu": ["appId", "appSecret", "allowFrom"],
     "dingtalk": ["clientId", "clientSecret", "allowFrom"],
     "wecom": ["botId", "secret", "allowFrom"],
+    "weixin": ["allowFrom"],
     "mochat": ["clawToken", "agentUserId", "allowFrom"],
     "email": [
         "consentGranted",
@@ -95,7 +96,7 @@ class WebChannelService:
     ) -> dict[str, Any]:
         if not isinstance(payload, dict):
             raise ValueError("Delivery payload must be an object.")
-        if "sendProgress" not in payload and "sendToolHints" not in payload:
+        if not any(key in payload for key in ("sendProgress", "sendToolHints", "sendMaxRetries")):
             raise ValueError("At least one delivery setting is required.")
 
         config_payload = dict(current_config)
@@ -104,14 +105,17 @@ class WebChannelService:
             channels_payload["sendProgress"] = bool(payload.get("sendProgress"))
         if "sendToolHints" in payload:
             channels_payload["sendToolHints"] = bool(payload.get("sendToolHints"))
+        if "sendMaxRetries" in payload:
+            channels_payload["sendMaxRetries"] = int(payload.get("sendMaxRetries"))
 
         updated_config = update_config(config_payload)
         return self.list_channels(config=_config_from_payload(updated_config))
 
-    def _delivery_payload(self, channels_payload: dict[str, Any]) -> dict[str, bool]:
+    def _delivery_payload(self, channels_payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "sendProgress": bool(channels_payload.get("sendProgress", True)),
             "sendToolHints": bool(channels_payload.get("sendToolHints", False)),
+            "sendMaxRetries": int(channels_payload.get("sendMaxRetries", 3)),
         }
 
     def _build_channel_item(self, channel_name: str, raw_config: Any) -> dict[str, Any]:

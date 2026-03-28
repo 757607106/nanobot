@@ -399,7 +399,7 @@ class WebChatRuntimeService:
     def list_enabled_channels(self) -> list[str]:
         enabled_channels: list[str] = []
         for name in type(self.state.config.channels).model_fields:
-            if name in {"send_progress", "send_tool_hints"}:
+            if name in {"send_progress", "send_tool_hints", "send_max_retries"}:
                 continue
             channel = getattr(self.state.config.channels, name, None)
             if getattr(channel, "enabled", False):
@@ -424,6 +424,7 @@ class WebChatRuntimeService:
                 "restrictToWorkspace": self.state.config.tools.restrict_to_workspace,
                 "sendProgress": self.state.config.channels.send_progress,
                 "sendToolHints": self.state.config.channels.send_tool_hints,
+                "sendMaxRetries": self.state.config.channels.send_max_retries,
                 "status": "ready",
                 "enabledChannels": self.list_enabled_channels(),
                 "activeMcpCount": len(active_mcp),

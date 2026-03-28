@@ -98,6 +98,7 @@ class ChannelsConfig(Base):
 
     send_progress: bool = True  # stream agent's text progress to the channel
     send_tool_hints: bool = False  # stream tool-call hints (e.g. read_file("…"))
+    send_max_retries: int = Field(default=3, ge=0, le=10)  # Max delivery attempts (initial send included)
     whatsapp: ChannelSectionConfig = Field(default_factory=ChannelSectionConfig)
     telegram: ChannelSectionConfig = Field(default_factory=ChannelSectionConfig)
     discord: ChannelSectionConfig = Field(default_factory=ChannelSectionConfig)
@@ -109,6 +110,7 @@ class ChannelsConfig(Base):
     qq: ChannelSectionConfig = Field(default_factory=ChannelSectionConfig)
     matrix: ChannelSectionConfig = Field(default_factory=ChannelSectionConfig)
     wecom: ChannelSectionConfig = Field(default_factory=ChannelSectionConfig)
+    weixin: ChannelSectionConfig = Field(default_factory=ChannelSectionConfig)
 
     def model_dump(self, *args, **kwargs):
         data = super().model_dump(*args, **kwargs)
@@ -125,6 +127,7 @@ class ChannelsConfig(Base):
                 "qq",
                 "matrix",
                 "wecom",
+                "weixin",
             ):
                 section = getattr(self, name, None)
                 if isinstance(section, ChannelSectionConfig):
@@ -145,9 +148,9 @@ class AgentDefaults(Base):
     context_window_tokens: int = 65_536
     temperature: float = 0.1
     max_tool_iterations: int = 40
-    # Deprecated compatibility field: accepted from old configs but ignored at runtime.
     memory_window: int | None = Field(default=None, exclude=True)
-    reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
+    reasoning_effort: str | None = None  # low / medium / high - enables LLM thinking mode
+    timezone: str = "UTC"  # IANA timezone, e.g. "Asia/Shanghai", "America/New_York"
 
     @property
     def should_warn_deprecated_memory_window(self) -> bool:
@@ -192,17 +195,20 @@ class ProvidersConfig(Base):
     dashscope: ProviderConfig = Field(default_factory=ProviderConfig)
     vllm: ProviderConfig = Field(default_factory=ProviderConfig)
     ollama: ProviderConfig = Field(default_factory=ProviderConfig)  # Ollama local models
+    ovms: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenVINO Model Server (OVMS)
     gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     moonshot: ProviderConfig = Field(default_factory=ProviderConfig)
     minimax: ProviderConfig = Field(default_factory=ProviderConfig)
+    mistral: ProviderConfig = Field(default_factory=ProviderConfig)
+    stepfun: ProviderConfig = Field(default_factory=ProviderConfig)  # Step Fun (阶跃星辰)
     aihubmix: ProviderConfig = Field(default_factory=ProviderConfig)  # AiHubMix API gateway
     siliconflow: ProviderConfig = Field(default_factory=ProviderConfig)  # SiliconFlow (硅基流动)
     volcengine: ProviderConfig = Field(default_factory=ProviderConfig)  # VolcEngine (火山引擎)
     volcengine_coding_plan: ProviderConfig = Field(default_factory=ProviderConfig)  # VolcEngine Coding Plan
     byteplus: ProviderConfig = Field(default_factory=ProviderConfig)  # BytePlus (VolcEngine international)
     byteplus_coding_plan: ProviderConfig = Field(default_factory=ProviderConfig)  # BytePlus Coding Plan
-    openai_codex: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenAI Codex (OAuth)
-    github_copilot: ProviderConfig = Field(default_factory=ProviderConfig)  # Github Copilot (OAuth)
+    openai_codex: ProviderConfig = Field(default_factory=ProviderConfig, exclude=True)  # OpenAI Codex (OAuth)
+    github_copilot: ProviderConfig = Field(default_factory=ProviderConfig, exclude=True)  # Github Copilot (OAuth)
 
 
 class HeartbeatConfig(Base):
@@ -210,6 +216,7 @@ class HeartbeatConfig(Base):
 
     enabled: bool = True
     interval_s: int = 30 * 60  # 30 minutes
+    keep_recent_messages: int = 8
 
 
 class GatewayConfig(Base):
@@ -241,6 +248,7 @@ class WebToolsConfig(Base):
 class ExecToolConfig(Base):
     """Shell exec tool configuration."""
 
+    enable: bool = True
     timeout: int = 60
     path_append: str = ""
     sandbox_kind: Literal["local", "docker", "remote"] = "local"
@@ -251,7 +259,6 @@ class ExecToolConfig(Base):
     docker_mounts: list[str] = Field(default_factory=list)
     docker_env_allowlist: list[str] = Field(default_factory=list)
     remote_endpoint: str = ""
-
 
 class MCPServerConfig(Base):
     """MCP server connection configuration (stdio or HTTP)."""
@@ -487,12 +494,16 @@ class Config(BaseSettings):
 
         forced_provider = str(self.agents.defaults.provider or "").strip()
         if forced_provider and forced_provider != "auto":
-            preferred = self._preferred_binding_candidate(forced_provider, model=model)
+            from nanobot.providers.registry import find_by_name
+
+            normalized_spec = find_by_name(forced_provider)
+            normalized_provider = normalized_spec.name if normalized_spec is not None else forced_provider
+            preferred = self._preferred_binding_candidate(normalized_provider, model=model)
             if preferred:
                 binding_name, binding = preferred
-                return binding, binding_name, forced_provider
-            provider = getattr(self.providers, forced_provider, None)
-            return (provider, None, forced_provider) if provider else (None, None, None)
+                return binding, binding_name, normalized_provider
+            provider = getattr(self.providers, normalized_provider, None)
+            return (provider, None, normalized_provider) if provider else (None, None, None)
 
         model_lower = (model or self.agents.defaults.model).lower()
         model_normalized = model_lower.replace("-", "_")
@@ -577,6 +588,11 @@ class Config(BaseSettings):
                 continue
             provider.api_base = normalize_api_base_url(spec.name, provider.api_base)
 
+        if self.agents.defaults.provider and self.agents.defaults.provider != "auto":
+            normalized = find_by_name(self.agents.defaults.provider)
+            if normalized is not None:
+                self.agents.defaults.provider = normalized.name
+
         if self.model_bindings:
             normalized: dict[str, ModelBindingConfig] = {}
             for binding_name, binding in self.model_bindings.items():
@@ -587,17 +603,18 @@ class Config(BaseSettings):
                 if not provider_name:
                     continue
                 spec = find_by_name(provider_name)
+                normalized_provider_name = spec.name if spec is not None else provider_name
                 explicit_capability = (
                     str(getattr(binding, "capability_type", "") or "").strip()
                     if "capability_type" in getattr(binding, "model_fields_set", set())
                     else ""
                 )
                 normalized[key] = ModelBindingConfig(
-                    provider=provider_name,
-                    label=str(binding.label or "").strip() or (spec.label if spec else provider_name),
+                    provider=normalized_provider_name,
+                    label=str(binding.label or "").strip() or (spec.label if spec else normalized_provider_name),
                     model=str(binding.model or "").strip() or None,
                     api_key=binding.api_key,
-                    api_base=normalize_api_base_url(provider_name, binding.api_base),
+                    api_base=normalize_api_base_url(normalized_provider_name, binding.api_base),
                     extra_headers=self._copy_headers(binding.extra_headers),
                     capability_type=(
                         explicit_capability
@@ -707,8 +724,7 @@ class Config(BaseSettings):
         if p and p.api_base:
             return p.api_base
         # Only gateways get a default api_base here. Standard providers
-        # (like Moonshot) set their base URL via env vars in _setup_env
-        # to avoid polluting the global litellm.api_base.
+        # resolve their base URL from the registry in the provider constructor.
         if name:
             spec = find_by_name(name)
             if spec and (spec.is_gateway or spec.is_local) and spec.default_api_base:

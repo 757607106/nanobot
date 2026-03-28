@@ -199,7 +199,7 @@ class WebSetupManager:
     def _channel_ready(self, config: Config) -> bool:
         channels = config.channels.model_dump(by_alias=True)
         for key, value in channels.items():
-            if key in {"sendProgress", "sendToolHints"}:
+            if key in {"sendProgress", "sendToolHints", "sendMaxRetries"}:
                 continue
             if isinstance(value, dict) and value.get("enabled"):
                 return True

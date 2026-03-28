@@ -4,9 +4,12 @@ import asyncio
 import os
 import re
 import shlex
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from loguru import logger
 
 from nanobot.agent.tools.base import Tool
 
@@ -37,6 +40,12 @@ async def _run_shell_subprocess(
             await asyncio.wait_for(process.wait(), timeout=5.0)
         except asyncio.TimeoutError:
             pass
+        finally:
+            if sys.platform != "win32":
+                try:
+                    os.waitpid(process.pid, os.WNOHANG)
+                except (ProcessLookupError, ChildProcessError) as e:
+                    logger.debug("Process already reaped or not found: {}", e)
         return f"Error: Command timed out after {timeout} seconds"
 
     output_parts = []
