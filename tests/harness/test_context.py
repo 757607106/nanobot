@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +19,9 @@ from nanobot.harness import (
     build_sandbox_provider,
     resolve_execution_environment,
 )
+from nanobot.platform.runs import RunService
+from nanobot.platform.runs.store import RunStore
+from nanobot.session.manager import SessionManager
 from nanobot.platform.runs import RunControlScope
 from nanobot.web.runtime_services.agents import WebAgentRuntimeService
 
@@ -279,6 +283,103 @@ def test_resolve_execution_environment_combines_workspace_and_sandbox(tmp_path: 
     assert snapshot["sandboxKind"] == "docker"
     assert snapshot["tenantId"] == "tenant-a"
 
+
+def test_run_agent_definition_uses_isolated_workspace_and_scoped_memory(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    config = Config()
+    config.agents.defaults.workspace = str(workspace)
+    runs = RunService(RunStore(tmp_path / "runs.db"), instance_id="instance-a")
+    sessions = SessionManager(workspace)
+    state = SimpleNamespace(
+        agent=object(),
+        sessions=sessions,
+        runs=runs,
+        bus=object(),
+        config=config,
+        config_runtime=SimpleNamespace(make_provider=lambda _cfg: object()),
+        chat_runtime=SimpleNamespace(
+            format_session_summary_from_session=lambda _session, session_id: {
+                "id": session_id,
+                "sessionId": session_id,
+                "title": "",
+                "messageCount": 0,
+                "fileCount": 0,
+            },
+            format_message=lambda sequence, session_id, message: {
+                "sequence": sequence,
+                "sessionId": session_id,
+                **(message or {}),
+            },
+            default_title=lambda _content=None: "Session",
+        ),
+        workspace_runtime=SimpleNamespace(get_valid_template_tools=lambda: []),
+        app_agents=SimpleNamespace(instance_id="instance-a"),
+        app_knowledge=None,
+        app_memory=None,
+        cron=None,
+    )
+    runtime = WebAgentRuntimeService(state)
+    agent = {
+        "agentId": "agent-a",
+        "tenantId": "tenant-a",
+        "instanceId": "instance-a",
+        "name": "Agent A",
+        "systemPrompt": "System prompt.",
+        "toolAllowlist": [],
+        "mcpServerIds": [],
+        "memoryScope": "workspace_shared",
+    }
+    environment = runtime.resolve_isolated_agent_environment(
+        agent,
+        thread_id="thread-a",
+        session_key="agent:agent-a:session:session-a",
+    )
+    memory_dir = environment.workspace.path / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    (memory_dir / "MEMORY.md").write_text("WORKSPACE SECRET", encoding="utf-8")
+
+    captured: dict[str, Any] = {}
+
+    class StubLoop:
+        async def process_direct(self, *args, **kwargs):
+            _ = args, kwargs
+            return "Stub response"
+
+        async def close_mcp(self) -> None:
+            return None
+
+    def fake_build_isolated_agent_loop(self, agent, *, prepared=None, workspace_binding=None, sandbox_binding=None, **kwargs):
+        _ = agent, kwargs, sandbox_binding
+        captured["workspace_binding"] = workspace_binding
+        captured["prepared"] = prepared
+        return StubLoop(), prepared
+
+    monkeypatch.setattr(WebAgentRuntimeService, "build_isolated_agent_loop", fake_build_isolated_agent_loop)
+
+    import asyncio
+
+    asyncio.run(
+        runtime.run_agent_definition(
+            agent,
+            task="Hello",
+            label="Agent A",
+            session_key="agent:agent-a:session:session-a",
+            session_id="session-a",
+            session_title="Agent Session",
+            origin_chat_id="chat-a",
+            origin_channel="web",
+            thread_id="thread-a",
+            workspace_binding=environment.workspace,
+            sandbox_binding=environment.sandbox,
+        )
+    )
+
+    workspace_binding = captured["workspace_binding"]
+    prepared = captured["prepared"]
+    assert workspace_binding.scope == "agent_thread"
+    assert "/agents/agent-a/threads/thread-a" in workspace_binding.path.as_posix()
+    assert ("Agent Workspace Memory", "WORKSPACE SECRET") in prepared.runtime_memory_sections
 
 def test_build_sandbox_provider_uses_configured_kind() -> None:
     config = Config()

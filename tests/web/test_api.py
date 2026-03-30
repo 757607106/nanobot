@@ -1346,6 +1346,28 @@ def test_web_api_session_files_are_scoped_to_session(web_client: TestClient) -> 
     assert sessions.json()["data"]["items"][0]["fileCount"] == 1
 
 
+def test_web_api_session_file_import_accepts_absolute_workspace_path(web_client: TestClient) -> None:
+    created = web_client.post("/api/v1/chat/sessions", json={"title": "Absolute Import"})
+    assert created.status_code == 201
+    session_id = created.json()["data"]["id"]
+
+    uploaded = web_client.post(
+        "/api/v1/chat/uploads",
+        files={"file": ("absolute.txt", b"absolute path import", "text/plain")},
+    )
+    assert uploaded.status_code == 201
+    uploaded_item = uploaded.json()["data"]
+
+    imported = web_client.post(
+        f"/api/v1/chat/sessions/{session_id}/files/import",
+        json={"attachments": [{"name": uploaded_item["name"], "path": uploaded_item["path"]}]},
+    )
+    assert imported.status_code == 200
+    session_files = imported.json()["data"]["sessionFiles"]
+    assert len(session_files) == 1
+    assert session_files[0]["relativePath"] == uploaded_item["relativePath"]
+
+
 def test_web_api_agent_sessions_are_namespaced_per_agent(web_client: TestClient) -> None:
     first_agent = web_client.post(
         "/api/v1/agents",
@@ -1538,6 +1560,105 @@ def test_web_api_agent_chat_dispatch_uses_isolated_runtime(
     )
     assert dispatched.status_code == 200
     assert dispatched.json()["data"]["content"] == "Agent session reply"
+
+
+def test_web_api_agent_test_run_uses_unique_isolated_workspace(
+    web_client: TestClient,
+    monkeypatch,
+) -> None:
+    created_agent = web_client.post(
+        "/api/v1/agents",
+        json={"name": "Isolated Test Agent", "systemPrompt": "Run inside isolated test workspaces."},
+    )
+    assert created_agent.status_code == 201
+    agent_id = created_agent.json()["data"]["agentId"]
+
+    captured: list[dict[str, object]] = []
+
+    async def fake_run_agent_definition(
+        agent,
+        *,
+        task,
+        session_key,
+        session_id: str,
+        thread_id,
+        workspace_binding,
+        sandbox_binding,
+        workspace_memory_resolver,
+        **kwargs,
+    ):
+        _ = sandbox_binding, kwargs
+        run_index = len(captured) + 1
+        assert agent["agentId"] == agent_id
+        assert task == "Check isolated test run workspace."
+        assert session_key.startswith(f"agent-test:{agent_id}:")
+        assert session_id.startswith(f"agent-test:{agent_id}:")
+        assert session_id != f"agent-test:{agent_id}:pending"
+        assert thread_id == session_id
+        assert workspace_binding.scope == "agent_thread"
+        assert f"/agents/{agent_id}/threads/" in workspace_binding.path.as_posix()
+        memory_dir = workspace_binding.path / "memory"
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        (memory_dir / "MEMORY.md").write_text(f"TEST SECRET {run_index}", encoding="utf-8")
+        assert workspace_memory_resolver() == [("Agent Workspace Memory", f"TEST SECRET {run_index}")]
+        captured.append(
+            {
+                "session_key": session_key,
+                "session_id": session_id,
+                "workspace_path": workspace_binding.path,
+            }
+        )
+        actual_session_id = f"agent-test:{agent_id}:run-{run_index}"
+        return {
+            "run": {
+                "runId": f"run-{run_index}",
+                "status": "completed",
+            },
+            "session": {
+                "id": actual_session_id,
+                "sessionId": actual_session_id,
+                "title": f"Agent Test · {agent['name']}",
+                "messageCount": 2,
+                "fileCount": 0,
+            },
+            "assistantMessage": {
+                "role": "assistant",
+                "content": f"Test run reply {run_index}",
+                "createdAt": datetime.now().isoformat(),
+            },
+            "messages": [],
+            "pendingKnowledgeBindings": [],
+            "knowledgeHits": [],
+            "appliedBindings": {
+                "toolAllowlist": [],
+                "mcpServerIds": [],
+                "skillIds": [],
+                "knowledgeBindingIds": [],
+            },
+        }
+
+    monkeypatch.setattr(
+        web_client.app.state.web.agent_runtime,
+        "run_agent_definition",
+        fake_run_agent_definition,
+    )
+
+    first = web_client.post(
+        f"/api/v1/agents/{agent_id}/test-run",
+        json={"content": "Check isolated test run workspace."},
+    )
+    second = web_client.post(
+        f"/api/v1/agents/{agent_id}/test-run",
+        json={"content": "Check isolated test run workspace."},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["data"]["assistantMessage"]["content"] == "Test run reply 1"
+    assert second.json()["data"]["assistantMessage"]["content"] == "Test run reply 2"
+    assert len(captured) == 2
+    assert captured[0]["session_id"] != captured[1]["session_id"]
+    assert captured[0]["workspace_path"] != captured[1]["workspace_path"]
 
 
 def test_web_api_chat_workspace_snapshot(web_client: TestClient) -> None:

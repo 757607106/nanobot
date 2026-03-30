@@ -254,6 +254,13 @@ class WebChannelRuntimeService:
         except Exception:
             logger.warning("Agent definition '{}' not found for channel routing", agent_id)
             return f"Agent '{agent_id}' not found."
+        session_key = f"agent:{agent_id}:{msg.session_key}"
+        session_id = session_key
+        environment = self.state.agent_runtime.resolve_isolated_agent_environment(
+            agent_def,
+            thread_id=session_id,
+            session_key=session_key,
+        )
         route_metadata = self._route_metadata(
             msg,
             tenant_id=tenant_id,
@@ -265,12 +272,19 @@ class WebChannelRuntimeService:
                 agent_def,
                 task=msg.content,
                 label=str(agent_def.get("name") or agent_id),
-                session_key=f"agent:{agent_id}:{msg.session_key}",
-                session_id=f"agent:{agent_id}:{msg.session_key}",
+                session_key=session_key,
+                session_id=session_id,
                 session_title=f"Agent Route · {agent_def.get('name') or agent_id}",
                 origin_channel=msg.channel,
                 origin_chat_id=msg.chat_id,
+                thread_id=session_id,
                 route_metadata=route_metadata,
+                workspace_memory_resolver=self.state.agent_runtime.build_workspace_memory_resolver(
+                    environment.workspace.path,
+                    heading="Agent Workspace Memory",
+                ),
+                workspace_binding=environment.workspace,
+                sandbox_binding=environment.sandbox,
             )
         except ValueError as exc:
             return str(exc)

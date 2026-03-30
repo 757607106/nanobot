@@ -224,6 +224,19 @@ def get_agent_session_files(request: Request, agent_id: str, session_id: str) ->
     return _json_response(200, _ok(data))
 
 
+@router.get("/api/v1/agents/{agent_id}/sessions/{session_id}/workspace")
+def get_agent_session_workspace(request: Request, agent_id: str, session_id: str) -> JSONResponse:
+    try:
+        data = request.app.state.web.get_agent_chat_workspace(
+            agent_id,
+            session_id,
+            tenant_id=get_tenant_id(request),
+        )
+    except KeyError as exc:
+        raise APIError(404, "AGENT_OR_SESSION_NOT_FOUND", "Agent session not found.") from exc
+    return _json_response(200, _ok(data))
+
+
 @router.post("/api/v1/agents/{agent_id}/sessions/{session_id}/uploads")
 async def upload_agent_session_file(request: Request, agent_id: str, session_id: str) -> JSONResponse:
     form = await request.form()

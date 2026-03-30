@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
@@ -296,7 +296,11 @@ async def test_channel_runtime_agent_handler_applies_knowledge_binding(monkeypat
         session_title="Agent Route · Ops Agent",
         origin_channel="telegram",
         origin_chat_id="42",
+        thread_id="agent:agent-ops:chat-1",
         route_metadata=None,
+        workspace_memory_resolver=ANY,
+        workspace_binding=ANY,
+        sandbox_binding=ANY,
     )
     runtime_config = runtime_config_holder["config"]
     assert runtime_config.agents.defaults.binding == "ops-binding"

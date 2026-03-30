@@ -23,13 +23,15 @@ class ContextBuilder:
         self,
         workspace: Path,
         *,
+        memory_workspace: Path | None = None,
         virtual_workspace_path: Path | str | None = None,
         timezone: str | None = None,
     ):
         self.workspace = workspace
+        self.memory_workspace = memory_workspace or workspace
         self.virtual_workspace_path = Path(virtual_workspace_path) if virtual_workspace_path is not None else workspace
         self.timezone = timezone
-        self.memory = MemoryStore(workspace)
+        self.memory = MemoryStore(self.memory_workspace)
         self.skills = SkillsLoader(workspace)
 
     def build_system_prompt(

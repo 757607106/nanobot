@@ -297,6 +297,15 @@ class WebAppState:
     def get_chat_workspace(self) -> dict[str, Any]:
         return self.chat_runtime.get_chat_workspace()
 
+    def get_agent_chat_workspace(
+        self,
+        agent_id: str,
+        session_id: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self.agent_chat_runtime.get_chat_workspace(agent_id, session_id, tenant_id=tenant_id)
+
     def get_mcp_test_chat(self, server_name: str, limit: int = 120) -> dict[str, Any]:
         return self.chat_runtime.get_mcp_test_chat(server_name, limit)
 

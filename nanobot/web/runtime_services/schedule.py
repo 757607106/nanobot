@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from nanobot.agent.tools.cron import CronTool
+from nanobot.bus.events import extract_outbound_content
 from nanobot.cron.types import CronJob, CronPayload, CronSchedule
 from nanobot.services.calendar_reminder import CalendarReminderService
 
@@ -234,12 +235,13 @@ class WebScheduleRuntimeService:
         if isinstance(cron_tool, CronTool):
             cron_token = cron_tool.set_cron_context(True)
         try:
-            return await self.state.agent.process_direct(
+            response = await self.state.agent.process_direct(
                 reminder_note,
                 session_key=session_key,
                 channel=channel,
                 chat_id=chat_id,
             )
+            return extract_outbound_content(response)
         finally:
             if isinstance(cron_tool, CronTool) and cron_token is not None:
                 cron_tool.reset_cron_context(cron_token)

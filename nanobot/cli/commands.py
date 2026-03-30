@@ -33,6 +33,7 @@ from rich.table import Table
 from rich.text import Text
 
 from nanobot import __logo__, __version__
+from nanobot.bus.events import extract_outbound_content
 from nanobot.cli.stream import StreamRenderer, ThinkingSpinner
 from nanobot.config.paths import get_workspace_path, is_default_workspace
 from nanobot.config.schema import Config
@@ -578,7 +579,7 @@ def gateway(
             if isinstance(cron_tool, CronTool) and cron_token is not None:
                 cron_tool.reset_cron_context(cron_token)
 
-        response = resp or ""
+        response = extract_outbound_content(resp)
 
         message_tool = agent.tools.get("message")
         if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
@@ -639,7 +640,7 @@ def gateway(
         session.retain_recent_legal_suffix(hb_cfg.keep_recent_messages)
         agent.sessions.save(session)
 
-        return resp or ""
+        return extract_outbound_content(resp)
 
     async def on_heartbeat_notify(response: str) -> None:
         """Deliver a heartbeat response to the user's channel."""
@@ -816,7 +817,7 @@ def agent(
             if not renderer.streamed:
                 await renderer.close()
                 _print_agent_response(
-                    response,
+                    extract_outbound_content(response),
                     render_markdown=markdown,
                     metadata=None,
                 )

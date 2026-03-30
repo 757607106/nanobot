@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from nanobot.agent.loop import AgentLoop
+from nanobot.bus.events import InboundMessage, extract_outbound_content
 from nanobot.chat_payload import normalize_chat_attachments
 from nanobot.session.manager import Session
 
@@ -100,13 +101,13 @@ class WebChatRuntimeService:
             raise ValueError("File path is required.")
 
         candidate = Path(raw_relative_path)
+        workspace_root = workspace_root.resolve()
         if candidate.is_absolute():
             try:
-                candidate = candidate.relative_to(self.state.config.workspace_path)
+                candidate = candidate.resolve().relative_to(workspace_root)
             except ValueError as exc:
                 raise ValueError("File must stay inside the workspace.") from exc
 
-        workspace_root = workspace_root.resolve()
         resolved = (workspace_root / candidate).resolve()
         try:
             resolved.relative_to(workspace_root)
@@ -120,6 +121,35 @@ class WebChatRuntimeService:
 
     def resolve_workspace_file(self, relative_path: str) -> dict[str, Any]:
         return self.resolve_workspace_file_in_root(self.state.config.workspace_path, relative_path)
+
+    async def _dispatch_chat_turn(
+        self,
+        *,
+        session_key: str,
+        session_id: str,
+        content: str,
+        on_progress,
+        run_context: dict[str, Any] | None = None,
+    ) -> str:
+        agent = self.state.agent
+        if hasattr(agent, "_process_message") and hasattr(agent, "_connect_mcp"):
+            await agent._connect_mcp()
+            response = await agent._process_message(
+                InboundMessage(channel="web", sender_id="user", chat_id=session_id, content=content),
+                session_key=session_key,
+                on_progress=on_progress,
+                run_context=run_context,
+            )
+            return extract_outbound_content(response)
+
+        response = await agent.process_direct(
+            content=content,
+            session_key=session_key,
+            channel="web",
+            chat_id=session_id,
+            on_progress=on_progress,
+        )
+        return extract_outbound_content(response)
 
     @staticmethod
     def collect_message_attachment_refs(session: Session) -> list[dict[str, Any]]:
@@ -521,7 +551,7 @@ class WebChatRuntimeService:
             None,
         )
         return {
-            "content": response,
+            "content": extract_outbound_content(response),
             "assistantMessage": assistant_message,
             "session": payload["session"],
             "messages": payload["messages"],
@@ -546,11 +576,10 @@ class WebChatRuntimeService:
         normalized_attachments = normalize_chat_attachments(attachments)
         if normalized_attachments:
             self.add_session_file_refs(session, normalized_attachments)
-        response = await self.state.agent.process_direct(
-            content=content,
+        response = await self._dispatch_chat_turn(
             session_key=key,
-            channel="web",
-            chat_id=session_id,
+            session_id=session_id,
+            content=content,
             on_progress=on_progress,
             run_context={
                 "chat_message": {

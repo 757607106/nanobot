@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from nanobot.harness import (
+    AgentThreadWorkspaceProvider,
     ExecutionContext,
     ExecutionEnvironmentBinding,
     ExecutionAssemblyState,
@@ -26,10 +27,12 @@ from nanobot.harness import (
     ToolPolicy,
     ToolPolicyMiddleware,
     WorkspaceBinding,
+    WorkspaceProvider,
     build_sandbox_provider,
     resolve_execution_environment,
 )
 from nanobot.agent.loop import AgentLoop
+from nanobot.bus.events import InboundMessage, extract_outbound_content
 from nanobot.agent.skills import SkillsLoader
 from nanobot.providers.registry import find_by_model
 from nanobot.platform.agents import AgentDefinitionNotFoundError
@@ -401,6 +404,62 @@ class WebAgentRuntimeService:
         config.tools.mcp_servers = selected_mcp
         return config
 
+    @staticmethod
+    def build_workspace_memory_resolver(
+        workspace_path: Path,
+        *,
+        heading: str = "Workspace Shared Memory",
+    ) -> Callable[[], list[tuple[str, str]]]:
+        return lambda: WebAgentRuntimeService.get_workspace_memory_sections_for_path(
+            workspace_path,
+            heading=heading,
+        )
+
+    def resolve_agent_environment(
+        self,
+        agent: dict[str, Any],
+        *,
+        thread_id: str | None = None,
+        root_run_id: str | None = None,
+        session_key: str | None = None,
+        workspace_provider: WorkspaceProvider | None = None,
+    ) -> ExecutionEnvironmentBinding:
+        return resolve_execution_environment(
+            workspace=self.state.config.workspace_path,
+            restrict_to_workspace=self.state.config.tools.restrict_to_workspace,
+            exec_config=self.state.config.tools.exec,
+            principal_kind="agent",
+            tenant_id=str(agent.get("tenantId") or "default").strip() or "default",
+            instance_id=str(
+                agent.get("instanceId")
+                or getattr(getattr(self.state, "app_agents", None), "instance_id", "default")
+                or "default"
+            ).strip()
+            or "default",
+            principal_id=str(agent.get("agentId") or agent.get("name") or "agent").strip() or "agent",
+            thread_id=thread_id,
+            root_run_id=root_run_id,
+            session_key=session_key,
+            workspace_provider=workspace_provider or self._get_workspace_provider(),
+            sandbox_provider=self._get_sandbox_provider(),
+        )
+
+    def resolve_isolated_agent_environment(
+        self,
+        agent: dict[str, Any],
+        *,
+        thread_id: str,
+        session_key: str,
+        root_run_id: str | None = None,
+    ) -> ExecutionEnvironmentBinding:
+        return self.resolve_agent_environment(
+            agent,
+            thread_id=thread_id,
+            root_run_id=root_run_id,
+            session_key=session_key,
+            workspace_provider=AgentThreadWorkspaceProvider(),
+        )
+
     def _build_execution_middleware_chain(
         self,
         knowledge_service: Any | None,
@@ -543,6 +602,42 @@ class WebAgentRuntimeService:
             knowledge_policy=knowledge_policy,
         )
 
+    async def _execute_agent_turn(
+        self,
+        isolated_agent: AgentLoop,
+        *,
+        task: str,
+        execution_context: ExecutionContext,
+        on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
+        on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+    ) -> str:
+        if hasattr(isolated_agent, "_process_message") and hasattr(isolated_agent, "_connect_mcp"):
+            await isolated_agent._connect_mcp()
+            run_context = execution_context.to_agent_loop_run_context()
+            if on_run_event is not None:
+                run_context["run_event_sink"] = on_run_event
+            response = await isolated_agent._process_message(
+                InboundMessage(
+                    channel=execution_context.origin_channel,
+                    sender_id="user",
+                    chat_id=execution_context.session_id or execution_context.origin_chat_id or "direct",
+                    content=task,
+                ),
+                session_key=execution_context.session_key,
+                on_progress=on_progress,
+                run_context=run_context,
+            )
+            return extract_outbound_content(response)
+
+        response = await isolated_agent.process_direct(
+            content=task,
+            session_key=execution_context.session_key,
+            channel=execution_context.origin_channel,
+            chat_id=execution_context.session_id or execution_context.origin_chat_id or "direct",
+            on_progress=on_progress,
+        )
+        return extract_outbound_content(response)
+
     def build_isolated_agent_loop(
         self,
         agent: dict[str, Any],
@@ -615,6 +710,7 @@ class WebAgentRuntimeService:
             bus=runtime_bus,
             provider=self.state.config_runtime.make_provider(prepared.config),
             workspace=resolved_workspace.path,
+            context_workspace=prepared.config.workspace_path,
             model=prepared.config.agents.defaults.model,
             max_iterations=prepared.config.agents.defaults.max_tool_iterations,
             context_window_tokens=prepared.config.agents.defaults.context_window_tokens,
@@ -672,14 +768,54 @@ class WebAgentRuntimeService:
         if not task:
             raise ValueError("content is required.")
 
-        prepared = prepared or self.prepare_agent_execution(
-            agent,
-            task=task,
-            additional_prompt_sections=additional_prompt_sections,
-            include_workspace_memory=include_workspace_memory,
-            memory_sections=memory_sections,
-            workspace_memory_resolver=workspace_memory_resolver,
-        )
+        config = prepared.config if prepared else self._build_agent_config(agent)
+        if prepared is None:
+            self._validate_agent_bindings(agent, config)
+
+        agent_id = str(agent.get("agentId") or "").strip() or None
+        instance_id = str(
+            agent.get("instanceId")
+            or getattr(getattr(self.state, "app_agents", None), "instance_id", "")
+            or "default"
+        ).strip() or "default"
+        tenant_id = str(agent.get("tenantId") or "default").strip() or "default"
+        principal_id = agent_id or str(label or agent.get("name") or "agent")
+
+        if workspace_binding is None or sandbox_binding is None:
+            environment = self.resolve_environment_binding(
+                workspace=config.workspace_path,
+                restrict_to_workspace=config.tools.restrict_to_workspace,
+                exec_config=config.tools.exec,
+                principal_kind="agent",
+                tenant_id=tenant_id,
+                instance_id=instance_id,
+                principal_id=principal_id,
+                thread_id=thread_id,
+                root_run_id=root_run_id,
+                session_key=session_key,
+            )
+            workspace_binding = workspace_binding or environment.workspace
+            sandbox_binding = sandbox_binding or environment.sandbox
+        assert workspace_binding is not None
+        assert sandbox_binding is not None
+
+        if prepared is None:
+            effective_workspace_memory_resolver = workspace_memory_resolver
+            if effective_workspace_memory_resolver is None:
+                heading = "Workspace Shared Memory" if workspace_binding.scope == "shared" else "Agent Workspace Memory"
+                effective_workspace_memory_resolver = self.build_workspace_memory_resolver(
+                    workspace_binding.path,
+                    heading=heading,
+                )
+            prepared = self.prepare_agent_execution(
+                agent,
+                task=task,
+                additional_prompt_sections=additional_prompt_sections,
+                include_workspace_memory=include_workspace_memory,
+                memory_sections=memory_sections,
+                workspace_memory_resolver=effective_workspace_memory_resolver,
+            )
+
         execution_context = self.materialize_execution_context(
             agent,
             prepared,
@@ -694,23 +830,6 @@ class WebAgentRuntimeService:
             root_run_id=root_run_id,
             thread_id=thread_id,
         )
-        if workspace_binding is None or sandbox_binding is None:
-            environment = self.resolve_environment_binding(
-                workspace=prepared.config.workspace_path,
-                restrict_to_workspace=prepared.config.tools.restrict_to_workspace,
-                exec_config=prepared.config.tools.exec,
-                principal_kind=execution_context.principal_kind,
-                tenant_id=execution_context.tenant_id,
-                instance_id=execution_context.instance_id,
-                principal_id=execution_context.principal_id,
-                thread_id=execution_context.thread_id,
-                root_run_id=execution_context.effective_root_run_id,
-                session_key=execution_context.session_key,
-            )
-            workspace_binding = workspace_binding or environment.workspace
-            sandbox_binding = sandbox_binding or environment.sandbox
-        assert workspace_binding is not None
-        assert sandbox_binding is not None
         execution_context.workspace_path = str(workspace_binding.path)
         execution_context.workspace_scope = workspace_binding.scope
         execution_context.sandbox_kind = sandbox_binding.kind
@@ -807,11 +926,12 @@ class WebAgentRuntimeService:
 
         try:
             self.state.runs.start_run(record.run_id)
-            response = await isolated_agent.process_direct(
-                content=task,
-                run_context={"run_event_sink": on_run_event} if on_run_event is not None else None,
+            response = await self._execute_agent_turn(
+                isolated_agent,
+                task=task,
                 execution_context=execution_context,
                 on_progress=_on_progress,
+                on_run_event=on_run_event,
             )
             artifact_path = self.state.runs.write_markdown_artifact(
                 record.run_id,
@@ -886,27 +1006,65 @@ class WebAgentRuntimeService:
         except AgentDefinitionNotFoundError as exc:
             raise KeyError(agent_id) from exc
 
-        pending_session_key = self._agent_test_session_key(agent["agentId"], "pending")
+        provisional_token = (
+            self.state.instance.next_id("agent-test")
+            if hasattr(self.state.instance, "next_id")
+            else None
+        )
+        if not provisional_token:
+            from uuid import uuid4
+
+            provisional_token = uuid4().hex
+        provisional_session_key = self._agent_test_session_key(agent["agentId"], provisional_token)
+        provisional_session_id = self._agent_test_session_id(agent["agentId"], provisional_token)
+        provisional_environment = self.resolve_isolated_agent_environment(
+            agent,
+            thread_id=provisional_session_id,
+            session_key=provisional_session_key,
+        )
         result = await self.run_agent_definition(
             agent,
             task=task,
             label=agent["name"],
-            session_key=pending_session_key.replace("pending", "pending"),
-            session_id=self._agent_test_session_id(agent["agentId"], "pending"),
+            session_key=provisional_session_key,
+            session_id=provisional_session_id,
             session_title=f"Agent Test · {agent['name']}",
             origin_chat_id=agent["agentId"],
+            thread_id=provisional_session_id,
+            workspace_memory_resolver=self.build_workspace_memory_resolver(
+                provisional_environment.workspace.path,
+                heading="Agent Workspace Memory",
+            ),
+            workspace_binding=provisional_environment.workspace,
+            sandbox_binding=provisional_environment.sandbox,
         )
         run_id = result["run"]["runId"]
         actual_session_key = self._agent_test_session_key(agent["agentId"], run_id)
         actual_session_id = self._agent_test_session_id(agent["agentId"], run_id)
         if result["session"]["id"] != actual_session_id:
-            session = self.state.sessions.get_or_create(pending_session_key)
-            self.state.sessions.delete(pending_session_key)
+            session = self.state.sessions.get_or_create(provisional_session_key)
+            self.state.sessions.delete(provisional_session_key)
             actual = self.state.sessions.get_or_create(actual_session_key)
             actual.messages = list(session.messages)
             actual.metadata.update(session.metadata)
             self.state.sessions.save(actual)
-            self.state.runs.store.update_run(run_id, session_key=actual_session_key)
+            actual_environment = self.resolve_isolated_agent_environment(
+                agent,
+                thread_id=actual_session_id,
+                session_key=actual_session_key,
+            )
+            provisional_workspace_path = provisional_environment.workspace.path
+            actual_workspace_path = actual_environment.workspace.path
+            if provisional_workspace_path != actual_workspace_path and provisional_workspace_path.exists():
+                actual_workspace_path.parent.mkdir(parents=True, exist_ok=True)
+                if not actual_workspace_path.exists():
+                    provisional_workspace_path.rename(actual_workspace_path)
+            self.state.runs.store.update_run(
+                run_id,
+                session_key=actual_session_key,
+                thread_id=actual_session_id,
+                workspace_path=str(actual_workspace_path),
+            )
             result["run"] = self.state.runs.get_run(run_id)
             result["session"] = self._format_session_summary(actual_session_key, actual_session_id)
             result["messages"] = self._format_messages(actual_session_key, actual_session_id)

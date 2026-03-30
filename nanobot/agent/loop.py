@@ -39,7 +39,6 @@ from nanobot.utils.helpers import strip_think
 if TYPE_CHECKING:
     from nanobot.config.schema import ChannelsConfig, ExecToolConfig, WebSearchConfig
     from nanobot.cron.service import CronService
-    from nanobot.harness import ExecutionContext
     from nanobot.platform.runs import RunService
 
 
@@ -185,6 +184,7 @@ class AgentLoop:
         bus: MessageBus,
         provider: LLMProvider,
         workspace: Path,
+        context_workspace: Path | None = None,
         model: str | None = None,
         max_iterations: int = 40,
         context_window_tokens: int = 65_536,
@@ -248,8 +248,10 @@ class AgentLoop:
             ).sandbox
 
         virtual_workspace_path = str(getattr(self.sandbox_binding, "runtime_workdir", workspace) or workspace)
+        resolved_context_workspace = Path(context_workspace) if context_workspace is not None else workspace
         self.context = ContextBuilder(
-            workspace,
+            resolved_context_workspace,
+            memory_workspace=workspace,
             virtual_workspace_path=virtual_workspace_path,
             timezone=timezone,
         )
@@ -745,27 +747,14 @@ class AgentLoop:
         on_progress: Callable[[str], Awaitable[None]] | None = None,
         on_stream: Callable[[str], Awaitable[None]] | None = None,
         on_stream_end: Callable[..., Awaitable[None]] | None = None,
-        run_context: dict[str, Any] | None = None,
-        execution_context: "ExecutionContext | None" = None,
-    ) -> str:
-        """Process a message directly (for CLI or cron usage)."""
+    ) -> OutboundMessage | None:
+        """Process a message directly using the upstream-style contract."""
         await self._connect_mcp()
-        merged_run_context = dict(run_context or {})
-        if execution_context is not None:
-            session_key = str(execution_context.session_key or session_key)
-            channel = str(execution_context.origin_channel or channel)
-            chat_id = str(execution_context.session_id or chat_id)
-            merged_run_context = {
-                **execution_context.to_agent_loop_run_context(),
-                **merged_run_context,
-            }
         msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
-        response = await self._process_message(
+        return await self._process_message(
             msg,
             session_key=session_key,
             on_progress=on_progress,
             on_stream=on_stream,
             on_stream_end=on_stream_end,
-            run_context=merged_run_context or None,
         )
-        return response.content if response else ""

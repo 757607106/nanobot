@@ -36,3 +36,13 @@ class OutboundMessage:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+def extract_outbound_content(message: "OutboundMessage | str | None") -> str:
+    """Return visible text from a direct-response call.
+
+    The helper accepts both the upstream-style ``OutboundMessage`` return value
+    and the older string-based stubs still used by some tests.
+    """
+    if isinstance(message, OutboundMessage):
+        return message.content
+    return str(message or "")
+

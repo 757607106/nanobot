@@ -184,4 +184,4 @@ class TestRestartCommand:
         response = await loop.process_direct("/status", session_key="cli:test")
 
         assert response is not None
-        assert "Model: test-model" in response
+        assert "Model: test-model" in response.content

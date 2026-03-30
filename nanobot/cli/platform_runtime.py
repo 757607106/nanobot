@@ -9,6 +9,7 @@ from typing import Any, Callable
 from loguru import logger
 
 from nanobot.agent.loop import AgentLoop
+from nanobot.bus.events import extract_outbound_content
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import Config
 from nanobot.cron.service import CronService
@@ -60,18 +61,27 @@ class CLIGatewayRoutingRuntime:
             logger.warning("Agent definition '{}' not found for channel routing", agent_id)
             return f"Agent '{agent_id}' not found."
 
+        session_key = f"agent:{agent_id}:{msg.session_key}"
+        environment = self.agent_runtime.resolve_isolated_agent_environment(
+            agent_def,
+            thread_id=session_key,
+            session_key=session_key,
+        )
         isolated, _ = self.agent_runtime.build_isolated_agent_loop(
             agent_def,
             task=msg.content,
             bus=self.state.bus,
+            workspace_binding=environment.workspace,
+            sandbox_binding=environment.sandbox,
         )
         try:
-            return await isolated.process_direct(
+            response = await isolated.process_direct(
                 msg.content,
-                session_key=f"agent:{agent_id}:{msg.session_key}",
+                session_key=session_key,
                 channel=msg.channel,
                 chat_id=msg.chat_id,
             )
+            return extract_outbound_content(response)
         finally:
             await isolated.close_mcp()
 

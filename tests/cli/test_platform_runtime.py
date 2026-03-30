@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from nanobot.harness import SandboxBinding, WorkspaceBinding
 from nanobot.cli.platform_runtime import CLIGatewayRoutingRuntime
 
 
@@ -29,8 +31,19 @@ async def test_cli_gateway_agent_handler_reuses_shared_agent_runtime() -> None:
         close_mcp=AsyncMock(return_value=None),
     )
     agent_def = {"agentId": "ops-agent", "name": "Ops Agent"}
+    environment = SimpleNamespace(
+        workspace=WorkspaceBinding(path=Path("/tmp/ops-agent"), scope="agent_thread"),
+        sandbox=SandboxBinding(
+            kind="local",
+            working_dir=Path("/tmp/ops-agent"),
+            restrict_to_workspace=True,
+            exec_timeout=120,
+            runtime_workdir="/tmp/ops-agent",
+        ),
+    )
     agent_runtime = SimpleNamespace(
-        build_isolated_agent_loop=MagicMock(return_value=(isolated, object()))
+        build_isolated_agent_loop=MagicMock(return_value=(isolated, object())),
+        resolve_isolated_agent_environment=MagicMock(return_value=environment),
     )
     runtime = _make_runtime(
         agents_service=SimpleNamespace(get_agent=lambda agent_id: agent_def),
@@ -46,10 +59,17 @@ async def test_cli_gateway_agent_handler_reuses_shared_agent_runtime() -> None:
     result = await runtime.handle_agent_message("ops-agent", message)
 
     assert result == "agent reply"
+    agent_runtime.resolve_isolated_agent_environment.assert_called_once_with(
+        agent_def,
+        thread_id="agent:ops-agent:telegram:42",
+        session_key="agent:ops-agent:telegram:42",
+    )
     agent_runtime.build_isolated_agent_loop.assert_called_once_with(
         agent_def,
         task="restart service",
         bus=runtime.state.bus,
+        workspace_binding=environment.workspace,
+        sandbox_binding=environment.sandbox,
     )
     isolated.process_direct.assert_awaited_once_with(
         "restart service",

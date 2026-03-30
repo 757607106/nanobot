@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import re
 import time
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from nanobot.chat_payload import normalize_chat_attachments
-from nanobot.harness import (
-    AgentThreadWorkspaceProvider,
-    build_sandbox_provider,
-    resolve_execution_environment,
-)
+from nanobot.harness import AgentThreadWorkspaceProvider
 from nanobot.platform.agents import AgentDefinitionNotFoundError
 from nanobot.session.manager import Session
 
@@ -67,38 +64,6 @@ class WebAgentChatRuntimeService:
         if session is None:
             raise KeyError(session_id)
         return session
-
-    def _resolve_agent_environment(self, agent: dict[str, Any], session_id: str):
-        agent_id = str(agent.get("agentId") or "").strip() or "agent"
-        tenant_id = str(agent.get("tenantId") or "default").strip() or "default"
-        instance_id = str(
-            agent.get("instanceId")
-            or getattr(getattr(self.state, "app_agents", None), "instance_id", "default")
-            or "default"
-        ).strip() or "default"
-        session_key = self.session_key(agent_id, session_id)
-        sandbox_provider = getattr(self.state, "sandbox_provider", None) or build_sandbox_provider(
-            self.state.config.tools.exec
-        )
-        return resolve_execution_environment(
-            workspace=self.state.config.workspace_path,
-            restrict_to_workspace=self.state.config.tools.restrict_to_workspace,
-            exec_config=self.state.config.tools.exec,
-            principal_kind="agent",
-            tenant_id=tenant_id,
-            instance_id=instance_id,
-            principal_id=agent_id,
-            thread_id=session_id,
-            session_key=session_key,
-            workspace_provider=AgentThreadWorkspaceProvider(),
-            sandbox_provider=sandbox_provider,
-        )
-
-    def _workspace_memory_resolver(self, workspace_path):
-        return lambda: self.state.agent_runtime.get_workspace_memory_sections_for_path(
-            workspace_path,
-            heading="Agent Workspace Memory",
-        )
 
     def list_sessions(
         self,
@@ -214,6 +179,38 @@ class WebAgentChatRuntimeService:
         session = self.require_session(agent_id, session_id)
         return self.state.chat_runtime.get_session_file_refs(session)
 
+    def get_chat_workspace(
+        self,
+        agent_id: str,
+        session_id: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        agent = self._require_agent(agent_id, tenant_id=tenant_id)
+        _session = self.require_session(agent_id, session_id)
+        environment = self.state.agent_runtime.resolve_agent_environment(
+            agent,
+            thread_id=session_id,
+            session_key=self.session_key(agent_id, session_id),
+            workspace_provider=AgentThreadWorkspaceProvider(),
+        )
+        upload_dir = environment.workspace.path / "uploads"
+        recent_uploads: list[dict[str, Any]] = []
+        if upload_dir.is_dir():
+            for path in sorted(upload_dir.iterdir(), key=lambda entry: entry.stat().st_mtime, reverse=True):
+                if not path.is_file():
+                    continue
+                recent_uploads.append(self.state.chat_runtime.format_upload_item(path, environment.workspace.path))
+                if len(recent_uploads) >= 6:
+                    break
+        payload = dict(self.state.chat_runtime.get_chat_workspace())
+        payload["generatedAt"] = datetime.now().isoformat()
+        runtime = dict(payload.get("runtime") or {})
+        runtime["workspace"] = str(environment.workspace.path)
+        payload["runtime"] = runtime
+        payload["recentUploads"] = recent_uploads
+        return payload
+
     def upload_chat_file_to_session(
         self,
         agent_id: str,
@@ -232,7 +229,12 @@ class WebAgentChatRuntimeService:
             raise ValueError("Uploaded file is empty.")
         if len(content) > 10 * 1024 * 1024:
             raise ValueError("Uploaded file must be 10 MB or smaller.")
-        environment = self._resolve_agent_environment(agent, session_id)
+        environment = self.state.agent_runtime.resolve_agent_environment(
+            agent,
+            thread_id=session_id,
+            session_key=self.session_key(agent_id, session_id),
+            workspace_provider=AgentThreadWorkspaceProvider(),
+        )
         upload_dir = environment.workspace.path / "uploads"
         upload_dir.mkdir(parents=True, exist_ok=True)
         destination = upload_dir / f"{int(time.time())}-{raw_name}"
@@ -251,7 +253,12 @@ class WebAgentChatRuntimeService:
     ) -> list[dict[str, Any]]:
         agent = self._require_agent(agent_id, tenant_id=tenant_id)
         session = self.require_session(agent_id, session_id)
-        environment = self._resolve_agent_environment(agent, session_id)
+        environment = self.state.agent_runtime.resolve_agent_environment(
+            agent,
+            thread_id=session_id,
+            session_key=self.session_key(agent_id, session_id),
+            workspace_provider=AgentThreadWorkspaceProvider(),
+        )
         resolved = [
             self.state.chat_runtime.resolve_workspace_file_in_root(
                 environment.workspace.path,
@@ -302,7 +309,12 @@ class WebAgentChatRuntimeService:
         normalized_attachments = normalize_chat_attachments(attachments)
         if normalized_attachments:
             self.state.chat_runtime.add_session_file_refs(session, normalized_attachments)
-        environment = self._resolve_agent_environment(agent, session_id)
+        environment = self.state.agent_runtime.resolve_agent_environment(
+            agent,
+            thread_id=session_id,
+            session_key=key,
+            workspace_provider=AgentThreadWorkspaceProvider(),
+        )
         result = await self.state.agent_runtime.run_agent_definition(
             agent,
             task=content,
@@ -312,7 +324,10 @@ class WebAgentChatRuntimeService:
             session_title=str(session.metadata.get("title") or self.state.chat_runtime.default_title()),
             origin_chat_id=session_id,
             thread_id=session_id,
-            workspace_memory_resolver=self._workspace_memory_resolver(environment.workspace.path),
+            workspace_memory_resolver=self.state.agent_runtime.build_workspace_memory_resolver(
+                environment.workspace.path,
+                heading="Agent Workspace Memory",
+            ),
             workspace_binding=environment.workspace,
             sandbox_binding=environment.sandbox,
             on_progress=on_progress,
