@@ -35,12 +35,10 @@ class ChannelBindingService:
         *,
         instance_id: str,
         agent_lookup: Callable[[str], Any] | None = None,
-        team_lookup: Callable[[str], Any] | None = None,
     ):
         self.store = store
         self.instance_id = instance_id
         self.agent_lookup = agent_lookup
-        self.team_lookup = team_lookup
 
     @staticmethod
     def _normalize_text(value: Any, *, required: bool = False, field_name: str = "value") -> str:

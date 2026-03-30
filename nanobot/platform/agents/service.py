@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import replace
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
 
+from nanobot.platform.agents.model_selection import canonicalize_agent_model_selection
 from nanobot.platform.artifact_retention import normalize_artifact_retention_policy
 from nanobot.platform.agents.models import AgentDefinition, now_iso
 from nanobot.platform.agents.store import AgentDefinitionStore
+
+if TYPE_CHECKING:
+    from nanobot.config.schema import Config
 
 
 class AgentDefinitionNotFoundError(KeyError):
@@ -28,6 +32,9 @@ def _slugify(value: str) -> str:
     return normalized or "agent"
 
 
+_MISSING = object()
+
+
 class AgentDefinitionService:
     """Instance-scoped CRUD service for agent definitions."""
 
@@ -36,9 +43,11 @@ class AgentDefinitionService:
         store: AgentDefinitionStore,
         *,
         instance_id: str,
+        config_loader: Callable[[], Config | None] | None = None,
     ):
         self.store = store
         self.instance_id = instance_id
+        self._config_loader = config_loader
 
     @staticmethod
     def _get_value(payload: dict[str, Any], *keys: str) -> Any:
@@ -46,6 +55,13 @@ class AgentDefinitionService:
             if key in payload:
                 return payload[key]
         return None
+
+    @staticmethod
+    def _get_optional_value(payload: dict[str, Any], *keys: str) -> Any:
+        for key in keys:
+            if key in payload:
+                return payload[key]
+        return _MISSING
 
     @staticmethod
     def _normalize_text(value: Any, *, required: bool = False, field_name: str = "value") -> str:
@@ -118,12 +134,71 @@ class AgentDefinitionService:
             counter += 1
         return candidate
 
+    def _load_config(self) -> Config | None:
+        return self._config_loader() if self._config_loader is not None else None
+
+    def _canonicalize_model_selection(
+        self,
+        *,
+        model: str | None,
+        binding: str | None,
+        provider: str | None,
+        default_model: str | None = None,
+        default_binding: str | None = None,
+        default_provider: str | None = None,
+    ) -> tuple[str | None, str | None, str | None]:
+        try:
+            selection = canonicalize_agent_model_selection(
+                self._load_config(),
+                model=model,
+                binding=binding,
+                provider=provider,
+                default_model=default_model,
+                default_binding=default_binding,
+                default_provider=default_provider,
+            )
+        except ValueError as exc:
+            raise AgentDefinitionValidationError(str(exc)) from exc
+        return selection.model, selection.binding, selection.provider
+
+    def _repair_agent_selection(self, agent: AgentDefinition) -> AgentDefinition:
+        config = self._load_config()
+        if config is None:
+            return agent
+        try:
+            selection = canonicalize_agent_model_selection(
+                config,
+                model=agent.model,
+                binding=agent.binding,
+                provider=agent.provider,
+            )
+        except ValueError:
+            return agent
+
+        if (
+            selection.model == agent.model
+            and selection.binding == agent.binding
+            and selection.provider == agent.provider
+        ):
+            return agent
+
+        repaired = replace(
+            agent,
+            model=selection.model,
+            binding=selection.binding,
+            provider=selection.provider,
+        )
+        persisted = self.store.update(repaired, tenant_id=agent.tenant_id)
+        return persisted or repaired
+
     def _normalize_create_payload(
         self,
         payload: dict[str, Any],
         *,
         tenant_id: str,
         default_model: str | None,
+        default_binding: str | None,
+        default_provider: str | None,
         default_tools: list[str],
         template_snapshot: dict[str, Any] | None,
     ) -> AgentDefinition:
@@ -178,18 +253,28 @@ class AgentDefinitionService:
             field_name="tags",
         )
 
-        model = self._normalize_text(
-            self._get_value(payload, "model") if "model" in payload else template_snapshot.get("model", default_model),
+        raw_model = self._normalize_text(
+            self._get_value(payload, "model") if "model" in payload else template_snapshot.get("model"),
             field_name="model",
-        ) or default_model
-        binding = self._normalize_text(
+        ) or None
+        raw_binding = self._normalize_text(
             self._get_value(payload, "binding") if "binding" in payload else template_snapshot.get("binding"),
             field_name="binding",
         ) or None
-        provider = self._normalize_text(
+        raw_provider = self._normalize_text(
             self._get_value(payload, "provider") if "provider" in payload else template_snapshot.get("provider"),
             field_name="provider",
         ) or None
+        model = raw_model or default_model
+        use_binding_defaults = raw_model is None and raw_binding is None and raw_provider is None
+        model, binding, provider = self._canonicalize_model_selection(
+            model=model,
+            binding=raw_binding,
+            provider=raw_provider,
+            default_model=default_model,
+            default_binding=default_binding if use_binding_defaults else None,
+            default_provider=default_provider if use_binding_defaults else None,
+        )
         backend = self._normalize_text(
             self._get_value(payload, "backend") if "backend" in payload else template_snapshot.get("backend"),
             field_name="backend",
@@ -255,86 +340,103 @@ class AgentDefinitionService:
 
     def _apply_update(self, existing: AgentDefinition, payload: dict[str, Any]) -> AgentDefinition:
         updates = {
-            "name": self._get_value(payload, "name"),
-            "description": self._get_value(payload, "description"),
-            "system_prompt": self._get_value(payload, "systemPrompt", "system_prompt"),
-            "rules": self._get_value(payload, "rules"),
-            "model": self._get_value(payload, "model"),
-            "binding": self._get_value(payload, "binding"),
-            "provider": self._get_value(payload, "provider"),
-            "backend": self._get_value(payload, "backend"),
-            "enabled": self._get_value(payload, "enabled"),
-            "tool_allowlist": self._get_value(payload, "toolAllowlist", "tool_allowlist"),
-            "mcp_server_ids": self._get_value(payload, "mcpServerIds", "mcp_server_ids"),
-            "skill_ids": self._get_value(payload, "skillIds", "skill_ids"),
-            "knowledge_binding_ids": self._get_value(payload, "knowledgeBindingIds", "knowledge_binding_ids"),
-            "tags": self._get_value(payload, "tags"),
-            "memory_scope": self._get_value(payload, "memoryScope", "memory_scope"),
-            "source_template_name": self._get_value(payload, "sourceTemplateName", "source_template_name"),
-            "max_execution_timeout_seconds": self._get_value(
+            "name": self._get_optional_value(payload, "name"),
+            "description": self._get_optional_value(payload, "description"),
+            "system_prompt": self._get_optional_value(payload, "systemPrompt", "system_prompt"),
+            "rules": self._get_optional_value(payload, "rules"),
+            "model": self._get_optional_value(payload, "model"),
+            "binding": self._get_optional_value(payload, "binding"),
+            "provider": self._get_optional_value(payload, "provider"),
+            "backend": self._get_optional_value(payload, "backend"),
+            "enabled": self._get_optional_value(payload, "enabled"),
+            "tool_allowlist": self._get_optional_value(payload, "toolAllowlist", "tool_allowlist"),
+            "mcp_server_ids": self._get_optional_value(payload, "mcpServerIds", "mcp_server_ids"),
+            "skill_ids": self._get_optional_value(payload, "skillIds", "skill_ids"),
+            "knowledge_binding_ids": self._get_optional_value(payload, "knowledgeBindingIds", "knowledge_binding_ids"),
+            "tags": self._get_optional_value(payload, "tags"),
+            "memory_scope": self._get_optional_value(payload, "memoryScope", "memory_scope"),
+            "source_template_name": self._get_optional_value(payload, "sourceTemplateName", "source_template_name"),
+            "max_execution_timeout_seconds": self._get_optional_value(
                 payload, "maxExecutionTimeoutSeconds", "max_execution_timeout_seconds",
             ),
-            "output_format_hint": self._get_value(payload, "outputFormatHint", "output_format_hint"),
-            "artifact_retention_policy": self._get_value(payload, "artifactRetentionPolicy", "artifact_retention_policy"),
+            "output_format_hint": self._get_optional_value(payload, "outputFormatHint", "output_format_hint"),
+            "artifact_retention_policy": self._get_optional_value(payload, "artifactRetentionPolicy", "artifact_retention_policy"),
         }
 
         name = existing.name
-        if updates["name"] is not None:
+        if updates["name"] is not _MISSING:
             name = self._normalize_text(updates["name"], required=True, field_name="name")
             self._ensure_unique_name(name, tenant_id=existing.tenant_id, exclude_agent_id=existing.agent_id)
+
+        next_model = existing.model
+        next_binding = existing.binding
+        next_provider = existing.provider
+        selection_updated = any(
+            updates[key] is not _MISSING
+            for key in ("model", "binding", "provider")
+        )
+        if selection_updated:
+            raw_model = existing.model
+            if updates["model"] is not _MISSING:
+                raw_model = self._normalize_text(updates["model"], field_name="model") or None
+            raw_binding = existing.binding
+            if updates["binding"] is not _MISSING:
+                raw_binding = self._normalize_text(updates["binding"], field_name="binding") or None
+            raw_provider = existing.provider
+            if updates["provider"] is not _MISSING:
+                raw_provider = self._normalize_text(updates["provider"], field_name="provider") or None
+            next_model, next_binding, next_provider = self._canonicalize_model_selection(
+                model=raw_model,
+                binding=raw_binding,
+                provider=raw_provider,
+            )
 
         return replace(
             existing,
             name=name,
             description=existing.description
-            if updates["description"] is None
+            if updates["description"] is _MISSING
             else self._normalize_text(updates["description"], field_name="description"),
             system_prompt=existing.system_prompt
-            if updates["system_prompt"] is None
+            if updates["system_prompt"] is _MISSING
             else self._normalize_text(updates["system_prompt"], required=True, field_name="systemPrompt"),
             rules=existing.rules
-            if updates["rules"] is None
+            if updates["rules"] is _MISSING
             else self._normalize_string_list(updates["rules"], field_name="rules"),
-            model=existing.model
-            if updates["model"] is None
-            else (self._normalize_text(updates["model"], field_name="model") or None),
-            binding=existing.binding
-            if updates["binding"] is None
-            else (self._normalize_text(updates["binding"], field_name="binding") or None),
-            provider=existing.provider
-            if updates["provider"] is None
-            else (self._normalize_text(updates["provider"], field_name="provider") or None),
+            model=next_model,
+            binding=next_binding,
+            provider=next_provider,
             backend=existing.backend
-            if updates["backend"] is None
+            if updates["backend"] is _MISSING
             else (self._normalize_text(updates["backend"], field_name="backend") or None),
-            enabled=existing.enabled if updates["enabled"] is None else bool(updates["enabled"]),
+            enabled=existing.enabled if updates["enabled"] is _MISSING else bool(updates["enabled"]),
             tool_allowlist=existing.tool_allowlist
-            if updates["tool_allowlist"] is None
+            if updates["tool_allowlist"] is _MISSING
             else self._normalize_string_list(updates["tool_allowlist"], field_name="toolAllowlist"),
             mcp_server_ids=existing.mcp_server_ids
-            if updates["mcp_server_ids"] is None
+            if updates["mcp_server_ids"] is _MISSING
             else self._normalize_string_list(updates["mcp_server_ids"], field_name="mcpServerIds"),
             skill_ids=existing.skill_ids
-            if updates["skill_ids"] is None
+            if updates["skill_ids"] is _MISSING
             else self._normalize_string_list(updates["skill_ids"], field_name="skillIds"),
             knowledge_binding_ids=existing.knowledge_binding_ids
-            if updates["knowledge_binding_ids"] is None
+            if updates["knowledge_binding_ids"] is _MISSING
             else self._normalize_string_list(updates["knowledge_binding_ids"], field_name="knowledgeBindingIds"),
             tags=existing.tags
-            if updates["tags"] is None
+            if updates["tags"] is _MISSING
             else self._normalize_string_list(updates["tags"], field_name="tags"),
             memory_scope=existing.memory_scope
-            if updates["memory_scope"] is None
+            if updates["memory_scope"] is _MISSING
             else (
                 (normalized if normalized in {"agent_profile", "workspace_shared"} else "agent_profile")
                 if (normalized := (self._normalize_text(updates["memory_scope"], field_name="memoryScope") or "agent_profile"))
                 else "agent_profile"
             ),
             source_template_name=existing.source_template_name
-            if updates["source_template_name"] is None
+            if updates["source_template_name"] is _MISSING
             else (self._normalize_text(updates["source_template_name"], field_name="sourceTemplateName") or None),
             max_execution_timeout_seconds=existing.max_execution_timeout_seconds
-            if updates["max_execution_timeout_seconds"] is None
+            if updates["max_execution_timeout_seconds"] is _MISSING
             else self._normalize_positive_int(
                 updates["max_execution_timeout_seconds"],
                 field_name="maxExecutionTimeoutSeconds",
@@ -343,10 +445,10 @@ class AgentDefinitionService:
                 max_val=3600,
             ),
             output_format_hint=existing.output_format_hint
-            if updates["output_format_hint"] is None
+            if updates["output_format_hint"] is _MISSING
             else self._normalize_text(updates["output_format_hint"], field_name="outputFormatHint"),
             artifact_retention_policy=existing.artifact_retention_policy
-            if updates["artifact_retention_policy"] is None
+            if updates["artifact_retention_policy"] is _MISSING
             else normalize_artifact_retention_policy(
                 updates["artifact_retention_policy"],
                 error_cls=AgentDefinitionValidationError,
@@ -359,11 +461,11 @@ class AgentDefinitionService:
         agent = self.store.get(agent_id, tenant_id=tenant_id)
         if agent is None:
             raise AgentDefinitionNotFoundError(agent_id)
-        return agent
+        return self._repair_agent_selection(agent)
 
     def list_agents(self, *, tenant_id: str, enabled: bool | None = None) -> list[dict[str, Any]]:
         return [
-            agent.to_dict()
+            self._repair_agent_selection(agent).to_dict()
             for agent in self.store.list_all(
                 tenant_id=tenant_id,
                 instance_id=self.instance_id,
@@ -380,13 +482,24 @@ class AgentDefinitionService:
         *,
         tenant_id: str,
         default_model: str | None,
+        default_binding: str | None = None,
+        default_provider: str | None = None,
         default_tools: list[str],
         template_snapshot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        config = self._load_config()
         agent = self._normalize_create_payload(
             payload,
             tenant_id=tenant_id,
-            default_model=default_model,
+            default_model=default_model
+            if default_model is not None
+            else (config.agents.defaults.model if config is not None else None),
+            default_binding=default_binding
+            if default_binding is not None
+            else (config.agents.defaults.binding if config is not None else None),
+            default_provider=default_provider
+            if default_provider is not None
+            else (config.agents.defaults.provider if config is not None else None),
             default_tools=default_tools,
             template_snapshot=template_snapshot,
         )

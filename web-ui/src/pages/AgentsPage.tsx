@@ -146,15 +146,27 @@ function parseRules(value: string) {
   )
 }
 
-function toPayload(form: AgentFormState): AgentDefinitionMutationInput {
+function toPayload(
+  form: AgentFormState,
+  availableBindings: Record<string, { provider: string; model?: string | null }>,
+): AgentDefinitionMutationInput {
+  const bindingConfig = form.binding ? availableBindings[form.binding] : undefined
+  const binding = form.binding.trim() || null
+  const provider = binding
+    ? bindingConfig?.provider || null
+    : form.provider.trim() || null
+  const model = binding
+    ? form.model.trim() || bindingConfig?.model || null
+    : form.model.trim() || null
+
   return {
     name: form.name.trim(),
     description: form.description.trim(),
     systemPrompt: form.systemPrompt.trim(),
     rules: parseRules(form.rulesText),
-    model: form.model.trim() || null,
-    binding: form.binding.trim() || null,
-    provider: form.provider.trim() || null,
+    model,
+    binding,
+    provider,
     backend: form.backend.trim() || null,
     enabled: form.enabled,
     toolAllowlist: [...form.toolAllowlist],
@@ -301,6 +313,14 @@ export default function AgentsPage() {
       .sort((left, right) => left.label.localeCompare(right.label)),
     [availableBindings],
   )
+  const selectedBindingConfig = form.binding ? availableBindings[form.binding] : null
+  const selectedBindingProviderLabel = useMemo(() => {
+    const providerName = selectedBindingConfig?.provider
+    if (!providerName) {
+      return ''
+    }
+    return globalConfigMeta?.providers.find((item) => item.name === providerName)?.label || providerName
+  }, [globalConfigMeta, selectedBindingConfig])
 
   const modelSuggestions = useMemo(() => {
     if (!globalConfig || !globalConfigMeta) return []
@@ -460,10 +480,10 @@ export default function AgentsPage() {
       const currentModel = current.model.trim()
       let nextModel = current.model
 
-      if (bindingConfig?.model && !currentModel) {
+      if (bindingConfig?.model) {
         nextModel = bindingConfig.model
       } else if (nextProvider && currentModel && !modelMatchesProvider(globalConfigMeta, nextProvider, currentModel)) {
-        nextModel = bindingConfig?.model || getModelSuggestions(nextProvider)[0] || current.model
+        nextModel = getModelSuggestions(nextProvider)[0] || current.model
       }
 
       return {
@@ -514,7 +534,7 @@ export default function AgentsPage() {
   async function handleSave() {
     let payload: AgentDefinitionMutationInput
     try {
-      payload = toPayload(form)
+      payload = toPayload(form, availableBindings)
     } catch (payloadError) {
       const nextError = getErrorMessage(payloadError, '产物保留策略无效')
       setError(nextError)
@@ -883,33 +903,13 @@ export default function AgentsPage() {
                   value={form.binding || undefined}
                   onChange={(value) => updateBinding(value ?? '')}
                   options={agentBindingOptions}
-                  placeholder="优先使用指定绑定"
+                  placeholder="推荐直接选择模型绑定"
                 />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">供应商绑定</Text>
-                <Select
-                  allowClear
-                  value={form.provider || undefined}
-                  onChange={(value) => updateProvider(value ?? '')}
-                  options={agentProviderOptions}
-                  placeholder="自动判断"
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">模型</Text>
-                <AutoComplete
-                  value={form.model}
-                  onChange={(value) => updateForm('model', value)}
-                  options={modelSuggestions}
-                  placeholder="使用默认模型"
-                  allowClear
-                  filterOption={(input, option) =>
-                    (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                />
+                <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                  {selectedBindingConfig
+                    ? `当前会固定到 ${selectedBindingProviderLabel || selectedBindingConfig.provider}${selectedBindingConfig.model ? ` · ${selectedBindingConfig.model}` : ''}。`
+                    : '未指定模型绑定时，可在高级设置里用兼容模式手动指定供应商和模型。'}
+                </Text>
               </div>
 
               <div className="studio-form-field studio-form-switch-field">
@@ -1008,6 +1008,36 @@ export default function AgentsPage() {
                   label: '高级设置',
                   children: (
                     <div className="studio-form-grid">
+                      <div className="studio-form-field studio-form-field-span-2">
+                        <Text type="secondary">
+                          兼容模式仅在未选择模型绑定时使用；如果已经选择了模型绑定，下方供应商和模型会被该绑定覆盖。
+                        </Text>
+                      </div>
+                      <div className="studio-form-field">
+                        <Text type="secondary">兼容供应商</Text>
+                        <Select
+                          allowClear
+                          disabled={Boolean(form.binding)}
+                          value={form.provider || undefined}
+                          onChange={(value) => updateProvider(value ?? '')}
+                          options={agentProviderOptions}
+                          placeholder="不指定时自动推断"
+                        />
+                      </div>
+                      <div className="studio-form-field">
+                        <Text type="secondary">兼容模型</Text>
+                        <AutoComplete
+                          disabled={Boolean(form.binding)}
+                          value={form.model}
+                          onChange={(value) => updateForm('model', value)}
+                          options={modelSuggestions}
+                          placeholder="不指定时使用绑定或默认模型"
+                          allowClear
+                          filterOption={(input, option) =>
+                            (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                          }
+                        />
+                      </div>
                       <div className="studio-form-field">
                         <Text type="secondary">记忆范围</Text>
                         <Select

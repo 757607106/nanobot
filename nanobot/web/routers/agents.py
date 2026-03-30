@@ -72,6 +72,8 @@ def create_agent(
             payload,
             tenant_id=tenant_id,
             default_model=request.app.state.web.config.agents.defaults.model,
+            default_binding=request.app.state.web.config.agents.defaults.binding,
+            default_provider=request.app.state.web.config.agents.defaults.provider,
             default_tools=_default_tools(request),
             template_snapshot=_resolve_template_snapshot(request, payload),
         )

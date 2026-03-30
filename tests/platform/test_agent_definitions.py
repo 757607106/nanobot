@@ -2,12 +2,42 @@ from __future__ import annotations
 
 import pytest
 
+from nanobot.config.schema import Config
 from nanobot.platform.agents import (
+    AgentDefinition,
     AgentDefinitionConflictError,
     AgentDefinitionNotFoundError,
     AgentDefinitionService,
     AgentDefinitionStore,
+    AgentDefinitionValidationError,
 )
+from nanobot.platform.agents.models import now_iso
+
+
+def _config_with_agent_bindings() -> Config:
+    return Config.model_validate(
+        {
+            "agents": {
+                "defaults": {
+                    "binding": "qwen3-5-plus",
+                    "provider": "dashscope",
+                    "model": "qwen3.5-plus",
+                }
+            },
+            "modelBindings": {
+                "qwen3-5-plus": {
+                    "provider": "dashscope",
+                    "label": "Qwen 3.5 Plus",
+                    "model": "qwen3.5-plus",
+                },
+                "kimi-cn": {
+                    "provider": "moonshot",
+                    "label": "Kimi K2.5",
+                    "model": "kimi-k2.5",
+                },
+            },
+        }
+    )
 
 
 def test_agent_definition_service_crud_and_copy(tmp_path) -> None:
@@ -111,3 +141,99 @@ def test_agent_definition_service_uses_template_snapshot_and_detects_conflicts(t
             default_tools=["read_file"],
             template_snapshot=None,
         )
+
+
+def test_agent_definition_service_canonicalizes_binding_first_selection(tmp_path) -> None:
+    config = _config_with_agent_bindings()
+    service = AgentDefinitionService(
+        AgentDefinitionStore(tmp_path / "agents.db"),
+        instance_id="instance-test",
+        config_loader=lambda: config,
+    )
+
+    created = service.create_agent(
+        {
+            "name": "Support Agent",
+            "systemPrompt": "Handle support issues.",
+            "binding": "qwen3.5-plus",
+            "provider": "dashscope",
+            "toolAllowlist": ["read_file"],
+        },
+        tenant_id="default",
+        default_model=None,
+        default_tools=["read_file"],
+        template_snapshot=None,
+    )
+
+    assert created["binding"] == "qwen3-5-plus"
+    assert created["provider"] == "dashscope"
+    assert created["model"] == "qwen3.5-plus"
+
+    updated = service.update_agent(
+        created["agentId"],
+        {
+            "binding": None,
+            "provider": "moonshot",
+            "model": "kimi-k2.5",
+        },
+    )
+    assert updated["binding"] == "kimi-cn"
+    assert updated["provider"] == "moonshot"
+    assert updated["model"] == "kimi-k2.5"
+
+
+def test_agent_definition_service_rejects_unrecoverable_binding(tmp_path) -> None:
+    config = _config_with_agent_bindings()
+    service = AgentDefinitionService(
+        AgentDefinitionStore(tmp_path / "agents.db"),
+        instance_id="instance-test",
+        config_loader=lambda: config,
+    )
+
+    with pytest.raises(AgentDefinitionValidationError, match="unknown model binding"):
+        service.create_agent(
+            {
+                "name": "Broken Agent",
+                "systemPrompt": "Broken config.",
+                "binding": "missing-binding",
+                "model": "totally-unknown-model",
+            },
+            tenant_id="default",
+            default_model=None,
+            default_tools=["read_file"],
+            template_snapshot=None,
+        )
+
+
+def test_agent_definition_service_repairs_legacy_stored_binding_on_read(tmp_path) -> None:
+    config = _config_with_agent_bindings()
+    store = AgentDefinitionStore(tmp_path / "agents.db")
+    service = AgentDefinitionService(
+        store,
+        instance_id="instance-test",
+        config_loader=lambda: config,
+    )
+    now = now_iso()
+    store.create(
+        AgentDefinition(
+            agent_id="legacy-agent",
+            tenant_id="default",
+            instance_id="instance-test",
+            name="Legacy Agent",
+            system_prompt="Repair me.",
+            model="qwen3.5-plus",
+            binding="qwen3.5-plus",
+            provider="dashscope",
+            tool_allowlist=["read_file"],
+            knowledge_binding_ids=[],
+            tags=[],
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    fetched = service.get_agent("legacy-agent")
+    assert fetched["binding"] == "qwen3-5-plus"
+    persisted = store.get("legacy-agent")
+    assert persisted is not None
+    assert persisted.binding == "qwen3-5-plus"

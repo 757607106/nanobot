@@ -86,43 +86,6 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     whatsapp_binding = WebWhatsAppBindingService(instance)
     setup = WebSetupManager(instance)
     operations = WebOperationsService(setup, mcp_registry, instance)
-    agents = AgentDefinitionService(
-        AgentDefinitionStore(instance.agent_definitions_db_path()),
-        instance_id=instance.id,
-    )
-    rag_engine = create_rag_engine_from_config(config, instance.data_dir)
-    knowledge = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
-        instance=instance,
-        instance_id=instance.id,
-        rag_engine=rag_engine,
-        config=config,
-    )
-    memory = MemoryService(
-        MemoryStore(instance.memory_db_path()),
-        instance=instance,
-        instance_id=instance.id,
-        agent_lookup=agents.require_agent,
-    )
-    runs = RunService(
-        RunStore(instance.agent_runs_db_path()),
-        instance_id=instance.id,
-        artifact_dir=instance.agent_artifacts_dir(),
-    )
-    tenants_service = TenantService(TenantStore(instance.tenants_db_path()))
-    runs.bind_tenant_settings_loader(lambda tenant_id: tenants_service.get_tenant(tenant_id))
-    runs.bind_definition_policy_loaders(
-        agent_loader=lambda agent_id, tenant_id=None: agents.get_agent(agent_id, tenant_id=tenant_id),
-    )
-    channel_bindings_service = ChannelBindingService(
-        ChannelBindingStore(instance.channel_bindings_db_path()),
-        instance_id=instance.id,
-        agent_lookup=agents.require_agent,
-    )
-    channel_audit_service = ChannelAuditService(
-        ChannelAuditStore(instance.channel_audit_db_path()),
-        instance_id=instance.id,
-    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -159,6 +122,44 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
             await app.state.web.shutdown_async()
 
     app = FastAPI(title="nanobot Web UI", version=__version__, lifespan=lifespan)
+    agents = AgentDefinitionService(
+        AgentDefinitionStore(instance.agent_definitions_db_path()),
+        instance_id=instance.id,
+        config_loader=lambda: getattr(getattr(app.state, "web", None), "config", config),
+    )
+    rag_engine = create_rag_engine_from_config(config, instance.data_dir)
+    knowledge = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        rag_engine=rag_engine,
+        config=config,
+    )
+    memory = MemoryService(
+        MemoryStore(instance.memory_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        agent_lookup=agents.require_agent,
+    )
+    runs = RunService(
+        RunStore(instance.agent_runs_db_path()),
+        instance_id=instance.id,
+        artifact_dir=instance.agent_artifacts_dir(),
+    )
+    tenants_service = TenantService(TenantStore(instance.tenants_db_path()))
+    runs.bind_tenant_settings_loader(lambda tenant_id: tenants_service.get_tenant(tenant_id))
+    runs.bind_definition_policy_loaders(
+        agent_loader=lambda agent_id, tenant_id=None: agents.get_agent(agent_id, tenant_id=tenant_id),
+    )
+    channel_bindings_service = ChannelBindingService(
+        ChannelBindingStore(instance.channel_bindings_db_path()),
+        instance_id=instance.id,
+        agent_lookup=agents.require_agent,
+    )
+    channel_audit_service = ChannelAuditService(
+        ChannelAuditStore(instance.channel_audit_db_path()),
+        instance_id=instance.id,
+    )
     app.state.instance = instance
     app.state.auth = auth
     app.state.mcp_registry = mcp_registry

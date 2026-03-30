@@ -17,7 +17,8 @@ from unittest.mock import AsyncMock, patch
 from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
 from nanobot.config.schema import Config, MCPServerConfig
-from nanobot.platform.agents import AgentDefinitionStore
+from nanobot.platform.agents import AgentDefinition, AgentDefinitionStore
+from nanobot.platform.agents.models import now_iso
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
 from nanobot.providers.base import LLMResponse, ToolCallRequest
 from nanobot.session.manager import SessionManager
@@ -3561,6 +3562,93 @@ def test_web_api_agents_creation_persists_in_instance_scoped_store(web_client: T
     persisted = store.get(agent_id)
     assert persisted is not None
     assert persisted.instance_id == web_client.app.state.instance.id
+
+
+def test_web_api_agents_create_rejects_unrecoverable_binding(web_client: TestClient) -> None:
+    web_client.app.state.web.config = Config.model_validate(
+        {
+            "agents": {
+                "defaults": {
+                    "binding": "qwen3-5-plus",
+                    "provider": "dashscope",
+                    "model": "qwen3.5-plus",
+                }
+            },
+            "modelBindings": {
+                "qwen3-5-plus": {
+                    "provider": "dashscope",
+                    "label": "Qwen 3.5 Plus",
+                    "model": "qwen3.5-plus",
+                }
+            },
+        }
+    )
+
+    created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Broken Agent",
+            "systemPrompt": "Broken config.",
+            "binding": "missing-binding",
+            "model": "totally-unknown-model",
+        },
+    )
+    assert created.status_code == 400
+    payload = created.json()["error"]
+    assert payload["code"] == "AGENT_VALIDATION_ERROR"
+    assert "unknown model binding" in payload["message"]
+
+
+def test_web_api_agents_get_repairs_legacy_binding_values(web_client: TestClient) -> None:
+    web_client.app.state.web.config = Config.model_validate(
+        {
+            "agents": {
+                "defaults": {
+                    "binding": "qwen3-5-plus",
+                    "provider": "dashscope",
+                    "model": "qwen3.5-plus",
+                }
+            },
+            "modelBindings": {
+                "qwen3-5-plus": {
+                    "provider": "dashscope",
+                    "label": "Qwen 3.5 Plus",
+                    "model": "qwen3.5-plus",
+                }
+            },
+        }
+    )
+
+    now = now_iso()
+    store = AgentDefinitionStore(web_client.app.state.instance.agent_definitions_db_path())
+    store.create(
+        AgentDefinition(
+            agent_id="legacy-support",
+            tenant_id="default",
+            instance_id=web_client.app.state.instance.id,
+            name="Legacy Support",
+            system_prompt="Repair stale selections.",
+            model="qwen3.5-plus",
+            binding="qwen3.5-plus",
+            provider="dashscope",
+            tool_allowlist=["read_file"],
+            knowledge_binding_ids=[],
+            tags=[],
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    fetched = web_client.get("/api/v1/agents/legacy-support")
+    assert fetched.status_code == 200
+    payload = fetched.json()["data"]
+    assert payload["binding"] == "qwen3-5-plus"
+    assert payload["provider"] == "dashscope"
+    assert payload["model"] == "qwen3.5-plus"
+
+    persisted = store.get("legacy-support")
+    assert persisted is not None
+    assert persisted.binding == "qwen3-5-plus"
 
 
 def test_web_api_skill_upload_list_and_delete(web_client: TestClient) -> None:

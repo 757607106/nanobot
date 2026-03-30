@@ -62,12 +62,13 @@ function createEmptyForm(): BindingFormState {
   }
 }
 
-function bindingToForm(b: ChannelBinding): BindingFormState {
+function bindingToForm(b: ChannelBinding, agents: AgentDefinition[]): BindingFormState {
+  const hasMatchingAgent = agents.some((agent) => agent.agentId === b.targetId)
   return {
     channelName: b.channelName,
     channelChatId: b.channelChatId,
-    targetType: b.targetType,
-    targetId: b.targetId,
+    targetType: 'agent',
+    targetId: hasMatchingAgent ? b.targetId : '',
     priority: b.priority,
     enabled: b.enabled,
   }
@@ -77,7 +78,7 @@ function toPayload(form: BindingFormState): ChannelBindingMutationInput {
   return {
     channelName: form.channelName,
     channelChatId: form.channelChatId || '*',
-    targetType: form.targetType,
+    targetType: 'agent',
     targetId: form.targetId,
     priority: form.priority,
     enabled: form.enabled,
@@ -181,7 +182,7 @@ export default function ChannelBindingsPage() {
     try {
       const detail = await api.getChannelBinding(id)
       setCurrentBinding(detail)
-      setForm(bindingToForm(detail))
+      setForm(bindingToForm(detail, agents))
     } catch {
       setCurrentBinding(null)
       setForm(createEmptyForm())
@@ -199,7 +200,7 @@ export default function ChannelBindingsPage() {
       const found = bindings.find((b) => b.bindingId === bindingId)
       if (found) {
         setCurrentBinding(found)
-        setForm(bindingToForm(found))
+        setForm(bindingToForm(found, agents))
       } else if (!loadingWorkspace) {
         loadBindingDetail(bindingId)
       }
@@ -208,7 +209,11 @@ export default function ChannelBindingsPage() {
       setForm(createEmptyForm())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bindingId, bindings])
+  }, [agents, bindingId, bindings, loadingWorkspace])
+
+  const currentBindingMissingTarget = Boolean(
+    currentBinding && !agents.some((agent) => agent.agentId === currentBinding.targetId),
+  )
 
   // ---------------------------------------------------------------------------
   // CRUD handlers
@@ -398,6 +403,7 @@ export default function ChannelBindingsPage() {
             <Tag>{form.channelChatId || '*'}</Tag>
             <Tag color={form.enabled ? 'success' : 'default'}>{form.enabled ? '启用' : '禁用'}</Tag>
             {form.targetId ? <Tag color="blue">{targetOptions.find((item) => item.value === form.targetId)?.label || form.targetId}</Tag> : null}
+            {currentBindingMissingTarget ? <Tag color="warning">请重新选择 AI 员工</Tag> : null}
           </div>
 
           <div className="studio-form-grid">

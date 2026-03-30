@@ -173,6 +173,16 @@ class TestChannelBindingService:
         )
         assert updated["targetId"] == "agent-12"
 
+    def test_update_rejects_non_agent_target_type(self, service: ChannelBindingService) -> None:
+        created = _create_binding(service, target_id="agent-13")
+
+        with pytest.raises(ChannelBindingValidationError, match="targetType must be one of: agent."):
+            service.update_binding(
+                created["bindingId"],
+                {"targetType": "legacy-target", "targetId": "agent-12"},
+                tenant_id="default",
+            )
+
     def test_delete_binding(self, service: ChannelBindingService) -> None:
         created = _create_binding(service)
         assert service.delete_binding(created["bindingId"], tenant_id="default") is True

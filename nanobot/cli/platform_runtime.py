@@ -99,9 +99,17 @@ def build_cli_gateway_routing_runtime(
     provider_factory: Callable[[Config], Any],
 ) -> CLIGatewayRoutingRuntime:
     """Build the platform services needed for CLI channel routing."""
+    state = SimpleNamespace()
+    state.config = config
+    state.bus = bus
+    state.agent = None
+    state.sessions = session_manager
+    state.cron = cron
+
     agents_service = AgentDefinitionService(
         AgentDefinitionStore(instance.agent_definitions_db_path()),
         instance_id=instance.id,
+        config_loader=lambda: state.config,
     )
     channel_bindings = ChannelBindingService(
         ChannelBindingStore(instance.channel_bindings_db_path()),
@@ -128,12 +136,6 @@ def build_cli_gateway_routing_runtime(
         agent_lookup=agents_service.require_agent,
     )
 
-    state = SimpleNamespace()
-    state.config = config
-    state.bus = bus
-    state.agent = None
-    state.sessions = session_manager
-    state.cron = cron
     state.runs = runs
     state.app_agents = agents_service
     state.app_knowledge = knowledge_service

@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -3240,6 +3240,83 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('消息路由')).toBeInTheDocument()
     expect(screen.getByText('绑定列表')).toBeInTheDocument()
     expect(screen.getAllByText('telegram').length).toBeGreaterThan(0)
+  })
+
+  it('always saves channel bindings as agent targets', async () => {
+    installMatchMedia(false)
+
+    mockApi.getChannelBindings.mockResolvedValue([{
+      bindingId: 'cb-test-legacy',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      channelName: 'qq',
+      channelChatId: '*',
+      targetType: 'legacy-target',
+      targetId: 'legacy-target-2',
+      priority: 0,
+      enabled: true,
+      metadata: {},
+      createdAt: '2026-03-14T10:00:00Z',
+      updatedAt: '2026-03-14T10:00:00Z',
+    }])
+    mockApi.getChannelBinding.mockResolvedValue({
+      bindingId: 'cb-test-legacy',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      channelName: 'qq',
+      channelChatId: '*',
+      targetType: 'legacy-target',
+      targetId: 'legacy-target-2',
+      priority: 0,
+      enabled: true,
+      metadata: {},
+      createdAt: '2026-03-14T10:00:00Z',
+      updatedAt: '2026-03-14T10:00:00Z',
+    })
+    mockApi.updateChannelBinding.mockResolvedValue({
+      bindingId: 'cb-test-legacy',
+      tenantId: 'default',
+      instanceId: 'instance-default',
+      channelName: 'qq',
+      channelChatId: '*',
+      targetType: 'agent',
+      targetId: 'support-member',
+      priority: 0,
+      enabled: true,
+      metadata: {},
+      createdAt: '2026-03-14T10:00:00Z',
+      updatedAt: '2026-03-14T10:06:00Z',
+    })
+
+    renderWithProviders(
+      <MemoryRouter
+        initialEntries={['/channels/bindings/cb-test-legacy']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          <Route path="/channels/bindings/:bindingId" element={<ChannelBindingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('请重新选择 AI 员工')).toBeInTheDocument()
+
+    const selects = screen.getAllByRole('combobox')
+    fireEvent.change(selects[1], { target: { value: 'support-member' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(mockApi.updateChannelBinding).toHaveBeenCalledWith(
+        'cb-test-legacy',
+        expect.objectContaining({
+          targetType: 'agent',
+          targetId: 'support-member',
+        }),
+      )
+    })
   })
 
   it('renders channel audit page with recent entries', async () => {

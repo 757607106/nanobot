@@ -36,6 +36,7 @@ from nanobot.bus.events import InboundMessage, extract_outbound_content
 from nanobot.agent.skills import SkillsLoader
 from nanobot.providers.registry import find_by_model
 from nanobot.platform.agents import AgentDefinitionNotFoundError
+from nanobot.platform.agents.model_selection import canonicalize_agent_model_selection
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
 
 if TYPE_CHECKING:
@@ -234,9 +235,12 @@ class WebAgentRuntimeService:
         agent: dict[str, Any],
         config: Config,
     ) -> tuple[list[str], list[str], list[str]]:
-        binding_name = str(agent.get("binding") or "").strip()
-        if binding_name and binding_name not in config.model_bindings:
-            raise ValueError(f"Agent references unknown model binding: {binding_name}")
+        canonicalize_agent_model_selection(
+            config,
+            model=agent.get("model"),
+            binding=agent.get("binding"),
+            provider=agent.get("provider"),
+        )
 
         valid_tool_names = {
             item["name"]
@@ -377,9 +381,15 @@ class WebAgentRuntimeService:
 
     def _build_agent_config(self, agent: dict[str, Any]) -> Config:
         config = self.state.config.model_copy(deep=True)
-        binding = str(agent.get("binding") or "").strip()
-        provider = str(agent.get("provider") or "").strip()
-        model = (agent.get("model") or "").strip()
+        selection = canonicalize_agent_model_selection(
+            config,
+            model=agent.get("model"),
+            binding=agent.get("binding"),
+            provider=agent.get("provider"),
+        )
+        binding = str(selection.binding or "").strip()
+        provider = str(selection.provider or "").strip()
+        model = str(selection.model or "").strip()
         if binding:
             config.agents.defaults.binding = binding
             binding_cfg = config.model_bindings.get(binding)
