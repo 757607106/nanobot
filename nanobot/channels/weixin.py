@@ -20,7 +20,7 @@ import time
 import uuid
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote
 
 import httpx
@@ -109,6 +109,8 @@ class WeixinChannel(BaseChannel):
         return WeixinConfig().model_dump(by_alias=True)
 
     def __init__(self, config: Any, bus: MessageBus):
+        if hasattr(config, "model_dump"):
+            config = config.model_dump()
         if isinstance(config, dict):
             config = WeixinConfig.model_validate(config)
         super().__init__(config, bus)
@@ -256,13 +258,28 @@ class WeixinChannel(BaseChannel):
             raise RuntimeError(f"Failed to get QR code from WeChat API: {data}")
         return qrcode_id, (qrcode_img_content or qrcode_id)
 
-    async def _qr_login(self) -> bool:
-        """Perform QR code login flow. Returns True on success."""
+    async def _qr_login(
+        self,
+        on_qr: Callable[[str], None] | None = None,
+        on_status: Callable[[str], None] | None = None,
+    ) -> bool:
+        """Perform QR code login flow. Returns True on success.
+
+        Args:
+            on_qr: Optional callback invoked with the QR code URL each time
+                   a new code is generated.
+            on_status: Optional callback invoked with the current scan status
+                       string ("wait", "scaned", "confirmed", "expired").
+        """
         try:
             logger.info("Starting WeChat QR code login...")
             refresh_count = 0
             qrcode_id, scan_url = await self._fetch_qr_code()
             self._print_qr_code(scan_url)
+            if on_qr:
+                on_qr(scan_url)
+            if on_status:
+                on_status("wait")
 
             logger.info("Waiting for QR code scan...")
             while self._running:
@@ -279,6 +296,8 @@ class WeixinChannel(BaseChannel):
                     continue
 
                 status = status_data.get("status", "")
+                if on_status:
+                    on_status(status)
                 if status == "confirmed":
                     token = status_data.get("bot_token", "")
                     bot_id = status_data.get("ilink_bot_id", "")
@@ -316,6 +335,8 @@ class WeixinChannel(BaseChannel):
                     )
                     qrcode_id, scan_url = await self._fetch_qr_code()
                     self._print_qr_code(scan_url)
+                    if on_qr:
+                        on_qr(scan_url)
                     logger.info("New QR code generated, waiting for scan...")
                     continue
                 # status == "wait" — keep polling
@@ -344,8 +365,19 @@ class WeixinChannel(BaseChannel):
     # Channel lifecycle
     # ------------------------------------------------------------------
 
-    async def login(self, force: bool = False) -> bool:
-        """Perform QR code login and save token. Returns True on success."""
+    async def login(
+        self,
+        force: bool = False,
+        on_qr: Callable[[str], None] | None = None,
+        on_status: Callable[[str], None] | None = None,
+    ) -> bool:
+        """Perform QR code login and save token. Returns True on success.
+
+        Args:
+            force: If True, ignore existing credentials and force re-authentication.
+            on_qr: Optional callback invoked with the QR code URL.
+            on_status: Optional callback invoked with scan status strings.
+        """
         if force:
             self._token = ""
             self._get_updates_buf = ""
@@ -353,6 +385,8 @@ class WeixinChannel(BaseChannel):
             if state_file.exists():
                 state_file.unlink()
         if self._token or self._load_state():
+            if on_status:
+                on_status("connected")
             return True
 
         # Initialize HTTP client for the login flow
@@ -362,7 +396,7 @@ class WeixinChannel(BaseChannel):
         )
         self._running = True  # Enable polling loop in _qr_login()
         try:
-            return await self._qr_login()
+            return await self._qr_login(on_qr=on_qr, on_status=on_status)
         finally:
             self._running = False
             if self._client:

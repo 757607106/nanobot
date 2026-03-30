@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import shutil
 import time
@@ -9,10 +8,10 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch
 
 from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
@@ -20,11 +19,11 @@ from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.platform.agents import AgentDefinition, AgentDefinitionStore
 from nanobot.platform.agents.models import now_iso
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
-from nanobot.providers.base import LLMResponse, ToolCallRequest
+from nanobot.providers.base import LLMResponse
 from nanobot.session.manager import SessionManager
-from tests.knowledge_test_utils import FakeRAGEngine
 from nanobot.web.api import create_app, run_server
 from nanobot.web.services import operations as web_operations
+from tests.knowledge_test_utils import FakeRAGEngine
 
 AUTH_USERNAME = "admin"
 AUTH_PASSWORD = "bootstrap-pass-123"
@@ -544,6 +543,34 @@ def test_web_api_whatsapp_bind_endpoints_accept_status_start_and_stop(tmp_path, 
         assert stopped.status_code == 200
         assert stopped.json()["data"]["lastStatus"] == "stopped"
         assert stop_calls == [True]
+
+
+def test_web_api_weixin_bind_status_uses_saved_runtime_token(tmp_path, monkeypatch) -> None:
+    config = _make_test_config(tmp_path, monkeypatch)
+    runtime_state_dir = tmp_path / "weixin"
+    runtime_state_dir.mkdir(parents=True, exist_ok=True)
+    (runtime_state_dir / "account.json").write_text(
+        json.dumps(
+            {
+                "token": "saved-weixin-token",
+                "get_updates_buf": "",
+                "context_tokens": {},
+                "base_url": "https://ilinkai.weixin.qq.com",
+            },
+        ),
+        encoding="utf-8",
+    )
+
+    with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
+        _bootstrap_admin(client)
+
+        status = client.get("/api/v1/channels/weixin/bind/status")
+        assert status.status_code == 200
+        payload = status.json()["data"]
+        assert payload["channelName"] == "weixin"
+        assert payload["authenticated"] is True
+        assert payload["lastStatus"] == "connected"
+        assert payload["running"] is False
 
 
 def test_web_api_profile_update_avatar_and_password_rotation_persist(tmp_path, monkeypatch) -> None:

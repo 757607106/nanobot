@@ -150,12 +150,17 @@ class ChannelManager:
         self._validate_allow_from()
 
     def _validate_allow_from(self) -> None:
+        invalid_channels: list[str] = []
         for name, ch in self.channels.items():
             if getattr(ch.config, "allow_from", None) == []:
-                raise SystemExit(
-                    f'Error: "{name}" has empty allowFrom (denies all). '
-                    f'Set ["*"] to allow everyone, or add specific user IDs.'
+                logger.warning(
+                    'Skipping channel "{}": empty allowFrom denies all. '
+                    'Set ["*"] to allow everyone, or add specific user IDs.',
+                    name,
                 )
+                invalid_channels.append(name)
+        for name in invalid_channels:
+            self.channels.pop(name, None)
 
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""

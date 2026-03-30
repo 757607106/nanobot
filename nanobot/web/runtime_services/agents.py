@@ -620,12 +620,15 @@ class WebAgentRuntimeService:
         execution_context: ExecutionContext,
         on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
         on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        chat_message: dict[str, Any] | None = None,
     ) -> str:
         if hasattr(isolated_agent, "_process_message") and hasattr(isolated_agent, "_connect_mcp"):
             await isolated_agent._connect_mcp()
             run_context = execution_context.to_agent_loop_run_context()
             if on_run_event is not None:
                 run_context["run_event_sink"] = on_run_event
+            if chat_message is not None:
+                run_context["chat_message"] = chat_message
             response = await isolated_agent._process_message(
                 InboundMessage(
                     channel=execution_context.origin_channel,
@@ -770,6 +773,8 @@ class WebAgentRuntimeService:
         prepared: PreparedAgentExecution | None = None,
         on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
         on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        display_content: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         if not self.state.agent or not self.state.sessions or not self.state.runs:
             raise RuntimeError("Web agent runtime is not available.")
@@ -934,6 +939,14 @@ class WebAgentRuntimeService:
             if on_progress is not None:
                 await on_progress(progress, tool_hint=tool_hint)
 
+        chat_message: dict[str, Any] | None = None
+        if display_content or attachments:
+            from nanobot.chat_payload import normalize_chat_attachments as _normalize
+            chat_message = {
+                "display_content": display_content or task,
+                "attachments": _normalize(attachments),
+            }
+
         try:
             self.state.runs.start_run(record.run_id)
             response = await self._execute_agent_turn(
@@ -942,6 +955,7 @@ class WebAgentRuntimeService:
                 execution_context=execution_context,
                 on_progress=_on_progress,
                 on_run_event=on_run_event,
+                chat_message=chat_message,
             )
             artifact_path = self.state.runs.write_markdown_artifact(
                 record.run_id,

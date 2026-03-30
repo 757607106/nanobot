@@ -331,6 +331,8 @@ class WebAgentChatRuntimeService:
             workspace_binding=environment.workspace,
             sandbox_binding=environment.sandbox,
             on_progress=on_progress,
+            display_content=display_content,
+            attachments=attachments,
         )
         assistant_message = result.get("assistantMessage")
         return {

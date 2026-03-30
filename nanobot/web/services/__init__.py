@@ -17,6 +17,7 @@ from nanobot.web.services.mcp_servers import MCPServerService
 from nanobot.web.services.operations import WebOperationsService
 from nanobot.web.services.setup import WebSetupManager
 from nanobot.web.services.whatsapp_binding import WebWhatsAppBindingService
+from nanobot.web.services.weixin_binding import WebWeixinBindingService
 
 __all__ = [
     "AgentTemplateManager",
@@ -34,4 +35,5 @@ __all__ = [
     "WebOperationsService",
     "WebSetupManager",
     "WebWhatsAppBindingService",
+    "WebWeixinBindingService",
 ]

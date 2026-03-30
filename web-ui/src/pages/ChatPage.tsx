@@ -793,7 +793,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   return (
     <div className="chat-page-shell chat-independent-shell">
       <div className="chat-grid chat-independent-grid">
-        <aside className="chat-shell-side">
+        <aside className="chat-shell-side glass-panel" style={{ border: 'none' }}>
           <div className="chat-rail-head">
             <div className="chat-rail-brand">
               <span className="section-kicker">会话中心</span>
@@ -910,7 +910,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
               )}
             </div>
 
-            <div className="chat-composer-panel chat-composer-panel-independent">
+            <div className="chat-composer-panel chat-composer-panel-independent glass-panel-strong" style={{ borderRadius: 'var(--nb-radius-xl)' }}>
               <div className="sender-shell" data-testid={testIds.chat.composer}>
                 <Sender
                   ref={senderRef}

@@ -270,6 +270,17 @@ export const channelMetas: ChannelMeta[] = [
       { path: ['autoReplyEnabled'], label: '启用自动回复', kind: 'switch' },
     ],
   },
+  {
+    name: 'weixin',
+    label: 'WeChat (微信 / Weixin)',
+    category: 'Social',
+    description: '个人微信协议接入，支持接收图文语音及上下文记忆。注意：若未填写 Token，需根据终端日志提示扫描二维码登录。',
+    primaryFields: [
+      { path: ['token'], label: 'Bot Token', kind: 'password', description: '（可选）留空可通过扫码获取' },
+      { path: ['allowFrom'], label: '允许用户', kind: 'list', placeholder: allowFromPlaceholder },
+      { path: ['routeTag'], label: '路由标签', kind: 'text', description: '多实例部署标识路由，一般留空' },
+    ],
+  },
 ]
 
 export const channelCategoryOrder: ChannelMeta['category'][] = [

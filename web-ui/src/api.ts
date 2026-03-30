@@ -80,6 +80,7 @@ import type {
   SystemStatus,
   ValidationRunResult,
   WhatsAppBindingStatus,
+  WeixinBindingStatus,
 } from './types'
 
 const API_BASE = '/api/v1'
@@ -419,6 +420,16 @@ export const api = {
     }),
   stopWhatsAppBinding: () =>
     request<WhatsAppBindingStatus>('/channels/whatsapp/bind/stop', {
+      method: 'POST',
+    }),
+  getWeixinBindingStatus: () => request<WeixinBindingStatus>('/channels/weixin/bind/status'),
+  startWeixinBinding: (payload?: { force?: boolean }) =>
+    request<WeixinBindingStatus>('/channels/weixin/bind/start', {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    }),
+  stopWeixinBinding: () =>
+    request<WeixinBindingStatus>('/channels/weixin/bind/stop', {
       method: 'POST',
     }),
   updateChannelDelivery: (payload: { sendProgress?: boolean; sendToolHints?: boolean }) =>

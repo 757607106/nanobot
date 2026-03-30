@@ -1,8 +1,8 @@
 export const shellSpring = {
   type: 'spring',
-  stiffness: 170,
-  damping: 22,
-  mass: 0.9,
+  stiffness: 300,
+  damping: 30,
+  mass: 0.8,
 } as const
 
 export const surfaceReveal = {

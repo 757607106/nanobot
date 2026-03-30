@@ -120,3 +120,36 @@ def stop_whatsapp_bind(request: Request) -> JSONResponse:
         logger.exception("WhatsApp bind stop failed")
         raise APIError(400, "WHATSAPP_BIND_STOP_FAILED", str(exc)) from exc
     return _json_response(200, _ok(data))
+
+
+# ==== WeChat (Weixin) binding ====
+
+
+@router.get("/api/v1/channels/weixin/bind/status")
+def get_weixin_bind_status(request: Request) -> JSONResponse:
+    data = request.app.state.weixin_binding.status(request.app.state.web.config)
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/channels/weixin/bind/start")
+def start_weixin_bind(
+    request: Request,
+    payload: dict[str, Any] = Body(default_factory=dict),
+) -> JSONResponse:
+    try:
+        force = bool(payload.get("force", False))
+        data = request.app.state.weixin_binding.start(request.app.state.web.config, force=force)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("WeChat bind start failed")
+        raise APIError(400, "WEIXIN_BIND_START_FAILED", str(exc)) from exc
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/v1/channels/weixin/bind/stop")
+def stop_weixin_bind(request: Request) -> JSONResponse:
+    try:
+        data = request.app.state.weixin_binding.stop(request.app.state.web.config)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("WeChat bind stop failed")
+        raise APIError(400, "WEIXIN_BIND_STOP_FAILED", str(exc)) from exc
+    return _json_response(200, _ok(data))

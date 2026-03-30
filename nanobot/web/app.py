@@ -84,6 +84,8 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     channels = WebChannelService()
     channel_tests = WebChannelTestService(instance)
     whatsapp_binding = WebWhatsAppBindingService(instance)
+    from nanobot.web.services.weixin_binding import WebWeixinBindingService
+    weixin_binding = WebWeixinBindingService()
     setup = WebSetupManager(instance)
     operations = WebOperationsService(setup, mcp_registry, instance)
 
@@ -99,6 +101,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         app.state.channels = channels
         app.state.channel_tests = channel_tests
         app.state.whatsapp_binding = whatsapp_binding
+        app.state.weixin_binding = weixin_binding
         app.state.operations = operations
         app.state.agents = agents
         app.state.knowledge = knowledge
@@ -118,6 +121,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
             yield
         finally:
             app.state.whatsapp_binding.shutdown()
+            app.state.weixin_binding.shutdown()
             app.state.knowledge.shutdown()
             await app.state.web.shutdown_async()
 

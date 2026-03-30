@@ -24,7 +24,7 @@ import { api } from '../api'
 import PageHero from '../components/PageHero'
 import { channelCategoryLabels, channelMetas, type FieldMeta } from '../configMeta'
 import { testIds } from '../testIds'
-import type { ChannelDetailResponse, ChannelProbeResult, WhatsAppBindingStatus } from '../types'
+import type { ChannelDetailResponse, ChannelProbeResult, WhatsAppBindingStatus, WeixinBindingStatus } from '../types'
 
 const { Text } = Typography
 
@@ -79,6 +79,7 @@ export default function ChannelDetailPage() {
   const channelName = String(params.channelName || '').trim()
   const meta = channelMetas.find((item) => item.name === channelName) ?? null
   const isWhatsApp = channelName === 'whatsapp'
+  const isWeixin = channelName === 'weixin'
   const [detail, setDetail] = useState<ChannelDetailResponse | null>(null)
   const [draftConfig, setDraftConfig] = useState<Record<string, unknown>>({})
   const [loading, setLoading] = useState(true)
@@ -86,6 +87,7 @@ export default function ChannelDetailPage() {
   const [testing, setTesting] = useState(false)
   const [probeResult, setProbeResult] = useState<ChannelProbeResult | null>(null)
   const [whatsappBinding, setWhatsAppBinding] = useState<WhatsAppBindingStatus | null>(null)
+  const [weixinBinding, setWeixinBinding] = useState<WeixinBindingStatus | null>(null)
   const [bindingLoading, setBindingLoading] = useState(false)
   const [bindingStarting, setBindingStarting] = useState(false)
   const [bindingStopping, setBindingStopping] = useState(false)
@@ -104,6 +106,14 @@ export default function ChannelDetailPage() {
     }
     void loadWhatsAppBindingStatus()
   }, [isWhatsApp, channelName])
+
+  useEffect(() => {
+    if (!isWeixin) {
+      setWeixinBinding(null)
+      return
+    }
+    void loadWeixinBindingStatus()
+  }, [isWeixin, channelName])
 
   const missingLabels = useMemo(() => {
     if (!meta || !detail) {
@@ -143,6 +153,21 @@ export default function ChannelDetailPage() {
       setWhatsAppBinding(result)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载 WhatsApp 绑定状态失败')
+    } finally {
+      setBindingLoading(false)
+    }
+  }
+
+  async function loadWeixinBindingStatus() {
+    if (!isWeixin) {
+      return
+    }
+    try {
+      setBindingLoading(true)
+      const result = await api.getWeixinBindingStatus()
+      setWeixinBinding(result)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载 WeChat 绑定状态失败')
     } finally {
       setBindingLoading(false)
     }
@@ -212,6 +237,32 @@ export default function ChannelDetailPage() {
       message.success('WhatsApp 绑定流程已停止')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '停止 WhatsApp 绑定失败')
+    } finally {
+      setBindingStopping(false)
+    }
+  }
+
+  async function startWeixinBinding() {
+    try {
+      setBindingStarting(true)
+      const result = await api.startWeixinBinding({ force: true })
+      setWeixinBinding(result)
+      message.success(result.authenticated ? 'WeChat 绑定已就绪' : '绑定流程已启动，请扫码。')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '启动 WeChat 绑定失败')
+    } finally {
+      setBindingStarting(false)
+    }
+  }
+
+  async function stopWeixinBinding() {
+    try {
+      setBindingStopping(true)
+      const result = await api.stopWeixinBinding()
+      setWeixinBinding(result)
+      message.success('WeChat 绑定流程已停止')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '停止 WeChat 绑定失败')
     } finally {
       setBindingStopping(false)
     }
@@ -548,6 +599,76 @@ export default function ChannelDetailPage() {
                 </Space>
               ) : (
                 <Text type="secondary">暂未读取到绑定状态。</Text>
+              )}
+            </Card>
+          ) : null}
+
+          {isWeixin ? (
+            <Card className="config-panel-card">
+              <div className="config-card-header">
+                <div className="page-section-title">
+                  <Typography.Title level={4}>微信扫码绑定</Typography.Title>
+                </div>
+                <Space wrap>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    loading={bindingLoading}
+                    onClick={() => void loadWeixinBindingStatus()}
+                  >
+                    刷新状态
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    loading={bindingStarting}
+                    onClick={() => void startWeixinBinding()}
+                  >
+                    获取登录二维码
+                  </Button>
+                  <Button
+                    danger
+                    icon={<PauseCircleOutlined />}
+                    loading={bindingStopping}
+                    onClick={() => void stopWeixinBinding()}
+                  >
+                    停止流程
+                  </Button>
+                </Space>
+              </div>
+
+              {weixinBinding ? (
+                <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                  <Space wrap>
+                    <Tag color={weixinBinding.running ? 'blue' : 'default'}>
+                      {weixinBinding.running ? '登录流程运行中' : '登录流程未运行'}
+                    </Tag>
+                    <Tag color={weixinBinding.authenticated ? 'green' : 'orange'}>
+                      {weixinBinding.authenticated ? '已认证' : '尚未认证'}
+                    </Tag>
+                    {weixinBinding.lastStatus ? (
+                      <Tag color="purple">状态: {weixinBinding.lastStatus}</Tag>
+                    ) : null}
+                  </Space>
+
+                  {weixinBinding.lastError ? (
+                    <Alert showIcon type="error" message="最近错误" description={weixinBinding.lastError} />
+                  ) : null}
+
+                  {weixinBinding.qrCode ? (
+                    <Space direction="vertical" size={8}>
+                      <Text strong>扫码完成登录</Text>
+                      <QRCode value={weixinBinding.qrCode} size={192} />
+                    </Space>
+                  ) : (
+                    <Text type="secondary">
+                      {weixinBinding.authenticated
+                        ? '已成功登录。'
+                        : '点击“获取登录二维码”启动微信登录流程。'}
+                    </Text>
+                  )}
+                </Space>
+              ) : (
+                <Text type="secondary">暂未读取到状态。</Text>
               )}
             </Card>
           ) : null}

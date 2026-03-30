@@ -321,6 +321,18 @@ export interface WhatsAppBindingStatus {
   recentLogs: string[]
 }
 
+export interface WeixinBindingStatus {
+  channelName: 'weixin'
+  running: boolean
+  authenticated: boolean
+  lastStatus?: string | null
+  lastError?: string | null
+  qrCode?: string | null
+  qrUpdatedAt?: string | null
+  startedAt?: string | null
+  checkedAt: string
+}
+
 export interface SystemStatus {
   web: {
     version: string

@@ -173,7 +173,7 @@ export default function AppShell() {
   const navigationContent = (
     <motion.div
       className="app-sider-panel"
-      initial={{ opacity: 0, x: -22 }}
+      initial={{ opacity: 0, x: -30 }}
       animate={{ opacity: 1, x: 0 }}
       transition={shellSpring}
     >
@@ -224,7 +224,7 @@ export default function AppShell() {
   return (
     <Layout className={`app-shell theme-${resolvedTheme} ${isChatRoute ? 'app-shell-chat' : ''}`}>
       {isDesktop ? (
-        <Sider width={navWidth} theme={menuTheme} className={`app-sider ${isChatRoute ? 'app-sider-chat' : ''}`}>
+        <Sider width={navWidth} theme={menuTheme} className={`app-sider glass-panel ${isChatRoute ? 'app-sider-chat' : ''}`} style={{ background: 'transparent' }}>
           {navigationContent}
         </Sider>
       ) : null}
