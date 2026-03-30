@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import time
 from pathlib import Path
@@ -45,6 +46,30 @@ class _RuntimeAwareFakeRAGEngine(FakeRAGEngine):
 
     async def reset_kb(self, kb_id: str) -> None:
         self.reset_calls.append(kb_id)
+
+
+class _SlowQueryFakeRAGEngine(FakeRAGEngine):
+    async def query_structured(
+        self,
+        kb_id: str,
+        query_text: str,
+        *,
+        mode: str = "hybrid",
+        top_k: int = 8,
+        chunk_top_k: int = 12,
+        response_type: str = "Multiple Paragraphs",
+        only_need_context: bool = False,
+        only_need_prompt: bool = False,
+        enable_rerank: bool = False,
+    ) -> dict:
+        del kb_id, query_text, mode, top_k, chunk_top_k, response_type, only_need_context, only_need_prompt, enable_rerank
+        await asyncio.sleep(0.2)
+        return {
+            "status": "success",
+            "message": "",
+            "data": {"chunks": [], "entities": [], "relationships": [], "references": []},
+            "metadata": {"mode": "naive", "kbType": "lightrag"},
+        }
 
 
 def test_knowledge_base_service_file_and_source_flow(tmp_path: Path) -> None:
@@ -183,6 +208,28 @@ def test_query_kb_for_agent_uses_fast_context_only_mode(tmp_path: Path) -> None:
     assert result["metadata"]["mode"] == "naive"
     assert result["queryParams"]["onlyNeedContext"] is True
     assert result["queryParams"]["topK"] == 4
+
+
+def test_query_database_honors_internal_best_effort_timeout(tmp_path: Path) -> None:
+    instance = _make_instance(tmp_path)
+    service = KnowledgeBaseService(
+        KnowledgeBaseStore(instance.knowledge_db_path()),
+        instance=instance,
+        instance_id=instance.id,
+        rag_engine=_SlowQueryFakeRAGEngine(),
+    )
+
+    created = service.create_knowledge_base({"name": "Slow KB"})
+    kb_id = created["kbId"]
+
+    with pytest.raises(TimeoutError, match="Knowledge async task timed out"):
+        service.query_database(
+            kb_id,
+            {
+                "query": "hello",
+                "__best_effort_timeout_seconds__": 0.01,
+            },
+        )
 
 
 def test_knowledge_base_service_resolves_kb_model_bindings_for_rag_runtime(tmp_path: Path) -> None:

@@ -62,6 +62,14 @@ class RetrievalHit:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class _InitFailureState:
+    """Track transient initialization failures so we can fail fast briefly."""
+
+    error: str
+    retry_after_monotonic: float
+
+
 # ---------------------------------------------------------------------------
 # RAG Engine
 # ---------------------------------------------------------------------------
@@ -130,6 +138,8 @@ class RAGEngine:
         self._locks: dict[str, asyncio.Lock] = {}
         self._instance_runtime_keys: dict[str, str] = {}
         self._kb_runtime_resolver: Callable[[str], dict[str, Any] | None] | None = None
+        self._init_failures: dict[str, _InitFailureState] = {}
+        self._init_failure_cooldown_seconds = 30.0
 
     @staticmethod
     async def _await_request(coro: Any, *, timeout: float, operation: str) -> Any:
@@ -201,6 +211,43 @@ class RAGEngine:
                 "worker timeout",
             )
         )
+
+    @staticmethod
+    def _is_backend_unavailable_error(exc: Exception | str) -> bool:
+        message = str(exc or "").strip().lower()
+        return any(
+            token in message
+            for token in (
+                "fail connecting to server",
+                "failed to connect",
+                "connection refused",
+                "connection reset",
+                "server unavailable",
+                "service unavailable",
+                "name or service not known",
+                "temporary failure in name resolution",
+                "nodename nor servname provided",
+                "failed to establish a new connection",
+            )
+        )
+
+    def _get_active_init_failure(self, kb_id: str) -> _InitFailureState | None:
+        failure = self._init_failures.get(kb_id)
+        if failure is None:
+            return None
+        if time.monotonic() >= failure.retry_after_monotonic:
+            self._init_failures.pop(kb_id, None)
+            return None
+        return failure
+
+    def _record_init_failure(self, kb_id: str, error: str) -> None:
+        self._init_failures[kb_id] = _InitFailureState(
+            error=str(error or "Unknown initialization error.").strip() or "Unknown initialization error.",
+            retry_after_monotonic=time.monotonic() + self._init_failure_cooldown_seconds,
+        )
+
+    def _clear_init_failure(self, kb_id: str) -> None:
+        self._init_failures.pop(kb_id, None)
 
     async def _insert_chunks_without_graph_extraction(
         self,
@@ -522,11 +569,20 @@ class RAGEngine:
     async def _ensure_ready(self, kb_id: str):
         """Return an initialized RAGAnything instance with LightRAG storages ready."""
         async with self._get_lock(kb_id):
+            active_failure = self._get_active_init_failure(kb_id)
+            if active_failure is not None:
+                retry_in = max(active_failure.retry_after_monotonic - time.monotonic(), 0.0)
+                raise RuntimeError(
+                    f"RAGAnything initialization temporarily paused for kb_id={kb_id} "
+                    f"(retry in {retry_in:.0f}s): {active_failure.error}"
+                )
+
             last_error = "Unknown initialization error."
             for attempt in range(2):
                 rag = await self._get_or_create_instance(kb_id)
                 ready, detail = self._lightrag_readiness(rag)
                 if ready:
+                    self._clear_init_failure(kb_id)
                     return rag
 
                 with self._storage_env_scope():
@@ -534,6 +590,7 @@ class RAGEngine:
 
                 ready, detail = self._lightrag_readiness(rag)
                 if isinstance(init, dict) and init.get("success") and ready:
+                    self._clear_init_failure(kb_id)
                     return rag
 
                 init_error = init.get("error") if isinstance(init, dict) else None
@@ -545,7 +602,15 @@ class RAGEngine:
                     last_error,
                 )
                 await self.reset_kb(kb_id)
+                if self._is_backend_unavailable_error(last_error):
+                    logger.warning(
+                        "RAGEngine: backend unavailable for kb_id={}, skipping immediate retry: {}",
+                        kb_id,
+                        last_error,
+                    )
+                    break
 
+            self._record_init_failure(kb_id, last_error)
             raise RuntimeError(f"RAGAnything initialization failed for kb_id={kb_id}: {last_error}")
 
     # ------------------------------------------------------------------
@@ -829,6 +894,7 @@ class RAGEngine:
         """Finalize and evict a cached per-KB RAG instance."""
         rag = self._instances.pop(kb_id, None)
         self._instance_runtime_keys.pop(kb_id, None)
+        self._clear_init_failure(kb_id)
         if rag is None:
             return
         try:
@@ -1330,6 +1396,7 @@ class RAGEngine:
             # Remove from instances cache
             self._instances.pop(kb_id, None)
             self._instance_runtime_keys.pop(kb_id, None)
+            self._clear_init_failure(kb_id)
             self._locks.pop(kb_id, None)
 
             # Remove working directory

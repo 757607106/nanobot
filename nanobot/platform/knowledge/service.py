@@ -14,7 +14,7 @@ import re
 import shutil
 import textwrap
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import replace
 from pathlib import Path
 from threading import Lock
@@ -77,6 +77,8 @@ def _short_id(prefix: str) -> str:
 
 DEFAULT_KNOWLEDGE_CHUNK_SIZE = 500
 DEFAULT_KNOWLEDGE_CHUNK_OVERLAP = 80
+_BEST_EFFORT_QUERY_TIMEOUT_KEY = "__best_effort_timeout_seconds__"
+DEFAULT_BEST_EFFORT_RETRIEVE_TIMEOUT_SECONDS = 2.0
 
 
 class KnowledgeBaseService:
@@ -109,6 +111,7 @@ class KnowledgeBaseService:
         self._retired_rag_engines: list[Any] = []
         self._job_options_lock = Lock()
         self._job_options: dict[str, dict[str, Any]] = {}
+        self._best_effort_retrieve_timeout_seconds = DEFAULT_BEST_EFFORT_RETRIEVE_TIMEOUT_SECONDS
         self.artifacts = KnowledgeArtifactStore(
             vector_dir_factory=self._kb_vector_dir,
             evaluation_dir_factory=self._kb_eval_dir,
@@ -129,9 +132,15 @@ class KnowledgeBaseService:
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
 
-    def _run_async(self, coro: Any) -> Any:
+    def _run_async(self, coro: Any, *, timeout: float | None = None) -> Any:
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result()
+        try:
+            return future.result(timeout=timeout)
+        except FutureTimeoutError as exc:
+            future.cancel()
+            if timeout is None:
+                raise
+            raise TimeoutError(f"Knowledge async task timed out after {timeout:.1f}s") from exc
 
     def shutdown(self) -> None:
         if self.rag_engine is not None and self._loop.is_running():
@@ -2071,6 +2080,13 @@ class KnowledgeBaseService:
     def query_database(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         kb = self.require_kb(kb_id)
         merged_payload = self._merge_query_payload(payload)
+        raw_timeout = merged_payload.pop(_BEST_EFFORT_QUERY_TIMEOUT_KEY, None)
+        query_timeout: float | None = None
+        if raw_timeout is not None:
+            try:
+                query_timeout = max(0.001, float(raw_timeout))
+            except (TypeError, ValueError):
+                query_timeout = None
         query_text = self._normalize_text(self._get_value(merged_payload, "query", "queryText"), required=True, field_name="query")
         file_ids = self._extract_requested_file_ids(merged_payload) or []
         file_name = self._normalize_text(self._get_value(merged_payload, "fileName", "file_name"), field_name="fileName") or None
@@ -2093,7 +2109,8 @@ class KnowledgeBaseService:
                 only_need_context=params.only_need_context,
                 only_need_prompt=params.only_need_prompt,
                 enable_rerank=params.enable_rerank,
-            )
+            ),
+            timeout=query_timeout,
         )
         tokens = self._matching_file_tokens(kb_id, file_ids=file_ids or None, file_name=file_name)
         filtered = self._filter_query_result(raw, tokens=tokens)
@@ -2173,10 +2190,11 @@ class KnowledgeBaseService:
                         "mode": resolved_mode,
                         "topK": max(1, int(limit or 8)),
                         "onlyNeedContext": True,
+                        _BEST_EFFORT_QUERY_TIMEOUT_KEY: self._best_effort_retrieve_timeout_seconds,
                     },
                 )
-            except Exception:
-                logger.exception("Knowledge retrieve failed for {}", kb.kb_id)
+            except Exception as exc:
+                logger.warning("Knowledge retrieve skipped for {}: {}", kb.kb_id, exc)
                 continue
             for chunk in list((query_result.get("data") or {}).get("chunks") or [])[: max(1, int(limit or 8))]:
                 file = _match_file(kb.kb_id, str(chunk.get("file_path") or ""))

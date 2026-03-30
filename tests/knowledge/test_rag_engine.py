@@ -109,6 +109,21 @@ class _FakeRag:
         return Path(file_path).name
 
 
+class _FailingInitRag:
+    def __init__(self, error: str) -> None:
+        self.error = error
+        self.init_calls = 0
+        self.lightrag = None
+        self.parse_cache = None
+
+    async def _ensure_lightrag_initialized(self):
+        self.init_calls += 1
+        return {"success": False, "error": self.error}
+
+    async def finalize_storages(self):
+        return None
+
+
 class _FakeDropStorage:
     def __init__(self) -> None:
         self.drop_calls = 0
@@ -852,3 +867,27 @@ def test_rag_engine_runtime_config_applies_per_kb_overrides(tmp_path: Path) -> N
     assert runtime["embedding_model"] == "bge-m3"
     assert runtime["embedding_provider_name"] == "custom"
     assert runtime["embedding_dim"] == 2048
+
+
+@pytest.mark.asyncio
+async def test_ensure_ready_skips_immediate_retry_and_enters_cooldown_for_backend_unavailable(tmp_path: Path) -> None:
+    engine = RAGEngine(
+        storage_root=tmp_path / "storage",
+        default_model="deepseek-chat",
+    )
+    failing_rag = _FailingInitRag(
+        "<MilvusException: (code=2, message=Fail connecting to server on 127.0.0.1:19530, illegal connection params or server unavailable)>"
+    )
+    engine._get_or_create_instance = AsyncMock(return_value=failing_rag)  # type: ignore[method-assign]
+    engine.reset_kb = AsyncMock()  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="RAGAnything initialization failed"):
+        await engine._ensure_ready("kb-ops")
+
+    assert failing_rag.init_calls == 1
+    assert engine.reset_kb.await_count == 1
+
+    with pytest.raises(RuntimeError, match="temporarily paused"):
+        await engine._ensure_ready("kb-ops")
+
+    assert engine._get_or_create_instance.await_count == 1
