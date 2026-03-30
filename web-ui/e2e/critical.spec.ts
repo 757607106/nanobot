@@ -6,6 +6,7 @@ import {
   composerInput,
   composerSubmit,
   login,
+  uniqueE2EName,
 } from './helpers'
 
 test.describe.serial('critical gui flows @critical', () => {
@@ -59,6 +60,44 @@ test.describe.serial('critical gui flows @critical', () => {
     await expect(bubbleList).toContainText('E2E mock 已收到：[附加文件]')
     await expect(bubbleList).toContainText(/brief\.txt/)
     await expect(bubbleList).toContainText('review the uploaded file')
+  })
+
+  test('switches to custom agent and keeps chat UX parity', async ({ page }) => {
+    await login(page)
+    await page.getByTestId(testIds.app.navChat).click()
+    await expect(page).toHaveURL(/\/chat$/)
+
+    const agentName = uniqueE2EName('E2E Agent')
+    const createdAgent = await page.request.post('/api/v1/agents', {
+      data: {
+        name: agentName,
+        systemPrompt: 'You are an E2E agent.',
+      },
+    })
+    expect(createdAgent.ok()).toBeTruthy()
+    const createdPayload = await createdAgent.json()
+    const agentId = createdPayload.data.agentId as string
+    expect(agentId).toBeTruthy()
+
+    await page.getByTestId(testIds.chat.switchAgent).click()
+    const picker = page.getByRole('dialog', { name: '切换到自定义Agent' })
+    await expect(picker).toBeVisible()
+    await picker.getByText(agentName, { exact: false }).click()
+    await expect(page).toHaveURL(new RegExp(`/studio/agents/${agentId}/chat$`))
+
+    await expect(page.getByTestId(testIds.chat.newSession)).toBeVisible()
+    await page.getByTestId(testIds.chat.newSession).click()
+    const fileChooserPromise = page.waitForEvent('filechooser')
+    await page.getByTestId(testIds.chat.uploadFile).click()
+    const fileChooser = await fileChooserPromise
+    await fileChooser.setFiles(BRIEF_FIXTURE_PATH)
+    await expect(page.locator('text=/brief\\.txt/').first()).toBeVisible()
+
+    await composerInput(page).fill('review the uploaded file')
+    await composerSubmit(page).click()
+    const bubbleList = page.getByTestId(testIds.chat.bubbleList)
+    await expect(bubbleList).toContainText('review the uploaded file')
+    await expect(bubbleList).toContainText('E2E mock 已收到：[附加文件]')
   })
 
   test('enables MCP detail and shows current tools', async ({ page }) => {

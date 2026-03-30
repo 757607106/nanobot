@@ -47,6 +47,7 @@ export const testIds = {
     bubbleList: 'chat-bubble-list',
     fileInput: 'chat-file-input',
     uploadFile: 'chat-upload-file',
+    switchAgent: 'chat-switch-agent',
   },
   channels: {
     detailLinkPrefix: 'channels-detail-link-',

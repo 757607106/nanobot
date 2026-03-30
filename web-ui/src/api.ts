@@ -300,6 +300,10 @@ export const api = {
       `/agents/${encodeURIComponent(agentId)}/sessions?page=${page}&pageSize=${pageSize}`,
     ),
   getChatWorkspace: () => request<ChatWorkspaceData>('/chat/workspace'),
+  getAgentChatWorkspace: (agentId: string, sessionId: string) =>
+    request<ChatWorkspaceData>(
+      `/agents/${encodeURIComponent(agentId)}/sessions/${encodeURIComponent(sessionId)}/workspace`,
+    ),
   getSessionFiles: (sessionId: string) => request<ChatUploadItem[]>(`/chat/sessions/${sessionId}/files`),
   getAgentSessionFiles: (agentId: string, sessionId: string) =>
     request<ChatUploadItem[]>(`/agents/${encodeURIComponent(agentId)}/sessions/${sessionId}/files`),

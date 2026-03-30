@@ -16,6 +16,29 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+def _ensure_stdlib_platform_module() -> None:
+    import importlib
+    import platform as loaded
+
+    if hasattr(loaded, "python_implementation"):
+        return
+
+    sys.modules.pop("platform", None)
+    for entry in list(sys.path):
+        try:
+            candidate = Path(entry) / "platform"
+        except Exception:
+            continue
+        if candidate.is_dir() and (candidate / "__init__.py").exists():
+            sys.path.remove(entry)
+    importlib.invalidate_caches()
+    reloaded = importlib.import_module("platform")
+    if not hasattr(reloaded, "python_implementation"):
+        raise RuntimeError("Failed to restore stdlib platform module; sys.path shadows platform.")
+
+
+_ensure_stdlib_platform_module()
+
 from nanobot.config.loader import save_config, set_config_path
 from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.providers.base import LLMProvider, LLMResponse
@@ -217,6 +240,32 @@ def _patch_runtime(app) -> None:
             "assistantMessage": state.get_last_assistant_message(session_id),
         }
 
+    async def fake_agent_chat(
+        agent_id: str,
+        session_id: str,
+        content: str,
+        on_progress,
+        *,
+        tenant_id: str | None = None,
+        display_content: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        session_key = state.agent_chat_runtime.session_key(agent_id, session_id)
+        session = state.sessions.get_or_create(session_key)
+        if not session.metadata.get("title"):
+            session.metadata["title"] = state._default_title(display_content or content)
+            session.metadata["agentId"] = agent_id
+        session.add_message("user", display_content or content, attachments=attachments or [])
+        await on_progress("正在读取 E2E 固定回复")
+        reply = f"E2E mock 已收到：{content}"
+        session.add_message("assistant", reply)
+        state.sessions.save(session)
+        assistant_message = state.get_last_agent_assistant_message(agent_id, session_id, tenant_id=tenant_id)
+        return {
+            "content": reply,
+            "assistantMessage": assistant_message,
+        }
+
     async def fake_mcp_test(server_name: str, content: str, on_progress) -> dict[str, Any]:
         session = state.sessions.get_or_create(state._mcp_test_session_key(server_name))
         if not session.metadata.get("title"):
@@ -241,6 +290,7 @@ def _patch_runtime(app) -> None:
         }
 
     state.chat = fake_chat
+    state.chat_with_agent = fake_agent_chat
     state.chat_with_mcp_test = fake_mcp_test
 
 
