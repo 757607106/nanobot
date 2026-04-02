@@ -8,6 +8,7 @@ import {
   Input,
   InputNumber,
   Select,
+  Skeleton,
   Space,
   Spin,
   Switch,
@@ -110,7 +111,7 @@ function getMissingFieldLabels(channelName: string, fields: string[]) {
 }
 
 export default function ChannelsPage() {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const navigate = useNavigate()
   const [data, setData] = useState<ChannelListResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -272,28 +273,52 @@ export default function ChannelsPage() {
   }
 
   async function handleToggleEnabled(channelName: string, enabled: boolean) {
-    try {
-      setTogglingChannelName(channelName)
-      const detail = (detailMap[channelName] || (await loadChannelDetail(channelName, true))) as ChannelDetailResponse | null
-      if (!detail) {
-        return
+    const state = itemsByName.get(channelName)
+    const isCurrentlyEnabled = state?.enabled
+
+    async function doToggle() {
+      try {
+        setTogglingChannelName(channelName)
+        const detail = (detailMap[channelName] || (await loadChannelDetail(channelName, true))) as ChannelDetailResponse | null
+        if (!detail) {
+          return
+        }
+        // Use server config (not draft) to avoid accidentally saving unsaved edits
+        const payload = { ...detail.config, enabled }
+        const result = await api.updateChannel(channelName, payload)
+        setDetailMap((current) => ({ ...current, [channelName]: result }))
+        setDraftMap((current) => ({ ...current, [channelName]: result.config }))
+        syncChannelState(result.channel)
+        message.success(enabled ? '渠道已启用' : '渠道已停用')
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '更新渠道状态失败')
+      } finally {
+        setTogglingChannelName((current) => (current === channelName ? null : current))
       }
-      const payload = { ...(draftMap[channelName] || detail.config), enabled }
-      const result = await api.updateChannel(channelName, payload)
-      setDetailMap((current) => ({ ...current, [channelName]: result }))
-      setDraftMap((current) => ({ ...current, [channelName]: result.config }))
-      syncChannelState(result.channel)
-      message.success(enabled ? '渠道已启用' : '渠道已停用')
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '更新渠道状态失败')
-    } finally {
-      setTogglingChannelName((current) => (current === channelName ? null : current))
+    }
+
+    // Disabling a running channel requires confirmation
+    if (!enabled && isCurrentlyEnabled) {
+      modal.confirm({
+        title: '停用渠道',
+        content: `确定要停用「${channelMetas.find((m) => m.name === channelName)?.label || channelName}」吗？停用后该渠道将不再接收和处理消息。`,
+        okText: '停用',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: doToggle,
+      })
+    } else {
+      void doToggle()
     }
   }
 
   function renderField(channelName: string, field: FieldMeta) {
     const draft = draftMap[channelName] || {}
     const value = getFieldValue(draft, field.path)
+    const state = itemsByName.get(channelName)
+    const missingFields = state?.missingRequiredFields || []
+    const isRequired = missingFields.includes(field.path[0])
+    const requiredMark = isRequired ? <span style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span> : null
 
     if (field.kind === 'switch') {
       return (
@@ -526,8 +551,8 @@ export default function ChannelsPage() {
               {expanded ? (
                 <div className="channels-registry-row-body">
                   {isInlineLoading && !detail ? (
-                    <div className="channels-inline-loading">
-                      <Spin />
+                    <div className="channels-inline-loading" style={{ padding: '16px 0' }}>
+                      <Skeleton active title={{ width: '40%' }} paragraph={{ rows: 3, width: ['100%', '80%', '60%'] }} />
                     </div>
                   ) : detail ? (
                     <>

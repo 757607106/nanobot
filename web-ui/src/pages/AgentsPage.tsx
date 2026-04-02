@@ -258,6 +258,7 @@ export default function AgentsPage() {
   const [globalConfig, setGlobalConfig] = useState<ConfigData | null>(null)
   const [globalConfigMeta, setGlobalConfigMeta] = useState<ConfigMeta | null>(null)
   const [capabilityTab, setCapabilityTab] = useState('tools')
+  const [drawerTab, setDrawerTab] = useState('basic')
 
   useEffect(() => {
     void loadWorkspace()
@@ -848,456 +849,474 @@ export default function AgentsPage() {
       )}
 
       <Drawer
-        title={currentAgent ? '员工设置' : '新建员工'}
+        title={null}
         width="min(680px, calc(100vw - 16px))"
         onClose={handleCloseDrawer}
         open={isDrawerOpen}
-        styles={{ body: { padding: 0 } }}
-        extra={
-          <Space>
+        styles={{ header: { display: 'none' }, body: { padding: 0 } }}
+        className="agent-detail-drawer"
+      >
+        {/* Custom Drawer Header */}
+        <div className="agent-drawer-header">
+          <div className="agent-drawer-header-left">
+            <div className="agent-drawer-avatar" data-status={form.enabled ? 'active' : 'inactive'}>
+              {form.name ? form.name.charAt(0).toUpperCase() : '?'}
+            </div>
+            <div className="agent-drawer-identity">
+              <h3 className="agent-drawer-name">
+                {form.name || (currentAgent ? '未命名员工' : '新建员工')}
+              </h3>
+              <div className="agent-drawer-meta">
+                <Tag color={form.enabled ? 'success' : 'default'} style={{ marginRight: 6 }}>
+                  {form.enabled ? '在职' : '离职'}
+                </Tag>
+                {currentAgent?.sourceTemplateName && (
+                  <Tag color="purple">模板：{currentAgent.sourceTemplateName}</Tag>
+                )}
+                {currentAgent && (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {currentAgent.agentId.split('-')[0].toUpperCase()}
+                  </Text>
+                )}
+              </div>
+            </div>
+          </div>
+          <Space className="agent-drawer-header-actions">
             {currentAgent && (
-              <Button icon={<MessageOutlined />} onClick={() => navigate(`/studio/agents/${currentAgent.agentId}/chat`)}>
-                进入会话
+              <Button size="small" icon={<MessageOutlined />} onClick={() => navigate(`/studio/agents/${currentAgent.agentId}/chat`)}>
+                会话
               </Button>
             )}
-            {currentAgent && (
-              <Button icon={<CopyOutlined />} onClick={() => void handleCopy()} loading={copying}>
-                复制
-              </Button>
-            )}
-            <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSave()} loading={saving}>
+            <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => void handleSave()} loading={saving}>
               保存
             </Button>
+            <Button size="small" type="text" onClick={handleCloseDrawer} style={{ fontSize: 18, lineHeight: 1 }}>
+              ✕
+            </Button>
           </Space>
-        }
-      >
-        <div className="page-stack studio-drawer-stack">
-          {error ? <Alert type="error" showIcon message={error} style={{ margin: '16px 16px 0' }} /> : null}
-          <Card bordered={false} className="config-panel-card" loading={loadingDetail}>
-            {currentAgent?.sourceTemplateName ? <Tag color="purple" style={{ marginBottom: '16px' }}>来自模板：{currentAgent.sourceTemplateName}</Tag> : null}
+        </div>
 
-            <div className="studio-form-grid">
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">名称</Text>
-                <Input
-                  value={form.name}
-                  onChange={(event) => updateForm('name', event.target.value)}
-                  placeholder="输入员工名称"
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">标签</Text>
-                <Select
-                  mode="tags"
-                  value={form.tags}
-                  onChange={(value) => updateForm('tags', value)}
-                  placeholder="输入标签"
-                />
-              </div>
-
-              <div className="studio-form-field">
-                <Text type="secondary">模型绑定</Text>
-                <Select
-                  allowClear
-                  value={form.binding || undefined}
-                  onChange={(value) => updateBinding(value ?? '')}
-                  options={agentBindingOptions}
-                  placeholder="推荐直接选择模型绑定"
-                />
-                <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-                  {selectedBindingConfig
-                    ? `当前会固定到 ${selectedBindingProviderLabel || selectedBindingConfig.provider}${selectedBindingConfig.model ? ` · ${selectedBindingConfig.model}` : ''}。`
-                    : '未指定模型绑定时，可在高级设置里用兼容模式手动指定供应商和模型。'}
-                </Text>
-              </div>
-
-              <div className="studio-form-field studio-form-switch-field">
-                <Text type="secondary">启用状态</Text>
-                <Switch checked={form.enabled} onChange={(checked) => updateForm('enabled', checked)} />
-              </div>
-
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">职责说明</Text>
-                <TextArea
-                  value={form.description}
-                  onChange={(event) => updateForm('description', event.target.value)}
-                  rows={3}
-                  placeholder="输入职责说明"
-                />
-              </div>
-
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">角色说明</Text>
-                <TextArea
-                  value={form.systemPrompt}
-                  onChange={(event) => updateForm('systemPrompt', event.target.value)}
-                  rows={8}
-                  placeholder="输入角色说明"
-                />
-              </div>
-
-              <div className="studio-form-field studio-form-field-span-2">
-                <Text type="secondary">工作规则</Text>
-                <TextArea
-                  value={form.rulesText}
-                  onChange={(event) => updateForm('rulesText', event.target.value)}
-                  rows={4}
-                  placeholder="输入工作规则"
-                />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <div style={{ marginBottom: 12 }}>
-                <Typography.Title level={5} style={{ marginBottom: 4 }}>能力配置</Typography.Title>
-              </div>
-              <Tabs
-                activeKey={capabilityTab}
-                onChange={setCapabilityTab}
-                items={[
-                  {
-                    key: 'tools',
-                    label: `工具 (${form.toolAllowlist.length})`,
-                    children: renderCapabilityCards(
-                      toolCardItems,
-                      form.toolAllowlist,
-                      (key) => toggleArrayItem('toolAllowlist', key),
-                      '暂无可用内置工具',
-                    ),
-                  },
-                  {
-                    key: 'skills',
-                    label: `技能 (${form.skillIds.length})`,
-                    children: renderCapabilityCards(
-                      skillCardItems,
-                      form.skillIds,
-                      (key) => toggleArrayItem('skillIds', key),
-                      '暂无已安装技能',
-                    ),
-                  },
-                  {
-                    key: 'mcp',
-                    label: `${devMode ? 'MCP 服务' : '连接'} (${form.mcpServerIds.length})`,
-                    children: renderCapabilityCards(
-                      mcpCardItems,
-                      form.mcpServerIds,
-                      (key) => toggleArrayItem('mcpServerIds', key),
-                      '暂无可用连接',
-                    ),
-                  },
-                  {
-                    key: 'knowledge',
-                    label: `知识库 (${form.knowledgeBindingIds.length})`,
-                    children: renderCapabilityCards(
-                      knowledgeCardItems,
-                      form.knowledgeBindingIds,
-                      (key) => toggleArrayItem('knowledgeBindingIds', key),
-                      '暂无可用知识库',
-                    ),
-                  },
-                ]}
-              />
-            </div>
-
-            <Collapse
-              className="studio-inline-collapse"
-              items={[
-                {
-                  key: 'advanced',
-                  label: '高级设置',
-                  children: (
+        {/* Drawer-level Tab Navigation */}
+        <Tabs
+          activeKey={drawerTab}
+          onChange={setDrawerTab}
+          className="agent-drawer-tabs"
+          items={[
+            {
+              key: 'basic',
+              label: '基本信息',
+              children: (
+                <div className="agent-drawer-tab-body">
+                  {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError(null)} style={{ marginBottom: 16 }} /> : null}
+                  <Spin spinning={loadingDetail}>
                     <div className="studio-form-grid">
                       <div className="studio-form-field studio-form-field-span-2">
-                        <Text type="secondary">
-                          兼容模式仅在未选择模型绑定时使用；如果已经选择了模型绑定，下方供应商和模型会被该绑定覆盖。
-                        </Text>
+                        <Text type="secondary">名称</Text>
+                        <Input
+                          value={form.name}
+                          onChange={(event) => updateForm('name', event.target.value)}
+                          placeholder="输入员工名称"
+                        />
                       </div>
+
                       <div className="studio-form-field">
-                        <Text type="secondary">兼容供应商</Text>
+                        <Text type="secondary">标签</Text>
+                        <Select
+                          mode="tags"
+                          value={form.tags}
+                          onChange={(value) => updateForm('tags', value)}
+                          placeholder="输入标签"
+                        />
+                      </div>
+
+                      <div className="studio-form-field">
+                        <Text type="secondary">模型绑定</Text>
                         <Select
                           allowClear
-                          disabled={Boolean(form.binding)}
-                          value={form.provider || undefined}
-                          onChange={(value) => updateProvider(value ?? '')}
-                          options={agentProviderOptions}
-                          placeholder="不指定时自动推断"
+                          value={form.binding || undefined}
+                          onChange={(value) => updateBinding(value ?? '')}
+                          options={agentBindingOptions}
+                          placeholder="推荐直接选择模型绑定"
                         />
                       </div>
-                      <div className="studio-form-field">
-                        <Text type="secondary">兼容模型</Text>
-                        <AutoComplete
-                          disabled={Boolean(form.binding)}
-                          value={form.model}
-                          onChange={(value) => updateForm('model', value)}
-                          options={modelSuggestions}
-                          placeholder="不指定时使用绑定或默认模型"
-                          allowClear
-                          filterOption={(input, option) =>
-                            (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
-                          }
-                        />
+
+                      <div className="studio-form-field studio-form-switch-field">
+                        <Text type="secondary">启用状态</Text>
+                        <Switch checked={form.enabled} onChange={(checked) => updateForm('enabled', checked)} />
                       </div>
-                      <div className="studio-form-field">
-                        <Text type="secondary">记忆范围</Text>
-                        <Select
-                          value={form.memoryScope}
-                          onChange={(value) => updateForm('memoryScope', value)}
-                          options={memoryScopeOptions}
-                        />
-                      </div>
-                      <div className="studio-form-field">
-                        <Text type="secondary">产物归档天数</Text>
-                        <Input
-                          value={form.artifactArchiveAfterDays}
-                          onChange={(event) => updateForm('artifactArchiveAfterDays', event.target.value)}
-                          placeholder="留空表示不归档"
-                        />
-                      </div>
-                      <div className="studio-form-field">
-                        <Text type="secondary">产物删除天数</Text>
-                        <Input
-                          value={form.artifactDeleteAfterDays}
-                          onChange={(event) => updateForm('artifactDeleteAfterDays', event.target.value)}
-                          placeholder="留空表示不删除"
-                        />
-                      </div>
+
                       <div className="studio-form-field studio-form-field-span-2">
-                        <Text type="secondary">
-                          留空时回退到租户默认策略；只填写删除天数时，会直接按删除策略治理产物。
-                        </Text>
+                        <Text type="secondary">职责说明</Text>
+                        <TextArea
+                          value={form.description}
+                          onChange={(event) => updateForm('description', event.target.value)}
+                          rows={3}
+                          placeholder="输入职责说明"
+                        />
                       </div>
-                      <DevOnly>
-                        <div className="studio-form-field">
-                          <Text type="secondary">兼容后端</Text>
-                          <Input
-                            value={form.backend}
-                            onChange={(event) => updateForm('backend', event.target.value)}
-                            placeholder="仅在需要兼容特定运行后端时填写"
-                          />
-                        </div>
-                      </DevOnly>
+
+                      <div className="studio-form-field studio-form-field-span-2">
+                        <Text type="secondary">角色说明</Text>
+                        <TextArea
+                          value={form.systemPrompt}
+                          onChange={(event) => updateForm('systemPrompt', event.target.value)}
+                          rows={8}
+                          placeholder="输入角色说明"
+                        />
+                      </div>
+
+                      <div className="studio-form-field studio-form-field-span-2">
+                        <Text type="secondary">工作规则</Text>
+                        <TextArea
+                          value={form.rulesText}
+                          onChange={(event) => updateForm('rulesText', event.target.value)}
+                          rows={4}
+                          placeholder="输入工作规则"
+                        />
+                      </div>
                     </div>
-                  ),
-                },
-              ]}
-            />
 
-            <div className="studio-form-actions" style={{ marginTop: 24 }}>
-              <Space wrap>
-                <Button icon={<CopyOutlined />} onClick={() => void handleCopy()} disabled={!currentAgent} loading={copying}>
-                  复制
-                </Button>
-                <Button icon={<DeleteOutlined />} danger onClick={() => void handleDelete()} disabled={!currentAgent} loading={deleting}>
-                  删除
-                </Button>
-                <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSave()} loading={saving}>
-                  保存员工
-                </Button>
-              </Space>
-            </div>
-          </Card>
-
-          <Card className="config-panel-card studio-agent-run-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>员工记忆治理</Typography.Title>
-              </div>
-              <Space wrap>
-                {currentAgent ? <Tag color="blue">{memoryScopeLabel(form.memoryScope)}</Tag> : null}
-                <Tag color="purple">
-                  {agentMemory?.candidateCount ?? agentMemoryCandidates.filter((item) => item.status === 'proposed').length} 待处理
-                </Tag>
-              </Space>
-            </div>
-
-            {memoryError ? <Alert type="error" showIcon message={memoryError} /> : null}
-
-            {!currentAgent ? (
-              <Empty image={false} description="先保存员工，再治理其长期记忆。" />
-            ) : (
-              <>
-                <div className="studio-form-grid">
-                  <div className="studio-form-field studio-form-field-span-2">
-                    <Text type="secondary">员工长期记忆</Text>
-                    <TextArea
-                      value={agentMemoryDraft}
-                      onChange={(event) => setAgentMemoryDraft(event.target.value)}
-                      rows={6}
-                      placeholder="这里存放该员工稳定可复用的偏好、规范和工作习惯。"
+                    <Collapse
+                      className="studio-inline-collapse"
+                      items={[
+                        {
+                          key: 'advanced',
+                          label: '高级设置',
+                          children: (
+                            <div className="studio-form-grid">
+                              <div className="studio-form-field studio-form-field-span-2">
+                                <Text type="secondary">
+                                  兼容模式仅在未选择模型绑定时使用；如果已经选择了模型绑定，下方供应商和模型会被该绑定覆盖。
+                                </Text>
+                              </div>
+                              <div className="studio-form-field">
+                                <Text type="secondary">兼容供应商</Text>
+                                <Select
+                                  allowClear
+                                  disabled={Boolean(form.binding)}
+                                  value={form.provider || undefined}
+                                  onChange={(value) => updateProvider(value ?? '')}
+                                  options={agentProviderOptions}
+                                  placeholder="不指定时自动推断"
+                                />
+                              </div>
+                              <div className="studio-form-field">
+                                <Text type="secondary">兼容模型</Text>
+                                <AutoComplete
+                                  disabled={Boolean(form.binding)}
+                                  value={form.model}
+                                  onChange={(value) => updateForm('model', value)}
+                                  options={modelSuggestions}
+                                  placeholder="不指定时使用绑定或默认模型"
+                                  allowClear
+                                  filterOption={(input, option) =>
+                                    (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                                  }
+                                />
+                              </div>
+                              <div className="studio-form-field">
+                                <Text type="secondary">记忆范围</Text>
+                                <Select
+                                  value={form.memoryScope}
+                                  onChange={(value) => updateForm('memoryScope', value)}
+                                  options={memoryScopeOptions}
+                                />
+                              </div>
+                              <div className="studio-form-field">
+                                <Text type="secondary">产物归档天数</Text>
+                                <Input
+                                  value={form.artifactArchiveAfterDays}
+                                  onChange={(event) => updateForm('artifactArchiveAfterDays', event.target.value)}
+                                  placeholder="留空表示不归档"
+                                />
+                              </div>
+                              <div className="studio-form-field">
+                                <Text type="secondary">产物删除天数</Text>
+                                <Input
+                                  value={form.artifactDeleteAfterDays}
+                                  onChange={(event) => updateForm('artifactDeleteAfterDays', event.target.value)}
+                                  placeholder="留空表示不删除"
+                                />
+                              </div>
+                              <div className="studio-form-field studio-form-field-span-2">
+                                <Text type="secondary">
+                                  留空时回退到租户默认策略；只填写删除天数时，会直接按删除策略治理产物。
+                                </Text>
+                              </div>
+                              <DevOnly>
+                                <div className="studio-form-field">
+                                  <Text type="secondary">兼容后端</Text>
+                                  <Input
+                                    value={form.backend}
+                                    onChange={(event) => updateForm('backend', event.target.value)}
+                                    placeholder="仅在需要兼容特定运行后端时填写"
+                                  />
+                                </div>
+                              </DevOnly>
+                            </div>
+                          ),
+                        },
+                      ]}
                     />
-                    <Space wrap>
-                      <Text type="secondary">
-                        {agentMemory?.updatedAt ? `最近更新：${formatDateTimeZh(agentMemory.updatedAt)}` : '未保存'}
-                      </Text>
-                      <Tag>{currentAgent.agentId}</Tag>
-                    </Space>
-                  </div>
-                </div>
 
-                <div className="studio-form-actions">
-                  <Space wrap>
-                    <Button icon={<ReloadOutlined />} onClick={() => void loadAgentMemoryGovernance(currentAgent.agentId)} loading={loadingMemory}>
-                      刷新记忆
-                    </Button>
-                    <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSaveAgentMemory()} loading={savingMemory}>
-                      保存员工记忆
-                    </Button>
-                    <Button onClick={() => navigate(`/studio/memory/agents/${currentAgent.agentId}`)}>
-                      进入统一记忆审计
-                    </Button>
-                  </Space>
+                    <div className="agent-drawer-bottom-actions">
+                      <Button icon={<CopyOutlined />} onClick={() => void handleCopy()} disabled={!currentAgent} loading={copying}>
+                        复制
+                      </Button>
+                      <Button icon={<DeleteOutlined />} danger onClick={() => void handleDelete()} disabled={!currentAgent} loading={deleting}>
+                        删除
+                      </Button>
+                    </div>
+                  </Spin>
                 </div>
-
-                <div className="studio-runs-header">
-                  <Typography.Title level={5}>提交候选</Typography.Title>
-                </div>
-
-                <div className="studio-form-field">
-                  <Text type="secondary">候选内容</Text>
-                  <TextArea
-                    value={agentCandidateDraft}
-                    onChange={(event) => setAgentCandidateDraft(event.target.value)}
-                    rows={4}
-                    placeholder="先把可能有价值的稳定偏好提成候选，再决定是否应用到员工记忆。"
+              ),
+            },
+            {
+              key: 'capabilities',
+              label: '能力配置',
+              children: (
+                <div className="agent-drawer-tab-body">
+                  <Tabs
+                    activeKey={capabilityTab}
+                    onChange={setCapabilityTab}
+                    size="small"
+                    items={[
+                      {
+                        key: 'tools',
+                        label: `工具 (${form.toolAllowlist.length})`,
+                        children: renderCapabilityCards(
+                          toolCardItems,
+                          form.toolAllowlist,
+                          (key) => toggleArrayItem('toolAllowlist', key),
+                          '暂无可用内置工具',
+                        ),
+                      },
+                      {
+                        key: 'skills',
+                        label: `技能 (${form.skillIds.length})`,
+                        children: renderCapabilityCards(
+                          skillCardItems,
+                          form.skillIds,
+                          (key) => toggleArrayItem('skillIds', key),
+                          '暂无已安装技能',
+                        ),
+                      },
+                      {
+                        key: 'mcp',
+                        label: `${devMode ? 'MCP 服务' : '连接'} (${form.mcpServerIds.length})`,
+                        children: renderCapabilityCards(
+                          mcpCardItems,
+                          form.mcpServerIds,
+                          (key) => toggleArrayItem('mcpServerIds', key),
+                          '暂无可用连接',
+                        ),
+                      },
+                      {
+                        key: 'knowledge',
+                        label: `知识库 (${form.knowledgeBindingIds.length})`,
+                        children: renderCapabilityCards(
+                          knowledgeCardItems,
+                          form.knowledgeBindingIds,
+                          (key) => toggleArrayItem('knowledgeBindingIds', key),
+                          '暂无可用知识库',
+                        ),
+                      },
+                    ]}
                   />
                 </div>
-
-                <div className="studio-form-actions">
-                  <Button onClick={() => void handleCreateAgentMemoryCandidate()} loading={creatingMemoryCandidate}>
-                    提交候选
-                  </Button>
-                </div>
-
-                <div className="studio-runs-header">
-                  <Typography.Title level={5}>候选记录</Typography.Title>
-                </div>
-
-                {loadingMemory && agentMemoryCandidates.length === 0 ? (
-                  <div className="center-box">
-                    <Spin />
+              ),
+            },
+            {
+              key: 'memory',
+              label: '记忆治理',
+              children: (
+                <div className="agent-drawer-tab-body">
+                  <div className="agent-section-header">
+                    <Typography.Title level={5} style={{ margin: 0 }}>员工长期记忆</Typography.Title>
+                    <Space>
+                      {currentAgent ? <Tag color="blue">{memoryScopeLabel(form.memoryScope)}</Tag> : null}
+                      <Tag color="purple">
+                        {agentMemory?.candidateCount ?? agentMemoryCandidates.filter((item) => item.status === 'proposed').length} 待处理
+                      </Tag>
+                    </Space>
                   </div>
-                ) : agentMemoryCandidates.length === 0 ? (
-                  <Empty image={false} description="暂无员工记忆候选" />
-                ) : (
-                  <div className="studio-run-list">
-                    {agentMemoryCandidates.map((candidate) => (
-                      <div key={candidate.candidateId} className="studio-run-list-item" style={{ marginBottom: '12px' }}>
-                        <div className="studio-run-list-copy">
-                          <div className="studio-run-list-head">
-                            <strong>{candidate.title}</strong>
-                            <Tag color={candidate.status === 'applied' ? 'success' : candidate.status === 'rejected' ? 'default' : 'processing'}>
-                              {candidate.status}
-                            </Tag>
+
+                  {memoryError ? <Alert type="error" showIcon message={memoryError} style={{ marginBottom: 16 }} /> : null}
+
+                  {!currentAgent ? (
+                    <Empty image={false} description="先保存员工，再治理其长期记忆。" />
+                  ) : (
+                    <>
+                      <div className="studio-form-grid">
+                        <div className="studio-form-field studio-form-field-span-2">
+                          <TextArea
+                            value={agentMemoryDraft}
+                            onChange={(event) => setAgentMemoryDraft(event.target.value)}
+                            rows={6}
+                            placeholder="这里存放该员工稳定可复用的偏好、规范和工作习惯。"
+                          />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {agentMemory?.updatedAt ? `更新于 ${formatDateTimeZh(agentMemory.updatedAt)}` : '未保存'}
+                            </Text>
                           </div>
-                          <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
-                            {candidate.content}
-                          </Paragraph>
-                          <Text type="secondary">
-                            {candidate.sourceKind} · {candidate.updatedAt ? formatDateTimeZh(candidate.updatedAt) : '未记录时间'}
-                          </Text>
-                          <Space wrap>
-                            {candidate.status === 'proposed' ? (
-                              <Button size="small" onClick={() => void handleApplyAgentMemoryCandidate(candidate.candidateId)}>
-                                应用到员工记忆
-                              </Button>
-                            ) : null}
-                            {candidate.status === 'proposed' ? (
-                              <Button size="small" danger onClick={() => void handleRejectAgentMemoryCandidate(candidate.candidateId)}>
-                                忽略
-                              </Button>
-                            ) : null}
-                          </Space>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </Card>
 
-          <Card className="config-panel-card studio-agent-run-card">
-            <div className="config-card-header">
-              <div className="page-section-title">
-                <Typography.Title level={4}>员工试运行</Typography.Title>
-              </div>
-              {currentAgent ? <DevOnly><Tag color="blue">{currentAgent.agentId}</Tag></DevOnly> : <Tag>未保存</Tag>}
-            </div>
-
-            <div className="studio-form-field">
-              <Text type="secondary">测试任务</Text>
-              <TextArea
-                value={testPrompt}
-                onChange={(event) => setTestPrompt(event.target.value)}
-                rows={4}
-                placeholder="输入测试任务"
-              />
-            </div>
-
-            <div className="studio-form-actions">
-              <Space wrap>
-                <Button
-                  type="primary"
-                  icon={<ExperimentOutlined />}
-                  onClick={() => void handleTestRun()}
-                  loading={testing}
-                  disabled={!currentAgent}
-                >
-                  开始试运行
-                </Button>
-                {currentAgent ? (
-                  <Button onClick={() => void loadRecentRuns(currentAgent.agentId)} loading={loadingRuns}>
-                    刷新最近执行
-                  </Button>
-                ) : null}
-              </Space>
-            </div>
-
-            {runError ? <Alert type="error" showIcon message={runError} /> : null}
-
-            {lastResult ? (
-              <div className="studio-run-result">
-                <Text type="secondary">最近一次返回摘要</Text>
-                <Paragraph className="studio-result-copy">{lastResult}</Paragraph>
-              </div>
-            ) : null}
-
-            <div className="studio-runs-header">
-              <Typography.Title level={5}>最近执行</Typography.Title>
-            </div>
-
-            {loadingRuns ? (
-              <div className="center-box">
-                <Spin />
-              </div>
-            ) : recentRuns.length === 0 ? (
-              <Empty image={false} description="暂无执行记录" />
-            ) : (
-              <div className="studio-run-list">
-                {recentRuns.map((run) => (
-                  <div key={run.runId} className="studio-run-list-item" style={{ marginBottom: '12px' }}>
-                    <div className="studio-run-list-copy">
-                      <div className="studio-run-list-head">
-                        <Space wrap>
-                          <strong>{run.label}</strong>
-                          <Tag color={statusColor(run.status)}>{run.status}</Tag>
-                        </Space>
-                        <Text type="secondary">{formatDateTimeZh(run.createdAt)}</Text>
+                      <div className="agent-drawer-bottom-actions" style={{ marginBottom: 24 }}>
+                        <Button icon={<ReloadOutlined />} onClick={() => void loadAgentMemoryGovernance(currentAgent.agentId)} loading={loadingMemory}>
+                          刷新
+                        </Button>
+                        <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSaveAgentMemory()} loading={savingMemory}>
+                          保存记忆
+                        </Button>
+                        <Button onClick={() => navigate(`/studio/memory/agents/${currentAgent.agentId}`)}>
+                          统一审计
+                        </Button>
                       </div>
-                      <Paragraph className="studio-run-preview" ellipsis={{ rows: 2 }}>
-                        {run.resultSummary?.content || run.taskPreview}
-                      </Paragraph>
-                      {run.lastErrorMessage ? (
-                        <Text type="danger">{run.lastErrorMessage}</Text>
-                      ) : null}
-                    </div>
+
+                      <div className="agent-section-header">
+                        <Typography.Title level={5} style={{ margin: 0 }}>提交候选</Typography.Title>
+                      </div>
+                      <div className="studio-form-field">
+                        <TextArea
+                          value={agentCandidateDraft}
+                          onChange={(event) => setAgentCandidateDraft(event.target.value)}
+                          rows={3}
+                          placeholder="先把可能有价值的稳定偏好提成候选，再决定是否应用到员工记忆。"
+                        />
+                      </div>
+                      <div className="agent-drawer-bottom-actions" style={{ marginBottom: 24 }}>
+                        <Button onClick={() => void handleCreateAgentMemoryCandidate()} loading={creatingMemoryCandidate}>
+                          提交候选
+                        </Button>
+                      </div>
+
+                      <div className="agent-section-header">
+                        <Typography.Title level={5} style={{ margin: 0 }}>候选记录</Typography.Title>
+                      </div>
+
+                      {loadingMemory && agentMemoryCandidates.length === 0 ? (
+                        <div className="center-box"><Spin /></div>
+                      ) : agentMemoryCandidates.length === 0 ? (
+                        <Empty image={false} description="暂无员工记忆候选" />
+                      ) : (
+                        <div className="studio-run-list">
+                          {agentMemoryCandidates.map((candidate) => (
+                            <div key={candidate.candidateId} className="studio-run-list-item" style={{ marginBottom: 12 }}>
+                              <div className="studio-run-list-copy">
+                                <div className="studio-run-list-head">
+                                  <strong>{candidate.title}</strong>
+                                  <Tag color={candidate.status === 'applied' ? 'success' : candidate.status === 'rejected' ? 'default' : 'processing'}>
+                                    {candidate.status}
+                                  </Tag>
+                                </div>
+                                <Paragraph className="studio-run-preview" ellipsis={{ rows: 3 }}>
+                                  {candidate.content}
+                                </Paragraph>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  {candidate.sourceKind} · {candidate.updatedAt ? formatDateTimeZh(candidate.updatedAt) : ''}
+                                </Text>
+                                {candidate.status === 'proposed' && (
+                                  <Space wrap style={{ marginTop: 6 }}>
+                                    <Button size="small" type="primary" onClick={() => void handleApplyAgentMemoryCandidate(candidate.candidateId)}>
+                                      应用
+                                    </Button>
+                                    <Button size="small" danger onClick={() => void handleRejectAgentMemoryCandidate(candidate.candidateId)}>
+                                      忽略
+                                    </Button>
+                                  </Space>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: 'test',
+              label: '试运行',
+              children: (
+                <div className="agent-drawer-tab-body">
+                  <div className="agent-section-header">
+                    <Typography.Title level={5} style={{ margin: 0 }}>员工试运行</Typography.Title>
+                    {currentAgent ? <DevOnly><Tag color="blue">{currentAgent.agentId}</Tag></DevOnly> : <Tag>未保存</Tag>}
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
+
+                  <div className="studio-form-field">
+                    <Text type="secondary">测试任务</Text>
+                    <TextArea
+                      value={testPrompt}
+                      onChange={(event) => setTestPrompt(event.target.value)}
+                      rows={4}
+                      placeholder="输入测试任务"
+                    />
+                  </div>
+
+                  <div className="agent-drawer-bottom-actions" style={{ marginBottom: 24 }}>
+                    <Button
+                      type="primary"
+                      icon={<ExperimentOutlined />}
+                      onClick={() => void handleTestRun()}
+                      loading={testing}
+                      disabled={!currentAgent}
+                    >
+                      开始试运行
+                    </Button>
+                    {currentAgent && (
+                      <Button onClick={() => void loadRecentRuns(currentAgent.agentId)} loading={loadingRuns}>
+                        刷新
+                      </Button>
+                    )}
+                  </div>
+
+                  {runError ? <Alert type="error" showIcon message={runError} style={{ marginBottom: 16 }} /> : null}
+
+                  {lastResult && (
+                    <div className="studio-run-result" style={{ marginBottom: 16 }}>
+                      <Text type="secondary">最近一次返回摘要</Text>
+                      <Paragraph className="studio-result-copy">{lastResult}</Paragraph>
+                    </div>
+                  )}
+
+                  <div className="agent-section-header">
+                    <Typography.Title level={5} style={{ margin: 0 }}>最近执行</Typography.Title>
+                  </div>
+
+                  {loadingRuns ? (
+                    <div className="center-box"><Spin /></div>
+                  ) : recentRuns.length === 0 ? (
+                    <Empty image={false} description="暂无执行记录" />
+                  ) : (
+                    <div className="studio-run-list">
+                      {recentRuns.map((run) => (
+                        <div key={run.runId} className="studio-run-list-item" style={{ marginBottom: 12 }}>
+                          <div className="studio-run-list-copy">
+                            <div className="studio-run-list-head">
+                              <Space wrap>
+                                <strong>{run.label}</strong>
+                                <Tag color={statusColor(run.status)}>{run.status}</Tag>
+                              </Space>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{formatDateTimeZh(run.createdAt)}</Text>
+                            </div>
+                            <Paragraph className="studio-run-preview" ellipsis={{ rows: 2 }}>
+                              {run.resultSummary?.content || run.taskPreview}
+                            </Paragraph>
+                            {run.lastErrorMessage && <Text type="danger">{run.lastErrorMessage}</Text>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+          ]}
+        />
       </Drawer>
     </div>
   )

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { App, Empty, Spin, Tag } from 'antd'
+import { App, Tag } from 'antd'
 import { api } from '../api'
+import AsyncContent, { getErrorMessage } from '../components/AsyncContent'
 import type {
   ChannelListResponse,
   CronStatus,
@@ -156,13 +157,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {loading ? (
-              <div className="center-box">
-                <Spin />
-              </div>
-            ) : dashboardChannelCards.length === 0 ? (
-              <Empty description="暂无渠道数据" className="empty-block" />
-            ) : (
+            <AsyncContent loading={loading} empty={dashboardChannelCards.length === 0} emptyDescription="暂无渠道数据" skeleton={false}>
               <div className="chat-dashboard-channel-grid">
                 {dashboardChannelCards.map((item) => (
                   <div
@@ -203,7 +198,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            )}
+            </AsyncContent>
           </div>
 
           <div className="chat-dashboard-channel-card dashboard-data-card">
@@ -213,13 +208,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {loading ? (
-              <div className="center-box">
-                <Spin />
-              </div>
-            ) : highlightedSkills.length === 0 ? (
-              <Empty description="暂无技能数据" className="empty-block" />
-            ) : (
+            <AsyncContent loading={loading} empty={highlightedSkills.length === 0} emptyDescription="暂无技能数据" skeleton={false}>
               <div className="dashboard-data-list">
                 {highlightedSkills.map((item) => (
                   <div key={item.id} className="dashboard-data-item">
@@ -232,7 +221,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            )}
+            </AsyncContent>
           </div>
 
           <div className="chat-dashboard-channel-card dashboard-data-card">

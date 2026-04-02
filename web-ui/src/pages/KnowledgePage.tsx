@@ -115,77 +115,115 @@ export default function KnowledgePage() {
   const shouldOpenCreateModal = location.pathname.endsWith('/knowledge/new')
   const benchmarkUploadInputRef = useRef<HTMLInputElement | null>(null)
 
+  // ─── Core data ───
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
   const [modelConfig, setModelConfig] = useState<ConfigData | null>(null)
   const [configMeta, setConfigMeta] = useState<ConfigMeta | null>(null)
   const [currentKb, setCurrentKb] = useState<KnowledgeBaseDefinition | null>(null)
   const [filesState, setFilesState] = useState<KnowledgeFileListResponse>(createEmptyListState)
   const [jobs, setJobs] = useState<KnowledgeIngestJob[]>([])
+  const [activeTab, setActiveTab] = useState('files')
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([])
+  const [fileSearch, setFileSearch] = useState('')
+  const [expandedFileIds, setExpandedFileIds] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [formState, setFormState] = useState<KnowledgeFormState>(() => createKnowledgeFormState())
+  const [indexConfig, setIndexConfig] = useState<KnowledgeIndexConfigState>(() => createIndexConfigState())
+
+  // ─── Query state ───
   const [queryParams, setQueryParams] = useState<KnowledgeQueryParams>(() => getDefaultQueryParams())
   const [queryText, setQueryText] = useState('')
   const [queryResult, setQueryResult] = useState<KnowledgeRetrieveResult | null>(null)
   const [resultView, setResultView] = useState<'formatted' | 'raw'>('formatted')
   const [sampleQuestions, setSampleQuestions] = useState<string[]>([])
+  const [queryParamSchema, setQueryParamSchema] = useState<KnowledgeQueryParamSchema | null>(null)
+
+  // ─── Visualization ───
   const [mindmap, setMindmap] = useState<KnowledgeMindmapNode | null>(null)
   const [graphData, setGraphData] = useState<KnowledgeGraphData | null>(null)
   const [graphStats, setGraphStats] = useState<KnowledgeGraphStats | null>(null)
+  const [graphConfig, setGraphConfig] = useState({ label: '*', depth: 2, maxNodes: 50 })
+
+  // ─── Benchmark & evaluation ───
   const [benchmarks, setBenchmarks] = useState<KnowledgeBenchmark[]>([])
   const [benchmarkPreview, setBenchmarkPreview] = useState<KnowledgeBenchmarkDetail | null>(null)
-  const [benchmarkPreviewLoading, setBenchmarkPreviewLoading] = useState(false)
   const [benchmarkPreviewPage, setBenchmarkPreviewPage] = useState(1)
   const [benchmarkPreviewPageSize, setBenchmarkPreviewPageSize] = useState(20)
   const [evaluationHistory, setEvaluationHistory] = useState<KnowledgeEvaluationSummary[]>([])
   const [evaluationResult, setEvaluationResult] = useState<KnowledgeEvaluationResult | null>(null)
-  const [graphLabel, setGraphLabel] = useState('*')
-  const [graphDepth, setGraphDepth] = useState(2)
-  const [graphMaxNodes, setGraphMaxNodes] = useState(50)
-  const [activeTab, setActiveTab] = useState('files')
-  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([])
-  const [fileSearch, setFileSearch] = useState('')
-  const [workspaceLoading, setWorkspaceLoading] = useState(true)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [queryLoading, setQueryLoading] = useState(false)
-  const [graphLoading, setGraphLoading] = useState(false)
-  const [mindmapLoading, setMindmapLoading] = useState(false)
-  const [benchmarkLoading, setBenchmarkLoading] = useState(false)
-  const [evaluationLoading, setEvaluationLoading] = useState(false)
-  const [savingKb, setSavingKb] = useState(false)
-  const [creatingKb, setCreatingKb] = useState(false)
-  const [generatingDescription, setGeneratingDescription] = useState(false)
-  const [parsingFiles, setParsingFiles] = useState(false)
-  const [indexingFiles, setIndexingFiles] = useState(false)
-  const [uploadingBenchmark, setUploadingBenchmark] = useState(false)
-  const [generatingBenchmark, setGeneratingBenchmark] = useState(false)
-  const [runningEvaluation, setRunningEvaluation] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [createModalOpen, setCreateModalOpen] = useState(shouldOpenCreateModal)
-  const [folderModalOpen, setFolderModalOpen] = useState(false)
-  const [urlModalOpen, setUrlModalOpen] = useState(false)
-  const [moveModalOpen, setMoveModalOpen] = useState(false)
-  const [indexConfigOpen, setIndexConfigOpen] = useState(false)
-  const [queryConfigOpen, setQueryConfigOpen] = useState(false)
-  const [benchmarkGenerateOpen, setBenchmarkGenerateOpen] = useState(false)
-  const [benchmarkUploadOpen, setBenchmarkUploadOpen] = useState(false)
-  const [evaluationResultOpen, setEvaluationResultOpen] = useState(false)
-  const [fileDetailOpen, setFileDetailOpen] = useState(false)
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [formState, setFormState] = useState<KnowledgeFormState>(() => createKnowledgeFormState())
-  const [indexConfig, setIndexConfig] = useState<KnowledgeIndexConfigState>(() => createIndexConfigState())
-  const [folderName, setFolderName] = useState('')
-  const [folderParentId, setFolderParentId] = useState<string | null>(null)
-  const [urlParentId, setUrlParentId] = useState<string | null>(null)
-  const [moveTargetParentId, setMoveTargetParentId] = useState<string | null>(null)
-  const [moveTargetName, setMoveTargetName] = useState('')
-  const [benchmarkUploadFile, setBenchmarkUploadFile] = useState<File | null>(null)
-  const [benchmarkName, setBenchmarkName] = useState('')
-  const [benchmarkDescription, setBenchmarkDescription] = useState('')
-  const [benchmarkCount, setBenchmarkCount] = useState(10)
-  const [selectedBenchmarkId, setSelectedBenchmarkId] = useState<string | null>(null)
   const [evaluationErrorOnly, setEvaluationErrorOnly] = useState(false)
-  const [queryParamSchema, setQueryParamSchema] = useState<KnowledgeQueryParamSchema | null>(null)
-  const [fileDetailLoading, setFileDetailLoading] = useState(false)
+  const [selectedBenchmarkId, setSelectedBenchmarkId] = useState<string | null>(null)
   const [fileDetail, setFileDetail] = useState<KnowledgeFileDetail | null>(null)
-  const [expandedFileIds, setExpandedFileIds] = useState<string[]>([])
+  const [urlParentId, setUrlParentId] = useState<string | null>(null)
+
+  // ─── Loading states (consolidated: 17 → 1) ───
+  const [loading, setLoading] = useState({
+    workspace: true,
+    detail: false,
+    query: false,
+    graph: false,
+    mindmap: false,
+    benchmark: false,
+    evaluation: false,
+    saving: false,
+    creating: false,
+    generatingDescription: false,
+    parsing: false,
+    indexing: false,
+    uploadingBenchmark: false,
+    generatingBenchmark: false,
+    runningEvaluation: false,
+    fileDetail: false,
+    benchmarkPreview: false,
+  })
+  function setLoadingField(field: keyof typeof loading, value: boolean) {
+    setLoading((prev) => ({ ...prev, [field]: value }))
+  }
+
+  // ─── Modal states (consolidated: 11 → 1) ───
+  const [modals, setModals] = useState({
+    create: shouldOpenCreateModal,
+    folder: false,
+    url: false,
+    move: false,
+    indexConfig: false,
+    queryConfig: false,
+    benchmarkGenerate: false,
+    benchmarkUpload: false,
+    evaluationResult: false,
+    fileDetail: false,
+    settings: false,
+  })
+  function openModal(name: keyof typeof modals) {
+    setModals((prev) => ({ ...prev, [name]: true }))
+  }
+  function closeModal(name: keyof typeof modals) {
+    setModals((prev) => ({ ...prev, [name]: false }))
+  }
+
+  // ─── Form states (per-operation, fixes shared state bug) ───
+  const [folderForm, setFolderForm] = useState({ name: '', parentId: null as string | null })
+  const [moveForm, setMoveForm] = useState({ targetParentId: null as string | null, targetName: '' })
+  const [benchmarkUploadForm, setBenchmarkUploadForm] = useState({
+    name: '', description: '', file: null as File | null,
+  })
+  const [benchmarkGenerateForm, setBenchmarkGenerateForm] = useState({
+    name: '自动生成评估基准', description: '', count: 10,
+  })
+
+  // ─── Form reset helpers ───
+  function resetFolderForm() {
+    setFolderForm({ name: '', parentId: null })
+  }
+  function resetMoveForm() {
+    setMoveForm({ targetParentId: null, targetName: '' })
+  }
+  function resetBenchmarkUploadForm() {
+    setBenchmarkUploadForm({ name: '', description: '', file: null })
+  }
+  function resetBenchmarkGenerateForm() {
+    setBenchmarkGenerateForm({ name: '自动生成评估基准', description: '', count: 10 })
+  }
 
   const deferredFileSearch = useDeferredValue(fileSearch)
   const modelBindings = useMemo(
@@ -257,7 +295,7 @@ export default function KnowledgePage() {
   }, [])
 
   useEffect(() => {
-    setCreateModalOpen(shouldOpenCreateModal)
+    setModals((prev) => ({ ...prev, create: shouldOpenCreateModal }))
   }, [shouldOpenCreateModal])
 
   useEffect(() => {
@@ -280,8 +318,8 @@ export default function KnowledgePage() {
       setSelectedFileIds([])
       setExpandedFileIds([])
       setFileDetail(null)
-      setFileDetailOpen(false)
-      setSettingsModalOpen(false)
+      closeModal('fileDetail')
+      closeModal('settings')
       setActiveTab('files')
       return
     }
@@ -293,13 +331,13 @@ export default function KnowledgePage() {
     if (activeTab === 'graph' && currentKb) {
       void loadGraph(currentKb.kbId)
     }
-  }, [activeTab, currentKb, graphDepth, graphMaxNodes])
+  }, [activeTab, currentKb, graphConfig.depth, graphConfig.maxNodes])
 
   useEffect(() => {
-    if (activeTab === 'mindmap' && currentKb && !mindmap && !mindmapLoading) {
+    if (activeTab === 'mindmap' && currentKb && !mindmap && !loading.mindmap) {
       void loadMindmap(currentKb.kbId)
     }
-  }, [activeTab, currentKb, mindmap, mindmapLoading])
+  }, [activeTab, currentKb, mindmap, loading.mindmap])
 
   useEffect(() => {
     if (Object.keys(modelBindings).length === 0) {
@@ -423,20 +461,20 @@ export default function KnowledgePage() {
 
   async function loadKnowledgeBases() {
     try {
-      setWorkspaceLoading(true)
+      setLoadingField('workspace', true)
       const items = await api.getKnowledgeBases()
       setKnowledgeBases(items)
       setError(null)
     } catch (loadError) {
       setError(getErrorMessage(loadError, '加载知识库列表失败'))
     } finally {
-      setWorkspaceLoading(false)
+      setLoadingField('workspace', false)
     }
   }
 
   async function loadKnowledgeDetail(nextKbId: string) {
     try {
-      setDetailLoading(true)
+      setLoadingField('detail', true)
       const [kb, filePayload, jobPayload, querySchemaPayload, questionPayload, graphStatsPayload] = await Promise.all([
         api.getKnowledgeBase(nextKbId),
         api.getKnowledgeFiles(nextKbId),
@@ -474,23 +512,23 @@ export default function KnowledgePage() {
       setError(null)
       setSelectedFileIds([])
       setExpandedFileIds([])
-      setSettingsModalOpen(false)
+      closeModal('settings')
     } catch (loadError) {
       setError(getErrorMessage(loadError, '加载知识库详情失败'))
     } finally {
-      setDetailLoading(false)
+      setLoadingField('detail', false)
     }
   }
 
   async function loadMindmap(targetKbId: string) {
     try {
-      setMindmapLoading(true)
+      setLoadingField('mindmap', true)
       const payload = await api.getKnowledgeMindmap(targetKbId)
       setMindmap(payload.mindmap)
     } catch {
       setMindmap(null)
     } finally {
-      setMindmapLoading(false)
+      setLoadingField('mindmap', false)
     }
   }
 
@@ -503,7 +541,7 @@ export default function KnowledgePage() {
 
   async function loadBenchmarkState(targetKbId: string) {
     try {
-      setBenchmarkLoading(true)
+      setLoadingField('benchmark', true)
       const [benchmarkItems, evaluationItems] = await Promise.all([
         api.getKnowledgeBenchmarks(targetKbId),
         api.getKnowledgeEvaluationHistory(targetKbId),
@@ -514,7 +552,7 @@ export default function KnowledgePage() {
     } catch (loadError) {
       message.error(getErrorMessage(loadError, '加载评测数据失败'))
     } finally {
-      setBenchmarkLoading(false)
+      setLoadingField('benchmark', false)
     }
   }
 
@@ -538,7 +576,7 @@ export default function KnowledgePage() {
 
   async function handleCreateKnowledgeBase() {
     try {
-      setCreatingKb(true)
+      setLoadingField('creating', true)
       const created = await api.createKnowledgeBase({
         name: formState.name.trim(),
         description: formState.description.trim(),
@@ -549,7 +587,7 @@ export default function KnowledgePage() {
         tags: parseTags(formState.tagsText),
       })
       message.success('知识库已创建')
-      setCreateModalOpen(false)
+      closeModal('create')
       setFormState(createKnowledgeForm())
       setIndexConfig(createIndexConfigState())
       await loadKnowledgeBases()
@@ -557,14 +595,14 @@ export default function KnowledgePage() {
     } catch (createError) {
       message.error(getErrorMessage(createError, '创建知识库失败'))
     } finally {
-      setCreatingKb(false)
+      setLoadingField('creating', false)
     }
   }
 
   async function handleSaveKnowledgeBase() {
     if (!currentKb) return
     try {
-      setSavingKb(true)
+      setLoadingField('saving', true)
       const updated = await api.updateKnowledgeBase(currentKb.kbId, {
         name: formState.name.trim(),
         description: formState.description.trim(),
@@ -582,7 +620,7 @@ export default function KnowledgePage() {
     } catch (saveError) {
       message.error(getErrorMessage(saveError, '保存知识库设置失败'))
     } finally {
-      setSavingKb(false)
+      setLoadingField('saving', false)
     }
   }
 
@@ -609,7 +647,7 @@ export default function KnowledgePage() {
       return
     }
     try {
-      setGeneratingDescription(true)
+      setLoadingField('generatingDescription', true)
       const payload = await api.generateKnowledgeBaseDescription({
         kbId: currentKb?.kbId,
         name: formState.name.trim(),
@@ -621,21 +659,20 @@ export default function KnowledgePage() {
     } catch (descriptionError) {
       message.error(getErrorMessage(descriptionError, '生成知识库描述失败'))
     } finally {
-      setGeneratingDescription(false)
+      setLoadingField('generatingDescription', false)
     }
   }
 
   async function handleCreateFolder() {
-    if (!currentKb || !folderName.trim()) return
+    if (!currentKb || !folderForm.name.trim()) return
     try {
       await api.createKnowledgeFolder(currentKb.kbId, {
-        name: folderName.trim(),
-        parentId: folderParentId,
+        name: folderForm.name.trim(),
+        parentId: folderForm.parentId,
       })
       message.success('文件夹已创建')
-      setFolderModalOpen(false)
-      setFolderName('')
-      setFolderParentId(null)
+      closeModal('folder')
+      resetFolderForm()
       await loadKnowledgeDetail(currentKb.kbId)
       await loadKnowledgeBases()
     } catch (folderError) {
@@ -653,14 +690,14 @@ export default function KnowledgePage() {
       message.warning('已跳过不可解析的文件，仅提交待解析或解析失败的文件')
     }
     try {
-      setParsingFiles(true)
+      setLoadingField('parsing', true)
       await api.parseKnowledgeFiles(currentKb.kbId, { fileIds: targetFileIds })
       message.success('解析任务已提交')
       await loadKnowledgeDetail(currentKb.kbId)
     } catch (parseError) {
       message.error(getErrorMessage(parseError, '提交解析任务失败'))
     } finally {
-      setParsingFiles(false)
+      setLoadingField('parsing', false)
     }
   }
 
@@ -674,7 +711,7 @@ export default function KnowledgePage() {
       message.warning('已跳过不可入库的文件，仅提交已解析或入库失败的文件')
     }
     try {
-      setIndexingFiles(true)
+      setLoadingField('indexing', true)
       await api.indexKnowledgeFiles(currentKb.kbId, {
         fileIds: targetFileIds,
         params: {
@@ -690,7 +727,7 @@ export default function KnowledgePage() {
     } catch (indexError) {
       message.error(getErrorMessage(indexError, '提交索引任务失败'))
     } finally {
-      setIndexingFiles(false)
+      setLoadingField('indexing', false)
     }
   }
 
@@ -718,12 +755,11 @@ export default function KnowledgePage() {
     try {
       await api.moveKnowledgeFile(currentKb.kbId, {
         fileId: target.fileId,
-        targetParentId: moveTargetParentId,
-        filename: moveTargetName.trim() || target.filename,
+        targetParentId: moveForm.targetParentId,
+        filename: moveForm.targetName.trim() || target.filename,
       })
-      setMoveModalOpen(false)
-      setMoveTargetParentId(null)
-      setMoveTargetName('')
+      closeModal('move')
+      resetMoveForm()
       await loadKnowledgeDetail(currentKb.kbId)
       message.success('文件位置已更新')
     } catch (moveError) {
@@ -733,24 +769,26 @@ export default function KnowledgePage() {
 
   function openMoveModal() {
     if (!hasSingleSelection) return
-    setMoveTargetParentId(selectedFiles[0].parentId || null)
-    setMoveTargetName(selectedFiles[0].filename)
-    setMoveModalOpen(true)
+    setMoveForm({
+      targetParentId: selectedFiles[0].parentId || null,
+      targetName: selectedFiles[0].filename,
+    })
+    openModal('move')
   }
 
   async function handleOpenFileDetail(target: KnowledgeDocument) {
     if (!currentKb || target.isFolder) return
     try {
-      setFileDetailOpen(true)
-      setFileDetailLoading(true)
+      openModal('fileDetail')
+      setLoadingField('fileDetail', true)
       const detail = await api.getKnowledgeFileDetail(currentKb.kbId, target.fileId)
       setFileDetail(detail)
     } catch (detailError) {
-      setFileDetailOpen(false)
+      closeModal('fileDetail')
       setFileDetail(null)
       message.error(getErrorMessage(detailError, '加载文件详情失败'))
     } finally {
-      setFileDetailLoading(false)
+      setLoadingField('fileDetail', false)
     }
   }
 
@@ -817,7 +855,7 @@ export default function KnowledgePage() {
     const query = (nextQuery ?? queryText).trim()
     if (!currentKb || !query) return
     try {
-      setQueryLoading(true)
+      setLoadingField('query', true)
       const result = await api.queryKnowledgeBase(currentKb.kbId, {
         query,
         mode: queryParams.mode,
@@ -832,7 +870,7 @@ export default function KnowledgePage() {
     } catch (queryError) {
       message.error(getErrorMessage(queryError, '知识库查询失败'))
     } finally {
-      setQueryLoading(false)
+      setLoadingField('query', false)
     }
   }
 
@@ -861,25 +899,25 @@ export default function KnowledgePage() {
   async function handleGenerateMindmap() {
     if (!currentKb) return
     try {
-      setMindmapLoading(true)
+      setLoadingField('mindmap', true)
       const payload = await api.generateKnowledgeMindmap(currentKb.kbId)
       setMindmap(payload.mindmap)
       message.success('知识导图已生成')
     } catch (generateError) {
       message.error(getErrorMessage(generateError, '生成知识导图失败'))
     } finally {
-      setMindmapLoading(false)
+      setLoadingField('mindmap', false)
     }
   }
 
   async function loadGraph(targetKbId: string) {
     try {
-      setGraphLoading(true)
+      setLoadingField('graph', true)
       const [graph, stats] = await Promise.all([
         api.getKnowledgeGraph(targetKbId, {
-          nodeLabel: graphLabel,
-          maxDepth: graphDepth,
-          maxNodes: graphMaxNodes,
+          nodeLabel: graphConfig.label,
+          maxDepth: graphConfig.depth,
+          maxNodes: graphConfig.maxNodes,
         }),
         api.getKnowledgeGraphStats(targetKbId).catch(() => null),
       ])
@@ -888,58 +926,54 @@ export default function KnowledgePage() {
     } catch (graphError) {
       message.error(getErrorMessage(graphError, '加载知识图谱失败'))
     } finally {
-      setGraphLoading(false)
+      setLoadingField('graph', false)
     }
   }
 
   async function handleUploadBenchmark() {
-    if (!currentKb || !benchmarkUploadFile) return
+    if (!currentKb || !benchmarkUploadForm.file) return
     try {
-      setUploadingBenchmark(true)
+      setLoadingField('uploadingBenchmark', true)
       await api.uploadKnowledgeBenchmark(currentKb.kbId, {
-        file: benchmarkUploadFile,
-        name: benchmarkName.trim() || benchmarkUploadFile.name.replace(/\.jsonl$/i, ''),
-        description: benchmarkDescription.trim(),
+        file: benchmarkUploadForm.file,
+        name: benchmarkUploadForm.name.trim() || benchmarkUploadForm.file.name.replace(/\.jsonl$/i, ''),
+        description: benchmarkUploadForm.description.trim(),
       })
       message.success('评估基准已上传')
-      setBenchmarkUploadOpen(false)
-      setBenchmarkUploadFile(null)
-      setBenchmarkName('')
-      setBenchmarkDescription('')
+      closeModal('benchmarkUpload')
+      resetBenchmarkUploadForm()
       await loadBenchmarkState(currentKb.kbId)
     } catch (uploadError) {
       message.error(getErrorMessage(uploadError, '上传评估基准失败'))
     } finally {
-      setUploadingBenchmark(false)
+      setLoadingField('uploadingBenchmark', false)
     }
   }
 
   async function handleGenerateBenchmark() {
     if (!currentKb) return
     try {
-      setGeneratingBenchmark(true)
+      setLoadingField('generatingBenchmark', true)
       await api.generateKnowledgeBenchmark(currentKb.kbId, {
-        count: benchmarkCount,
-        name: benchmarkName.trim() || '自动生成评估基准',
-        description: benchmarkDescription.trim(),
+        count: benchmarkGenerateForm.count,
+        name: benchmarkGenerateForm.name.trim() || '自动生成评估基准',
+        description: benchmarkGenerateForm.description.trim(),
       })
       message.success('评估基准已生成')
-      setBenchmarkGenerateOpen(false)
-      setBenchmarkName('')
-      setBenchmarkDescription('')
-      setBenchmarkCount(10)
+      closeModal('benchmarkGenerate')
+      resetBenchmarkGenerateForm()
       await loadBenchmarkState(currentKb.kbId)
     } catch (generateError) {
       message.error(getErrorMessage(generateError, '生成评估基准失败'))
     } finally {
-      setGeneratingBenchmark(false)
+      setLoadingField('generatingBenchmark', false)
     }
   }
 
   async function handlePreviewBenchmark(benchmark: KnowledgeBenchmark, page = 1, pageSize = 20) {
     if (!currentKb) return
     try {
-      setBenchmarkPreviewLoading(true)
+      setLoadingField('benchmarkPreview', true)
       setBenchmarkPreviewPage(page)
       setBenchmarkPreviewPageSize(pageSize)
       const detail = await api.getKnowledgeBenchmarkDetail(currentKb.kbId, benchmark.benchmarkId, page, pageSize)
@@ -947,7 +981,7 @@ export default function KnowledgePage() {
     } catch (previewError) {
       message.error(getErrorMessage(previewError, '加载评估基准详情失败'))
     } finally {
-      setBenchmarkPreviewLoading(false)
+      setLoadingField('benchmarkPreview', false)
     }
   }
 
@@ -970,7 +1004,7 @@ export default function KnowledgePage() {
   async function handleRunEvaluation() {
     if (!currentKb || !selectedBenchmarkId) return
     try {
-      setRunningEvaluation(true)
+      setLoadingField('runningEvaluation', true)
       const payload = await api.runKnowledgeEvaluation(currentKb.kbId, {
         benchmarkId: selectedBenchmarkId,
       })
@@ -979,14 +1013,14 @@ export default function KnowledgePage() {
     } catch (runError) {
       message.error(getErrorMessage(runError, '启动评测失败'))
     } finally {
-      setRunningEvaluation(false)
+      setLoadingField('runningEvaluation', false)
     }
   }
 
   async function handleViewEvaluationResult(taskId: string, errorOnly = false) {
     if (!currentKb) return
     try {
-      setEvaluationLoading(true)
+      setLoadingField('evaluation', true)
       const result = await api.getKnowledgeEvaluationResult(currentKb.kbId, taskId, {
         page: 1,
         pageSize: 20,
@@ -994,11 +1028,11 @@ export default function KnowledgePage() {
       })
       setEvaluationResult(result)
       setEvaluationErrorOnly(errorOnly)
-      setEvaluationResultOpen(true)
+      openModal('evaluationResult')
     } catch (viewError) {
       message.error(getErrorMessage(viewError, '加载评测结果失败'))
     } finally {
-      setEvaluationLoading(false)
+      setLoadingField('evaluation', false)
     }
   }
 
@@ -1015,7 +1049,7 @@ export default function KnowledgePage() {
         await loadBenchmarkState(currentKb.kbId)
         if (evaluationResult?.taskId === taskId) {
           setEvaluationResult(null)
-          setEvaluationResultOpen(false)
+          closeModal('evaluationResult')
         }
         message.success('评测结果已删除')
       },
@@ -1075,24 +1109,24 @@ export default function KnowledgePage() {
                 icon={<UploadOutlined />}
                 onClick={() => {
                   setUrlParentId(hasSingleSelection && selectedFiles[0].isFolder ? selectedFiles[0].fileId : null)
-                  setUrlModalOpen(true)
+                  openModal('url')
                 }}
               >
                 添加文件
               </Button>
-              <Button icon={<FolderAddOutlined />} onClick={() => setFolderModalOpen(true)}>新建文件夹</Button>
+              <Button icon={<FolderAddOutlined />} onClick={() => openModal('folder')}>新建文件夹</Button>
               <Button
                 icon={<RetweetOutlined />}
-                loading={parsingFiles}
+                loading={loading.parsing}
                 disabled={!canParseSelectedDocuments}
                 onClick={() => void handleParseSelected()}
               >
                 解析
               </Button>
-              <Button onClick={() => setIndexConfigOpen(true)}>索引配置</Button>
+              <Button onClick={() => openModal('indexConfig')}>索引配置</Button>
               <Button
                 icon={<BranchesOutlined />}
-                loading={indexingFiles}
+                loading={loading.indexing}
                 type="primary"
                 disabled={!canIndexSelectedDocuments}
                 onClick={() => void handleIndexSelected()}
@@ -1160,7 +1194,7 @@ export default function KnowledgePage() {
         <KnowledgeQueryTab
           queryParams={queryParams}
           queryText={queryText}
-          queryLoading={queryLoading}
+          queryLoading={loading.query}
           queryResult={queryResult}
           resultView={resultView}
           sampleQuestions={sampleQuestions}
@@ -1176,7 +1210,7 @@ export default function KnowledgePage() {
           onEnableRerankChange={(checked) => setQueryParams((prev) => ({ ...prev, enableRerank: checked }))}
           onSaveQueryDefaults={() => void handleSaveQueryDefaults()}
           onGenerateQuestions={() => void handleGenerateQuestions()}
-          onOpenQueryConfig={() => setQueryConfigOpen(true)}
+          onOpenQueryConfig={() => openModal('queryConfig')}
           onResultViewChange={setResultView}
           onQueryTextChange={setQueryText}
           onQuery={(query) => void handleQuery(query)}
@@ -1188,15 +1222,15 @@ export default function KnowledgePage() {
       label: '知识图谱',
       children: (
         <KnowledgeGraphTab
-          graphLabel={graphLabel}
-          graphDepth={graphDepth}
-          graphMaxNodes={graphMaxNodes}
-          graphLoading={graphLoading}
+          graphLabel={graphConfig.label}
+          graphDepth={graphConfig.depth}
+          graphMaxNodes={graphConfig.maxNodes}
+          graphLoading={loading.graph}
           graphData={graphData}
           graphStats={graphStats}
-          onGraphLabelChange={setGraphLabel}
-          onGraphDepthChange={setGraphDepth}
-          onGraphMaxNodesChange={setGraphMaxNodes}
+          onGraphLabelChange={(v) => setGraphConfig((prev) => ({ ...prev, label: v }))}
+          onGraphDepthChange={(v) => setGraphConfig((prev) => ({ ...prev, depth: v }))}
+          onGraphMaxNodesChange={(v) => setGraphConfig((prev) => ({ ...prev, maxNodes: v }))}
           onReload={() => currentKb && void loadGraph(currentKb.kbId)}
         />
       ),
@@ -1206,7 +1240,7 @@ export default function KnowledgePage() {
       label: '知识导图',
       children: (
         <KnowledgeMindmapTab
-          mindmapLoading={mindmapLoading}
+          mindmapLoading={loading.mindmap}
           mindmap={mindmap}
           onRegenerate={() => void handleGenerateMindmap()}
         />
@@ -1219,8 +1253,8 @@ export default function KnowledgePage() {
         <KnowledgeEvaluationTab
           selectedBenchmarkId={selectedBenchmarkId}
           benchmarks={benchmarks}
-          runningEvaluation={runningEvaluation}
-          benchmarkLoading={benchmarkLoading}
+          runningEvaluation={loading.runningEvaluation}
+          benchmarkLoading={loading.benchmark}
           evaluationHistory={evaluationHistory}
           columns={evaluationColumns}
           onBenchmarkChange={setSelectedBenchmarkId}
@@ -1234,16 +1268,17 @@ export default function KnowledgePage() {
       label: '评估基准',
       children: (
         <KnowledgeBenchmarksTab
-          benchmarkLoading={benchmarkLoading}
+          benchmarkLoading={loading.benchmark}
           benchmarks={benchmarks}
           columns={benchmarkColumns}
           onOpenGenerate={() => {
-            setBenchmarkName('自动生成评估基准')
-            setBenchmarkDescription('')
-            setBenchmarkCount(10)
-            setBenchmarkGenerateOpen(true)
+            resetBenchmarkGenerateForm()
+            openModal('benchmarkGenerate')
           }}
-          onOpenUpload={() => setBenchmarkUploadOpen(true)}
+          onOpenUpload={() => {
+            resetBenchmarkUploadForm()
+            openModal('benchmarkUpload')
+          }}
           onRefresh={() => currentKb && void loadBenchmarkState(currentKb.kbId)}
         />
       ),
@@ -1287,7 +1322,7 @@ export default function KnowledgePage() {
                 <Text strong>知识库列表</Text>
                 <Tag>{knowledgeBases.length}</Tag>
               </div>
-              {workspaceLoading ? (
+              {loading.workspace ? (
                 <div className="knowledge-card-grid">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="knowledge-sidebar-item" style={{ height: 160, padding: 18 }}>
@@ -1352,7 +1387,7 @@ export default function KnowledgePage() {
             {error ? (
               <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />
             ) : null}
-            {detailLoading ? (
+            {loading.detail ? (
               <div className="knowledge-loading-panel is-large"><Spin size="large" /></div>
             ) : !currentKb ? (
               <Card className="knowledge-empty-card">
@@ -1381,7 +1416,7 @@ export default function KnowledgePage() {
                     </div>
                     <Space>
                       <Button icon={<ReloadOutlined />} onClick={() => void loadKnowledgeDetail(currentKb.kbId)} />
-                      <Button icon={<EditOutlined />} onClick={() => setSettingsModalOpen(true)}>设置</Button>
+                      <Button icon={<EditOutlined />} onClick={() => openModal('settings')}>设置</Button>
                       <Button danger icon={<DeleteOutlined />} onClick={handleDeleteKnowledgeBase}>删除</Button>
                     </Space>
                   </div>
@@ -1424,17 +1459,17 @@ export default function KnowledgePage() {
       </motion.div>
 
       <Modal
-        open={createModalOpen}
+        open={modals.create}
         title="新建知识库"
         onCancel={() => {
-          setCreateModalOpen(false)
+          closeModal('create')
           if (shouldOpenCreateModal) {
             startTransition(() => navigate('/knowledge'))
           }
         }}
         onOk={() => void handleCreateKnowledgeBase()}
         okText="创建"
-        confirmLoading={creatingKb}
+        confirmLoading={loading.creating}
       >
         <div className="knowledge-settings-grid">
           <div className="studio-form-field">
@@ -1448,7 +1483,7 @@ export default function KnowledgePage() {
           <div className="studio-form-field studio-form-field-span-2">
             <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
               <Text type="secondary">描述</Text>
-              <Button size="small" loading={generatingDescription} disabled={!supportsDescriptionGeneration} onClick={() => void handleGenerateDescription()}>
+              <Button size="small" loading={loading.generatingDescription} disabled={!supportsDescriptionGeneration} onClick={() => void handleGenerateDescription()}>
                 AI 生成描述
               </Button>
             </Space>
@@ -1513,57 +1548,57 @@ export default function KnowledgePage() {
       </Modal>
 
       <Modal
-        open={folderModalOpen}
+        open={modals.folder}
         title="新建文件夹"
-        onCancel={() => setFolderModalOpen(false)}
+        onCancel={() => { closeModal('folder'); resetFolderForm() }}
         onOk={() => void handleCreateFolder()}
         okText="创建"
       >
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Input placeholder="文件夹名称" value={folderName} onChange={(event) => setFolderName(event.target.value)} />
+          <Input placeholder="文件夹名称" value={folderForm.name} onChange={(event) => setFolderForm((prev) => ({ ...prev, name: event.target.value }))} />
           <Select
             allowClear
             placeholder="父文件夹，可为空"
-            value={folderParentId}
+            value={folderForm.parentId}
             options={folderOptions}
-            onChange={(value) => setFolderParentId(value)}
+            onChange={(value) => setFolderForm((prev) => ({ ...prev, parentId: value }))}
           />
         </Space>
       </Modal>
 
       <KnowledgeUploadModal
-        open={urlModalOpen}
+        open={modals.url}
         kb={currentKb}
         folderOptions={folderOptions}
         defaultParentId={urlParentId}
-        onClose={() => setUrlModalOpen(false)}
+        onClose={() => closeModal('url')}
         onSuccess={() => refreshDetail()}
       />
 
       <Modal
-        open={moveModalOpen}
+        open={modals.move}
         title="移动文件"
-        onCancel={() => setMoveModalOpen(false)}
+        onCancel={() => { closeModal('move'); resetMoveForm() }}
         onOk={() => void handleMoveSelectedFile()}
         okText="保存"
       >
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Input value={moveTargetName} onChange={(event) => setMoveTargetName(event.target.value)} placeholder="新的名称" />
+          <Input value={moveForm.targetName} onChange={(event) => setMoveForm((prev) => ({ ...prev, targetName: event.target.value }))} placeholder="新的名称" />
           <Select
             allowClear
             placeholder="目标文件夹，可为空表示根目录"
-            value={moveTargetParentId}
+            value={moveForm.targetParentId}
             options={folderOptions.filter((item) => item.value !== selectedFiles[0]?.fileId)}
-            onChange={(value) => setMoveTargetParentId(value)}
+            onChange={(value) => setMoveForm((prev) => ({ ...prev, targetParentId: value }))}
           />
         </Space>
       </Modal>
 
       <Modal
-        open={indexConfigOpen}
+        open={modals.indexConfig}
         title="索引配置"
-        onCancel={() => setIndexConfigOpen(false)}
-        onOk={() => setIndexConfigOpen(false)}
+        onCancel={() => closeModal('indexConfig')}
+        onOk={() => closeModal('indexConfig')}
         okText="保存配置"
       >
         <div className="knowledge-settings-grid">
@@ -1607,11 +1642,11 @@ export default function KnowledgePage() {
       </Modal>
 
       <Modal
-        open={queryConfigOpen}
+        open={modals.queryConfig}
         title="检索配置"
-        onCancel={() => setQueryConfigOpen(false)}
+        onCancel={() => closeModal('queryConfig')}
         onOk={() => {
-          setQueryConfigOpen(false)
+          closeModal('queryConfig')
           void handleSaveQueryDefaults()
         }}
         okText="保存"
@@ -1657,9 +1692,9 @@ export default function KnowledgePage() {
       </Modal>
 
       <Modal
-        open={settingsModalOpen}
+        open={modals.settings}
         title={currentKb ? `知识库设置 · ${currentKb.name}` : '知识库设置'}
-        onCancel={() => setSettingsModalOpen(false)}
+        onCancel={() => closeModal('settings')}
         footer={null}
         width={860}
       >
@@ -1670,9 +1705,9 @@ export default function KnowledgePage() {
           llmBindingOptions={llmBindingOptions}
           chunkPresetOptions={CHUNK_PRESET_OPTIONS.map((item) => ({ label: item.label, value: item.value }))}
           languageOptions={[...LANGUAGE_OPTIONS]}
-          generatingDescription={generatingDescription}
+          generatingDescription={loading.generatingDescription}
           supportsDescriptionGeneration={supportsDescriptionGeneration}
-          savingKb={savingKb}
+          savingKb={loading.saving}
           onFormStateChange={setFormState}
           onIndexConfigChange={setIndexConfig}
           onGenerateDescription={() => void handleGenerateDescription()}
@@ -1681,69 +1716,67 @@ export default function KnowledgePage() {
       </Modal>
 
       <Modal
-        open={benchmarkUploadOpen}
+        open={modals.benchmarkUpload}
         title="上传评估基准"
         onCancel={() => {
-          setBenchmarkUploadOpen(false)
-          setBenchmarkUploadFile(null)
-          setBenchmarkName('')
-          setBenchmarkDescription('')
+          closeModal('benchmarkUpload')
+          resetBenchmarkUploadForm()
         }}
         onOk={() => void handleUploadBenchmark()}
         okText="上传"
-        confirmLoading={uploadingBenchmark}
+        confirmLoading={loading.uploadingBenchmark}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
           <Input
             placeholder="基准名称"
-            value={benchmarkName}
-            onChange={(event) => setBenchmarkName(event.target.value)}
+            value={benchmarkUploadForm.name}
+            onChange={(event) => setBenchmarkUploadForm((prev) => ({ ...prev, name: event.target.value }))}
           />
           <Input.TextArea
             rows={3}
             placeholder="基准描述"
-            value={benchmarkDescription}
-            onChange={(event) => setBenchmarkDescription(event.target.value)}
+            value={benchmarkUploadForm.description}
+            onChange={(event) => setBenchmarkUploadForm((prev) => ({ ...prev, description: event.target.value }))}
           />
           <Button onClick={() => benchmarkUploadInputRef.current?.click()}>
-            {benchmarkUploadFile ? `已选择：${benchmarkUploadFile.name}` : '选择 JSONL 文件'}
+            {benchmarkUploadForm.file ? `已选择：${benchmarkUploadForm.file.name}` : '选择 JSONL 文件'}
           </Button>
           <input
             ref={benchmarkUploadInputRef}
             type="file"
             accept=".jsonl"
             style={{ display: 'none' }}
-            onChange={(event) => setBenchmarkUploadFile(event.target.files?.[0] || null)}
+            onChange={(event) => setBenchmarkUploadForm((prev) => ({ ...prev, file: event.target.files?.[0] || null }))}
           />
         </Space>
       </Modal>
 
       <Modal
-        open={benchmarkGenerateOpen}
+        open={modals.benchmarkGenerate}
         title="生成评估基准"
-        onCancel={() => setBenchmarkGenerateOpen(false)}
+        onCancel={() => closeModal('benchmarkGenerate')}
         onOk={() => void handleGenerateBenchmark()}
         okText="生成"
-        confirmLoading={generatingBenchmark}
+        confirmLoading={loading.generatingBenchmark}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
           <Input
             placeholder="基准名称"
-            value={benchmarkName}
-            onChange={(event) => setBenchmarkName(event.target.value)}
+            value={benchmarkGenerateForm.name}
+            onChange={(event) => setBenchmarkGenerateForm((prev) => ({ ...prev, name: event.target.value }))}
           />
           <Input.TextArea
             rows={3}
             placeholder="基准描述"
-            value={benchmarkDescription}
-            onChange={(event) => setBenchmarkDescription(event.target.value)}
+            value={benchmarkGenerateForm.description}
+            onChange={(event) => setBenchmarkGenerateForm((prev) => ({ ...prev, description: event.target.value }))}
           />
           <InputNumber
             min={1}
             max={50}
             style={{ width: '100%' }}
-            value={benchmarkCount}
-            onChange={(value) => setBenchmarkCount(Number(value || 10))}
+            value={benchmarkGenerateForm.count}
+            onChange={(value) => setBenchmarkGenerateForm((prev) => ({ ...prev, count: Number(value || 10) }))}
             addonBefore="题目数"
           />
         </Space>
@@ -1751,7 +1784,7 @@ export default function KnowledgePage() {
 
       <KnowledgeBenchmarkPreviewModal
         open={!!benchmarkPreview}
-        loading={benchmarkPreviewLoading}
+        loading={loading.benchmarkPreview}
         benchmark={benchmarkPreview}
         page={benchmarkPreviewPage}
         pageSize={benchmarkPreviewPageSize}
@@ -1768,20 +1801,20 @@ export default function KnowledgePage() {
       />
 
       <KnowledgeEvaluationResultModal
-        open={evaluationResultOpen}
-        loading={evaluationLoading}
+        open={modals.evaluationResult}
+        loading={loading.evaluation}
         result={evaluationResult}
         errorOnly={evaluationErrorOnly}
-        onClose={() => setEvaluationResultOpen(false)}
+        onClose={() => closeModal('evaluationResult')}
         onToggleErrorOnly={() => evaluationResult && void handleViewEvaluationResult(evaluationResult.taskId, !evaluationErrorOnly)}
       />
 
       <KnowledgeFileDetailModal
         kbId={currentKb?.kbId || null}
-        open={fileDetailOpen}
-        loading={fileDetailLoading}
+        open={modals.fileDetail}
+        loading={loading.fileDetail}
         detail={fileDetail}
-        onClose={() => setFileDetailOpen(false)}
+        onClose={() => closeModal('fileDetail')}
       />
     </div>
   )

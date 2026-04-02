@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { App, Button, Card, Spin, Tag, Typography } from 'antd'
+import { App, Button, Card, Skeleton, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { api } from '../api'
+import { getErrorMessage } from '../components/AsyncContent'
 import DevOnly from '../components/DevOnly'
 import { MotionGroup, MotionPanel } from '../components/MotionSurface'
 import PageHero from '../components/PageHero'
@@ -28,7 +29,7 @@ export default function SystemPage() {
       const next = await api.getSystemStatus()
       setStatus(next)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载系统状态失败')
+      message.error(getErrorMessage(error, '加载系统状态失败'))
     } finally {
       setLoading(false)
     }
@@ -36,8 +37,8 @@ export default function SystemPage() {
 
   if (loading && !status) {
     return (
-      <div className="center-box page-card">
-        <Spin />
+      <div className="page-stack">
+        <Skeleton active title={{ width: '40%' }} paragraph={{ rows: 4, width: ['100%', '85%', '70%', '55%'] }} />
       </div>
     )
   }

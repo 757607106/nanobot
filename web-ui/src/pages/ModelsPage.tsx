@@ -185,13 +185,24 @@ export default function ModelsPage() {
   }
 
   function deleteBinding(bindingName: string) {
-    updateConfig((current) => {
-      const nextBindings = { ...(current.modelBindings ?? {}) }
-      delete nextBindings[bindingName]
-      return {
-        ...current,
-        modelBindings: nextBindings,
-      }
+    const binding = bindings[bindingName]
+    modal.confirm({
+      title: '删除模型绑定',
+      content: `确定要删除「${binding?.label || binding?.model || bindingName}」吗？删除后需要点击"保存所有配置"才会生效。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => {
+        updateConfig((current) => {
+          const nextBindings = { ...(current.modelBindings ?? {}) }
+          delete nextBindings[bindingName]
+          return {
+            ...current,
+            modelBindings: nextBindings,
+          }
+        })
+        message.success('已标记删除，请保存配置')
+      },
     })
   }
 
@@ -212,6 +223,8 @@ export default function ModelsPage() {
         },
       }
     })
+    const binding = bindings[bindingName]
+    message.success(`已将「${binding?.label || bindingName}」设为默认，请保存配置`)
   }
 
   function updateProviderCredential(providerName: string, field: 'apiKey' | 'apiBase', value: string) {
@@ -392,7 +405,19 @@ export default function ModelsPage() {
         width={720}
         open={Boolean(activeProviderName)}
         onClose={() => setActiveProviderName(null)}
-        extra={<Button type="primary" onClick={saveCurrentConfig} loading={saving}>保存更改</Button>}
+        extra={
+          <Button 
+            type="primary" 
+            icon={<SaveOutlined />}
+            onClick={() => {
+              void saveCurrentConfig()
+              setActiveProviderName(null)
+            }} 
+            loading={saving}
+          >
+            保存并关闭
+          </Button>
+        }
       >
         {activeProviderMeta && (
           <div className="page-stack">

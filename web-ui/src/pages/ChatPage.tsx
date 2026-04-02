@@ -99,9 +99,11 @@ function getMessageStatusLabel(status: MessageInfo<ChatMessage>['status']) {
   return '助手回复'
 }
 
-export default function ChatPage({ agentId }: { agentId?: string } = {}) {
+export default function ChatPage({ agentId: propAgentId }: { agentId?: string } = {}) {
   const { message, modal } = App.useApp()
   const navigate = useNavigate()
+  const [overrideAgentId, setOverrideAgentId] = useState<string | null>(null)
+  const agentId = overrideAgentId !== null ? (overrideAgentId || undefined) : propAgentId
   const inAgentMode = Boolean(agentId)
   const [activeAgent, setActiveAgent] = useState<AgentDefinition | null>(null)
   const [loadingActiveAgent, setLoadingActiveAgent] = useState(false)
@@ -637,11 +639,16 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
     if (isRequesting) {
       abort()
     }
+    // Clear session state before switching agent to avoid stale-session 404s
+    setCurrentSessionId(null)
+    setSessions([])
+    setMessages([])
+    setSessionFiles([])
     if (target === 'platform') {
-      navigate('/chat')
-      return
+      setOverrideAgentId('')
+    } else {
+      setOverrideAgentId(target)
     }
-    navigate(`/studio/agents/${encodeURIComponent(target)}/chat`)
   }
 
   async function uploadAttachmentsToSession(
@@ -885,7 +892,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
                   }}
                   data-testid={testIds.chat.switchAgent}
                 >
-                  切换到自定义Agent
+                  {inAgentMode ? (activeAgent?.name || '自定义Agent') : '选择员工'}
                 </Button>
                 <Button
                   type="text"
@@ -1032,7 +1039,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
       </div>
 
       <Modal
-        title="切换到自定义Agent"
+        title="选择对话员工"
         open={switchAgentOpen}
         onCancel={() => setSwitchAgentOpen(false)}
         footer={null}

@@ -2639,21 +2639,33 @@ class KnowledgeBaseService:
 
     def get_graph_labels(self, kb_id: str) -> dict[str, Any]:
         kb = self.require_kb(kb_id)
-        self._ensure_lightrag(kb, feature="Knowledge graph")
-        labels = self._run_async(self.rag_engine.get_graph_labels(kb_id))
+        if self.rag_engine is None:
+            return {"labels": []}
+        try:
+            labels = self._run_async(self.rag_engine.get_graph_labels(kb_id))
+        except Exception:
+            logger.debug("Failed to fetch graph labels for kb_id={}", kb_id)
+            return {"labels": []}
         return {"labels": labels}
+
+    _EMPTY_GRAPH: dict[str, Any] = {"nodes": [], "edges": [], "labels": [], "isTruncated": False}
 
     def get_graph(self, kb_id: str, *, node_label: str = "*", max_depth: int = 2, max_nodes: int = 50) -> dict[str, Any]:
         kb = self.require_kb(kb_id)
-        self._ensure_lightrag(kb, feature="Knowledge graph")
-        graph = self._run_async(
-            self.rag_engine.get_knowledge_graph(
-                kb_id,
-                label=node_label or "*",
-                max_depth=max(1, int(max_depth)),
-                max_nodes=max(10, int(max_nodes)),
+        if self.rag_engine is None:
+            return dict(self._EMPTY_GRAPH)
+        try:
+            graph = self._run_async(
+                self.rag_engine.get_knowledge_graph(
+                    kb_id,
+                    label=node_label or "*",
+                    max_depth=max(1, int(max_depth)),
+                    max_nodes=max(10, int(max_nodes)),
+                )
             )
-        )
+        except Exception:
+            logger.debug("Failed to fetch knowledge graph for kb_id={}", kb_id)
+            return dict(self._EMPTY_GRAPH)
         return graph
 
     def get_graph_stats(self, kb_id: str) -> dict[str, Any]:

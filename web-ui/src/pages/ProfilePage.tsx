@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, App, Button, Empty, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd'
+import { Alert, App, Button, Empty, Input, Modal, Progress, Space, Spin, Table, Tag, Typography } from 'antd'
 import {
   DeleteOutlined,
+  InboxOutlined,
   EditOutlined,
   LockOutlined,
   ReloadOutlined,
@@ -9,7 +10,8 @@ import {
   UploadOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { api, ApiError } from '../api'
+import { api } from '../api'
+import { getErrorMessage } from '../components/AsyncContent'
 import { formatDateTimeZh } from '../locale'
 import { useAuth } from '../auth'
 import { testIds } from '../testIds'
@@ -19,14 +21,23 @@ const { Text } = Typography
 
 type DialogMode = 'profile' | 'password' | 'avatar' | null
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) {
-    return error.message
+function getPasswordStrength(password: string): { percent: number; status: 'exception' | 'normal' | 'success'; label: string } {
+  if (!password) {
+    return { percent: 0, status: 'normal', label: '' }
   }
-  if (error instanceof Error && error.message) {
-    return error.message
+  let score = 0
+  if (password.length >= 8) score += 1
+  if (password.length >= 12) score += 1
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1
+  if (/\d/.test(password)) score += 1
+  if (/[^a-zA-Z0-9]/.test(password)) score += 1
+  if (score <= 2) {
+    return { percent: 33, status: 'exception', label: '弱' }
   }
-  return fallback
+  if (score <= 3) {
+    return { percent: 66, status: 'normal', label: '中' }
+  }
+  return { percent: 100, status: 'success', label: '强' }
 }
 
 function profileLabel(profile: ProfileData | null) {
@@ -37,7 +48,7 @@ function profileLabel(profile: ProfileData | null) {
 }
 
 export default function ProfilePage() {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { refresh } = useAuth()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [profile, setProfile] = useState<ProfileData | null>(null)
@@ -56,6 +67,9 @@ export default function ProfilePage() {
   const [profileError, setProfileError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [avatarError, setAvatarError] = useState<string | null>(null)
+  const [draggingOver, setDraggingOver] = useState(false)
+
+  const passwordStrength = useMemo(() => getPasswordStrength(newPassword), [newPassword])
 
   useEffect(() => {
     void loadProfile()
@@ -202,21 +216,30 @@ export default function ProfilePage() {
   }
 
   async function handleDeleteAvatar() {
-    try {
-      setUploadingAvatar(true)
-      const result = await api.deleteProfileAvatar()
-      applyProfile(result.profile)
-      setSelectedFile(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-      setAvatarError(null)
-      message.success('头像已移除')
-    } catch (error) {
-      setAvatarError(getErrorMessage(error, '移除头像失败'))
-    } finally {
-      setUploadingAvatar(false)
-    }
+    modal.confirm({
+      title: '移除头像',
+      content: '确定要移除当前头像吗？移除后将显示默认占位图标。',
+      okText: '移除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          setUploadingAvatar(true)
+          const result = await api.deleteProfileAvatar()
+          applyProfile(result.profile)
+          setSelectedFile(null)
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+          }
+          setAvatarError(null)
+          message.success('头像已移除')
+        } catch (error) {
+          setAvatarError(getErrorMessage(error, '移除头像失败'))
+        } finally {
+          setUploadingAvatar(false)
+        }
+      },
+    })
   }
 
   if (loading && !profile) {
@@ -430,6 +453,20 @@ export default function ProfilePage() {
               onChange={(event) => setNewPassword(event.target.value)}
               data-testid={testIds.profile.newPassword}
             />
+            {newPassword ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <Progress
+                  percent={passwordStrength.percent}
+                  status={passwordStrength.status}
+                  showInfo={false}
+                  size="small"
+                  style={{ flex: 1, margin: 0 }}
+                />
+                <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                  {passwordStrength.label}
+                </Text>
+              </div>
+            ) : null}
           </label>
 
           <label className="account-dialog-field">
@@ -499,16 +536,45 @@ export default function ProfilePage() {
             onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
           />
 
-          <div className="account-avatar-toolbar">
-            <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-              选择图片
-            </Button>
-            <Text type="secondary" className="account-avatar-note">
-              {selectedFile ? selectedFile.name : 'PNG / JPEG / WEBP / GIF，2 MB 内'}
-            </Text>
+          <div
+            className="account-avatar-dropzone"
+            style={{
+              border: `2px dashed ${draggingOver ? 'var(--ant-color-primary)' : 'var(--ant-color-border)'}`,
+              borderRadius: 8,
+              padding: '24px 16px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'border-color 0.2s, background 0.2s',
+              background: draggingOver ? 'var(--ant-color-primary-bg)' : 'transparent',
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDraggingOver(true) }}
+            onDragLeave={() => setDraggingOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDraggingOver(false)
+              const file = e.dataTransfer.files?.[0]
+              if (file && /^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+                setSelectedFile(file)
+              } else {
+                setAvatarError('仅支持 PNG / JPEG / WEBP / GIF 格式的图片。')
+              }
+            }}
+          >
+            <InboxOutlined style={{ fontSize: 32, color: 'var(--ant-color-primary)', marginBottom: 8 }} />
+            <div>
+              <Text type="secondary">
+                {selectedFile ? selectedFile.name : '点击或拖拽图片到此区域上传'}
+              </Text>
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                PNG / JPEG / WEBP / GIF，2 MB 内
+              </Text>
+            </div>
           </div>
 
-          {avatarError ? <Alert type="error" showIcon message={avatarError} /> : null}
+          {avatarError ? <Alert type="error" showIcon message={avatarError} style={{ marginTop: 8 }} /> : null}
         </div>
       </Modal>
     </section>

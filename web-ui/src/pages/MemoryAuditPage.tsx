@@ -20,7 +20,8 @@ import {
   SearchOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api, ApiError } from '../api'
+import { api } from '../api'
+import { getErrorMessage } from '../components/AsyncContent'
 import PageHero from '../components/PageHero'
 import { formatDateTimeZh } from '../locale'
 import type {
@@ -41,15 +42,6 @@ const agentMemoryScopeLabels: Record<string, string> = {
   workspace_shared: '工作区共享',
 }
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) {
-    return error.message
-  }
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
 
 function statusColor(status: string) {
   if (status === 'applied' || status === 'succeeded') {
@@ -68,7 +60,7 @@ function statusColor(status: string) {
 }
 
 export default function MemoryAuditPage() {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const navigate = useNavigate()
   const { agentId } = useParams()
   const selectedAgentId = agentId || null
@@ -191,15 +183,24 @@ export default function MemoryAuditPage() {
   }
 
   async function handleRejectCandidate(candidateId: string) {
-    try {
-      await api.rejectMemoryCandidate(candidateId)
-      message.success('候选记忆已标记为忽略')
-      if (currentAgent) {
-        await loadAgentAudit(currentAgent.agentId)
-      }
-    } catch (rejectError) {
-      setError(getErrorMessage(rejectError, '忽略候选记忆失败'))
-    }
+    modal.confirm({
+      title: '忽略候选记忆',
+      content: '确定要忽略此候选记忆吗？忽略后该条目将不再出现在待审列表中。',
+      okText: '忽略',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await api.rejectMemoryCandidate(candidateId)
+          message.success('候选记忆已标记为忽略')
+          if (currentAgent) {
+            await loadAgentAudit(currentAgent.agentId)
+          }
+        } catch (rejectError) {
+          setError(getErrorMessage(rejectError, '忽略候选记忆失败'))
+        }
+      },
+    })
   }
 
   async function handleSearch() {
@@ -241,6 +242,24 @@ export default function MemoryAuditPage() {
 
   function handleSelectEntity(id: string) {
     navigate(`/studio/memory/agents/${id}`)
+  }
+
+  function renderSourcePreview(emptyText: string, fallbackContent?: string | null) {
+    if (selectedMemorySource) {
+      return (
+        <div className="studio-run-result">
+          <Space wrap>
+            <Tag color="purple">{selectedMemorySource.sourceType}</Tag>
+            <Text type="secondary">{selectedMemorySource.title}</Text>
+          </Space>
+          <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
+        </div>
+      )
+    }
+    if (fallbackContent?.trim()) {
+      return <Paragraph className="studio-result-copy">{fallbackContent}</Paragraph>
+    }
+    return <Empty image={false} description={emptyText} />
   }
 
   if (loadingWorkspace && agents.length === 0 && !selectedAgentId) {
@@ -484,19 +503,7 @@ export default function MemoryAuditPage() {
                       {selectedMemorySource ? <Tag color="purple">{selectedMemorySource.sourceType}</Tag> : <Tag>员工记忆</Tag>}
                     </div>
 
-                    {selectedMemorySource ? (
-                      <div className="studio-run-result">
-                        <Space wrap>
-                          <Tag color="purple">{selectedMemorySource.sourceType}</Tag>
-                          <Text type="secondary">{selectedMemorySource.title}</Text>
-                        </Space>
-                        <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
-                      </div>
-                    ) : agentMemory?.content?.trim() ? (
-                      <Paragraph className="studio-result-copy">{agentMemory.content}</Paragraph>
-                    ) : (
-                      <Empty image={false} description="当前员工记忆为空，点击候选或搜索结果后可查看全文。" />
-                    )}
+                    {renderSourcePreview('当前员工记忆为空，点击候选或搜索结果后可查看全文。', agentMemory?.content)}
                   </Card>
                 </div>
               ) : null}
@@ -537,8 +544,13 @@ export default function MemoryAuditPage() {
                         { label: '深度', value: 'semantic' },
                       ]}
                     />
-                    <Text type="secondary">
-                      {memorySearchEffectiveMode ? `当前：${memorySearchEffectiveMode}` : '选择检索模式'}
+                    <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                      {memorySearchMode === 'keyword'
+                        ? '标准模式：基于关键词精确匹配，速度最快，适合已知确切术语的查找。'
+                        : memorySearchMode === 'hybrid'
+                          ? '平衡模式：结合关键词与语义向量检索，兼顾精确度和召回率（推荐）。'
+                          : '深度模式：纯语义向量检索，擅长理解含义相近但措辞不同的内容，速度较慢。'}
+                      {memorySearchEffectiveMode ? ` 实际生效：${memorySearchEffectiveMode}` : ''}
                     </Text>
                   </div>
 
@@ -584,17 +596,7 @@ export default function MemoryAuditPage() {
                         <Typography.Title level={5}>Source Preview</Typography.Title>
                       </div>
 
-                      {selectedMemorySource ? (
-                        <div className="studio-run-result">
-                          <Space wrap>
-                            <Tag color="purple">{selectedMemorySource.sourceType}</Tag>
-                            <Text type="secondary">{selectedMemorySource.title}</Text>
-                          </Space>
-                          <Paragraph className="studio-result-copy">{selectedMemorySource.content}</Paragraph>
-                        </div>
-                      ) : (
-                        <Empty image={false} description="选择结果后显示全文" />
-                      )}
+                      {renderSourcePreview('选择结果后显示全文')}
                     </Card>
                   </div>
                 </Card>
