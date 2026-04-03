@@ -27,6 +27,7 @@ import {
 } from '@ant-design/icons'
 import { api } from '../api'
 import { formatDateTimeZh } from '../locale'
+import './workbench.css'
 import type { CronJob, CronJobInput, CronStatus } from '../types'
 
 const { Text } = Typography
@@ -380,7 +381,7 @@ export default function CronPage() {
           <Input
             allowClear
             prefix={<SearchOutlined />}
-            placeholder="搜索任务名称、指令或 Cron 表达式"
+            placeholder="搜索任务"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -510,7 +511,7 @@ export default function CronPage() {
               name="name"
               rules={[{ required: true, message: '请输入任务名称' }]}
             >
-              <Input placeholder="例如：早间工作总结" />
+              <Input placeholder="任务名称" />
             </Form.Item>
 
             <Form.Item label="启用任务" name="enabled" valuePropName="checked" initialValue>
@@ -526,7 +527,7 @@ export default function CronPage() {
             <Input.TextArea
               rows={5}
               aria-label="执行指令"
-              placeholder="例如：总结最近工作并给出下一步建议。"
+              placeholder="执行指令"
             />
           </Form.Item>
 
@@ -609,7 +610,7 @@ export default function CronPage() {
                   </div>
 
                   <Form.Item label="时区" name="triggerTz" initialValue={defaultTimezone}>
-                    <Input placeholder="Asia/Shanghai" />
+                    <Input placeholder="时区" />
                   </Form.Item>
 
                   <div className="cron-cron-preview">
@@ -651,10 +652,10 @@ export default function CronPage() {
               getFieldValue('payloadDeliver') ? (
                 <div className="cron-dialog-grid cron-dialog-grid-2">
                   <Form.Item label="频道" name="payloadChannel">
-                    <Input placeholder="例如：telegram" />
+                    <Input placeholder="频道" />
                   </Form.Item>
                   <Form.Item label="目标" name="payloadTo">
-                    <Input placeholder="session 或 chat id" />
+                    <Input placeholder="目标" />
                   </Form.Item>
                 </div>
               ) : null

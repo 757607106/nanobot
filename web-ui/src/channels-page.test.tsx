@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ChannelsPage from './pages/ChannelsPage'
+import { ChannelsPage } from './pages/channels'
 import { renderWithProviders } from './test/renderApp'
 
 const mockApi = vi.hoisted(() => ({

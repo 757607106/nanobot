@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { Grid } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import SectionTabs from '../components/SectionTabs'
 import { useDevMode } from '../devMode'
@@ -28,26 +27,23 @@ function resolveActiveKey(pathname: string, routes: SystemRoute[]) {
 export default function SystemLayoutPage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const screens = Grid.useBreakpoint()
   const { devMode } = useDevMode()
-  const useCompactLabels = !screens.sm
 
   const visibleRoutes = useMemo(
     () =>
       allSystemRoutes
         .filter((item) => !item.devOnly || devMode)
         .map((item) => ({
-          ...item,
-          label: useCompactLabels ? item.shortLabel : item.label,
+          key: item.key,
+          label: item.label,
         })),
-    [devMode, useCompactLabels],
+    [devMode],
   )
-  const activeKey = resolveActiveKey(location.pathname, visibleRoutes)
+  const activeKey = resolveActiveKey(location.pathname, allSystemRoutes.filter((item) => !item.devOnly || devMode))
 
   return (
     <div className="page-stack">
       <SectionTabs
-        title="系统与账户"
         activeKey={activeKey}
         onChange={(key) => navigate(key)}
         items={visibleRoutes}

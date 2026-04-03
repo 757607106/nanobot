@@ -73,21 +73,24 @@ describe('ProfilePage', () => {
     })
   })
 
-  it('renders the reference-style account management layout', async () => {
+  it('renders the console-style account management layout', async () => {
     renderPage()
 
     expect(await screen.findByText('账户管理')).toBeInTheDocument()
+    expect(screen.getByText('当前管理员')).toBeInTheDocument()
+    expect(screen.getByText('安全摘要')).toBeInTheDocument()
+    expect(screen.getByText('账号资料')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /编辑资料/ }).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: /修改密码/ }).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: /头像管理/ }).length).toBeGreaterThan(0)
-    expect(screen.getByText('owner@example.com')).toBeInTheDocument()
+    expect(screen.getAllByText('owner@example.com').length).toBeGreaterThan(0)
   })
 
   it('saves profile updates through the profile endpoint', async () => {
     const user = userEvent.setup()
     renderPage()
 
-    expect(await screen.findByText('owner@example.com')).toBeInTheDocument()
+    expect((await screen.findAllByText('owner@example.com')).length).toBeGreaterThan(0)
     await user.click(screen.getAllByRole('button', { name: /编辑资料/ })[0])
     await user.clear(screen.getByLabelText('展示名称'))
     await user.type(screen.getByLabelText('展示名称'), 'Studio Owner')

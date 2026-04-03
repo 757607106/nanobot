@@ -412,10 +412,36 @@ export function updateProviderFieldValue(
   field: 'apiKey' | 'apiBase',
   value: string,
 ) {
+  const normalizedValue = field === 'apiBase'
+    ? (value.trim() ? value : null)
+    : value
   const bindings = getAllModelBindings(config, null)
-  const bindingName = String(config.agents.defaults.binding || '').trim()
-  const targetBinding = bindingName && bindings[bindingName]?.provider === providerName
-    ? bindingName
-    : providerName
-  return updateBindingFieldValue(config, targetBinding, providerMeta, field, value)
+  const activeBindingName = String(config.agents.defaults.binding || '').trim()
+  const targetBindingName = (
+    activeBindingName && bindings[activeBindingName]?.provider === providerName
+      ? activeBindingName
+      : bindings[providerName]?.provider === providerName
+        ? providerName
+        : Object.entries(bindings).find(([, binding]) => binding.provider === providerName)?.[0]
+  ) ?? null
+
+  return {
+    ...config,
+    providers: {
+      ...config.providers,
+      [providerName]: {
+        ...(config.providers[providerName] ?? buildProviderConfig(providerMeta ?? undefined)),
+        [field]: normalizedValue,
+      },
+    },
+    modelBindings: targetBindingName
+      ? {
+          ...bindings,
+          [targetBindingName]: {
+            ...bindings[targetBindingName],
+            [field]: normalizedValue,
+          },
+        }
+      : config.modelBindings,
+  }
 }

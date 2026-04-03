@@ -1,43 +1,64 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, App, Button, Empty, Input, Modal, Progress, Space, Spin, Table, Tag, Typography } from 'antd'
+import type { ReactNode } from 'react'
 import {
+  Alert,
+  App,
+  Avatar,
+  Button,
+  Card,
+  Descriptions,
+  Flex,
+  Input,
+  Modal,
+  Progress,
+  Space,
+  Tag,
+  Typography,
+  theme,
+} from 'antd'
+import type { DescriptionsProps } from 'antd'
+import {
+  CameraOutlined,
   DeleteOutlined,
-  InboxOutlined,
   EditOutlined,
   LockOutlined,
   ReloadOutlined,
-  SaveOutlined,
+  SafetyCertificateOutlined,
   UploadOutlined,
-  UserOutlined,
 } from '@ant-design/icons'
 import { api } from '../api'
-import { getErrorMessage } from '../components/AsyncContent'
+import PageHeader from '../components/console/PageHeader'
+import SectionCard from '../components/console/SectionCard'
 import { formatDateTimeZh } from '../locale'
 import { useAuth } from '../auth'
 import { testIds } from '../testIds'
 import type { ProfileData } from '../types'
 
-const { Text } = Typography
-
 type DialogMode = 'profile' | 'password' | 'avatar' | null
 
-function getPasswordStrength(password: string): { percent: number; status: 'exception' | 'normal' | 'success'; label: string } {
+function getPasswordStrength(password: string): {
+  percent: number
+  label: string
+  color: 'error' | 'warning' | 'success'
+} {
   if (!password) {
-    return { percent: 0, status: 'normal', label: '' }
+    return { percent: 0, label: '未输入', color: 'warning' }
   }
+
   let score = 0
   if (password.length >= 8) score += 1
   if (password.length >= 12) score += 1
   if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1
   if (/\d/.test(password)) score += 1
   if (/[^a-zA-Z0-9]/.test(password)) score += 1
+
   if (score <= 2) {
-    return { percent: 33, status: 'exception', label: '弱' }
+    return { percent: 33, label: '弱', color: 'error' }
   }
   if (score <= 3) {
-    return { percent: 66, status: 'normal', label: '中' }
+    return { percent: 66, label: '中', color: 'warning' }
   }
-  return { percent: 100, status: 'success', label: '强' }
+  return { percent: 100, label: '强', color: 'success' }
 }
 
 function profileLabel(profile: ProfileData | null) {
@@ -47,9 +68,33 @@ function profileLabel(profile: ProfileData | null) {
   return profile.displayName || profile.username
 }
 
+function progressStatus(color: 'error' | 'warning' | 'success') {
+  if (color === 'error') return 'exception'
+  if (color === 'success') return 'success'
+  return 'active'
+}
+
+function FieldGroup({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <Flex vertical gap={8}>
+      <Typography.Text strong className="text-[13px]">
+        {label}
+      </Typography.Text>
+      {children}
+    </Flex>
+  )
+}
+
 export default function ProfilePage() {
-  const { message, modal } = App.useApp()
+  const { message } = App.useApp()
   const { refresh } = useAuth()
+  const { token } = theme.useToken()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -57,6 +102,7 @@ export default function ProfilePage() {
   const [savingPassword, setSavingPassword] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [dialogMode, setDialogMode] = useState<DialogMode>(null)
+  const [confirmDeleteAvatarOpen, setConfirmDeleteAvatarOpen] = useState(false)
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
@@ -75,11 +121,6 @@ export default function ProfilePage() {
     void loadProfile()
   }, [])
 
-  const accountRows = useMemo(
-    () => (profile ? [{ key: 'current-account', ...profile }] : []),
-    [profile],
-  )
-
   function applyProfile(next: ProfileData) {
     setProfile(next)
     setUsername(next.username)
@@ -95,8 +136,8 @@ export default function ProfilePage() {
       setProfileError(null)
       setPasswordError(null)
       setAvatarError(null)
-    } catch (error) {
-      setProfileError(getErrorMessage(error, '加载管理员资料失败'))
+    } catch (loadError) {
+      setProfileError(loadError instanceof Error ? loadError.message : '加载管理员资料失败')
     } finally {
       setLoading(false)
     }
@@ -148,8 +189,8 @@ export default function ProfilePage() {
       await refresh()
       setDialogMode(null)
       message.success('管理员资料已保存')
-    } catch (error) {
-      setProfileError(getErrorMessage(error, '保存管理员资料失败'))
+    } catch (saveError) {
+      setProfileError(saveError instanceof Error ? saveError.message : '保存管理员资料失败')
     } finally {
       setSavingProfile(false)
     }
@@ -183,8 +224,8 @@ export default function ProfilePage() {
       await refresh()
       setDialogMode(null)
       message.success('密码已更新，旧会话已失效')
-    } catch (error) {
-      setPasswordError(getErrorMessage(error, '更新密码失败'))
+    } catch (saveError) {
+      setPasswordError(saveError instanceof Error ? saveError.message : '更新密码失败')
     } finally {
       setSavingPassword(false)
     }
@@ -207,376 +248,467 @@ export default function ProfilePage() {
         fileInputRef.current.value = ''
       }
       setAvatarError(null)
+      setDialogMode(null)
       message.success('头像已更新')
-    } catch (error) {
-      setAvatarError(getErrorMessage(error, '上传头像失败'))
+    } catch (uploadError) {
+      setAvatarError(uploadError instanceof Error ? uploadError.message : '上传头像失败')
     } finally {
       setUploadingAvatar(false)
     }
   }
 
   async function handleDeleteAvatar() {
-    modal.confirm({
-      title: '移除头像',
-      content: '确定要移除当前头像吗？移除后将显示默认占位图标。',
-      okText: '移除',
-      okButtonProps: { danger: true },
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          setUploadingAvatar(true)
-          const result = await api.deleteProfileAvatar()
-          applyProfile(result.profile)
-          setSelectedFile(null)
-          if (fileInputRef.current) {
-            fileInputRef.current.value = ''
-          }
-          setAvatarError(null)
-          message.success('头像已移除')
-        } catch (error) {
-          setAvatarError(getErrorMessage(error, '移除头像失败'))
-        } finally {
-          setUploadingAvatar(false)
-        }
-      },
-    })
+    try {
+      setUploadingAvatar(true)
+      const result = await api.deleteProfileAvatar()
+      applyProfile(result.profile)
+      setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      setAvatarError(null)
+      setConfirmDeleteAvatarOpen(false)
+      setDialogMode(null)
+      message.success('头像已移除')
+    } catch (deleteError) {
+      setAvatarError(deleteError instanceof Error ? deleteError.message : '移除头像失败')
+    } finally {
+      setUploadingAvatar(false)
+    }
   }
+
+  function handleAvatarFile(file: File | null) {
+    setSelectedFile(file)
+    setAvatarError(null)
+  }
+
+  const profileItems: DescriptionsProps['items'] = [
+    { key: 'username', label: '用户名', children: profile?.username || '--' },
+    { key: 'displayName', label: '展示名称', children: profile?.displayName || '未设置' },
+    { key: 'email', label: '邮箱', children: profile?.email || '未设置' },
+  ]
+
+  const securityItems: DescriptionsProps['items'] = [
+    { key: 'updatedAt', label: '资料更新时间', children: profile?.updatedAt ? formatDateTimeZh(profile.updatedAt) : '--' },
+    { key: 'avatarUpdatedAt', label: '头像更新时间', children: profile?.avatarUpdatedAt ? formatDateTimeZh(profile.avatarUpdatedAt) : '尚未更新头像' },
+    { key: 'createdAt', label: '创建时间', children: profile?.createdAt ? formatDateTimeZh(profile.createdAt) : '--' },
+  ]
 
   if (loading && !profile) {
     return (
-      <div className="center-box page-card">
-        <Spin />
+      <div className="page-stack">
+        <PageHeader title="账户管理" subtitle="正在加载资料..." />
+        <div className="page-content-wrapper px-[var(--nb-layout-gutter)]">
+          <Flex vertical gap={24}>
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+              <SectionCard loading />
+              <SectionCard loading />
+            </div>
+          </Flex>
+        </div>
       </div>
     )
   }
 
   if (!profile) {
     return (
-      <section className="account-admin-shell">
-        <div className="account-admin-topbar">
-          <div className="account-admin-title-chip">账户管理</div>
-          <div className="account-admin-topbar-actions">
-            <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} loading={loading}>
+      <Flex vertical gap={24}>
+        <PageHeader
+          title="账户管理"
+          subtitle="当前无法读取管理员资料。"
+          actions={(
+            <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()}>
               刷新
             </Button>
-          </div>
-        </div>
-        <div className="account-admin-table-shell">
-          <Empty description="当前无法读取管理员资料" />
-        </div>
-      </section>
+          )}
+        />
+        <Alert type="error" showIcon message={profileError || '当前无法读取管理员资料。'} />
+      </Flex>
     )
   }
 
   return (
-    <section className="account-admin-shell">
-      <div className="account-admin-topbar">
-        <div className="account-admin-title-chip">账户管理</div>
-        <div className="account-admin-topbar-actions">
-          <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} loading={loading}>
-            刷新
-          </Button>
-          <Button icon={<EditOutlined />} onClick={openProfileDialog}>
-            编辑资料
-          </Button>
-          <Button icon={<LockOutlined />} onClick={openPasswordDialog}>
-            修改密码
-          </Button>
-          <Button type="primary" icon={<UploadOutlined />} onClick={openAvatarDialog}>
-            头像管理
-          </Button>
+    <div className="page-stack">
+      <PageHeader
+        title="账户管理"
+        subtitle="维护管理员资料、密码安全和级别。"
+        actions={(
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} disabled={loading}>
+              刷新
+            </Button>
+            <Button 
+              type="primary" 
+              icon={<EditOutlined />} 
+              onClick={openProfileDialog}
+              style={{ borderRadius: 12 }}
+            >
+              编辑资料
+            </Button>
+          </Space>
+        )}
+      />
+
+      <div className="page-content-wrapper px-[var(--nb-layout-gutter)] pb-10">
+        <div className="flex flex-col gap-6">
+          {profileError && dialogMode !== 'profile' ? <Alert type="error" showIcon message={profileError} /> : null}
+
+          <div className="grid gap-4 grid-cols-1 lg:grid-cols-[1fr_360px]">
+            <SectionCard title="当前管理员" description="账户身份与识别。">
+              <Flex align="center" gap={32} wrap="wrap">
+                <div style={{ position: 'relative' }}>
+                  <Avatar
+                    src={profile.avatarUrl || undefined}
+                    alt={profileLabel(profile)}
+                    size={120}
+                    style={{
+                      background: 'var(--nb-card-selected-bg)',
+                      color: 'var(--nb-accent)',
+                      fontSize: 48,
+                      border: '4px solid var(--nb-card-subtle-border)',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
+                    }}
+                  >
+                    {profileLabel(profile).charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Button
+                    icon={<CameraOutlined />}
+                    size="small"
+                    shape="circle"
+                    style={{
+                      position: 'absolute',
+                      bottom: 4,
+                      right: 4,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    }}
+                    onClick={openAvatarDialog}
+                  />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <Flex vertical gap={12}>
+                    <Flex gap={8} wrap="wrap" align="center">
+                      <Typography.Title level={2} style={{ margin: 0, fontSize: 28, letterSpacing: '-0.02em' }}>
+                        {profile.username}
+                      </Typography.Title>
+                      <Tag color="gold" bordered={false} style={{ margin: 0, borderRadius: 6, fontWeight: 600 }}>ADMIN</Tag>
+                    </Flex>
+
+                    <Flex vertical gap={4}>
+                      <Typography.Text strong style={{ fontSize: 16 }}>
+                        {profile.displayName || '未设置展示名称'}
+                      </Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 14 }}>
+                        {profile.email || '未设置邮箱地址'}
+                      </Typography.Text>
+                    </Flex>
+                  </Flex>
+                </div>
+              </Flex>
+            </SectionCard>
+
+            <SectionCard title="安全摘要" description="鉴权状态与审计。">
+              <Flex vertical gap={20}>
+                <div
+                  style={{
+                    padding: '16px',
+                    borderRadius: 16,
+                    background: 'var(--nb-card-subtle-bg)',
+                    border: '1px solid var(--nb-card-subtle-border)',
+                  }}
+                >
+                  <Flex align="center" gap={10} style={{ marginBottom: 12 }}>
+                    <SafetyCertificateOutlined style={{ color: 'var(--nb-success)' }} />
+                    <Typography.Text strong>实例鉴权</Typography.Text>
+                  </Flex>
+                  <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+                    当前实例由 Nanobot 管理，一个实例只能拥有一个主管理员。
+                  </Typography.Paragraph>
+                </div>
+
+                <Descriptions
+                  colon={false}
+                  column={1}
+                  size="small"
+                  items={securityItems}
+                  labelStyle={{ color: 'var(--nb-text-quaternary)', width: 120 }}
+                  contentStyle={{ fontWeight: 500 }}
+                />
+              </Flex>
+            </SectionCard>
+          </div>
+
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            <SectionCard title="基本账户信息">
+              <Descriptions
+                colon={false}
+                column={1}
+                size="small"
+                items={profileItems}
+                labelStyle={{ color: 'var(--nb-text-quaternary)', width: 100 }}
+              />
+            </SectionCard>
+
+            <SectionCard title="安全与密码轮换">
+              <Flex vertical gap={20}>
+                <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+                  为保护您的账户安全，建议开启高强度密码（12位+混合字符）并定期轮换。
+                </Typography.Paragraph>
+                <Button 
+                  block 
+                  icon={<LockOutlined />} 
+                  onClick={openPasswordDialog}
+                  style={{ borderRadius: 12, height: 44 }}
+                >
+                  轮换登录密码
+                </Button>
+              </Flex>
+            </SectionCard>
+
+            <SectionCard title="头像与视觉资产">
+              <Flex vertical gap={20}>
+                 <Descriptions
+                  colon={false}
+                  column={1}
+                  size="small"
+                  items={[
+                    { key: 'avatarStatus', label: '状态', children: profile?.hasAvatar ? <Tag color="success" bordered={false}>已就绪</Tag> : <Tag bordered={false}>未设置</Tag> },
+                    { key: 'avatarTime', label: '最近更新', children: profile?.avatarUpdatedAt ? formatDateTimeZh(profile.avatarUpdatedAt).split(' ')[0] : '无' },
+                  ]}
+                  labelStyle={{ color: 'var(--nb-text-quaternary)', width: 80 }}
+                />
+                <Button 
+                  block 
+                  icon={<UploadOutlined />} 
+                  onClick={openAvatarDialog}
+                  style={{ borderRadius: 12, height: 44 }}
+                >
+                  管理头像
+                </Button>
+              </Flex>
+            </SectionCard>
+          </div>
         </div>
       </div>
 
-      <div className="account-admin-summary">
-        <Tag color="orange">管理员</Tag>
-        <span>当前实例仅开放当前管理员账号资料管理，页面样式参照参考项目的用户管理页。</span>
-      </div>
-
-      {profileError && dialogMode !== 'profile' ? (
-        <Alert className="account-admin-alert" type="error" showIcon message={profileError} />
-      ) : null}
-
-      <div className="account-admin-table-shell">
-        <Table
-          pagination={false}
-          rowKey="username"
-          scroll={{ x: 'max-content' }}
-          dataSource={accountRows}
-          locale={{ emptyText: '暂无账号数据' }}
-          columns={[
-            {
-              title: '用户名',
-              dataIndex: 'username',
-              key: 'username',
-              render: (value: string, row: ProfileData) => (
-                <div className="account-admin-user">
-                  <div className="account-admin-avatar">
-                    {row.avatarUrl ? (
-                      <img src={row.avatarUrl} alt={profileLabel(row)} className="account-admin-avatar-image" />
-                    ) : (
-                      <UserOutlined />
-                    )}
-                  </div>
-                  <div className="account-admin-user-copy">
-                    <div className="account-admin-user-primary">
-                      <strong>{value}</strong>
-                      <span>当前账号</span>
-                    </div>
-                    <div className="account-admin-user-secondary">
-                      {row.displayName || '未设置展示名称'}
-                    </div>
-                  </div>
-                </div>
-              ),
-            },
-            {
-              title: '身份',
-              key: 'role',
-              render: () => <Tag color="orange">管理员</Tag>,
-            },
-            {
-              title: '联系信息',
-              key: 'contact',
-              render: (_: unknown, row: ProfileData) => (
-                <div className="account-admin-multi-line">
-                  <strong>{row.email || '--'}</strong>
-                  <span>{row.displayName || '展示名称未设置'}</span>
-                </div>
-              ),
-            },
-            {
-              title: '状态',
-              key: 'state',
-              render: (_: unknown, row: ProfileData) => (
-                <div className="account-admin-multi-line">
-                  <strong>{row.hasAvatar ? '头像已设置' : '头像未设置'}</strong>
-                  <span>更新时间：{formatDateTimeZh(row.updatedAt)}</span>
-                </div>
-              ),
-            },
-            {
-              title: '操作',
-              key: 'actions',
-              align: 'right' as const,
-              render: () => (
-                <Space size={[8, 8]} wrap className="account-admin-action-row">
-                  <Button size="small" onClick={openProfileDialog}>
-                    编辑资料
-                  </Button>
-                  <Button size="small" onClick={openPasswordDialog}>
-                    修改密码
-                  </Button>
-                  <Button size="small" type="default" onClick={openAvatarDialog}>
-                    头像
-                  </Button>
-                </Space>
-              ),
-            },
-          ]}
-        />
-      </div>
-
+      {/* 编辑账户资料弹窗 */}
       <Modal
-        destroyOnHidden
         open={dialogMode === 'profile'}
         title="编辑账户资料"
-        onCancel={() => setDialogMode(null)}
-        onOk={() => void handleSaveProfile()}
-        confirmLoading={savingProfile}
         okText="保存"
+        cancelText="取消"
+        destroyOnHidden
+        centered
+        confirmLoading={savingProfile}
+        onOk={() => void handleSaveProfile()}
+        onCancel={() => setDialogMode(null)}
       >
-        <div className="account-dialog-stack">
-          <label className="account-dialog-field">
-            <span>管理员名称</span>
+        <Flex vertical gap={16} className="mt-2">
+          {profileError ? <Alert type="error" showIcon message={profileError} /> : null}
+
+          <FieldGroup label="用户名">
             <Input
-              aria-label="管理员名称"
+              aria-label="用户名"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               data-testid={testIds.profile.username}
             />
-          </label>
+          </FieldGroup>
 
-          <label className="account-dialog-field">
-            <span>展示名称</span>
+          <FieldGroup label="展示名称">
             <Input
               aria-label="展示名称"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="用于页面展示"
               data-testid={testIds.profile.displayName}
             />
-          </label>
+          </FieldGroup>
 
-          <label className="account-dialog-field">
-            <span>邮箱</span>
+          <FieldGroup label="邮箱">
             <Input
               aria-label="邮箱"
+              type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="owner@example.com"
               data-testid={testIds.profile.email}
             />
-          </label>
-
-          {profileError ? <Alert type="error" showIcon message={profileError} /> : null}
-        </div>
+          </FieldGroup>
+        </Flex>
       </Modal>
 
+      {/* 修改密码弹窗 */}
       <Modal
-        destroyOnHidden
         open={dialogMode === 'password'}
         title="修改密码"
-        onCancel={() => setDialogMode(null)}
-        onOk={() => void handleRotatePassword()}
-        confirmLoading={savingPassword}
         okText="更新密码"
+        cancelText="取消"
+        destroyOnHidden
+        centered
+        confirmLoading={savingPassword}
+        onOk={() => void handleRotatePassword()}
+        onCancel={() => setDialogMode(null)}
       >
-        <div className="account-dialog-stack">
-          <label className="account-dialog-field">
-            <span>当前密码</span>
+        <Flex vertical gap={16} className="mt-2">
+          {passwordError ? <Alert type="error" showIcon message={passwordError} /> : null}
+
+          <FieldGroup label="当前密码">
             <Input.Password
               aria-label="当前密码"
-              autoComplete="current-password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
               data-testid={testIds.profile.currentPassword}
             />
-          </label>
+          </FieldGroup>
 
-          <label className="account-dialog-field">
-            <span>新密码</span>
+          <FieldGroup label="新密码">
             <Input.Password
               aria-label="新密码"
-              autoComplete="new-password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               data-testid={testIds.profile.newPassword}
             />
-            {newPassword ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <Progress
-                  percent={passwordStrength.percent}
-                  status={passwordStrength.status}
-                  showInfo={false}
-                  size="small"
-                  style={{ flex: 1, margin: 0 }}
-                />
-                <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                  {passwordStrength.label}
-                </Text>
-              </div>
-            ) : null}
-          </label>
+          </FieldGroup>
 
-          <label className="account-dialog-field">
-            <span>确认新密码</span>
+          <div
+            className="p-3.5 rounded-[14px]"
+            style={{
+              border: `1px solid ${token.colorBorderSecondary}`,
+              background: token.colorBgLayout,
+            }}
+          >
+            <Flex justify="space-between" align="center" gap={12} wrap="wrap" className="mb-2">
+              <Typography.Text type="secondary">密码强度</Typography.Text>
+              <Tag color={passwordStrength.color === 'success' ? 'green' : passwordStrength.color === 'error' ? 'red' : 'gold'}>
+                {passwordStrength.label}
+              </Tag>
+            </Flex>
+            <Progress
+              percent={passwordStrength.percent}
+              status={progressStatus(passwordStrength.color)}
+              showInfo={false}
+              size="small"
+            />
+          </div>
+
+          <FieldGroup label="确认新密码">
             <Input.Password
               aria-label="确认新密码"
-              autoComplete="new-password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               data-testid={testIds.profile.confirmPassword}
             />
-          </label>
-
-          {passwordError ? <Alert type="error" showIcon message={passwordError} /> : null}
-        </div>
+          </FieldGroup>
+        </Flex>
       </Modal>
 
+      {/* 头像管理弹窗 */}
       <Modal
-        destroyOnHidden
         open={dialogMode === 'avatar'}
         title="头像管理"
-        onCancel={() => setDialogMode(null)}
+        destroyOnHidden
+        centered
         footer={(
-          <Space wrap>
-            <Button onClick={() => setDialogMode(null)}>关闭</Button>
+          <Flex justify="space-between" align="center" gap={12} wrap="wrap">
             <Button
               danger
               icon={<DeleteOutlined />}
-              loading={uploadingAvatar}
-              disabled={!profile.hasAvatar}
-              onClick={() => void handleDeleteAvatar()}
+              onClick={() => setConfirmDeleteAvatarOpen(true)}
+              disabled={!profile.hasAvatar || uploadingAvatar}
             >
               移除头像
             </Button>
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={uploadingAvatar}
-              onClick={() => void handleUploadAvatar()}
-            >
-              上传头像
-            </Button>
-          </Space>
-        )}
-      >
-        <div className="account-avatar-dialog">
-          <div className="account-avatar-preview">
-            <div className="account-admin-avatar account-admin-avatar-large">
-              {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt={profileLabel(profile)} className="account-admin-avatar-image" />
-              ) : (
-                <UserOutlined />
-              )}
-            </div>
-            <div className="account-avatar-copy">
-              <strong>{profileLabel(profile)}</strong>
-              <span>@{profile.username}</span>
-              <span>{profile.hasAvatar ? '当前已配置头像' : '当前未设置头像'}</span>
-            </div>
-          </div>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            className="hidden-file-input"
-            onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-          />
+            <Space>
+              <Button onClick={() => setDialogMode(null)}>取消</Button>
+              <Button
+                type="primary"
+                icon={<CameraOutlined />}
+                loading={uploadingAvatar}
+                onClick={() => void handleUploadAvatar()}
+              >
+                保存头像
+              </Button>
+            </Space>
+          </Flex>
+        )}
+        onCancel={() => setDialogMode(null)}
+      >
+        <Flex vertical gap={16} className="mt-2">
+          {avatarError ? <Alert type="error" showIcon message={avatarError} /> : null}
 
           <div
-            className="account-avatar-dropzone"
-            style={{
-              border: `2px dashed ${draggingOver ? 'var(--ant-color-primary)' : 'var(--ant-color-border)'}`,
-              borderRadius: 8,
-              padding: '24px 16px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              transition: 'border-color 0.2s, background 0.2s',
-              background: draggingOver ? 'var(--ant-color-primary-bg)' : 'transparent',
+            onDragOver={(event) => {
+              event.preventDefault()
+              setDraggingOver(true)
             }}
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setDraggingOver(true) }}
-            onDragLeave={() => setDraggingOver(false)}
-            onDrop={(e) => {
-              e.preventDefault()
+            onDragLeave={(event) => {
+              event.preventDefault()
               setDraggingOver(false)
-              const file = e.dataTransfer.files?.[0]
-              if (file && /^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
-                setSelectedFile(file)
-              } else {
-                setAvatarError('仅支持 PNG / JPEG / WEBP / GIF 格式的图片。')
-              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              setDraggingOver(false)
+              handleAvatarFile(event.dataTransfer.files?.[0] || null)
+            }}
+            className="p-6 rounded-5"
+            style={{
+              border: `1px dashed ${draggingOver ? token.colorPrimary : token.colorBorderSecondary}`,
+              background: draggingOver ? `${token.colorPrimary}12` : token.colorBgLayout,
             }}
           >
-            <InboxOutlined style={{ fontSize: 32, color: 'var(--ant-color-primary)', marginBottom: 8 }} />
-            <div>
-              <Text type="secondary">
-                {selectedFile ? selectedFile.name : '点击或拖拽图片到此区域上传'}
-              </Text>
-            </div>
-            <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                PNG / JPEG / WEBP / GIF，2 MB 内
-              </Text>
-            </div>
-          </div>
+            <Flex vertical align="center" gap={16}>
+              <Avatar
+                src={profile.avatarUrl || undefined}
+                alt={profileLabel(profile)}
+                size={96}
+                style={{
+                  background: `${token.colorPrimary}16`,
+                  color: token.colorPrimary,
+                  fontSize: 32,
+                }}
+              >
+                {profileLabel(profile).charAt(0).toUpperCase()}
+              </Avatar>
 
-          {avatarError ? <Alert type="error" showIcon message={avatarError} style={{ marginTop: 8 }} /> : null}
-        </div>
+              <Flex vertical align="center" gap={6}>
+                <Typography.Text strong>拖拽图片到这里，或手动选择文件</Typography.Text>
+                <Typography.Text type="secondary">
+                  当前选择：{selectedFile ? selectedFile.name : '尚未选择新头像'}
+                </Typography.Text>
+              </Flex>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(event) => handleAvatarFile(event.target.files?.[0] || null)}
+              />
+
+              <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+                选择图片
+              </Button>
+            </Flex>
+          </div>
+        </Flex>
       </Modal>
-    </section>
+
+      {/* 删除头像确认弹窗 */}
+      <Modal
+        open={confirmDeleteAvatarOpen}
+        title="移除头像"
+        okText="移除"
+        cancelText="取消"
+        okButtonProps={{ danger: true, loading: uploadingAvatar }}
+        destroyOnHidden
+        centered
+        onOk={() => void handleDeleteAvatar()}
+        onCancel={() => setConfirmDeleteAvatarOpen(false)}
+      >
+        <Typography.Paragraph type="secondary" className="!mt-2 leading-relaxed">
+          确定要移除当前头像吗？移除后将显示默认占位头像。
+        </Typography.Paragraph>
+      </Modal>
+    </div>
   )
 }

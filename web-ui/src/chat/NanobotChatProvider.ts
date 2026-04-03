@@ -96,19 +96,8 @@ function createFetchChatStream(
   }
 }
 
-function getStreamEvents(info: TransformMessage<ChatMessage, SSEOutput>) {
-  const events: StreamEvent[] = []
-  const currentEvent = parseStreamEvent(info.chunk)
-  if (currentEvent) {
-    events.push(currentEvent)
-  }
-  for (const item of info.chunks) {
-    const event = parseStreamEvent(item)
-    if (event) {
-      events.push(event)
-    }
-  }
-  return events
+function getStreamEvents(chunks: SSEOutput[]): StreamEvent[] {
+  return chunks.map(parseStreamEvent).filter((event): event is StreamEvent => event !== null)
 }
 
 export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatRequestInput, SSEOutput> {
@@ -122,24 +111,11 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
     })
   }
 
-  transformParams(
-    requestParams: Partial<ChatRequestInput>,
-    options: XRequestOptions<ChatRequestInput, SSEOutput, ChatMessage>,
-  ) {
+  transformParams(requestParams: Partial<ChatRequestInput>) {
     const sessionId = String(requestParams.sessionId || '').trim()
     const query = String(requestParams.query || '').trim()
 
-    if (!sessionId) {
-      throw new Error('sessionId is required')
-    }
-
-    if (!query) {
-      throw new Error('query is required')
-    }
-
     return {
-      ...(options?.params || {}),
-      ...requestParams,
       sessionId,
       query,
       displayContent: String(requestParams.displayContent || query).trim(),
@@ -158,7 +134,7 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
   }
 
   transformMessage(info: TransformMessage<ChatMessage, SSEOutput>) {
-    const events = getStreamEvents(info)
+    const events = getStreamEvents(info.chunks)
     const doneEvent = [...events].reverse().find((event) => event.type === 'done')
 
     if (doneEvent?.assistantMessage) {
@@ -170,18 +146,13 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
 
     const progressEvents = events.filter((event) => event.type === 'progress')
     if (progressEvents.length > 0) {
-      return progressEvents.reduce((currentMessage, event) => {
-        return appendProgressStep(currentMessage, event.content, Boolean(event.toolHint))
-      }, normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() }))
+      return progressEvents.reduce(
+        (message, event) => appendProgressStep(message, event.content, Boolean(event.toolHint)),
+        normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() }),
+      )
     }
 
-    return normalizeChatMessage(
-      info.originMessage ?? {
-        role: 'assistant',
-        content: '',
-        createdAt: new Date().toISOString(),
-      },
-    )
+    return normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() })
   }
 }
 

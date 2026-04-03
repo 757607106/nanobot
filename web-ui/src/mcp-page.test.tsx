@@ -2,7 +2,8 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import McpPage, { parseMappingInput } from './pages/McpPage'
+import McpPage from './pages/mcp'
+import { parseMappingInput } from './pages/mcp/utils'
 import { renderWithProviders } from './test/renderApp'
 
 const mockApi = vi.hoisted(() => ({

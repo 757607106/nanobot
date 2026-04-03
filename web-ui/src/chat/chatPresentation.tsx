@@ -1,13 +1,16 @@
+import type { ReactNode } from 'react'
 import { NodeIndexOutlined, PaperClipOutlined, ToolOutlined } from '@ant-design/icons'
 import { ThoughtChain } from '@ant-design/x'
 import type { ThoughtChainItem } from '@ant-design/x'
 import type { MessageInfo } from '@ant-design/x-sdk'
-import { Space, Tag, Tooltip } from 'antd'
+import { Collapse, Flex, Space, Tag, Tooltip, Typography, theme } from 'antd'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { formatDateTimeZh } from '../locale'
 import type { ChatAttachmentRef, ChatMessage, ChatToolCall } from '../types'
 import { getToolCallName, normalizeChatMessage } from './chatMessageUtils'
+
+const { Text, Paragraph } = Typography
 
 const TOOL_RESULT_PREVIEW_LIMIT = 1400
 
@@ -92,14 +95,31 @@ function buildThoughtChainItems(
     } else if (status === 'error' || status === 'abort') {
       itemStatus = isLast ? 'error' : 'success'
     }
+    const isTool = step.kind === 'tool'
     return {
       key: step.key,
-      icon: step.kind === 'tool' ? <ToolOutlined /> : <NodeIndexOutlined />,
-      title: step.kind === 'tool' ? `工具：${step.label}` : step.label,
-      description: step.kind === 'tool' ? '工具调用进度' : '执行过程',
+      icon: isTool ? <ToolOutlined /> : <NodeIndexOutlined />,
+      title: isTool ? `工具：${step.label}` : step.label,
+      description: isTool ? '正在执行工具调用' : '执行过程',
       status: itemStatus,
     }
   })
+}
+
+function MetaLabel({ children }: { children: ReactNode }) {
+  return (
+    <Text
+      type="secondary"
+      style={{
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+      }}
+    >
+      {children}
+    </Text>
+  )
 }
 
 function MarkdownBubble({ content }: { content: string }) {
@@ -148,12 +168,14 @@ export function AttachmentTags({
   removable?: boolean
   onRemove?: (relativePath: string) => void
 }) {
+  const { token } = theme.useToken()
+
   if (!attachments.length) {
     return null
   }
 
   return (
-    <div className="chat-attachment-tags">
+    <Flex wrap gap={8}>
       {attachments.map((item) => (
         <Tooltip key={item.relativePath} title={item.relativePath}>
           <Tag
@@ -164,63 +186,132 @@ export function AttachmentTags({
             }}
             icon={<PaperClipOutlined />}
             className="chat-attachment-tag"
+            style={{
+              marginInlineEnd: 0,
+              maxWidth: '100%',
+              borderRadius: 999,
+              background: token.colorFillQuaternary,
+              borderColor: token.colorBorderSecondary,
+            }}
           >
             {getAttachmentName(item)}
           </Tag>
         </Tooltip>
       ))}
-    </div>
+    </Flex>
   )
 }
 
 function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
+  const { token } = theme.useToken()
+
   if (!toolCalls.length) {
     return null
   }
 
   return (
-    <div className="chat-message-meta-block">
-      <div className="chat-message-meta-label">工具调用</div>
-      <div className="chat-tool-call-list">
-        {toolCalls.map((toolCall, index) => {
+    <Flex vertical gap={8}>
+      <MetaLabel>工具调用</MetaLabel>
+      <Collapse
+        size="small"
+        items={toolCalls.map((toolCall, index) => {
           const name = getToolCallName(toolCall)
-          return (
-            <details key={`${name}-${index}`} className="chat-tool-call-card">
-              <summary className="chat-tool-call-summary">
-                <span className="chat-tool-call-title">
+          return {
+            key: `${name}-${index}`,
+            label: (
+              <Flex justify="space-between" align="center" gap={12} wrap="wrap">
+                <Space size={8}>
                   <ToolOutlined />
-                  <span>{name}</span>
-                </span>
-                <span className="chat-tool-call-preview">{getToolArgumentsPreview(toolCall)}</span>
-              </summary>
-              <pre className="chat-tool-call-pre">{formatToolArgumentsBlock(toolCall)}</pre>
-            </details>
-          )
+                  <Text strong>{name}</Text>
+                </Space>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {getToolArgumentsPreview(toolCall)}
+                </Text>
+              </Flex>
+            ),
+            children: (
+              <Paragraph
+                code
+                style={{
+                  margin: 0,
+                  padding: 12,
+                  borderRadius: token.borderRadiusLG,
+                  background: token.colorFillAlter,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {formatToolArgumentsBlock(toolCall)}
+              </Paragraph>
+            ),
+          }
         })}
-      </div>
-    </div>
+      />
+    </Flex>
   )
 }
 
 function ToolResultCard({ message }: { message: ChatMessage }) {
+  const { token } = theme.useToken()
   const fullContent = String(message.content || '')
   const previewContent = truncateContent(fullContent)
   const isTruncated = previewContent !== fullContent
 
+  const codeBlockStyle: React.CSSProperties = {
+    margin: 0,
+    padding: 12,
+    borderRadius: token.borderRadiusLG,
+    background: token.colorFillAlter,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
+    maxHeight: 400,
+    overflow: 'auto',
+  }
+
   return (
-    <div className="chat-tool-result-card">
-      <div className="chat-tool-result-head">
-        <span>{message.name || 'tool'}</span>
-        <span>{message.createdAt ? formatDateTimeZh(message.createdAt) : '刚刚'}</span>
-      </div>
-      <pre className="chat-tool-result-pre">{previewContent}</pre>
-      {isTruncated ? (
-        <details className="chat-tool-result-details">
-          <summary className="chat-tool-result-summary">展开完整工具结果</summary>
-          <pre className="chat-tool-result-pre is-expanded">{fullContent}</pre>
-        </details>
-      ) : null}
-    </div>
+    <Collapse
+      size="small"
+      items={[
+        {
+          key: 'result',
+          label: (
+            <Flex justify="space-between" align="center" gap={12} wrap="wrap">
+              <Space size={8}>
+                <ToolOutlined />
+                <Text strong>{message.name || 'tool'}</Text>
+              </Space>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {message.createdAt ? formatDateTimeZh(message.createdAt) : '刚刚'}
+              </Text>
+            </Flex>
+          ),
+          children: (
+            <Flex vertical gap={8}>
+              <Paragraph code style={codeBlockStyle}>
+                {previewContent}
+              </Paragraph>
+              {isTruncated ? (
+                <Collapse
+                  ghost
+                  size="small"
+                  items={[
+                    {
+                      key: 'full',
+                      label: '展开完整工具结果',
+                      children: (
+                        <Paragraph code style={codeBlockStyle}>
+                          {fullContent}
+                        </Paragraph>
+                      ),
+                    },
+                  ]}
+                />
+              ) : null}
+            </Flex>
+          ),
+        },
+      ]}
+    />
   )
 }
 
@@ -235,6 +326,7 @@ export function ChatMessageBody({
   assistantLoadingCopy?: string
   showToolCalls?: boolean
 }) {
+  const { token } = theme.useToken()
   const message = normalizeChatMessage(info.message)
   const progressSteps = message.progressSteps ?? []
 
@@ -249,10 +341,10 @@ export function ChatMessageBody({
     (info.status === 'loading' || info.status === 'updating')
 
   return (
-    <div className="chat-message-stack">
+    <Flex vertical gap={12}>
       {progressSteps.length > 0 ? (
-        <div className="chat-message-meta-block">
-          <div className="chat-message-meta-label">执行过程</div>
+        <Flex vertical gap={8}>
+          <MetaLabel>执行过程</MetaLabel>
           {progressDisplay === 'tag-list' ? (
             <Space wrap>
               {progressSteps.map((step) => (
@@ -262,9 +354,17 @@ export function ChatMessageBody({
               ))}
             </Space>
           ) : (
-            <ThoughtChain items={buildThoughtChainItems(progressSteps, info.status)} className="chat-thought-chain" />
+            <ThoughtChain
+              items={buildThoughtChainItems(progressSteps, info.status)}
+              style={{
+                padding: 10,
+                borderRadius: token.borderRadiusLG,
+                background: token.colorFillQuaternary,
+                border: `1px solid ${token.colorBorderSecondary}`,
+              }}
+            />
           )}
-        </div>
+        </Flex>
       ) : null}
 
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
@@ -272,10 +372,10 @@ export function ChatMessageBody({
       {hasMessageContent ? (
         <MarkdownBubble content={String(message.content ?? '')} />
       ) : showPlaceholderCopy ? (
-        <div className="chat-loading-copy">{assistantLoadingCopy}</div>
+        <Text type="secondary">{assistantLoadingCopy}</Text>
       ) : null}
 
       {showToolCalls && message.role === 'assistant' ? <ToolCallCards toolCalls={message.toolCalls || []} /> : null}
-    </div>
+    </Flex>
   )
 }

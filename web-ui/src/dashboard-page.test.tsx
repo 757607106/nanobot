@@ -123,9 +123,11 @@ describe('DashboardPage', () => {
   it('renders the dashboard as a standalone page', async () => {
     renderPage()
 
-    expect(await screen.findByText('系统总览')).toBeInTheDocument()
-    expect(screen.getByText('渠道概览')).toBeInTheDocument()
-    expect(screen.getByText('技能概览')).toBeInTheDocument()
+    expect(await screen.findByText('平台总览')).toBeInTheDocument()
+    expect(screen.getByText('待处理事项')).toBeInTheDocument()
+    expect(screen.getByText('关键入口')).toBeInTheDocument()
+    expect(screen.getByText('渠道运行态')).toBeInTheDocument()
+    expect(screen.getAllByText('技能部署').length).toBeGreaterThan(0)
     expect(screen.getByText('自动化状态')).toBeInTheDocument()
     expect(screen.getAllByText('Telegram').length).toBeGreaterThan(0)
     expect(screen.getByText('任务引擎')).toBeInTheDocument()
@@ -134,7 +136,7 @@ describe('DashboardPage', () => {
   it('loads standalone dashboard data through the backend summary endpoints', async () => {
     renderPage()
 
-    expect(await screen.findByText('系统总览')).toBeInTheDocument()
+    expect(await screen.findByText('平台总览')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(mockApi.getChannels).toHaveBeenCalledTimes(1)

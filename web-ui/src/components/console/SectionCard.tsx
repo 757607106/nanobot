@@ -1,0 +1,77 @@
+import type { ReactNode } from 'react'
+import { Card, Flex, Typography } from 'antd'
+
+interface SectionCardProps {
+  title?: string
+  description?: string
+  action?: ReactNode
+  loading?: boolean
+  children?: ReactNode
+}
+
+export default function SectionCard({
+  title,
+  description,
+  action,
+  loading,
+  children,
+}: SectionCardProps) {
+  return (
+    <Card
+      className="section-card"
+      loading={loading}
+      style={{
+        height: '100%',
+      }}
+      styles={{
+        body: {
+          padding: 'var(--nb-card-padding)',
+        },
+      }}
+    >
+      <Flex vertical gap={16}>
+        <Flex
+          justify="space-between"
+          align="flex-start"
+          gap={14}
+          wrap="wrap"
+          className="section-card-head"
+        >
+          <div className="section-card-copy" style={{ minWidth: 0, flex: '1 1 280px' }}>
+            <Typography.Title
+              level={4}
+              className="section-card-title"
+              style={{
+                margin: 0,
+                fontSize: 16,
+                letterSpacing: '0.01em',
+              }}
+            >
+              {title}
+            </Typography.Title>
+
+            {description ? (
+              <Typography.Paragraph
+                className="section-card-description"
+                type="secondary"
+                style={{
+                  margin: '6px 0 0',
+                  maxWidth: 560,
+                  lineHeight: 1.5,
+                }}
+              >
+                {description}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+
+          {action ? <div className="section-card-extra" style={{ flexShrink: 0 }}>{action}</div> : null}
+        </Flex>
+
+        <div className="section-card-body">
+          {children}
+        </div>
+      </Flex>
+    </Card>
+  )
+}

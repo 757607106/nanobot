@@ -1,31 +1,36 @@
+import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Drawer, Grid, Layout, Menu, Typography } from 'antd'
-import { AnimatePresence, motion } from 'framer-motion'
 import {
   ApiOutlined,
-  ApartmentOutlined,
+  AppstoreOutlined,
   BookOutlined,
   ClusterOutlined,
-  DatabaseOutlined,
   DashboardOutlined,
-  DesktopOutlined,
+  ExperimentOutlined,
   LogoutOutlined,
+  MenuOutlined,
   MessageOutlined,
+  RobotOutlined,
   SettingOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
+import { Avatar, Button, Drawer, Flex, Menu, Typography, theme } from 'antd'
+import type { MenuProps } from 'antd'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { PLATFORM_BRAND_LOGO_SRC, PLATFORM_BRAND_NAME } from '../branding'
 import { useDevMode } from '../devMode'
-import { shellSpring, surfaceReveal } from '../motionTokens'
+import { shellSpring } from '../motionTokens'
 import { testIds } from '../testIds'
 import { useThemeMode } from '../themeMode'
+import { LAYOUT } from '../ui/tokens'
 
-const { Sider, Content } = Layout
+const DESKTOP_BREAKPOINT = '(min-width: 992px)'
 
 type AppRoute = {
   key: string
-  icon: JSX.Element
+  icon: ReactNode
   label: string
   testId?: string
 }
@@ -39,68 +44,67 @@ type AppRouteSection = {
 function buildRouteSections(devMode: boolean): AppRouteSection[] {
   return [
     {
-      key: 'workspace',
-      label: '工作区',
+      key: 'overview',
+      label: '总览',
       routes: [
         {
           key: '/dashboard',
           icon: <DashboardOutlined />,
-          label: '看板',
+          label: '平台总览',
           testId: testIds.app.navDashboard,
         },
+      ],
+    },
+    {
+      key: 'workspace',
+      label: '工作台',
+      routes: [
         {
           key: '/chat',
           icon: <MessageOutlined />,
-          label: '对话',
+          label: '对话工作台',
           testId: testIds.app.navChat,
         },
         {
           key: '/studio',
-          icon: <ApartmentOutlined />,
-          label: '协作',
+          icon: <RobotOutlined />,
+          label: 'Agent Studio',
           testId: testIds.app.navStudio,
         },
         {
           key: '/channels',
           icon: <ClusterOutlined />,
-          label: '渠道',
+          label: '渠道注册表',
           testId: testIds.app.navChannels,
+        },
+        {
+          key: '/knowledge',
+          icon: <BookOutlined />,
+          label: '知识工作区',
+          testId: testIds.app.navKnowledge,
         },
       ],
     },
     {
-      key: 'builder',
-      label: '构建',
+      key: 'build',
+      label: '配置',
       routes: [
         {
           key: '/models',
-          icon: <SettingOutlined />,
-          label: '模型',
+          icon: <ExperimentOutlined />,
+          label: '模型与绑定',
         },
         {
           key: '/skills',
-          icon: <BookOutlined />,
-          label: '技能',
+          icon: <AppstoreOutlined />,
+          label: '技能中心',
         },
         {
           key: '/mcp',
           icon: <ApiOutlined />,
-          label: devMode ? 'MCP 扩展' : '连接',
+          label: devMode ? 'MCP 扩展' : '连接管理',
           testId: testIds.app.navMcp,
         },
-        {
-          key: '/knowledge',
-          icon: <DatabaseOutlined />,
-          label: '知识库',
-          testId: testIds.app.navKnowledge,
-        },
-        // 暂时隐藏“行为引导”页面入口，保留实现便于后续恢复。
-        // {
-        //   key: '/prompt',
-        //   icon: <ProfileOutlined />,
-        //   label: '行为引导',
-        //   summary: '维护工作区引导文件与长期记忆文档。',
-        // },
       ],
     },
     {
@@ -109,155 +113,303 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
       routes: [
         {
           key: '/system',
-          icon: <DesktopOutlined />,
-          label: '系统',
+          icon: <SettingOutlined />,
+          label: '实例设置',
         },
       ],
     },
   ]
 }
 
+function routeIsActive(pathname: string, routeKey: string) {
+  return pathname === routeKey || pathname.startsWith(`${routeKey}/`)
+}
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true
+    }
+    return window.matchMedia(DESKTOP_BREAKPOINT).matches
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia(DESKTOP_BREAKPOINT)
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsDesktop(event.matches)
+    }
+
+    setIsDesktop(mediaQuery.matches)
+    mediaQuery.addEventListener('change', handleChange)
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange)
+    }
+  }, [])
+
+  return isDesktop
+}
+
 export default function AppShell() {
+  const { token } = theme.useToken()
   const location = useLocation()
   const navigate = useNavigate()
-  const screens = Grid.useBreakpoint()
-  const isDesktop = Boolean(screens.lg)
-  const navWidth = 216
+  const isDesktop = useIsDesktop()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const { resolvedTheme } = useThemeMode()
   const { logout, status: authStatus, submitting } = useAuth()
   const { devMode } = useDevMode()
-  const menuTheme = resolvedTheme === 'dark' ? 'dark' : 'light'
 
   const routeSections = useMemo(() => buildRouteSections(devMode), [devMode])
-  const primaryRoutes = useMemo(
-    () => routeSections.flatMap((section) => section.routes),
-    [routeSections],
+  const primaryRoutes = useMemo(() => routeSections.flatMap((section) => section.routes), [routeSections])
+  const activeRoute = useMemo(
+    () => primaryRoutes.find((item) => routeIsActive(location.pathname, item.key)) ?? primaryRoutes[0],
+    [location.pathname, primaryRoutes],
   )
+  const activeSection = useMemo(
+    () =>
+      routeSections.find((section) => section.routes.some((item) => routeIsActive(location.pathname, item.key)))
+      ?? routeSections[0],
+    [location.pathname, routeSections],
+  )
+  const isChatRoute = activeRoute.key === '/chat' || location.pathname.includes('/chat')
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [isDesktop, location.pathname])
 
   async function handleLogout() {
     await logout()
     navigate('/login', { replace: true })
   }
 
-  useEffect(() => {
-    setMobileNavOpen(false)
-  }, [location.pathname, isDesktop])
-
-  const activeRoute = useMemo(
-    () => primaryRoutes.find((item) => location.pathname.startsWith(item.key)) ?? primaryRoutes[0],
-    [location.pathname, primaryRoutes],
-  )
-  const isChatRoute = activeRoute.key === '/chat'
-
-  function buildMenuItems(items: AppRoute[]) {
-    return items.map((item) => ({
-      key: item.key,
-      icon: item.icon,
-      label: (
-        <div className="nav-item-copy" data-testid={item.testId}>
-          <span className="nav-item-title">{item.label}</span>
-        </div>
-      ),
-    }))
-  }
-
-  const contentVariants = isChatRoute
-    ? {
-        hidden: { opacity: 0, y: 8 },
-        visible: { opacity: 1, y: 0, transition: shellSpring },
-        exit: { opacity: 0, y: -6, transition: { duration: 0.14 } },
-      }
-    : surfaceReveal
-
-  const navigationContent = (
-    <motion.div
-      className="app-sider-panel"
-      initial={{ opacity: 0, x: -30 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={shellSpring}
-    >
-      <div className="brand-block">
-        <div className="brand-head">
-          <img className="brand-logo" src={PLATFORM_BRAND_LOGO_SRC} alt={PLATFORM_BRAND_NAME} />
-        </div>
-      </div>
-
-      <div className="nav-sections">
-        {routeSections.map((section) => (
-          <div className="nav-section" key={section.key}>
-            <Typography.Text className="nav-section-label">{section.label}</Typography.Text>
-            <Menu
-              mode="inline"
-              theme={menuTheme}
-              selectedKeys={[activeRoute.key]}
-              items={buildMenuItems(section.routes)}
-              onClick={({ key }) => navigate(key)}
-              className="nav-menu"
-            />
+  function renderNavigation() {
+    return (
+      <Flex vertical className="app-shell-nav h-full">
+        {/* Logo 区域 */}
+        <Flex align="center" gap={12} className="py-4 px-6">
+          <Avatar
+            alt={PLATFORM_BRAND_NAME}
+            src={PLATFORM_BRAND_LOGO_SRC}
+            size={40}
+            shape="square"
+            style={{ flexShrink: 0 }}
+          />
+          <div className="min-w-0">
+            <Typography.Title level={5} style={{ margin: 0, fontSize: 15 }}>
+              {PLATFORM_BRAND_NAME}
+            </Typography.Title>
+            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              Operations Console
+            </Typography.Text>
           </div>
-        ))}
-      </div>
+        </Flex>
 
-      <div className="sidebar-footer">
-        <div className="sidebar-account-card">
-          <div className="sidebar-account-copy">
-            <span className="sidebar-account-label">当前用户</span>
-            <div className="mono-block mono-block-tight">
-              {authStatus?.username || '未登录'}
+        {/* 菜单区域 */}
+        <Flex vertical gap={10} className="flex-1 px-3 pt-2">
+          {routeSections.map((section) => {
+            const selectedKey = section.routes.find((item) => routeIsActive(location.pathname, item.key))?.key
+            const items: MenuProps['items'] = section.routes.map((item) => ({
+              key: item.key,
+              icon: item.icon,
+              label: item.testId ? <span data-testid={item.testId}>{item.label}</span> : item.label,
+            }))
+
+            return (
+              <div key={section.key}>
+                <Typography.Text
+                  type="secondary"
+                  style={{
+                    display: 'block',
+                    paddingInline: 12,
+                    marginBottom: 4,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {section.label}
+                </Typography.Text>
+                <Menu
+                  mode="inline"
+                  selectedKeys={selectedKey ? [selectedKey] : []}
+                  items={items}
+                  onClick={({ key }) => navigate(String(key))}
+                  style={{
+                    background: 'transparent',
+                    borderInlineEnd: 'none',
+                  }}
+                />
+              </div>
+            )
+          })}
+        </Flex>
+
+        {/* 用户区域 */}
+        <Flex
+          vertical
+          gap={10}
+          className="px-3 pb-3 pt-4"
+          style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}
+        >
+          <Flex align="center" gap={12}>
+            <Avatar
+              icon={<UserOutlined />}
+              style={{
+                backgroundColor: token.colorPrimaryBg,
+                color: token.colorPrimary,
+              }}
+            >
+              {authStatus?.username?.slice(0, 1).toUpperCase()}
+            </Avatar>
+            <div className="min-w-0">
+              <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
+                当前用户
+              </Typography.Text>
+              <Typography.Text
+                strong
+                style={{ display: 'block', maxWidth: 180 }}
+                ellipsis
+              >
+                {authStatus?.username || '未登录'}
+              </Typography.Text>
             </div>
-          </div>
+          </Flex>
+
           <Button
             type="text"
-            size="small"
             icon={<LogoutOutlined />}
             loading={submitting}
             onClick={() => void handleLogout()}
             data-testid={testIds.app.logout}
-            className="sidebar-account-action"
-          />
-        </div>
-      </div>
-    </motion.div>
-  )
+            style={{ justifyContent: 'flex-start', paddingInline: 8 }}
+          >
+            退出登录
+          </Button>
+        </Flex>
+      </Flex>
+    )
+  }
 
   return (
-    <Layout className={`app-shell theme-${resolvedTheme} ${isChatRoute ? 'app-shell-chat' : ''}`}>
+    <div
+      className={`app-shell theme-${resolvedTheme} ${isChatRoute ? 'app-shell-chat' : ''} flex h-screen`}
+      style={{ background: token.colorBgLayout }}
+    >
       {isDesktop ? (
-        <Sider width={navWidth} theme={menuTheme} className={`app-sider glass-panel ${isChatRoute ? 'app-sider-chat' : ''}`} style={{ background: 'transparent' }}>
-          {navigationContent}
-        </Sider>
-      ) : null}
-
-      {!isDesktop ? (
+        <aside
+          className="sticky top-0 h-screen overflow-auto"
+          style={{
+            width: LAYOUT.siderWidth,
+            background: token.colorBgContainer,
+            borderRight: `1px solid ${token.colorBorderSecondary}`,
+            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+          }}
+        >
+          {renderNavigation()}
+        </aside>
+      ) : (
         <Drawer
+          placement="left"
           open={mobileNavOpen}
           onClose={() => setMobileNavOpen(false)}
-          placement="left"
-          width={`min(${navWidth}px, calc(100vw - 16px))`}
+          width={LAYOUT.siderWidth}
           closable={false}
-          rootClassName="mobile-nav-drawer"
+          styles={{
+            body: {
+              padding: 0,
+              background: token.colorBgContainer,
+            },
+          }}
         >
-          {navigationContent}
+          {renderNavigation()}
         </Drawer>
-      ) : null}
+      )}
 
-      <Layout className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''}`}>
-        <Content className={`app-content ${isChatRoute ? 'app-content-chat' : ''}`}>
+      <div className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''} flex flex-1 flex-col min-w-0`}>
+        <header
+          className="sticky top-0 z-20 flex items-center justify-between"
+          style={{
+            height: LAYOUT.headerHeight,
+            paddingInline: isDesktop ? 24 : 16,
+            background: token.colorBgContainer,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          }}
+        >
+          <Flex align="center" gap={12} className="min-w-0 flex-1">
+            {!isDesktop ? (
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="打开导航"
+              />
+            ) : null}
+
+            <div className="min-w-0">
+              <Typography.Text
+                type="secondary"
+                style={{
+                  display: 'block',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {activeSection.label}
+              </Typography.Text>
+              <Typography.Text
+                strong
+                style={{
+                  display: 'block',
+                  marginTop: 2,
+                  fontSize: 14,
+                  lineHeight: 1.2,
+                }}
+              >
+                {activeRoute.label}
+              </Typography.Text>
+            </div>
+          </Flex>
+
+          {isDesktop ? (
+            <Flex vertical align="flex-end" className="min-w-0">
+              <Typography.Text strong ellipsis style={{ maxWidth: 220 }}>
+                {authStatus?.username || '未登录'}
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                {resolvedTheme === 'dark' ? '深色界面' : '浅色界面'}
+              </Typography.Text>
+            </Flex>
+          ) : null}
+        </header>
+
+        <main
+          className={`app-content ${isChatRoute ? 'app-content-chat' : ''} flex-1 min-w-0`}
+          style={{
+            padding: isChatRoute ? '16px 18px 22px' : '22px 22px 28px',
+          }}
+        >
           <AnimatePresence initial={false} mode="wait">
             <motion.div
               key={location.pathname}
               className="app-content-motion"
-              variants={contentVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={shellSpring}
             >
               <Outlet />
             </motion.div>
           </AnimatePresence>
-        </Content>
-      </Layout>
-    </Layout>
+        </main>
+      </div>
+    </div>
   )
 }

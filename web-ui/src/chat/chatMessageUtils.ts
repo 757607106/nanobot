@@ -44,14 +44,10 @@ export function buildChatRequestQuery(content: string, attachments: ChatAttachme
     return trimmed
   }
   const attachmentLines = uniqueAttachments.map((item) => `- ${item.relativePath}`)
-  return `${ATTACHMENT_BLOCK_MARKER}
-${attachmentLines.join('\n')}
-
-${USER_PROMPT_MARKER}
-${trimmed}`
+  return `${ATTACHMENT_BLOCK_MARKER}\n${attachmentLines.join('\n')}\n\n${USER_PROMPT_MARKER}\n${trimmed}`
 }
 
-export function parseChatRequestQuery(content: string) {
+function parseChatRequestQuery(content: string) {
   const match = content.match(/^\[附加文件\]\n([\s\S]*?)\n\n\[用户问题\]\n([\s\S]*)$/)
   if (!match) {
     return {

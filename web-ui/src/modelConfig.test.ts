@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeModelConfig } from './modelConfig'
+import { normalizeModelConfig, updateProviderFieldValue } from './modelConfig'
 import type { ConfigData, ConfigMeta } from './types'
 
 function makeMeta(): ConfigMeta {
@@ -78,5 +78,19 @@ describe('normalizeModelConfig', () => {
     expect(normalized.providers.dashscope.apiKey).toBe('sk-provider-key')
     expect(normalized.providers.dashscope.apiBase).toBe('https://dashscope.example.com/compatible-mode/v1')
     expect(normalized.providers.dashscope.extraHeaders).toEqual({ 'X-Test': 'provider' })
+  })
+
+  it('writes shared provider credentials back to provider config and active binding', () => {
+    const meta = makeMeta()
+    const updated = updateProviderFieldValue(
+      makeConfig(),
+      'dashscope',
+      meta.providers[0],
+      'apiBase',
+      'https://dashscope-alt.example.com/compatible-mode/v1',
+    )
+
+    expect(updated.providers.dashscope.apiBase).toBe('https://dashscope-alt.example.com/compatible-mode/v1')
+    expect(updated.modelBindings?.['qwen-max']?.apiBase).toBe('https://dashscope-alt.example.com/compatible-mode/v1')
   })
 })

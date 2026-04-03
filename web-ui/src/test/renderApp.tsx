@@ -1,17 +1,17 @@
 import { render } from '@testing-library/react'
-import { App as AntdApp, ConfigProvider } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
 import type { ReactElement } from 'react'
 import { AuthProvider } from '../auth'
 import { DevModeProvider } from '../devMode'
 import { SetupProvider } from '../setup'
 import { ThemeModeProvider } from '../themeMode'
+import { ToastProvider } from '../toast'
+import AntdPageProvider from '../ui/antd/AntdPageProvider'
 
 export function renderWithProviders(ui: ReactElement) {
   return render(
     <ThemeModeProvider>
-      <ConfigProvider locale={zhCN}>
-        <AntdApp>
+      <AntdPageProvider>
+        <ToastProvider>
           <AuthProvider>
             <SetupProvider>
               <DevModeProvider>
@@ -19,8 +19,8 @@ export function renderWithProviders(ui: ReactElement) {
               </DevModeProvider>
             </SetupProvider>
           </AuthProvider>
-        </AntdApp>
-      </ConfigProvider>
+        </ToastProvider>
+      </AntdPageProvider>
     </ThemeModeProvider>,
   )
 }

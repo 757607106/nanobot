@@ -29,6 +29,9 @@ function getSystemTheme(): ResolvedTheme {
   if (typeof window === 'undefined') {
     return 'light'
   }
+  if (typeof window.matchMedia !== 'function') {
+    return 'light'
+  }
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
@@ -38,6 +41,9 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') {
+      return undefined
+    }
+    if (typeof window.matchMedia !== 'function') {
       return undefined
     }
 

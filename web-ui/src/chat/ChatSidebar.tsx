@@ -1,0 +1,187 @@
+import type { Conversation } from '@ant-design/x'
+import { Conversations } from '@ant-design/x'
+import { DeleteOutlined, EditOutlined, MessageOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { App, Button, Card, Empty, Flex, Input, Spin, Typography, theme } from 'antd'
+import { startTransition } from 'react'
+import { getDisplaySessionTitle } from './chatPresentation'
+import { formatRelativeTimeZh } from '../locale'
+import { testIds } from '../testIds'
+import type { SessionSummary } from '../types'
+
+const { Text } = Typography
+
+export interface ChatSidebarProps {
+  sessions: SessionSummary[]
+  activeSessionId: string | null
+  loading: boolean
+  sessionQuery: string
+  onSessionQueryChange: (query: string) => void
+  onSessionSelect: (sessionId: string) => void
+  onNewSession: () => void
+  onRenameSession: (session: SessionSummary) => void
+  onDeleteSession: (session: SessionSummary) => void
+  isDesktopLayout: boolean
+}
+
+function getSessionGroup(value?: string) {
+  if (!value) {
+    return '最近'
+  }
+
+  const now = Date.now()
+  const time = new Date(value).getTime()
+  const diff = now - time
+
+  if (diff < 24 * 60 * 60 * 1000) {
+    return '今天'
+  }
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    return '本周'
+  }
+  return '更早'
+}
+
+export function ChatSidebar({
+  sessions,
+  activeSessionId,
+  loading,
+  sessionQuery,
+  onSessionQueryChange,
+  onSessionSelect,
+  onNewSession,
+  onRenameSession,
+  onDeleteSession,
+  isDesktopLayout,
+}: ChatSidebarProps) {
+  const { token } = theme.useToken()
+  const surfaceRadius = token.borderRadiusLG + 8
+
+  const filteredSessions = sessions.filter((item) => {
+    const query = sessionQuery.trim().toLowerCase()
+    if (!query) {
+      return true
+    }
+    return `${item.title} ${getDisplaySessionTitle(item.title)} ${item.sessionId}`
+      .toLowerCase()
+      .includes(query)
+  })
+
+  const conversationItems: Conversation[] = filteredSessions.map((session) => ({
+    key: session.id,
+    group: getSessionGroup(session.updatedAt || session.createdAt),
+    timestamp: new Date(session.updatedAt || session.createdAt || Date.now()).getTime(),
+    icon: <MessageOutlined />,
+    label: (
+      <Flex vertical gap={2} style={{ width: '100%' }}>
+        <span className="conversation-title">{getDisplaySessionTitle(session.title)}</span>
+        <Text type="secondary" className="conversation-summary">
+          {session.messageCount} 条消息
+          {session.fileCount ? ` · ${session.fileCount} 个文件` : ''}
+          {' · '}
+          {formatRelativeTimeZh(session.updatedAt || session.createdAt)}
+        </Text>
+      </Flex>
+    ),
+  }))
+
+  return (
+    <Card
+      title={
+        <Flex vertical gap={4}>
+          <Text
+            type="secondary"
+            style={{
+              fontSize: 'var(--nb-text-2xs)',
+              fontWeight: 'var(--nb-font-weight-title)',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+            }}
+          >
+            会话中心
+          </Text>
+          <Text type="secondary">统一管理历史会话、搜索结果与上下文入口。</Text>
+        </Flex>
+      }
+      extra={
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={onNewSession}
+          data-testid={testIds.chat.newSession}
+        >
+          新建
+        </Button>
+      }
+      styles={{
+        body: {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          minHeight: 0,
+          height: '100%',
+        },
+      }}
+      style={{
+        height: '100%',
+        borderRadius: surfaceRadius,
+      }}
+    >
+      <Input
+        allowClear
+        prefix={<SearchOutlined />}
+        placeholder="搜索会话"
+        value={sessionQuery}
+        onChange={(event) => onSessionQueryChange(event.target.value)}
+        data-testid={testIds.chat.sessionSearch}
+      />
+
+      <div style={{ flex: 1, minHeight: isDesktopLayout ? 0 : 280, overflow: 'auto' }}>
+        {loading ? (
+          <Flex align="center" justify="center" style={{ minHeight: 220 }}>
+            <Spin />
+          </Flex>
+        ) : filteredSessions.length === 0 ? (
+          <Flex align="center" justify="center" style={{ minHeight: 220 }}>
+            <Empty description={sessionQuery ? '没有匹配的会话' : '还没有历史会话'} />
+          </Flex>
+        ) : (
+          <Conversations
+            aria-label="聊天会话列表"
+            className="chat-conversation-list"
+            items={conversationItems}
+            activeKey={activeSessionId ?? undefined}
+            classNames={{ item: 'chat-conversation-item' }}
+            tabIndex={0}
+            groupable={{
+              title: (group) => <Text type="secondary">{group}</Text>,
+            }}
+            onActiveChange={(key) => {
+              startTransition(() => {
+                onSessionSelect(String(key))
+              })
+            }}
+            menu={(conversation) => ({
+              items: [
+                { key: 'rename', label: '重命名', icon: <EditOutlined /> },
+                { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+              ],
+              onClick: ({ key, domEvent }) => {
+                domEvent.stopPropagation()
+                const session = sessions.find((item) => item.id === conversation.key)
+                if (!session) {
+                  return
+                }
+                if (key === 'rename') {
+                  onRenameSession(session)
+                }
+                if (key === 'delete') {
+                  onDeleteSession(session)
+                }
+              },
+            })}
+          />
+        )}
+      </div>
+    </Card>
+  )
+}

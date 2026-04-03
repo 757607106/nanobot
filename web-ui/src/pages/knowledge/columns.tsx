@@ -1,4 +1,4 @@
-import { DeleteOutlined, DownloadOutlined, FileSearchOutlined } from '@ant-design/icons'
+import { DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
 import { Button, Space, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { api } from '../../api'
@@ -8,128 +8,12 @@ import type {
   KnowledgeEvaluationSummary,
 } from '../../types'
 import {
-  canDeleteKnowledgeFile,
   formatScorePercent,
   statusColor,
   statusLabel,
-  type KnowledgeTreeNode,
 } from './shared'
 
 const { Text } = Typography
-
-interface KnowledgeFileColumnsOptions {
-  currentKbId: string
-  onOpenFileDetail: (record: KnowledgeTreeNode) => void
-  onDeleteFiles: (targets: KnowledgeTreeNode[]) => void
-}
-
-export function buildKnowledgeFileColumns({
-  currentKbId,
-  onOpenFileDetail,
-  onDeleteFiles,
-}: KnowledgeFileColumnsOptions): ColumnsType<KnowledgeTreeNode> {
-  return [
-    {
-      title: '名称',
-      dataIndex: 'filename',
-      key: 'filename',
-      width: 280,
-      ellipsis: true,
-      onCell: (record) => record.isFolder
-        ? {}
-        : {
-            className: 'knowledge-file-name-cell',
-            onClick: () => onOpenFileDetail(record),
-          },
-      render: (_value, record) => (
-        <div className="knowledge-file-cell">
-          <span className={`knowledge-file-kind ${record.isFolder ? 'is-folder' : 'is-file'}`}>
-            {record.isFolder ? 'DIR' : 'DOC'}
-          </span>
-          {record.isFolder ? (
-            <Text>{record.filename}</Text>
-          ) : (
-            <button
-              type="button"
-              className="knowledge-file-link"
-              onClick={(event) => {
-                event.stopPropagation()
-                onOpenFileDetail(record)
-              }}
-            >
-              {record.filename}
-            </button>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 120,
-      render: (value: string) => <Tag color={statusColor(value)}>{statusLabel(value)}</Tag>,
-    },
-    {
-      title: '类型',
-      dataIndex: 'fileType',
-      key: 'fileType',
-      width: 120,
-    },
-    {
-      title: '路径',
-      dataIndex: 'path',
-      key: 'path',
-      width: 180,
-      ellipsis: true,
-      render: (value: string) => <Text type="secondary">{value}</Text>,
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
-      width: 160,
-      render: (value?: string) => (value ? formatDateTimeZh(value) : '--'),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 140,
-      render: (_value, record) => (
-        <Space size={4}>
-          {!record.isFolder ? (
-            <>
-              <Button
-                size="small"
-                icon={<FileSearchOutlined />}
-                onClick={() => onOpenFileDetail(record)}
-              />
-              <Button
-                size="small"
-                icon={<DownloadOutlined />}
-                onClick={() => window.open(api.downloadKnowledgeFileUrl(currentKbId, record.fileId, 'raw'), '_blank', 'noopener')}
-              />
-              {record.markdownFile ? (
-                <Button
-                  size="small"
-                  icon={<FileSearchOutlined />}
-                  onClick={() => window.open(api.downloadKnowledgeFileUrl(currentKbId, record.fileId, 'parsed'), '_blank', 'noopener')}
-                />
-              ) : null}
-            </>
-          ) : null}
-          <Button
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            disabled={!record.isFolder && !canDeleteKnowledgeFile(record.status)}
-            onClick={() => onDeleteFiles([record])}
-          />
-        </Space>
-      ),
-    },
-  ]
-}
 
 interface KnowledgeBenchmarkColumnsOptions {
   currentKbId: string

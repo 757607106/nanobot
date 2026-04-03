@@ -1,6 +1,5 @@
-import { Tabs, Typography } from 'antd'
-import { motion } from 'framer-motion'
-import { staggerChildren, surfaceChild, surfaceReveal } from '../motionTokens'
+import { Flex, Tabs, Typography, theme } from 'antd'
+import type { TabsProps } from 'antd'
 
 export interface SectionTabItem {
   key: string
@@ -9,7 +8,7 @@ export interface SectionTabItem {
 
 interface SectionTabsProps {
   eyebrow?: string
-  title: string
+  title?: string
   description?: string
   activeKey: string
   items: SectionTabItem[]
@@ -24,34 +23,82 @@ export default function SectionTabs({
   items,
   onChange,
 }: SectionTabsProps) {
-  return (
-    <motion.section
-      className="page-card section-tabs-shell"
-      variants={surfaceReveal}
-      initial="hidden"
-      animate="visible"
-    >
-      <motion.div className="section-tabs-head" variants={staggerChildren}>
-        <motion.div className="section-tabs-copy" variants={surfaceChild}>
-          {eyebrow ? <Typography.Text type="secondary">{eyebrow}</Typography.Text> : null}
-          <Typography.Title level={4}>{title}</Typography.Title>
-          {description ? <Typography.Paragraph>{description}</Typography.Paragraph> : null}
-        </motion.div>
-      </motion.div>
+  const { token } = theme.useToken()
+  const hasCopy = Boolean(eyebrow || title || description)
 
-      <Tabs
-        className="console-tabs section-tabs"
-        activeKey={activeKey}
-        onChange={onChange}
-        items={items.map((item) => ({
-          key: item.key,
-          label: (
-            <span className="section-tab-label">
-              <span className="section-tab-title">{item.label}</span>
-            </span>
-          ),
-        }))}
-      />
-    </motion.section>
+  const tabItems: TabsProps['items'] = items.map((item) => ({
+    key: item.key,
+    label: item.label,
+    children: null,
+  }))
+
+  return (
+    <Flex vertical gap={hasCopy ? 10 : 0} className="section-tabs-shell" style={{ paddingInline: 2 }}>
+      {hasCopy ? (
+        <div className="section-tabs-copy" style={{ minWidth: 0 }}>
+          {eyebrow ? (
+            <Typography.Text
+              className="section-tabs-eyebrow"
+              style={{
+                color: token.colorPrimary,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {eyebrow}
+            </Typography.Text>
+          ) : null}
+
+          {title ? (
+            <Typography.Title
+              level={4}
+              className="section-tabs-title"
+              style={{
+                margin: eyebrow ? '4px 0 0' : 0,
+                fontSize: '1rem',
+                lineHeight: 1.15,
+              }}
+            >
+              {title}
+            </Typography.Title>
+          ) : null}
+
+          {description ? (
+            <Typography.Paragraph
+              className="section-tabs-description"
+              type="secondary"
+              style={{
+                margin: title || eyebrow ? '6px 0 0' : 0,
+                maxWidth: 560,
+                lineHeight: 1.5,
+              }}
+            >
+              {description}
+            </Typography.Paragraph>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        className="section-tabs-bar"
+        style={{
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+        }}
+      >
+        <Tabs
+          className="section-tabs-control"
+          activeKey={activeKey}
+          onChange={onChange}
+          items={tabItems}
+          size="middle"
+          animated={{ inkBar: true, tabPane: false }}
+          tabBarGutter={18}
+          style={{ marginBottom: 0 }}
+          tabBarStyle={{ margin: 0 }}
+        />
+      </div>
+    </Flex>
   )
 }

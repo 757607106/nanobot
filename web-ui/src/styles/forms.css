@@ -1,0 +1,71 @@
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth-field span {
+  color: var(--nb-ink);
+  font-size: var(--nb-text-sm);
+  font-weight: 600;
+}
+
+.auth-field .ant-input,
+.auth-field .ant-input-affix-wrapper {
+  min-height: 48px;
+  padding-inline: 14px;
+  border-radius: 16px;
+  background: var(--nb-surface-row-bg);
+  border-color: var(--nb-surface-row-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.studio-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.studio-form-field {
+  display: grid;
+  gap: 10px;
+}
+
+.studio-form-field > .ant-typography {
+  min-height: 22px;
+  font-size: var(--nb-text-sm);
+  font-weight: 600;
+}
+
+.studio-form-field-span-2 {
+  grid-column: span 2;
+}
+
+.studio-form-switch-field {
+  align-content: start;
+  justify-items: start;
+}
+
+.studio-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.studio-form-actions .ant-btn {
+  min-width: 118px;
+}
+
+@media (max-width: 768px) {
+  .studio-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-form-field-span-2 {
+    grid-column: span 1;
+  }
+
+  .studio-form-actions {
+    justify-content: stretch;
+  }
+}

@@ -6,6 +6,7 @@ import {
   Card,
   Col,
   Empty,
+  Flex,
   Input,
   Popconfirm,
   Row,
@@ -14,7 +15,9 @@ import {
   Tabs,
   Tag,
   Typography,
+  theme,
 } from 'antd'
+import { motion } from 'framer-motion'
 import {
   AppstoreOutlined,
   CloudDownloadOutlined,
@@ -28,14 +31,12 @@ import {
 } from '@ant-design/icons'
 import { api } from '../api'
 import { PLATFORM_BRAND_NAME, replaceBrandText } from '../branding'
-import DevOnly from '../components/DevOnly'
-import { MotionGroup, MotionPanel } from '../components/MotionSurface'
-import PageHero from '../components/PageHero'
+import { MotionPanel } from '../components/MotionSurface'
+import PageHeader from '../components/console/PageHeader'
 import { formatDateTimeZh } from '../locale'
 import type { InstalledSkill, MarketplaceSkill } from '../types'
 
 const { Text, Paragraph } = Typography
-
 const PAGE_SIZE = 18
 
 const MARKET_COMPATIBILITY_META: Record<MarketplaceSkill['compatibility'], { color: string }> = {
@@ -52,8 +53,311 @@ function getSkillAuthorLabel(author?: string | null) {
   return author.trim().toLowerCase() === 'nanobot' ? PLATFORM_BRAND_NAME : replaceBrandText(author)
 }
 
+function SkillCard({
+  skill,
+  isInstalled,
+  onDelete,
+  onInstall,
+  deleting,
+  installing,
+}: {
+  skill: {
+    name: string
+    description?: string | null
+    version?: string | null
+    author?: string | null
+    tags?: string[] | null
+  }
+  isInstalled?: boolean
+  onDelete?: () => void
+  onInstall?: (force?: boolean) => void
+  deleting?: boolean
+  installing?: boolean
+}) {
+  const { token } = theme.useToken()
+
+  // Generate avatar color from skill name
+  const avatarColor = `hsl(${(skill.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`
+
+  return (
+    <motion.div
+      whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)' }}
+      className="h-full"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        padding: 'var(--nb-spacing-md)',
+        borderRadius: 'var(--nb-radius-card)',
+        background: 'var(--nb-card-subtle-bg)',
+        border: '1px solid var(--nb-card-subtle-border)',
+        transition: 'all 0.2s ease',
+      }}
+    >
+      <div className="flex justify-between items-start" style={{ marginBottom: 12 }}>
+        <div className="flex items-center gap-3" style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              background: avatarColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 16,
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            {skill.name.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <Typography.Text strong ellipsis style={{ fontSize: 15, display: 'block', letterSpacing: '-0.01em' }}>
+              {skill.name}
+            </Typography.Text>
+            <Tag bordered={false} style={{ marginTop: 4, borderRadius: 6, fontSize: 11 }}>
+              V{skill.version || '1.0.0'}
+            </Tag>
+          </div>
+        </div>
+      </div>
+
+      <Typography.Paragraph
+        type="secondary"
+        ellipsis={{ rows: 2 }}
+        style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}
+      >
+        {skill.description || '暂无详细描述。'}
+      </Typography.Paragraph>
+
+      <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
+        {skill.author && (
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8, opacity: 0.7 }}>
+            BY {getSkillAuthorLabel(skill.author)?.toUpperCase()}
+          </Typography.Text>
+        )}
+        <Flex gap={6} wrap="wrap">
+          {(skill.tags || []).slice(0, 3).map((tag) => (
+            <Tag key={tag} bordered={false} style={{ margin: 0, fontSize: 11, borderRadius: 4, background: 'var(--nb-card-subtle-border)' }}>
+              {tag}
+            </Tag>
+          ))}
+        </Flex>
+      </div>
+    </motion.div>
+  )
+}
+
+function InstalledSkillCard({
+  skill,
+  onDelete,
+  deleting,
+}: {
+  skill: InstalledSkill
+  onDelete: () => void
+  deleting: boolean
+}) {
+  const { token } = theme.useToken()
+
+  // Generate avatar color from skill name
+  const avatarColor = `hsl(${(skill.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`
+
+  return (
+    <motion.div
+      whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)' }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        padding: 'var(--nb-spacing-md)',
+        borderRadius: 'var(--nb-radius-card)',
+        background: 'var(--nb-card-subtle-bg)',
+        border: '1px solid var(--nb-card-subtle-border)',
+        height: '100%',
+        transition: 'all 0.2s ease',
+      }}
+    >
+      <Flex justify="space-between" align="flex-start" style={{ marginBottom: 12 }}>
+        <div className="flex items-center gap-3" style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: avatarColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 18,
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            {skill.name.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <Typography.Text strong style={{ fontSize: 15, display: 'block', letterSpacing: '-0.01em' }}>
+              {skill.name}
+            </Typography.Text>
+            <Flex gap={6} style={{ marginTop: 4 }} wrap="wrap">
+              <Tag bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 11 }}>
+                V{skill.version || '1.0.0'}
+              </Tag>
+              <Tag
+                color={skill.source === 'workspace' ? 'green' : 'blue'}
+                bordered={false}
+                style={{ margin: 0, borderRadius: 6, fontSize: 11 }}
+              >
+                {skill.source === 'workspace' ? 'LOCAL' : 'CORE'}
+              </Tag>
+            </Flex>
+          </div>
+        </div>
+        {skill.isDeletable ? (
+          <Popconfirm title="确定删除这个技能吗？" onConfirm={onDelete} okButtonProps={{ danger: true }}>
+            <Button size="small" type="text" danger icon={<DeleteOutlined />} loading={deleting} />
+          </Popconfirm>
+        ) : (
+          <Tag bordered={false} style={{ fontSize: 11, background: 'var(--nb-card-subtle-border)' }}>BUILTIN</Tag>
+        )}
+      </Flex>
+
+      <Typography.Paragraph
+        type="secondary"
+        ellipsis={{ rows: 2 }}
+        style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}
+      >
+        {skill.description || '暂无详细描述。'}
+      </Typography.Paragraph>
+
+      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
+        {skill.author && (
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8, opacity: 0.6 }}>
+            DEVELOPED BY {getSkillAuthorLabel(skill.author)?.toUpperCase()}
+          </Typography.Text>
+        )}
+        <Flex gap={6} wrap="wrap">
+          {(skill.tags || []).slice(0, 3).map((tag) => (
+            <Tag key={tag} bordered={false} style={{ margin: 0, fontSize: 11, borderRadius: 4, background: 'var(--nb-card-subtle-border)' }}>
+              {tag}
+            </Tag>
+          ))}
+        </Flex>
+      </div>
+    </motion.div>
+  )
+}
+
+function MarketplaceSkillCard({
+  skill,
+  alreadyInstalled,
+  onInstall,
+  installing,
+}: {
+  skill: MarketplaceSkill
+  alreadyInstalled: boolean
+  onInstall: (force?: boolean) => void
+  installing: boolean
+}) {
+  // Generate avatar color from skill name
+  const avatarColor = `hsl(${(skill.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`
+
+  return (
+    <motion.div
+      whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)' }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        padding: 'var(--nb-spacing-md)',
+        borderRadius: 'var(--nb-radius-card)',
+        background: alreadyInstalled ? 'var(--nb-card-selected-bg)' : 'var(--nb-card-subtle-bg)',
+        border: alreadyInstalled ? '1px solid var(--nb-accent)' : '1px solid var(--nb-card-subtle-border)',
+        height: '100%',
+        transition: 'all 0.2s ease',
+      }}
+    >
+      <Flex justify="space-between" align="flex-start" style={{ marginBottom: 12 }}>
+        <div className="flex items-center gap-3" style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: avatarColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 18,
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            {skill.name.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <Typography.Text strong style={{ fontSize: 15, display: 'block', letterSpacing: '-0.01em' }}>
+              {skill.name}
+            </Typography.Text>
+            <Flex gap={6} style={{ marginTop: 4 }} wrap="wrap">
+              <Tag bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 11 }}>
+                V{skill.version}
+              </Tag>
+              <Tag
+                color={MARKET_COMPATIBILITY_META[skill.compatibility]?.color || 'default'}
+                bordered={false}
+                style={{ margin: 0, borderRadius: 6, fontSize: 11 }}
+              >
+                {skill.compatibilityLabel.toUpperCase()}
+              </Tag>
+            </Flex>
+          </div>
+        </div>
+        <Button
+          type={alreadyInstalled ? 'default' : 'primary'}
+          icon={<CloudDownloadOutlined />}
+          loading={installing}
+          onClick={() => onInstall(alreadyInstalled)}
+          size="small"
+          style={{ borderRadius: 8 }}
+        >
+          {alreadyInstalled ? '更新' : '安装'}
+        </Button>
+      </Flex>
+
+      <Typography.Paragraph
+        type="secondary"
+        ellipsis={{ rows: 2 }}
+        style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}
+      >
+        {skill.description || '暂无详细描述。'}
+      </Typography.Paragraph>
+
+      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
+        <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+           <Typography.Text type="secondary" style={{ fontSize: 12, opacity: 0.6 }}>
+            {skill.downloads} 次下载
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12, opacity: 0.6 }}>
+            {skill.updatedAt ? formatDateTimeZh(skill.updatedAt).split(' ')[0] : '-'}
+          </Typography.Text>
+        </Flex>
+        <Flex gap={6} wrap="wrap">
+          {(skill.tags || []).slice(0, 3).map((tag) => (
+            <Tag key={tag} bordered={false} style={{ margin: 0, fontSize: 11, borderRadius: 4, background: 'var(--nb-card-subtle-border)' }}>
+              {tag}
+            </Tag>
+          ))}
+        </Flex>
+      </div>
+    </motion.div>
+  )
+}
+
 export default function SkillsPage() {
   const { message } = App.useApp()
+  const { token } = theme.useToken()
   const folderInputRef = useRef<HTMLInputElement>(null)
   const zipInputRef = useRef<HTMLInputElement>(null)
   const [skills, setSkills] = useState<InstalledSkill[]>([])
@@ -75,14 +379,6 @@ export default function SkillsPage() {
   }, [])
 
   const installedSkillIds = useMemo(() => new Set(skills.map((skill) => skill.id)), [skills])
-  const workspaceSkillCount = useMemo(
-    () => skills.filter((item) => item.source === 'workspace').length,
-    [skills],
-  )
-  const builtInSkillCount = useMemo(
-    () => skills.filter((item) => item.source !== 'workspace').length,
-    [skills],
-  )
 
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
@@ -160,7 +456,7 @@ export default function SkillsPage() {
     try {
       setUploading(true)
       const uploaded = await api.uploadSkill(formData)
-      message.success(`技能“${uploaded.name}”上传成功`)
+      message.success(`技能"${uploaded.name}"上传成功`)
       await loadSkills()
       setActiveTab('installed')
     } catch (error) {
@@ -183,7 +479,7 @@ export default function SkillsPage() {
     try {
       setUploading(true)
       const uploaded = await api.uploadSkillZip(formData)
-      message.success(`技能“${uploaded.name}”上传成功`)
+      message.success(`技能"${uploaded.name}"上传成功`)
       await loadSkills()
       setActiveTab('installed')
     } catch (error) {
@@ -210,7 +506,7 @@ export default function SkillsPage() {
     try {
       setInstallingId(skill.slug)
       const installed = await api.installMarketplaceSkill(skill.slug, force)
-      message.success(force ? `技能“${installed.name}”已覆盖安装` : `技能“${installed.name}”安装成功`)
+      message.success(force ? `技能"${installed.name}"已覆盖安装` : `技能"${installed.name}"安装成功`)
       await Promise.all([loadSkills(), loadMarketplaceSkills(marketQuery)])
       if (!force) {
         setActiveTab('installed')
@@ -223,110 +519,46 @@ export default function SkillsPage() {
   }
 
   const renderInstalledView = () => (
-    <div className="tab-content-shell" style={{ padding: '20px 0' }}>
-      <div className="toolbar-row" style={{ marginBottom: 24, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div style={{ padding: 'var(--nb-spacing-xs) 0' }}>
+      <Flex justify="space-between" align="center" gap={16} wrap="wrap" style={{ marginBottom: 24 }}>
         <Input
           allowClear
-          prefix={<SearchOutlined />}
+          prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
           placeholder="搜索已安装技能..."
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          style={{ maxWidth: 400, flex: 1 }}
+          style={{ maxWidth: 400, borderRadius: 12, border: 'none', background: 'var(--nb-card-subtle-bg)' }}
           size="large"
         />
-        <Space size="middle">
-          <Button
-            size="large"
-            icon={<FolderOpenOutlined />}
-            loading={uploading}
-            onClick={() => folderInputRef.current?.click()}
-          >
-            上传文件夹
-          </Button>
-          <Button size="large" icon={<UploadOutlined />} loading={uploading} onClick={() => zipInputRef.current?.click()}>
-            上传 ZIP
-          </Button>
-          <Button size="large" icon={<ReloadOutlined />} loading={loading} onClick={() => void loadSkills()} />
-        </Space>
-      </div>
+        <Button
+          size="large"
+          icon={<ReloadOutlined />}
+          loading={loading}
+          onClick={() => void loadSkills()}
+          style={{ borderRadius: 12 }}
+        />
+      </Flex>
 
-      <div className="page-scroll-shell skills-scroll-shell">
+      <div className="overflow-auto">
         {loading ? (
-          <div className="center-box" style={{ padding: 40 }}>
+          <div className="flex items-center justify-center" style={{ padding: 'var(--nb-spacing-2xl)' }}>
             <Spin size="large" />
           </div>
         ) : filteredSkills.length === 0 ? (
           <Empty
             image={false}
             description={skills.length === 0 ? '还没有安装技能' : '没有匹配结果'}
-            className="empty-block"
-            style={{ padding: 40 }}
+            style={{ padding: 'var(--nb-spacing-2xl)' }}
           />
         ) : (
-          <Row gutter={[16, 16]} className="skills-grid">
+          <Row gutter={[16, 16]}>
             {filteredSkills.map((skill) => (
-              <Col xs={24} sm={12} md={8} lg={6} xl={6} key={skill.id}>
-                <MotionPanel className="skill-card-shell" standalone>
-                  <Card
-                    hoverable
-                    className="skill-card"
-                    style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
-                    styles={{ body: { flex: 1, display: 'flex', flexDirection: 'column' } }}
-                    actions={
-                      skill.isDeletable
-                        ? [
-                            <Popconfirm
-                              key="delete"
-                              title="确定删除这个技能吗？"
-                              okText="删除"
-                              cancelText="取消"
-                              okButtonProps={{ danger: true }}
-                              onConfirm={() => void handleDelete(skill.id)}
-                            >
-                              <Button
-                                type="text"
-                                danger
-                                icon={<DeleteOutlined />}
-                                loading={deletingId === skill.id}
-                                block
-                              >
-                                删除
-                              </Button>
-                            </Popconfirm>,
-                          ]
-                        : [<Button key="builtin" type="text" disabled>系统内置</Button>]
-                    }
-                  >
-                    <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                       <Space direction="vertical" size={2} style={{ flex: 1, minWidth: 0 }}>
-                         <Text strong ellipsis className="skills-card-title">{skill.name}</Text>
-                         <Space size={6}>
-                            <Tag bordered={false} style={{ margin: 0 }}>{skill.version || '1.0.0'}</Tag>
-                            <Tag color={skill.source === 'workspace' ? 'green' : 'blue'} bordered={false} style={{ margin: 0 }}>
-                              {skill.source === 'workspace' ? '工作区' : '内置'}
-                            </Tag>
-                         </Space>
-                       </Space>
-                    </div>
-                    
-                    <div className="skills-card-copy">
-                      <Paragraph type="secondary" ellipsis={{ rows: 2, expandable: false }} className="skills-card-description">
-                        {skill.description || '暂无描述。'}
-                      </Paragraph>
-                    </div>
-
-                    <Space direction="vertical" size={6} style={{ width: '100%' }}>
-                      {skill.author ? <Text type="secondary" className="skills-card-author">{getSkillAuthorLabel(skill.author)}</Text> : null}
-                      {skill.tags && skill.tags.length > 0 ? (
-                        <div className="skills-tag-cloud">
-                          {skill.tags.map((tag) => (
-                            <Tag key={tag} style={{ margin: 0 }}>{tag}</Tag>
-                          ))}
-                        </div>
-                      ) : null}
-                    </Space>
-                  </Card>
-                </MotionPanel>
+              <Col xs={24} sm={12} md={8} lg={8} xl={6} key={skill.id}>
+                <InstalledSkillCard
+                  skill={skill}
+                  onDelete={() => void handleDelete(skill.id)}
+                  deleting={deletingId === skill.id}
+                />
               </Col>
             ))}
           </Row>
@@ -336,8 +568,8 @@ export default function SkillsPage() {
   )
 
   const renderMarketView = () => (
-    <div className="tab-content-shell" style={{ padding: '20px 0' }}>
-      <div className="toolbar-row" style={{ marginBottom: 24, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div style={{ padding: 'var(--nb-spacing-sm) 0' }}>
+      <div className="flex flex-wrap gap-4 items-center" style={{ marginBottom: 24 }}>
         <Input.Search
           allowClear
           enterButton="搜索市场"
@@ -359,94 +591,29 @@ export default function SkillsPage() {
         </Space>
       </div>
 
-      <div className="page-scroll-shell skills-scroll-shell">
+      <div className="overflow-auto">
         {marketLoading ? (
-          <div className="center-box" style={{ padding: 40 }}>
+          <div className="flex items-center justify-center" style={{ padding: 'var(--nb-spacing-2xl)' }}>
             <Spin size="large" />
           </div>
         ) : marketplaceSkills.length === 0 ? (
-          <Empty description="没有找到匹配的技能" className="empty-block" style={{ padding: 40 }} />
+          <Empty description="没有找到匹配的技能" style={{ padding: 'var(--nb-spacing-2xl)' }} />
         ) : (
           <>
-            <Row gutter={[16, 16]} className="skills-grid">
-              {marketplaceSkills.map((skill) => {
-                const alreadyInstalled = installedSkillIds.has(skill.slug)
-                return (
-                  <Col xs={24} sm={12} md={8} lg={6} xl={6} key={skill.slug}>
-                    <MotionPanel className="skill-card-shell" standalone>
-                      <Card
-                        hoverable
-                        className="skill-card"
-                        style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
-                        styles={{ body: { flex: 1, display: 'flex', flexDirection: 'column' } }}
-                        actions={
-                          alreadyInstalled
-                            ? [
-                                <Button
-                                  key="reinstall"
-                                  type="text"
-                                  icon={<ReloadOutlined />}
-                                  loading={installingId === skill.slug}
-                                  onClick={() => void handleInstallMarketplaceSkill(skill, true)}
-                                  block
-                                >
-                                  覆盖安装
-                                </Button>,
-                              ]
-                            : [
-                                <Button
-                                  key="install"
-                                  type="primary"
-                                  icon={<CloudDownloadOutlined />}
-                                  loading={installingId === skill.slug}
-                                  onClick={() => void handleInstallMarketplaceSkill(skill)}
-                                  block
-                                >
-                                  安装
-                                </Button>,
-                              ]
-                        }
-                      >
-                        <div style={{ marginBottom: 12 }}>
-                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                              <Text strong ellipsis className="skills-card-title" style={{ flex: 1 }}>{skill.name}</Text>
-                              {alreadyInstalled && <Tag color="success" style={{ margin: 0 }}>已安装</Tag>}
-                           </div>
-                           <Space size={6}>
-                              <Tag bordered={false} style={{ margin: 0 }}>{skill.version}</Tag>
-                              <Tag color={MARKET_COMPATIBILITY_META[skill.compatibility]?.color || 'default'} bordered={false} style={{ margin: 0 }}>
-                                {skill.compatibilityLabel}
-                              </Tag>
-                           </Space>
-                        </div>
-
-                        <div className="skills-card-copy">
-                          <Paragraph type="secondary" ellipsis={{ rows: 2, expandable: false }} className="skills-card-description">
-                            {skill.description || '暂无描述。'}
-                          </Paragraph>
-                        </div>
-
-                        <Space direction="vertical" size={6} style={{ width: '100%' }}>
-                           <div className="skills-market-meta">
-                              <span>下载 {skill.downloads}</span>
-                              <span>{skill.updatedAt ? formatDateTimeZh(skill.updatedAt).split(' ')[0] : '-'}</span>
-                           </div>
-                          {skill.tags && skill.tags.length > 0 ? (
-                            <div className="skills-tag-cloud">
-                              {skill.tags.map((tag) => (
-                                <Tag key={tag} style={{ margin: 0 }}>{tag}</Tag>
-                              ))}
-                            </div>
-                          ) : null}
-                        </Space>
-                      </Card>
-                    </MotionPanel>
-                  </Col>
-                )
-              })}
+            <Row gutter={[16, 16]}>
+              {marketplaceSkills.map((skill) => (
+                <Col xs={24} sm={12} md={8} lg={8} xl={6} key={skill.slug}>
+                  <MarketplaceSkillCard
+                    skill={skill}
+                    alreadyInstalled={installedSkillIds.has(skill.slug)}
+                    onInstall={(force) => void handleInstallMarketplaceSkill(skill, force)}
+                    installing={installingId === skill.slug}
+                  />
+                </Col>
+              ))}
             </Row>
             {marketplaceSkills.length < marketplaceTotal && (
-              <div style={{ textAlign: 'center', marginTop: 24 }}>
+              <div className="text-center" style={{ marginTop: 24 }}>
                 <Button
                   type="default"
                   icon={loadingMore ? <LoadingOutlined /> : <DownloadOutlined />}
@@ -466,9 +633,31 @@ export default function SkillsPage() {
 
   return (
     <div className="page-stack">
-      <PageHero
-        className="page-hero-compact studio-hero"
+      <PageHeader
         title="技能中心"
+        subtitle="管理已安装技能和技能市场"
+        actions={
+          <Space size={8}>
+            <Button
+              size="large"
+              icon={<FolderOpenOutlined />}
+              loading={uploading}
+              onClick={() => folderInputRef.current?.click()}
+              style={{ borderRadius: 12 }}
+            >
+              上传文件夹
+            </Button>
+            <Button
+              size="large"
+              icon={<UploadOutlined />}
+              loading={uploading}
+              onClick={() => zipInputRef.current?.click()}
+              style={{ borderRadius: 12 }}
+            >
+              上传 ZIP
+            </Button>
+          </Space>
+        }
       />
 
       <input
@@ -487,12 +676,12 @@ export default function SkillsPage() {
         onChange={(event) => void handleZipSelect(event)}
       />
 
-      <div className="page-content-wrapper" style={{ padding: '0 var(--nb-layout-gutter)' }}>
+      <div className="page-content-wrapper px-[var(--nb-layout-gutter)]">
         <Tabs
           className="skills-page-tabs"
           activeKey={activeTab}
           onChange={setActiveTab}
-          type="card"
+          type="line"
           size="large"
           items={[
             {

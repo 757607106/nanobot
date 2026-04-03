@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Suspense, lazy } from 'react'
-import { Button, Spin, Typography } from 'antd'
+import { Button, Card, Flex, Spin, Typography } from 'antd'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppShell from './components/AppShell'
 import { AuthProvider, useAuth } from './auth'
@@ -10,12 +10,12 @@ import { testIds } from './testIds'
 
 const ChatPage = lazy(() => import('./pages/ChatPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
-const ChannelDetailPage = lazy(() => import('./pages/ChannelDetailPage'))
-const ChannelsPage = lazy(() => import('./pages/ChannelsPage'))
+const ChannelsPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelsPage })))
+const ChannelDetailPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelDetailPage })))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
-const McpPage = lazy(() => import('./pages/McpPage'))
-const McpServerDetailPage = lazy(() => import('./pages/McpServerDetailPage'))
-const ModelsPage = lazy(() => import('./pages/ModelsPage'))
+const McpPage = lazy(() => import('./pages/mcp'))
+const McpServerDetailPage = lazy(() => import('./pages/mcp/DetailPage'))
+const ModelsPage = lazy(() => import('./pages/models'))
 const OperationsPage = lazy(() => import('./pages/OperationsPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const PreferencesPage = lazy(() => import('./pages/PreferencesPage'))
@@ -23,17 +23,17 @@ const AutomationPage = lazy(() => import('./pages/AutomationPage'))
 const SetupPage = lazy(() => import('./pages/SetupPage'))
 const SkillsPage = lazy(() => import('./pages/SkillsPage'))
 const StudioLayoutPage = lazy(() => import('./pages/StudioLayoutPage'))
-const AgentsPage = lazy(() => import('./pages/AgentsPage'))
+const AgentsPage = lazy(() => import('./pages/agents'))
 const AgentChatPage = lazy(() => import('./pages/AgentChatPage'))
-const MemoryAuditPage = lazy(() => import('./pages/MemoryAuditPage'))
-const RunsPage = lazy(() => import('./pages/RunsPage'))
-const KnowledgePage = lazy(() => import('./pages/KnowledgePage'))
+const MemoryAuditPage = lazy(() => import('./pages/memory'))
+const RunsPage = lazy(() => import('./pages/runs'))
+const KnowledgePage = lazy(() => import('./pages/knowledge').then((m) => ({ default: m.KnowledgePage })))
 const SystemLayoutPage = lazy(() => import('./pages/SystemLayoutPage'))
 const SystemPage = lazy(() => import('./pages/SystemPage'))
 const ValidationPage = lazy(() => import('./pages/ValidationPage'))
-const ChannelBindingsPage = lazy(() => import('./pages/ChannelBindingsPage'))
-const ChannelAuditPage = lazy(() => import('./pages/ChannelAuditPage'))
-const ChannelsLayoutPage = lazy(() => import('./pages/ChannelsLayoutPage'))
+const ChannelBindingsPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelBindingsPage })))
+const ChannelAuditPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelAuditPage })))
+const ChannelsLayoutPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelsLayoutPage })))
 
 function RouteFallback() {
   return (
@@ -47,19 +47,49 @@ function withRouteSuspense(element: JSX.Element) {
   return <Suspense fallback={<RouteFallback />}>{element}</Suspense>
 }
 
+function RouteStateCard({
+  title,
+  description,
+  actionLabel,
+  actionTestId,
+  onAction,
+}: {
+  title: string
+  description: string
+  actionLabel: string
+  actionTestId: string
+  onAction: () => void
+}) {
+  return (
+    <div className="page-card center-box route-state-card">
+      <Card variant="borderless" className="route-state-copy" style={{ width: 'min(100%, 28rem)' }}>
+        <Flex vertical gap={16} align="flex-start">
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            {title}
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+            {description}
+          </Typography.Paragraph>
+          <Button type="primary" onClick={onAction} data-testid={actionTestId}>
+            {actionLabel}
+          </Button>
+        </Flex>
+      </Card>
+    </div>
+  )
+}
+
 function AuthStateError() {
   const { error, refresh } = useAuth()
 
   return (
-    <div className="page-card center-box route-state-card">
-      <div className="route-state-copy">
-        <Typography.Title level={4}>登录状态检查失败</Typography.Title>
-        <Typography.Paragraph>{error || '暂时无法连接认证接口。'}</Typography.Paragraph>
-        <Button type="primary" onClick={() => void refresh()} data-testid={testIds.app.authStateRetry}>
-          重新检查
-        </Button>
-      </div>
-    </div>
+    <RouteStateCard
+      title="登录状态检查失败"
+      description={error || '暂时无法连接认证接口。'}
+      actionLabel="重新检查"
+      actionTestId={testIds.app.authStateRetry}
+      onAction={() => void refresh()}
+    />
   )
 }
 
@@ -67,15 +97,13 @@ function SetupStateError() {
   const { error, refresh } = useSetup()
 
   return (
-    <div className="page-card center-box route-state-card">
-      <div className="route-state-copy">
-        <Typography.Title level={4}>初始化向导状态检查失败</Typography.Title>
-        <Typography.Paragraph>{error || '暂时无法读取首次配置进度。'}</Typography.Paragraph>
-        <Button type="primary" onClick={() => void refresh()} data-testid={testIds.app.setupStateRetry}>
-          重新检查
-        </Button>
-      </div>
-    </div>
+    <RouteStateCard
+      title="初始化配置状态检查失败"
+      description={error || '暂时无法读取初始化配置进度。'}
+      actionLabel="重新检查"
+      actionTestId={testIds.app.setupStateRetry}
+      onAction={() => void refresh()}
+    />
   )
 }
 

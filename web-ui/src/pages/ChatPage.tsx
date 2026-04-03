@@ -1,61 +1,49 @@
+import type { ComponentProps, ComponentRef } from 'react'
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Empty, Input, List, Modal, Spin, Typography } from 'antd'
-import { Attachments, Bubble, Conversations, Sender } from '@ant-design/x'
+import { App, Button, Card, Empty, Flex, Grid, Input, Layout, List, Modal, Space, Tag, Typography, theme } from 'antd'
 import type { Conversation } from '@ant-design/x'
 import { useXChat, type MessageInfo, type SSEOutput } from '@ant-design/x-sdk'
-import {
-  CloudUploadOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  LinkOutlined,
-  MessageOutlined,
-  PaperClipOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-  SearchOutlined,
-  ToolOutlined,
-  UserOutlined,
-} from '@ant-design/icons'
-import { RobotOutlined } from '@ant-design/icons'
+import { ReloadOutlined, RobotOutlined, SearchOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { PLATFORM_ASSISTANT_NAME } from '../branding'
 import { createNanobotChatProvider } from '../chat/NanobotChatProvider'
-import {
-  AttachmentTags,
-  ChatMessageBody,
-  getChatMessageTitle,
-  getDisplaySessionTitle,
-} from '../chat/chatPresentation'
+import { getDisplaySessionTitle } from '../chat/chatPresentation'
 import {
   buildChatRequestQuery,
   dedupeAttachmentRefs,
   normalizeChatMessage,
   toChatAttachmentRef,
 } from '../chat/chatMessageUtils'
-import { formatDateTimeZh, formatRelativeTimeZh } from '../locale'
+import { ChatSidebar } from '../chat/ChatSidebar'
+import { ChatMessages } from '../chat/ChatMessages'
+import { ChatInput } from '../chat/ChatInput'
+import '../chat/chat.css'
+import { formatRelativeTimeZh } from '../locale'
 import { testIds } from '../testIds'
-import type { AgentDefinition, ChatAttachmentRef, ChatMessage, ChatRequestInput, ChatUploadItem, ChatWorkspaceData, SessionSummary } from '../types'
-import { useNavigate } from 'react-router-dom'
+import type {
+  AgentDefinition,
+  ChatAttachmentRef,
+  ChatMessage,
+  ChatRequestInput,
+  ChatUploadItem,
+  ChatWorkspaceData,
+  SessionSummary,
+} from '../types'
 
-const { Text, Title } = Typography
+const { Title, Text } = Typography
+const { Content, Sider } = Layout
+
 const DRAFT_SESSION_KEY = '__draft__'
+const SESSION_RAIL_WIDTH = 352
 
-type ComposerAttachment = NonNullable<React.ComponentProps<typeof Attachments>['items']>[number]
+type ComposerAttachment = NonNullable<ComponentProps<typeof ChatInput>['pendingAttachments']>[number]
 
-function getSessionGroup(value?: string) {
-  if (!value) {
-    return '最近'
-  }
-  const now = new Date()
-  const date = new Date(value)
-  const diff = now.getTime() - date.getTime()
-  if (diff < 24 * 60 * 60 * 1000) {
-    return '今天'
-  }
-  if (diff < 7 * 24 * 60 * 60 * 1000) {
-    return '本周'
-  }
-  return '更早'
+type AgentPickerOption = {
+  key: string
+  title: string
+  description: string
+  active: boolean
 }
 
 function formatFileSize(sizeBytes?: number) {
@@ -71,40 +59,13 @@ function formatFileSize(sizeBytes?: number) {
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function createPendingAttachment(file: File): ComposerAttachment {
-  const uid = `${Date.now()}-${file.name}`
-  return {
-    uid,
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    originFileObj: Object.assign(file, {
-      uid,
-      lastModifiedDate: new Date(file.lastModified),
-    }) as ComposerAttachment['originFileObj'],
-    status: 'done',
-  } as ComposerAttachment
-}
-
-function getMessageStatusLabel(status: MessageInfo<ChatMessage>['status']) {
-  if (status === 'loading' || status === 'updating') {
-    return '生成中'
-  }
-  if (status === 'error') {
-    return '回复失败'
-  }
-  if (status === 'abort') {
-    return '已停止生成'
-  }
-  return '助手回复'
-}
-
-export default function ChatPage({ agentId: propAgentId }: { agentId?: string } = {}) {
+export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const { message, modal } = App.useApp()
+  const { token } = theme.useToken()
+  const screens = Grid.useBreakpoint()
   const navigate = useNavigate()
-  const [overrideAgentId, setOverrideAgentId] = useState<string | null>(null)
-  const agentId = overrideAgentId !== null ? (overrideAgentId || undefined) : propAgentId
   const inAgentMode = Boolean(agentId)
+
   const [activeAgent, setActiveAgent] = useState<AgentDefinition | null>(null)
   const [loadingActiveAgent, setLoadingActiveAgent] = useState(false)
   const [sessions, setSessions] = useState<SessionSummary[]>([])
@@ -127,9 +88,9 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
   const [loadingAgents, setLoadingAgents] = useState(false)
   const [switchAgentOpen, setSwitchAgentOpen] = useState(false)
   const [switchAgentQuery, setSwitchAgentQuery] = useState('')
-  const historyRef = useRef<HTMLDivElement | null>(null)
+
   const chatPanelRef = useRef<HTMLDivElement | null>(null)
-  const senderRef = useRef<React.ComponentRef<typeof Sender> | null>(null)
+  const senderRef = useRef<ComponentRef<typeof ChatInput> | null>(null)
   const currentSessionIdRef = useRef<string | null>(null)
   const pendingSyncSessionIdRef = useRef<string | null>(null)
   const shouldSyncSessionRef = useRef(false)
@@ -223,9 +184,7 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
     [currentSessionId, sessions],
   )
   const selectedSessionUpdatedAt = selectedSession?.updatedAt || selectedSession?.createdAt
-  const selectedSessionTitle = selectedSession
-    ? getDisplaySessionTitle(selectedSession.title)
-    : '开始新对话'
+  const selectedSessionTitle = selectedSession ? getDisplaySessionTitle(selectedSession.title) : '开始新对话'
   const selectedSessionSubtitle = selectedSessionUpdatedAt
     ? `最近更新 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}`
     : '发送一条消息，或先上传文件作为对话起点。'
@@ -234,51 +193,35 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
     ? String(activeAgent?.name || agentId || '自定义 Agent')
     : PLATFORM_ASSISTANT_NAME
 
-  async function refreshAgentsList() {
-    try {
-      setLoadingAgents(true)
-      setAgents(await api.getAgents(true))
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载 Agent 失败')
-    } finally {
-      setLoadingAgents(false)
-    }
-  }
-
-  const filteredSessions = useMemo(() => {
-    const query = sessionQuery.trim().toLowerCase()
-    if (!query) {
-      return sessions
-    }
-    return sessions.filter((item) => {
-      return `${item.title} ${getDisplaySessionTitle(item.title)} ${item.sessionId}`
-        .toLowerCase()
-        .includes(query)
-    })
-  }, [sessionQuery, sessions])
-
-  const conversationItems = useMemo(() => {
-    return filteredSessions.map((session) => ({
-      key: session.id,
-      group: getSessionGroup(session.updatedAt || session.createdAt),
-      timestamp: new Date(session.updatedAt || session.createdAt || Date.now()).getTime(),
-      label: (
-        <div className="conversation-copy">
-          <span className="conversation-title">{getDisplaySessionTitle(session.title)}</span>
-          <span className="conversation-summary">
-            {session.messageCount} 条消息
-            {session.fileCount ? ` · ${session.fileCount} 个文件` : ''}
-            {' · '}
-            {formatRelativeTimeZh(session.updatedAt || session.createdAt)}
-          </span>
-        </div>
-      ),
-      icon: <MessageOutlined />,
-    })) as Conversation[]
-  }, [filteredSessions])
-
   const recentUploads = workspaceData?.recentUploads || []
-  const showSenderHeader = pendingAttachments.length > 0 || draftAttachmentRefs.length > 0
+  const isDesktopLayout = Boolean(screens.lg)
+  const surfaceRadius = token.borderRadiusLG + 8
+
+  const agentPickerOptions = useMemo(() => {
+    const query = switchAgentQuery.trim().toLowerCase()
+    const options: AgentPickerOption[] = [
+      {
+        key: 'platform',
+        title: `${PLATFORM_ASSISTANT_NAME}（通用聊天）`,
+        description: '使用默认平台助手',
+        active: !inAgentMode,
+      },
+      ...agents
+        .filter((item) => item.enabled)
+        .map((item) => ({
+          key: item.agentId,
+          title: item.name || item.agentId,
+          description: item.description || item.agentId,
+          active: item.agentId === agentId,
+        })),
+    ]
+
+    if (!query) {
+      return options
+    }
+
+    return options.filter((item) => `${item.title} ${item.description}`.toLowerCase().includes(query))
+  }, [agentId, agents, inAgentMode, switchAgentQuery])
 
   function buildReloadRequest(messageId: string | number) {
     if (!currentSessionId) {
@@ -320,76 +263,6 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
     onReload(messageId, requestParams)
   }
 
-  const bubbleItems = useMemo(() => {
-    return messageInfos.map((info) => {
-      const item = info.message
-      const isUser = item.role === 'user'
-      const isAssistant = item.role === 'assistant'
-      const isTool = item.role === 'tool'
-      const canReload = isAssistant && !isRequesting
-
-      return {
-        key: info.id,
-        placement: isUser ? 'end' : 'start',
-        loading:
-          isAssistant &&
-          (info.status === 'loading' || info.status === 'updating') &&
-          !(item.progressSteps?.length || item.content),
-        avatar: {
-          icon: isUser ? <UserOutlined /> : isTool ? <ToolOutlined /> : <RobotOutlined />,
-          style: {
-            background: isUser
-              ? 'var(--nb-user-avatar-bg)'
-              : isTool
-                ? 'color-mix(in srgb, var(--nb-accent) 70%, transparent)'
-                : 'var(--nb-assistant-avatar-bg)',
-          },
-        },
-        variant: isUser ? 'filled' : isTool ? 'outlined' : 'shadow',
-        shape: 'corner',
-        classNames: {
-          content: [
-            'bubble-content-shell',
-            isUser ? 'is-user' : '',
-            isTool ? 'is-tool' : '',
-            isAssistant ? 'is-assistant' : '',
-            info.status === 'error' ? 'is-error' : '',
-            info.status === 'abort' ? 'is-abort' : '',
-          ]
-            .filter(Boolean)
-            .join(' '),
-          header: 'bubble-header-slot',
-          footer: 'bubble-footer-slot',
-        },
-        header: (
-          <div className="bubble-meta">
-            <span>{getChatMessageTitle(item, { assistantLabel })}</span>
-            <span>{item.createdAt ? formatDateTimeZh(item.createdAt) : '刚刚'}</span>
-          </div>
-        ),
-        footer: isAssistant ? (
-          <div className="bubble-footer-actions">
-            <span className="bubble-footer-note">{getMessageStatusLabel(info.status)}</span>
-            {canReload ? (
-              <Button
-                type="link"
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={() => handleReloadMessage(info.id)}
-                className="bubble-footer-button"
-              >
-                重新生成
-              </Button>
-            ) : null}
-          </div>
-        ) : isTool ? (
-          <span className="bubble-footer-note">工具结果</span>
-        ) : null,
-        content: <ChatMessageBody info={info} />,
-      }
-    }) as React.ComponentProps<typeof Bubble.List>['items']
-  }, [assistantLabel, isRequesting, messageInfos])
-
   useEffect(() => {
     currentSessionIdRef.current = currentSessionId
   }, [currentSessionId])
@@ -406,6 +279,9 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
   }, [agentId, currentSessionId])
 
   useEffect(() => {
+    currentSessionIdRef.current = null
+    pendingSyncSessionIdRef.current = null
+    shouldSyncSessionRef.current = false
     startTransition(() => {
       setCurrentSessionId(null)
     })
@@ -414,12 +290,14 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
     setSessionFiles([])
     setDraftAttachmentRefs([])
     setPendingAttachments([])
+    setComposerValue('')
     void loadSessions()
     void refreshWorkspaceData()
-  }, [agentId])
+  }, [agentId, setMessages])
 
   useEffect(() => {
     let cancelled = false
+
     async function loadActiveAgent() {
       if (!agentId) {
         setActiveAgent(null)
@@ -442,7 +320,9 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
         }
       }
     }
+
     void loadActiveAgent()
+
     return () => {
       cancelled = true
     }
@@ -451,10 +331,6 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
   useEffect(() => {
     void refreshAgentsList()
   }, [message])
-
-  useEffect(() => {
-    historyRef.current?.scrollTo({ top: historyRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messageInfos, isRequesting, isDefaultMessagesRequesting])
 
   useEffect(() => {
     const wasRequesting = wasRequestingRef.current
@@ -468,6 +344,17 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
     }
     wasRequestingRef.current = isRequesting
   }, [isRequesting])
+
+  async function refreshAgentsList() {
+    try {
+      setLoadingAgents(true)
+      setAgents(await api.getAgents(true))
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载 Agent 失败')
+    } finally {
+      setLoadingAgents(false)
+    }
+  }
 
   async function loadSessions(preferredSessionId?: string | null) {
     try {
@@ -639,16 +526,25 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
     if (isRequesting) {
       abort()
     }
-    // Clear session state before switching agent to avoid stale-session 404s
-    setCurrentSessionId(null)
+    currentSessionIdRef.current = null
+    pendingSyncSessionIdRef.current = null
+    shouldSyncSessionRef.current = false
     setSessions([])
     setMessages([])
     setSessionFiles([])
+    setDraftAttachmentRefs([])
+    setPendingAttachments([])
+    setComposerValue('')
+    startTransition(() => {
+      setCurrentSessionId(null)
+    })
+
     if (target === 'platform') {
-      setOverrideAgentId('')
-    } else {
-      setOverrideAgentId(target)
+      navigate('/chat')
+      return
     }
+
+    navigate(`/studio/agents/${encodeURIComponent(target)}/chat`)
   }
 
   async function uploadAttachmentsToSession(
@@ -720,7 +616,9 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
       }
       return dedupeAttachmentRefs([...prev, attachment])
     })
-    senderRef.current?.focus()
+    if (senderRef.current && 'focus' in senderRef.current && typeof senderRef.current.focus === 'function') {
+      ;(senderRef.current as { focus: () => void }).focus()
+    }
   }
 
   async function handleImportSessionFile(item: ChatUploadItem) {
@@ -735,7 +633,9 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
       setDraftAttachmentRefs((prev) => dedupeAttachmentRefs([...prev, toChatAttachmentRef(item)]))
       setLibraryOpen(false)
       await loadSessions(sessionId)
-      senderRef.current?.focus()
+      if (senderRef.current && 'focus' in senderRef.current && typeof senderRef.current.focus === 'function') {
+        ;(senderRef.current as { focus: () => void }).focus()
+      }
       message.success(`已将 ${item.name} 导入当前对话`)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '导入文件失败')
@@ -797,298 +697,190 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
     }
   }
 
-  return (
-    <div className="chat-page-shell chat-independent-shell">
-      <div className="chat-grid chat-independent-grid">
-        <aside className="chat-shell-side glass-panel" style={{ border: 'none' }}>
-          <div className="chat-rail-head">
-            <div className="chat-rail-brand">
-              <span className="section-kicker">会话中心</span>
-            </div>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreateSession}
-              data-testid={testIds.chat.newSession}
+  const sessionRail = (
+    <ChatSidebar
+      sessions={sessions}
+      activeSessionId={currentSessionId}
+      loading={loadingSessions}
+      sessionQuery={sessionQuery}
+      onSessionQueryChange={setSessionQuery}
+      onSessionSelect={(id) => setCurrentSessionId(id)}
+      onNewSession={handleCreateSession}
+      onRenameSession={openRenameModal}
+      onDeleteSession={confirmDeleteSession}
+      isDesktopLayout={isDesktopLayout}
+    />
+  )
+
+  const workspacePanel = (
+    <div ref={chatPanelRef} style={{ height: '100%' }}>
+      <Card
+        styles={{
+          body: {
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            height: '100%',
+            padding: 0,
+          },
+        }}
+        style={{
+          height: '100%',
+          minHeight: isDesktopLayout ? 0 : 680,
+          borderRadius: surfaceRadius,
+        }}
+      >
+        <Flex
+          justify="space-between"
+          align={isDesktopLayout ? 'flex-start' : 'stretch'}
+          gap={16}
+          wrap="wrap"
+          style={{
+            padding: isDesktopLayout ? 24 : 20,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          }}
+        >
+          <Flex vertical gap={6} flex={1} style={{ minWidth: 0 }}>
+            <Text
+              type="secondary"
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+              }}
             >
-              新建
+              会话
+            </Text>
+            <Title level={4} style={{ margin: 0 }}>
+              {selectedSessionTitle}
+            </Title>
+            <Text type="secondary">{selectedSessionSubtitle}</Text>
+          </Flex>
+
+          <Space wrap>
+            <Button
+              icon={<RobotOutlined />}
+              loading={loadingAgents || loadingActiveAgent}
+              onClick={() => {
+                setSwitchAgentQuery('')
+                setSwitchAgentOpen(true)
+                void refreshAgentsList()
+              }}
+              data-testid={testIds.chat.switchAgent}
+            >
+              {inAgentMode ? activeAgent?.name || '自定义Agent' : '切换 Agent'}
             </Button>
-          </div>
-
-          <div className="chat-rail-search">
-            <Input
-              allowClear
-              prefix={<SearchOutlined />}
-              placeholder="按标题或会话 ID 搜索"
-              value={sessionQuery}
-              onChange={(event) => setSessionQuery(event.target.value)}
-              data-testid={testIds.chat.sessionSearch}
+            <Button
+              type="text"
+              icon={<ReloadOutlined />}
+              onClick={() => void refreshWorkspaceData({ quiet: true })}
+              loading={refreshingWorkspace}
+              aria-label="刷新工作区"
             />
-          </div>
+          </Space>
+        </Flex>
 
-          {loadingSessions ? (
-            <div className="center-box">
-              <Spin />
-            </div>
-          ) : filteredSessions.length === 0 ? (
-            <Empty description="没有匹配的会话" className="empty-block" />
-          ) : (
-            <div className="conversation-list-shell">
-              <Conversations
-                aria-label="聊天会话列表"
-                className="conversation-list"
-                items={conversationItems}
-                activeKey={currentSessionId ?? undefined}
-                classNames={{ item: 'conversation-list-item' }}
-                tabIndex={0}
-                groupable={{
-                  title: (group) => <span className="conversation-group-title">{group}</span>,
-                }}
-                onActiveChange={(key) => {
-                  startTransition(() => {
-                    setCurrentSessionId(String(key))
-                  })
-                }}
-                menu={(conversation) => ({
-                  items: [
-                    { key: 'rename', label: '重命名', icon: <EditOutlined /> },
-                    { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
-                  ],
-                  onClick: ({ key, domEvent }) => {
-                    domEvent.stopPropagation()
-                    const session = sessions.find((item) => item.id === conversation.key)
-                    if (!session) {
-                      return
-                    }
-                    if (key === 'rename') {
-                      openRenameModal(session)
-                    }
-                    if (key === 'delete') {
-                      confirmDeleteSession(session)
-                    }
-                  },
-                })}
-              />
-            </div>
-          )}
-        </aside>
+        <Flex vertical style={{ flex: 1, minHeight: 0 }}>
+          <ChatMessages
+            messageInfos={messageInfos}
+            currentSessionId={currentSessionId}
+            isRequesting={isRequesting}
+            isLoadingMessages={isDefaultMessagesRequesting}
+            assistantLabel={assistantLabel}
+            quickPrompts={workspaceData?.quickPrompts}
+            onReloadMessage={handleReloadMessage}
+            onQuickPromptClick={(prompt) => {
+              setComposerValue(prompt)
+              if (senderRef.current && 'focus' in senderRef.current && typeof senderRef.current.focus === 'function') {
+                ;(senderRef.current as { focus: () => void }).focus()
+              }
+            }}
+            isDesktopLayout={isDesktopLayout}
+          />
 
-        <section className="chat-shell-main">
-          <div className="chat-panel chat-panel-independent" ref={chatPanelRef}>
-            <div className="chat-stage-header">
-              <div className="chat-stage-copy">
-                <span className="section-kicker">会话</span>
-                <Title level={4}>{selectedSessionTitle}</Title>
-                <Text type="secondary">{selectedSessionSubtitle}</Text>
-              </div>
-              <div className="chat-stage-actions">
-                <Button
-                  icon={<RobotOutlined />}
-                  loading={loadingAgents}
-                  onClick={() => {
-                    setSwitchAgentQuery('')
-                    setSwitchAgentOpen(true)
-                    void refreshAgentsList()
-                  }}
-                  data-testid={testIds.chat.switchAgent}
-                >
-                  {inAgentMode ? (activeAgent?.name || '自定义Agent') : '选择员工'}
-                </Button>
-                <Button
-                  type="text"
-                  icon={<ReloadOutlined />}
-                  onClick={() => void refreshWorkspaceData({ quiet: true })}
-                  loading={refreshingWorkspace}
-                />
-              </div>
-            </div>
+          <ChatInput
+            ref={senderRef}
+            value={composerValue}
+            onChange={setComposerValue}
+            onSubmit={handleSubmit}
+            onCancel={abort}
+            isRequesting={isRequesting}
+            uploadingFiles={uploadingFiles}
+            assistantLabel={assistantLabel}
+            pendingAttachments={pendingAttachments}
+            onPendingAttachmentsChange={setPendingAttachments}
+            draftAttachmentRefs={draftAttachmentRefs}
+            onDraftAttachmentRefsChange={setDraftAttachmentRefs}
+            sessionFiles={sessionFiles}
+            recentUploads={recentUploads}
+            onOpenLibrary={() => setLibraryOpen(true)}
+            onToggleSessionFile={toggleSessionFileReference}
+            dropContainerRef={chatPanelRef}
+            isDesktopLayout={isDesktopLayout}
+          />
+        </Flex>
+      </Card>
+    </div>
+  )
 
-            <div className="chat-history chat-history-expanded" ref={historyRef}>
-              {isDefaultMessagesRequesting ? (
-                <div className="center-box">
-                  <Spin />
-                </div>
-              ) : messageInfos.length === 0 ? (
-                <div className="chat-history-empty" />
-              ) : (
-                <div className="chat-history-canvas" data-testid={testIds.chat.bubbleList}>
-                  <Bubble.List items={bubbleItems} className="bubble-list" autoScroll />
-                </div>
-              )}
-            </div>
-
-            <div className="chat-composer-panel chat-composer-panel-independent glass-panel-strong" style={{ borderRadius: 'var(--nb-radius-xl)' }}>
-              <div className="sender-shell" data-testid={testIds.chat.composer}>
-                <Sender
-                  ref={senderRef}
-                  value={composerValue}
-                  loading={isRequesting || uploadingFiles}
-                  disabled={uploadingFiles}
-                  onChange={(value) => setComposerValue(value)}
-                  onSubmit={(value) => {
-                    void handleSubmit(value)
-                  }}
-                  onCancel={abort}
-                  onPasteFile={(firstFile) => {
-                    setPendingAttachments((prev) => [...prev, createPendingAttachment(firstFile)])
-                  }}
-                  autoSize={{ minRows: 1, maxRows: 5 }}
-                  placeholder={`给${assistantLabel}发送消息，或粘贴文件开始对话...`}
-                  className="chat-sender"
-                  header={
-                    showSenderHeader ? (
-                      <Sender.Header
-                        open
-                        title="本轮引用"
-                        closable={false}
-                        className="chat-sender-header"
-                        classNames={{
-                          header: 'chat-sender-header-head',
-                          content: 'chat-sender-header-body',
-                        }}
-                      >
-                        {draftAttachmentRefs.length ? (
-                          <div className="chat-sender-section">
-                            <div className="chat-inline-section-head">
-                              <span>本轮引用</span>
-                            </div>
-                            <AttachmentTags
-                              attachments={draftAttachmentRefs}
-                              removable
-                              onRemove={(relativePath) => {
-                                setDraftAttachmentRefs((prev) =>
-                                  prev.filter((item) => item.relativePath !== relativePath),
-                                )
-                              }}
-                            />
-                          </div>
-                        ) : null}
-                        {pendingAttachments.length > 0 ? (
-                          <div className="chat-sender-section">
-                            <div className="chat-inline-section-head">
-                              <span>待上传文件</span>
-                            </div>
-                            <Attachments
-                              items={pendingAttachments}
-                              multiple
-                              disabled={uploadingFiles}
-                              overflow="scrollX"
-                              beforeUpload={() => false}
-                              onChange={({ fileList }) => setPendingAttachments(fileList)}
-                            />
-                          </div>
-                        ) : null}
-                      </Sender.Header>
-                    ) : null
-                  }
-                  prefix={
-                    <span className="chat-sender-prefix-actions">
-                      <span data-testid={testIds.chat.fileInput}>
-                        <Attachments
-                          items={pendingAttachments}
-                          multiple
-                          disabled={uploadingFiles}
-                          beforeUpload={() => false}
-                          onChange={({ fileList }) => setPendingAttachments(fileList)}
-                          getDropContainer={() => chatPanelRef.current}
-                          placeholder={{
-                            icon: <CloudUploadOutlined />,
-                            title: '拖拽文件到这里',
-                            description: '发送时自动上传。',
-                          }}
-                        >
-                          <Button
-                            type="text"
-                            icon={<LinkOutlined />}
-                            className="chat-attach-trigger"
-                            disabled={uploadingFiles}
-                            data-testid={testIds.chat.uploadFile}
-                          />
-                        </Attachments>
-                      </span>
-                      <Button
-                        type="text"
-                        className="chat-import-trigger"
-                        icon={<PaperClipOutlined />}
-                        onClick={() => setLibraryOpen(true)}
-                        disabled={mutatingSessionFiles || recentUploads.length === 0}
-                      >
-                        历史文件
-                      </Button>
-                    </span>
-                  }
-                  footer={
-                    <div className="composer-footer">
-                      <div className="composer-footer-copy">
-                        <Text type="secondary">
-                          {uploadingFiles
-                            ? '附件上传中...'
-                            : pendingAttachments.length
-                              ? `按 Enter 发送，${pendingAttachments.length} 个附件会随消息一并上传。`
-                              : 'Enter 发送，Shift + Enter 换行。'}
-                        </Text>
-                      </div>
-                      <div className="composer-footer-actions" />
-                    </div>
-                  }
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
+  return (
+    <Layout className="page-stack" style={{ minHeight: 0, height: '100%', background: 'transparent' }}>
+      {isDesktopLayout ? (
+        <Layout hasSider style={{ flex: 1, minHeight: 0, gap: 16, background: 'transparent' }}>
+          <Sider
+            width={SESSION_RAIL_WIDTH}
+            theme="light"
+            style={{
+              background: 'transparent',
+            }}
+          >
+            {sessionRail}
+          </Sider>
+          <Content style={{ minWidth: 0, background: 'transparent' }}>
+            {workspacePanel}
+          </Content>
+        </Layout>
+      ) : (
+        <Layout style={{ flex: 1, minHeight: 0, background: 'transparent' }}>
+          <Content style={{ background: 'transparent' }}>
+            <Flex vertical gap={16}>
+              {sessionRail}
+              {workspacePanel}
+            </Flex>
+          </Content>
+        </Layout>
+      )}
 
       <Modal
-        title="选择对话员工"
+        title="切换到自定义Agent"
         open={switchAgentOpen}
         onCancel={() => setSwitchAgentOpen(false)}
         footer={null}
       >
-        <Input
-          allowClear
-          prefix={<SearchOutlined />}
-          placeholder="搜索 Agent 名称"
-          value={switchAgentQuery}
-          onChange={(event) => setSwitchAgentQuery(event.target.value)}
-          style={{ marginBottom: 12 }}
-        />
-        <List
-          dataSource={[
-            { key: 'platform', title: `${PLATFORM_ASSISTANT_NAME}（通用聊天）`, description: '使用默认平台助手' },
-            ...agents
-              .filter((item) => item.enabled)
-              .map((item) => ({
-                key: item.agentId,
-                title: item.name || item.agentId,
-                description: item.description || item.agentId,
-              })),
-          ].filter((item) => {
-            const query = switchAgentQuery.trim().toLowerCase()
-            if (!query) return true
-            return `${item.title} ${item.description}`.toLowerCase().includes(query)
-          })}
-          renderItem={(item) => (
-            <List.Item
-              key={item.key}
-              onClick={() => handleSwitchTarget(item.key)}
-              style={{ cursor: 'pointer' }}
-            >
-              <List.Item.Meta
-                title={
-                  <span>
-                    {item.title}
-                    {item.key !== 'platform' && item.key === agentId ? (
-                      <Text type="secondary" style={{ marginLeft: 8 }}>
-                        当前
-                      </Text>
-                    ) : null}
-                  </span>
-                }
-                description={item.description}
-              />
-            </List.Item>
-          )}
-        />
+        <Flex vertical gap={12}>
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder="搜索员工"
+            value={switchAgentQuery}
+            onChange={(event) => setSwitchAgentQuery(event.target.value)}
+          />
+          <List
+            rowKey="key"
+            dataSource={agentPickerOptions}
+            renderItem={(item) => (
+              <List.Item
+                key={item.key}
+                onClick={() => handleSwitchTarget(item.key)}
+                extra={item.active ? <Tag color="blue">当前</Tag> : null}
+                style={{ cursor: 'pointer' }}
+              >
+                <List.Item.Meta title={item.title} description={item.description} />
+              </List.Item>
+            )}
+          />
+        </Flex>
       </Modal>
 
       <Modal
@@ -1098,21 +890,18 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
         onCancel={() => setLibraryOpen(false)}
       >
         {recentUploads.length === 0 ? (
-          <Empty description="文件库里还没有可导入的最近文件" className="empty-block" />
+          <Empty description="文件库里还没有可导入的最近文件" />
         ) : (
-          <div className="chat-library-list">
-            {recentUploads.map((item) => {
+          <List
+            rowKey="relativePath"
+            itemLayout="horizontal"
+            dataSource={recentUploads}
+            renderItem={(item) => {
               const alreadyInSession = sessionFiles.some((entry) => entry.relativePath === item.relativePath)
               return (
-                <div key={item.relativePath} className="chat-library-item">
-                  <div className="chat-library-item-copy">
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.relativePath} · {formatFileSize(item.sizeBytes)}
-                    </span>
-                  </div>
-                  <div className="chat-library-item-actions">
-                    {alreadyInSession ? (
+                <List.Item
+                  actions={[
+                    alreadyInSession ? (
                       <Button size="small" onClick={() => toggleSessionFileReference(item)}>
                         加入本轮引用
                       </Button>
@@ -1127,12 +916,17 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
                       >
                         导入到对话
                       </Button>
-                    )}
-                  </div>
-                </div>
+                    ),
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={item.name}
+                    description={`${item.relativePath} · ${formatFileSize(item.sizeBytes)}`}
+                  />
+                </List.Item>
               )
-            })}
-          </div>
+            }}
+          />
         )}
       </Modal>
 
@@ -1149,10 +943,10 @@ export default function ChatPage({ agentId: propAgentId }: { agentId?: string } 
         <Input
           value={renameValue}
           onChange={(event) => setRenameValue(event.target.value)}
-          placeholder="输入会话标题"
+          placeholder="会话标题"
           maxLength={80}
         />
       </Modal>
-    </div>
+    </Layout>
   )
 }

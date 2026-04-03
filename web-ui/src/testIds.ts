@@ -17,9 +17,6 @@ export const testIds = {
     submit: 'auth-submit',
   },
   setup: {
-    stepProvider: 'setup-step-provider',
-    stepChannel: 'setup-step-channel',
-    stepAgent: 'setup-step-agent',
     providerSelect: 'setup-provider-select',
     modelInput: 'setup-model-input',
     apiKeyInput: 'setup-api-key-input',

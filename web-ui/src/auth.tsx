@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { createContext, useContext, useEffect, useState } from 'react'
-import { App as AntdApp } from 'antd'
 import { ApiError, api } from './api'
+import { useToast } from './toast'
 import type { AuthStatus } from './types'
 
 const AUTH_REQUIRED_EVENT = 'nanobot:auth-required'
@@ -30,7 +30,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { message } = AntdApp.useApp()
+  const toast = useToast()
   const [status, setStatus] = useState<AuthStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const next = await api.bootstrapAuth(username, password)
       setStatus(next)
       setError(null)
-      message.success('管理员账号已创建')
+      toast.success('管理员账号已创建')
       return next
     } catch (error) {
       const nextError = getErrorMessage(error, '管理员初始化失败')
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const next = await api.login(username, password)
       setStatus(next)
       setError(null)
-      message.success('登录成功')
+      toast.success('登录成功')
       return next
     } catch (error) {
       const nextError = getErrorMessage(error, '登录失败')
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const next = await api.logout()
       setStatus(next)
       setError(null)
-      message.success('已退出登录')
+      toast.success('已退出登录')
       return next
     } catch (error) {
       const nextError = getErrorMessage(error, '退出登录失败')

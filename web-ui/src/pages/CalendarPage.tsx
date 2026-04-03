@@ -3,7 +3,7 @@ import { Alert, App, Button, Card, Empty, Input, InputNumber, List, Select, Spac
 import { CalendarOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { api, ApiError } from '../api'
 import { MotionGroup, MotionPanel } from '../components/MotionSurface'
-import PageHero from '../components/PageHero'
+import PageHeader from '../components/console/PageHeader'
 import { formatDateTimeZh } from '../locale'
 import type { CalendarEvent, CalendarEventInput, CalendarSettings, CronJob } from '../types'
 
@@ -284,8 +284,7 @@ export default function CalendarPage() {
 
   return (
     <div className="page-stack">
-      <PageHero
-        className="page-hero-compact"
+      <PageHeader
         title="日程与提醒"
         actions={(
           <Space wrap>

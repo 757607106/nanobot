@@ -11,7 +11,9 @@ import {
   Select,
   Space,
   Switch,
+  Tag,
   Typography,
+  theme,
 } from 'antd'
 import { SaveOutlined, SearchOutlined } from '@ant-design/icons'
 import type { KnowledgeQueryChunk, KnowledgeQueryParams, KnowledgeRetrieveResult } from '../../types'
@@ -126,8 +128,14 @@ export function KnowledgeQueryTab({
             ]}
             style={{ width: 140 }}
           />
-          <InputNumber min={1} max={100} value={queryParams.topK} onChange={(value) => onTopKChange(Number(value || 10))} addonBefore="TopK" />
-          <InputNumber min={1} max={100} value={queryParams.chunkTopK} onChange={(value) => onChunkTopKChange(Number(value || 12))} addonBefore="ChunkK" />
+          <Space.Compact>
+            <Button disabled>TopK</Button>
+            <InputNumber min={1} max={100} value={queryParams.topK} onChange={(value) => onTopKChange(Number(value || 10))} />
+          </Space.Compact>
+          <Space.Compact>
+            <Button disabled>ChunkK</Button>
+            <InputNumber min={1} max={100} value={queryParams.chunkTopK} onChange={(value) => onChunkTopKChange(Number(value || 12))} />
+          </Space.Compact>
           <>
             <Switch checked={queryParams.enableRerank} onChange={onEnableRerankChange} />
             <Text type="secondary">重排</Text>
@@ -174,7 +182,7 @@ export function KnowledgeQueryTab({
         value={queryText}
         onChange={(event) => onQueryTextChange(event.target.value)}
         autoSize={{ minRows: 4, maxRows: 8 }}
-        placeholder="输入你要验证的知识库问题..."
+        placeholder="输入问题"
       />
 
       <div className="knowledge-query-actions">
@@ -342,18 +350,5 @@ export function KnowledgeQueryTab({
 }
 
 function TagLabel({ label }: { label: string }) {
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '2px 8px',
-        borderRadius: 999,
-        background: 'rgba(15, 23, 42, 0.06)',
-        fontSize: 12,
-      }}
-    >
-      {label}
-    </span>
-  )
+  return <Tag>{label}</Tag>
 }

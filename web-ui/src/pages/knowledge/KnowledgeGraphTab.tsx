@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Empty, Input, InputNumber, Segmented, Select, Spin, Statistic, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Input, InputNumber, Segmented, Select, Space, Spin, Statistic, Tag, Typography, theme } from 'antd'
 import { AimOutlined, ReloadOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
 import type { KnowledgeGraphData, KnowledgeGraphEdge, KnowledgeGraphNode, KnowledgeGraphStats } from '../../types'
 
@@ -48,14 +48,16 @@ interface GraphDisplayState {
   focusActive: boolean
 }
 
-const GRAPH_COLORS: Record<string, string> = {
-  concept: '#76a873',
-  artifact: '#cf8b3f',
-  organization: '#4f8fc7',
-  person: '#a86ec3',
-  capability: '#6d8f86',
-  data: '#8193a5',
-  default: '#60776e',
+function getGraphColors(token: ReturnType<typeof theme.useToken>['token']) {
+  return {
+    concept: token.colorSuccess,
+    artifact: token.colorWarning,
+    organization: token.colorInfo,
+    person: token.purple,
+    capability: token.cyan,
+    data: token.colorTextSecondary,
+    default: token.colorText,
+  }
 }
 
 const LOW_SIGNAL_TYPES = new Set(['data', 'date', 'time', 'number', 'version'])
@@ -161,8 +163,9 @@ function getFileName(value: string) {
   return normalized.split('/').pop() || normalized
 }
 
-function getColorForType(type: string) {
-  return GRAPH_COLORS[type] || GRAPH_COLORS.default
+function getColorForType(type: string, colors: ReturnType<typeof getGraphColors>) {
+  const key = type as keyof ReturnType<typeof getGraphColors>
+  return colors[key] || colors.default
 }
 
 function getDisplayNodeLabel(node: KnowledgeGraphNode, showFull = false) {
@@ -279,6 +282,8 @@ export function KnowledgeGraphTab({
   onGraphMaxNodesChange,
   onReload,
 }: KnowledgeGraphTabProps) {
+  const { token } = theme.useToken()
+  const graphColors = useMemo(() => getGraphColors(token), [token])
   const containerRef = useRef<HTMLDivElement | null>(null)
   const graphRef = useRef<any>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
@@ -453,7 +458,7 @@ export function KnowledgeGraphTab({
         return {
           id: node.id,
           data: {
-            color: getColorForType(getNodeType(node)),
+            color: getColorForType(getNodeType(node), graphColors),
             degree,
             label: labelNodeIds.has(node.id) ? getDisplayNodeLabel(node, displayGraph.focusActive) : '',
             selected: node.id === selectedNodeId,
@@ -472,7 +477,7 @@ export function KnowledgeGraphTab({
         },
       })),
     }
-  }, [displayGraph, labelNodeIds, relationCountByNode, selectedEdgeId, selectedNodeId, visibleNodeIds])
+  }, [displayGraph, graphColors, labelNodeIds, relationCountByNode, selectedEdgeId, selectedNodeId, visibleNodeIds])
 
   useEffect(() => {
     if (selectedNodeId && !filteredGraphData.nodes.some((node) => node.id === selectedNodeId)) {
@@ -523,23 +528,23 @@ export function KnowledgeGraphTab({
               size: (datum: any) => {
                 return Number(datum.data?.size || 28)
               },
-              fill: (datum: any) => datum.data?.color || GRAPH_COLORS.default,
+              fill: (datum: any) => datum.data?.color || graphColors.default,
               opacity: (datum: any) => (displayGraph.focusActive && !datum.data?.focused ? 0.18 : 1),
-              stroke: (datum: any) => (datum.data?.selected ? '#25312d' : '#f7f4ef'),
+              stroke: (datum: any) => (datum.data?.selected ? token.colorPrimary : token.colorBgContainer),
               lineWidth: (datum: any) => (datum.data?.selected ? 3.5 : datum.data?.isCenter ? 2.6 : 2),
               labelText: (datum: any) => datum.data?.label || '',
-              labelFill: '#27322d',
+              labelFill: token.colorText,
               labelFontSize: (datum: any) => (datum.data?.isCenter ? 13 : 11),
               labelWordWrap: true,
               labelMaxWidth: displayGraph.focusActive ? '320%' : '170%',
-              shadowColor: 'rgba(37, 49, 45, 0.12)',
+              shadowColor: token.colorFillSecondary,
               shadowBlur: 8,
             },
           },
           edge: {
             type: 'line',
             style: {
-              stroke: (datum: any) => (datum.data?.selected ? 'rgba(207, 139, 63, 0.95)' : 'rgba(111, 126, 119, 0.34)'),
+              stroke: (datum: any) => (datum.data?.selected ? token.colorWarning : token.colorBorderSecondary),
               opacity: displayGraph.focusActive ? 0.85 : 0.42,
               lineWidth: (datum: any) => (datum.data?.selected ? 3 : displayGraph.focusActive ? 1.9 : 1.2),
               endArrow: true,
@@ -608,7 +613,7 @@ export function KnowledgeGraphTab({
         graphRef.current = null
       }
     }
-  }, [displayGraph.focusActive, graphPayload, layoutMode])
+  }, [displayGraph.focusActive, graphColors, graphPayload, layoutMode, token])
 
   const selectedTypeCount = useMemo(() => {
     if (!selectedNode) return ''
@@ -624,8 +629,14 @@ export function KnowledgeGraphTab({
           prefix={<SearchOutlined />}
           placeholder="搜索实体"
         />
-        <InputNumber min={1} max={5} value={graphDepth} onChange={(value) => onGraphDepthChange(Number(value || 2))} addonBefore="层级" />
-        <InputNumber min={10} max={300} value={graphMaxNodes} onChange={(value) => onGraphMaxNodesChange(Number(value || 50))} addonBefore="实体数" />
+        <Space.Compact>
+          <Button disabled>层级</Button>
+          <InputNumber min={1} max={5} value={graphDepth} onChange={(value) => onGraphDepthChange(Number(value || 2))} />
+        </Space.Compact>
+        <Space.Compact>
+          <Button disabled>实体数</Button>
+          <InputNumber min={10} max={300} value={graphMaxNodes} onChange={(value) => onGraphMaxNodesChange(Number(value || 50))} />
+        </Space.Compact>
         <Select
           value={layoutMode}
           onChange={(value) => setLayoutMode(value as GraphLayoutMode)}

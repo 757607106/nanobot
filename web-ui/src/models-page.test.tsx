@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ModelsPage from './pages/ModelsPage'
+import ModelsPage from './pages/models'
 import { renderWithProviders } from './test/renderApp'
 
 const mockApi = vi.hoisted(() => ({
@@ -269,16 +269,15 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('模型供应商')).toBeInTheDocument()
-    expect(screen.getAllByText('模型供应商').length).toBeGreaterThan(0)
+    expect(await screen.findByText('模型与绑定')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('搜索供应商...')).toBeInTheDocument()
     expect(screen.getByText('Moonshot')).toBeInTheDocument()
-    expect(screen.getByText('DeepSeek')).toBeInTheDocument()
+    expect(screen.getAllByText('DeepSeek').length).toBeGreaterThan(0)
 
     await user.click(screen.getByText('Moonshot'))
 
-    expect(await screen.findByText('云端供应商全局凭据')).toBeInTheDocument()
-    expect(screen.getByText('已注册模型')).toBeInTheDocument()
+    expect(await screen.findByText('Moonshot 配置')).toBeInTheDocument()
+    expect(screen.getByText('模型绑定注册表')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '获取模型列表' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /添加模型/ })).toBeInTheDocument()
   })
@@ -288,9 +287,9 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('模型供应商')
+    await screen.findByText('模型与绑定')
     await user.click(screen.getByText('Moonshot'))
-    await screen.findByText('云端供应商全局凭据')
+    await screen.findByText('Moonshot 配置')
     await user.click(screen.getByRole('button', { name: /添加模型/ }))
     await screen.findByText('添加模型资源')
     await user.type(screen.getByLabelText('模型 ID'), 'kimi-k2.5')
@@ -300,8 +299,9 @@ describe('ModelsPage', () => {
     expect(kimiCnRow).not.toBeNull()
     await user.click(within(kimiCnRow as HTMLTableRowElement).getByText('设为默认'))
 
-    await user.clear(screen.getByPlaceholderText('https://api.moonshot.ai/v1'))
-    await user.type(screen.getByPlaceholderText('https://api.moonshot.ai/v1'), 'https://api.moonshot.cn/v1')
+    const apiBaseInput = screen.getAllByLabelText('API Base URL')[0]
+    await user.clear(apiBaseInput)
+    await user.type(apiBaseInput, 'https://api.moonshot.cn/v1')
 
     await user.click(screen.getByRole('button', { name: /保存所有配置/ }))
 
@@ -324,11 +324,12 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('模型供应商')
+    await screen.findByText('模型与绑定')
     await user.click(screen.getByText('Moonshot'))
-    await screen.findByText('云端供应商全局凭据')
-    await user.clear(screen.getByPlaceholderText('https://api.moonshot.ai/v1'))
-    await user.type(screen.getByPlaceholderText('https://api.moonshot.ai/v1'), 'https://api.moonshot.cn/v1')
+    await screen.findByText('Moonshot 配置')
+    const apiBaseInput = screen.getAllByLabelText('API Base URL')[0]
+    await user.clear(apiBaseInput)
+    await user.type(apiBaseInput, 'https://api.moonshot.cn/v1')
     await user.click(screen.getByRole('button', { name: /测试连接/ }))
     await screen.findByText('测试模型连接')
     await user.type(screen.getByLabelText('测试模型 ID'), 'kimi-k2.5')
@@ -352,9 +353,9 @@ describe('ModelsPage', () => {
 
     renderPage()
 
-    await screen.findByText('模型供应商')
+    await screen.findByText('模型与绑定')
     await user.click(screen.getByText('Moonshot'))
-    await screen.findByText('云端供应商全局凭据')
+    await screen.findByText('Moonshot 配置')
     await user.click(screen.getByRole('button', { name: '获取模型列表' }))
 
     await waitFor(() => {

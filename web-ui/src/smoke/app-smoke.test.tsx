@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testIds } from '../testIds'
 
 const mockApi = vi.hoisted(() => ({
   createSession: vi.fn(),
@@ -424,7 +425,7 @@ vi.mock('antd', async () => {
     extra?: React.ReactNode
     actions?: React.ReactNode[]
     open?: boolean
-    onClick?: () => void
+    onClick?: (...args: unknown[]) => void
     onChange?: (...args: unknown[]) => void
     checked?: boolean
     value?: unknown
@@ -453,12 +454,21 @@ vi.mock('antd', async () => {
   AppProvider.useApp = () => ({
     message: {
       error: vi.fn(),
+      info: vi.fn(),
       success: vi.fn(),
+      warning: vi.fn(),
     },
     modal: {
       confirm: vi.fn(),
     },
   })
+
+  const Avatar = ({ children, icon, src, alt }: Props & { alt?: string; src?: string }) => (
+    <span data-avatar={typeof src === 'string' ? src : undefined} aria-label={alt}>
+      {icon as React.ReactNode}
+      {children}
+    </span>
+  )
 
   const Button = ({ children, className, disabled, htmlType, icon, onClick }: Props) => (
     <button
@@ -600,10 +610,11 @@ vi.mock('antd', async () => {
     />
   )
 
-  const Select = ({ className, disabled, onChange, options = [], value }: Props) => (
+  const Select = ({ className, disabled, onChange, options = [], value, ...rest }: Props) => (
     <select
       className={className}
       disabled={Boolean(disabled)}
+      aria-label={typeof rest['aria-label'] === 'string' ? rest['aria-label'] : undefined}
       value={typeof value === 'string' || typeof value === 'number' ? value : undefined}
       onChange={(event) => onChange?.(event.target.value)}
     >
@@ -655,17 +666,49 @@ vi.mock('antd', async () => {
     </div>
   )
 
-  const Tabs = ({ items = [], onChange }: Props) => (
-    <div>
-      {items.map((item, index) => (
-        <section key={item.key ?? index}>
-          <button type="button" onClick={() => onChange?.(item.key)}>
-            {item.label as React.ReactNode}
-          </button>
-          <div>{item.children as React.ReactNode}</div>
-        </section>
-      ))}
-    </div>
+  const Tabs = ({ activeKey, children, items = [], onChange, value }: Props) => {
+    const normalizedItems = items.length > 0
+      ? items.map((item) => ({
+          key: item.key,
+          label: item.label,
+          children: item.children,
+        }))
+      : React.Children.toArray(children).map((child, index) => {
+          if (!React.isValidElement(child)) {
+            return { key: String(index), label: null, children: child }
+          }
+          const props = child.props as { children?: React.ReactNode; label?: React.ReactNode; value?: React.Key }
+          return {
+            key: props.value ?? String(index),
+            label: props.label,
+            children: props.children,
+          }
+        })
+
+    const selectedKey = activeKey ?? value ?? normalizedItems[0]?.key
+
+    return (
+      <div role="tablist">
+        {normalizedItems.map((item, index) => (
+          <section key={item.key ?? index}>
+            <div role="tab" aria-selected={item.key === selectedKey} onClick={() => onChange?.(item.key)}>
+              <button type="button" onClick={() => onChange?.(item.key)}>
+                {item.label as React.ReactNode}
+              </button>
+            </div>
+            <div>{item.children as React.ReactNode}</div>
+          </section>
+        ))}
+      </div>
+    )
+  }
+
+  const SplitterPanel = ({ children, className }: Props) => <div className={className}>{children}</div>
+  const Splitter = Object.assign(
+    ({ children, className }: Props) => <div className={className}>{children}</div>,
+    {
+      Panel: SplitterPanel,
+    },
   )
 
   const Collapse = ({ items = [] }: Props) => (
@@ -683,9 +726,9 @@ vi.mock('antd', async () => {
 
   const Popconfirm = ({ children }: Props) => <>{children}</>
 
-  const Alert = ({ message, description }: Props) => (
+  const Alert = ({ message, title, description }: Props & { title?: React.ReactNode }) => (
     <div>
-      <strong>{message as React.ReactNode}</strong>
+      <strong>{(title as React.ReactNode) ?? (message as React.ReactNode)}</strong>
       <div>{description as React.ReactNode}</div>
     </div>
   )
@@ -698,7 +741,22 @@ vi.mock('antd', async () => {
     </span>
   )
   const Descriptions = Object.assign(
-    ({ children }: Props) => <dl>{children}</dl>,
+    ({
+      children,
+      items = [],
+    }: Props & {
+      items?: Array<{ key?: string; label?: React.ReactNode; children?: React.ReactNode }>
+    }) => (
+      <dl>
+        {items.map((item, index) => (
+          <div key={item.key ?? index}>
+            <dt>{item.label}</dt>
+            <dd>{item.children}</dd>
+          </div>
+        ))}
+        {children}
+      </dl>
+    ),
     {
       Item: ({ children, label }: Props) => (
         <div>
@@ -746,11 +804,31 @@ vi.mock('antd', async () => {
       <div>{value}</div>
     </div>
   )
+  const Progress = ({ percent }: { percent?: number }) => <div>{percent}</div>
+  const Timeline = ({
+    items = [],
+  }: Props & {
+    items?: Array<{ dot?: React.ReactNode; children?: React.ReactNode }>
+  }) => (
+    <div>
+      {items.map((item, index) => (
+        <div key={index}>
+          {item.dot}
+          {item.children}
+        </div>
+      ))}
+    </div>
+  )
 
   const Typography = {
     Title: ({ children }: Props) => <div>{children}</div>,
     Paragraph: ({ children }: Props) => <p>{children}</p>,
     Text: ({ children }: Props) => <span>{children}</span>,
+    Link: ({ children, onClick }: Props) => (
+      <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    ),
   }
 
   const Space = Object.assign(Box, {
@@ -880,13 +958,17 @@ vi.mock('antd', async () => {
     Content: LayoutBase,
   })
 
-  const Menu = ({ items = [] }: Props) => (
+  const Menu = ({ items = [], onClick }: Props) => (
     <nav>
       {items.map((item, index) => (
-        <div key={(item as { key?: string }).key ?? index}>
+        <button
+          key={(item as { key?: string }).key ?? index}
+          type="button"
+          onClick={() => onClick?.({ key: (item as { key?: string }).key })}
+        >
           {(item as { icon?: React.ReactNode }).icon}
           {(item as { label?: React.ReactNode }).label as React.ReactNode}
-        </div>
+        </button>
       ))}
     </nav>
   )
@@ -903,10 +985,23 @@ vi.mock('antd', async () => {
   }
 
   const ConfigProvider = ({ children }: React.PropsWithChildren) => <>{children}</>
+  const theme = {
+    darkAlgorithm: Symbol('mock-antd-dark-algorithm'),
+    defaultAlgorithm: Symbol('mock-antd-default-algorithm'),
+    useToken: () => ({
+      token: {
+        colorBgContainer: '#ffffff',
+        colorBgLayout: '#f4f7fb',
+        colorBorderSecondary: '#d8e0eb',
+        colorPrimary: '#0f6cbd',
+      },
+    }),
+  }
 
   return {
     Alert,
     App: AppProvider,
+    Avatar,
     Badge,
     Button,
     Card,
@@ -931,18 +1026,22 @@ vi.mock('antd', async () => {
     Popconfirm,
     Radio,
     Row,
+    Progress,
     QRCode,
     Segmented,
     Select,
     Skeleton,
     Space,
     Spin,
+    Splitter,
     Statistic,
     Steps,
     Switch,
     Table,
     Tabs,
     Tag,
+    theme,
+    Timeline,
     Tooltip,
     Typography,
     Upload,
@@ -952,23 +1051,25 @@ vi.mock('antd', async () => {
 import { AppRoutes } from '../App'
 import AppShell from '../components/AppShell'
 import CalendarPage from '../pages/CalendarPage'
-import ChannelBindingsPage from '../pages/ChannelBindingsPage'
-import ChannelDetailPage from '../pages/ChannelDetailPage'
-import ChannelsLayoutPage from '../pages/ChannelsLayoutPage'
-import ChannelsPage from '../pages/ChannelsPage'
+import {
+  ChannelsPage,
+  ChannelsLayoutPage,
+  ChannelDetailPage,
+  ChannelBindingsPage,
+  ChannelAuditPage,
+} from '../pages/channels'
 import ChatPage from '../pages/ChatPage'
-import ChannelAuditPage from '../pages/ChannelAuditPage'
 import DashboardPage from '../pages/DashboardPage'
 import CronPage from '../pages/CronPage'
-import McpPage from '../pages/McpPage'
-import McpServerDetailPage from '../pages/McpServerDetailPage'
-import ModelsPage from '../pages/ModelsPage'
+import McpPage from '../pages/mcp'
+import McpServerDetailPage from '../pages/mcp/DetailPage'
+import ModelsPage from '../pages/models'
 import OperationsPage from '../pages/OperationsPage'
 import ProfilePage from '../pages/ProfilePage'
-import AgentsPage from '../pages/AgentsPage'
-import KnowledgePage from '../pages/KnowledgePage'
-import MemoryAuditPage from '../pages/MemoryAuditPage'
-import RunsPage from '../pages/RunsPage'
+import AgentsPage from '../pages/agents'
+import KnowledgePage from '../pages/knowledge/KnowledgePage'
+import MemoryAuditPage from '../pages/memory'
+import RunsPage from '../pages/runs'
 import SkillsPage from '../pages/SkillsPage'
 import SetupPage from '../pages/SetupPage'
 import StudioLayoutPage from '../pages/StudioLayoutPage'
@@ -3027,16 +3128,16 @@ describe('web app smoke pages', () => {
   it('renders the desktop app shell navigation', async () => {
     renderShell()
 
-    expect((await screen.findAllByText('工作区')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('看板', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(await screen.findByText('对话', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('协作', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('模型', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('渠道', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('技能', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('连接', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('知识库', { selector: '.nav-item-title' })).toBeInTheDocument()
-    expect(screen.getByText('系统', { selector: '.nav-item-title' })).toBeInTheDocument()
+    expect((await screen.findAllByText('工作台')).length).toBeGreaterThan(0)
+    expect(await screen.findByTestId(testIds.app.navDashboard)).toBeInTheDocument()
+    expect(await screen.findByTestId(testIds.app.navChat)).toBeInTheDocument()
+    expect(screen.getByText('Agent Studio')).toBeInTheDocument()
+    expect(screen.getByText('模型与绑定')).toBeInTheDocument()
+    expect(screen.getByText('渠道注册表')).toBeInTheDocument()
+    expect(screen.getByText('技能中心')).toBeInTheDocument()
+    expect(screen.getByText('连接管理')).toBeInTheDocument()
+    expect(screen.getByText('知识工作区')).toBeInTheDocument()
+    expect(screen.getByText('实例设置')).toBeInTheDocument()
     expect(screen.queryByText('日程', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('定时任务', { selector: '.nav-item-title' })).not.toBeInTheDocument()
     expect(screen.queryByText('行为引导', { selector: '.nav-item-title' })).not.toBeInTheDocument()
@@ -3120,14 +3221,18 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    // Drawer opens with tab navigation visible
-    expect(await screen.findByText('记忆治理')).toBeInTheDocument()
+    // Detail route may paint loading content first; wait for the tab bar to settle.
+    await waitFor(() => {
+      expect(screen.getByText('记忆治理')).toBeInTheDocument()
+    })
     // Click memory tab to activate it
     fireEvent.click(screen.getByText('记忆治理'))
     // Memory content renders after tab activation
-    expect(await screen.findByText('员工长期记忆')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /保存记忆/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '提交候选' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('员工长期记忆')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /保存记忆/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '提交候选' })).toBeInTheDocument()
+    })
 
     fireEvent.click(screen.getByText('统一审计'))
     expect(await screen.findByText('统一记忆审计')).toBeInTheDocument()
@@ -3216,12 +3321,12 @@ describe('web app smoke pages', () => {
     fireEvent.click(screen.getByText('Support KB'))
     expect(await screen.findByText('返回列表')).toBeInTheDocument()
     expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: '文件' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '文件' })).toBeInTheDocument()
     expect(screen.getByText('检索测试')).toBeInTheDocument()
     expect(screen.getByText('知识导图')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByText('设置'))
-    expect(await screen.findByText('分块策略')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: '设置' }))
+    expect(await screen.findByLabelText('分块策略')).toBeInTheDocument()
     expect(screen.getByText('保存知识库设置')).toBeInTheDocument()
   })
 
@@ -3451,7 +3556,7 @@ describe('web app smoke pages', () => {
     expect(screen.getByText('设置密码')).toBeInTheDocument()
   })
 
-  it('renders the setup wizard page', async () => {
+  it('renders the setup configuration page', async () => {
     installMatchMedia(false)
     mockApi.getSetupStatus.mockResolvedValue({
       completed: false,
@@ -3494,8 +3599,8 @@ describe('web app smoke pages', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('渠道概览')).toBeInTheDocument()
-    expect(screen.getByText('自动化状态')).toBeInTheDocument()
+    expect((await screen.findAllByText('平台总览')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('关键入口')).toBeInTheDocument()
   })
 
   it('falls back to the dashboard landing page when a hidden route is requested', async () => {
@@ -3533,16 +3638,17 @@ describe('web app smoke pages', () => {
       username: 'admin',
     })
 
-    expect(await screen.findByText('渠道概览')).toBeInTheDocument()
+    expect((await screen.findAllByText('平台总览')).length).toBeGreaterThan(0)
     expect(screen.queryByText('登录并继续')).not.toBeInTheDocument()
   })
 
   it('renders the dashboard page', async () => {
     renderPage(<DashboardPage />)
-    expect(await screen.findByText('渠道概览')).toBeInTheDocument()
-    expect(screen.getByText('技能概览')).toBeInTheDocument()
+    expect((await screen.findAllByText('平台总览')).length).toBeGreaterThan(0)
+    expect(screen.getByText('待处理事项')).toBeInTheDocument()
+    expect((await screen.findAllByText('技能部署')).length).toBeGreaterThan(0)
     expect(screen.getByText('自动化状态')).toBeInTheDocument()
-    expect(screen.getByText('系统总览')).toBeInTheDocument()
+    expect(screen.getByText('关键入口')).toBeInTheDocument()
   })
 
   it('renders the chat page', async () => {
@@ -3603,14 +3709,14 @@ describe('web app smoke pages', () => {
 
   it('renders the models page', async () => {
     renderPage(<ModelsPage />)
-    expect(await screen.findByText('模型供应商')).toBeInTheDocument()
+    expect(await screen.findByText('模型与绑定')).toBeInTheDocument()
     expect(screen.getByText('保存所有配置')).toBeInTheDocument()
-    expect(screen.getByText('DeepSeek')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('DeepSeek'))
-    expect(await screen.findByText('云端供应商全局凭据')).toBeInTheDocument()
-    expect(screen.getByText('已注册模型')).toBeInTheDocument()
+    expect(screen.getAllByText('DeepSeek').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getAllByText('DeepSeek')[0])
+    expect(await screen.findByText('DeepSeek 配置')).toBeInTheDocument()
+    expect(screen.getByText('模型绑定注册表')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /添加模型/i })).toBeInTheDocument()
-    expect(screen.getAllByText('模型供应商').length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('模型与绑定')).length).toBeGreaterThan(0)
   })
 
   it('renders the channels page', async () => {

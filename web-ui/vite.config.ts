@@ -1,5 +1,52 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
+const reactCorePackages = new Set(['react', 'react-dom', 'scheduler'])
+const routerPackages = new Set(['react-router', 'react-router-dom', '@remix-run/router'])
+const sharedRuntimePackages = new Set([
+  '@babel/runtime',
+  'tslib',
+])
+const heavyPackageNames = new Set([
+  'bubblesets-js',
+  'd3',
+  'dagre',
+  'gl-matrix',
+  'highlight.js',
+  'html2canvas',
+  'katex',
+  'lodash',
+  'markmap-common',
+  'markmap-html-parser',
+  'markmap-lib',
+  'markmap-view',
+  'markdown-it',
+  'markdown-it-ins',
+  'markdown-it-mark',
+  'markdown-it-sub',
+  'markdown-it-sup',
+  'ml-matrix',
+  'prismjs',
+  'yaml',
+  '@vscode/markdown-it-katex',
+])
+const markdownPackages = new Set([
+  'react-markdown',
+  'remark-gfm',
+  'unified',
+  'devlop',
+  'hast-util-to-jsx-runtime',
+  'html-url-attributes',
+  'mdast-util-to-hast',
+  'remark-parse',
+  'remark-rehype',
+  'unist-util-visit',
+  'property-information',
+  'comma-separated-tokens',
+  'space-separated-tokens',
+  'decode-named-character-reference',
+])
 
 function getPackageName(id: string) {
   const normalized = id.replace(/\\/g, '/').split('?')[0]
@@ -17,6 +64,10 @@ function getPackageName(id: string) {
   return segments[0]
 }
 
+function getPackageChunkName(pkg: string) {
+  return `pkg-${pkg.replace(/^@/, '').replace(/[\\/]/g, '-')}`
+}
+
 function manualChunks(id: string) {
   if (!id.includes('node_modules')) {
     return undefined
@@ -27,54 +78,46 @@ function manualChunks(id: string) {
     return 'vendor'
   }
 
-  if (['react', 'react-dom', 'scheduler'].includes(pkg)) {
+  if (reactCorePackages.has(pkg)) {
     return 'react-core'
   }
 
-  if (['react-router', 'react-router-dom', '@remix-run/router'].includes(pkg)) {
+  if (routerPackages.has(pkg)) {
     return 'router'
   }
 
-  if (
-    pkg === '@ant-design/x' ||
-    pkg === '@ant-design/x-sdk'
-  ) {
-    return 'ant-design-x'
+  if (sharedRuntimePackages.has(pkg)) {
+    return 'shared-runtime'
   }
 
   if (
-    pkg === 'antd' ||
-    pkg === '@ant-design/cssinjs' ||
-    pkg === '@ant-design/cssinjs-utils' ||
-    pkg === '@ant-design/colors' ||
-    pkg === '@ant-design/fast-color' ||
-    pkg === '@ant-design/icons' ||
-    pkg === '@ant-design/icons-svg' ||
-    pkg.startsWith('@rc-component/') ||
-    pkg.startsWith('rc-') ||
-    pkg === '@emotion/hash' ||
-    pkg === '@emotion/unitless'
-  ) {
-    return 'ant-design-core'
-  }
-
-  if (
-    pkg === 'react-markdown' ||
-    pkg === 'remark-gfm' ||
-    pkg === 'unified' ||
+    markdownPackages.has(pkg) ||
     pkg.startsWith('remark-') ||
     pkg.startsWith('rehype-') ||
     pkg.startsWith('micromark') ||
     pkg.startsWith('mdast-') ||
     pkg.startsWith('hast-') ||
     pkg.startsWith('unist-') ||
-    pkg.startsWith('vfile') ||
-    pkg === 'property-information' ||
-    pkg === 'comma-separated-tokens' ||
-    pkg === 'space-separated-tokens' ||
-    pkg === 'decode-named-character-reference'
+    pkg.startsWith('vfile')
   ) {
     return 'markdown'
+  }
+
+  if (
+    pkg.startsWith('@antv/') ||
+    pkg.startsWith('markmap-') ||
+    heavyPackageNames.has(pkg)
+  ) {
+    return getPackageChunkName(pkg)
+  }
+
+  if (
+    pkg === 'antd' ||
+    pkg.startsWith('@ant-design/') ||
+    pkg.startsWith('@rc-component/') ||
+    pkg.startsWith('rc-')
+  ) {
+    return undefined
   }
 
   return 'vendor'
@@ -86,7 +129,7 @@ export default defineConfig(({ mode }) => {
   const port = Number(env.NANOBOT_WEB_UI_PORT || '5173')
 
   return {
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     ssr: {
       noExternal: [
         'antd',

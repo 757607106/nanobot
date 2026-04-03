@@ -57,7 +57,7 @@ export function SetupProvider({ children }: { children: ReactNode }) {
       setError(null)
       return next
     } catch (error) {
-      const nextError = getErrorMessage(error, '无法检查初始化向导状态')
+      const nextError = getErrorMessage(error, '无法检查初始化配置状态')
       setStatus(null)
       setError(nextError)
       throw error
