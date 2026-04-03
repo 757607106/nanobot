@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { App, Button, Drawer, Empty, Flex, Input, Space, Tag, Typography, Progress, theme } from 'antd'
+import { Button, Drawer, Empty, Flex, Input, Space, Tag, Typography, Progress, theme } from 'antd'
 import {
   CheckCircleOutlined,
   CloseOutlined,
@@ -47,9 +47,10 @@ import {
 } from './utils'
 import type { AddModelDraft, BindingRow, TestDraft } from './types'
 import { SPACING } from '../../ui/tokens'
+import { useToast } from '../../toast'
 
 export default function ModelsPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const { token } = theme.useToken()
 
   const [config, setConfig] = useState<ConfigData | null>(null)
@@ -521,7 +522,7 @@ export default function ModelsPage() {
                     <span style={{ fontWeight: provider.bindingsCount > 0 ? 600 : 400 }}>{provider.bindingsCount}</span> 个模型路由
                   </Typography.Text>
                   <Button size="small" type={provider.configured ? 'default' : 'primary'} style={{ borderRadius: 6 }}>
-                    {provider.configured ? '管理路线' : '填入凭据'}
+                    {provider.configured ? '管理路由' : '填入凭据'}
                   </Button>
                 </Flex>
               </motion.div>
@@ -574,7 +575,7 @@ export default function ModelsPage() {
                         </Tag>
                         {bindings[defaultBindingName]?.provider === activeProviderName! ? (
                           <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 6 }}>
-                            包涵全局默认
+                            全局默认
                           </Tag>
                         ) : null}
                       </Space>
@@ -627,9 +628,6 @@ export default function ModelsPage() {
                 }}
               >
                 <Flex justify="flex-end" gap={8}>
-                  <Button onClick={() => setDrawerOpen(false)}>
-                    关闭
-                  </Button>
                   <Button
                     type="primary"
                     icon={<SaveOutlined />}

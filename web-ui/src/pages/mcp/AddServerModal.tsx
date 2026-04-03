@@ -1,6 +1,7 @@
-import { App, Button, Drawer, Input, InputNumber, Select, Space, theme } from 'antd'
+import { Button, Drawer, Input, InputNumber, Select, Space, theme } from 'antd'
 import type { McpServerEntry } from '../../types'
 import { buildServerConfig, ServerDraft, transportOptions } from './utils'
+import { useToast } from '../../toast'
 
 interface AddServerModalProps {
   open: boolean
@@ -23,7 +24,7 @@ export default function AddServerModal({
   onClose,
   onSave,
 }: AddServerModalProps) {
-  const { message } = App.useApp()
+  const message = useToast()
   const { token } = theme.useToken()
 
   const isRemote = draft.type !== 'stdio'

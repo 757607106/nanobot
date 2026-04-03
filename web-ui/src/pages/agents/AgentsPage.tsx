@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { App, Flex, Splitter } from 'antd'
+import { Flex, Splitter } from 'antd'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import type {
@@ -19,9 +19,10 @@ import AgentList from './AgentList'
 import type { AgentFormState } from './types'
 import { agentToForm, createEmptyForm, getErrorMessage, toPayload } from './utils'
 import { getAllModelBindings } from '../../modelConfig'
+import { useToast } from '../../toast'
 
 export default function AgentsPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const location = useLocation()
   const navigate = useNavigate()
   const { agentId } = useParams()

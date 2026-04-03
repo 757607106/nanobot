@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  App,
   Alert,
   Button,
   Empty,
@@ -38,6 +37,7 @@ import type {
   ChannelStateItem,
 } from '../../types'
 import { ChannelAvatar } from './shared'
+import { useToast } from '../../toast'
 
 interface BindingFormState {
   channelName: string
@@ -89,7 +89,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export default function ChannelBindingsPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const navigate = useNavigate()
   const params = useParams<{ bindingId: string }>()
   const [form] = Form.useForm()

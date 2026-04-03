@@ -11,11 +11,13 @@ import McpServerDetailDrawer from './DetailPage'
 
 import PageHeader from '../../components/console/PageHeader'
 import SectionCard from '../../components/console/SectionCard'
+import { useToast } from '../../toast'
 
 export default function McpPage() {
   const { serverName } = useParams()
   const navigate = useNavigate()
-  const { message, modal } = App.useApp()
+  const { modal } = App.useApp()
+  const message = useToast()
   const [data, setData] = useState<McpServerListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [actingName, setActingName] = useState<string | null>(null)

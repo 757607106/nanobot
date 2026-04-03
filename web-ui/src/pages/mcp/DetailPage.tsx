@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
-  App,
   Button,
   Descriptions,
   Empty,
@@ -30,6 +29,7 @@ import { testIds } from '../../testIds'
 import type { McpProbeResult, McpServerEntry } from '../../types'
 import { maskSensitiveMapping, transportLabels } from './utils'
 import SectionCard from '../../components/console/SectionCard'
+import { useToast } from '../../toast'
 
 const { Text } = Typography
 
@@ -86,7 +86,7 @@ export default function McpServerDetailDrawer({
   open?: boolean
   onClose?: () => void
 }) {
-  const { message } = App.useApp()
+  const message = useToast()
   const { token } = theme.useToken()
   const [entry, setEntry] = useState<McpServerEntry | null>(null)
   const [draft, setDraft] = useState<DetailDraft | null>(null)

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
-  App,
   Button,
+  Flex,
   Form,
   Input,
   InputNumber,
@@ -17,6 +17,8 @@ import {
   Typography,
 } from 'antd'
 import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   PauseCircleOutlined,
@@ -24,11 +26,14 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons'
 import { api } from '../api'
 import { formatDateTimeZh } from '../locale'
-import './workbench.css'
+import MetricCard from '../components/console/MetricCard'
+import SectionCard from '../components/console/SectionCard'
 import type { CronJob, CronJobInput, CronStatus } from '../types'
+import { useToast } from '../toast'
 
 const { Text } = Typography
 const defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
@@ -146,7 +151,7 @@ function buildCronExpr(values: Pick<CronFormValues, 'cronMinute' | 'cronHour' | 
 }
 
 export default function CronPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const [form] = Form.useForm<CronFormValues>()
   const [jobs, setJobs] = useState<CronJob[]>([])
   const [status, setStatus] = useState<CronStatus | null>(null)
@@ -324,175 +329,189 @@ export default function CronPage() {
 
   if (loading && !status) {
     return (
-      <div className="center-box page-card">
+      <Flex justify="center" align="center" style={{ padding: 'var(--nb-spacing-2xl)' }}>
         <Spin />
-      </div>
+      </Flex>
     )
   }
 
   return (
-    <section className="cron-registry-shell">
-      <div className="cron-registry-topbar">
-        <div className="cron-registry-title-chip">定时任务</div>
-        <div className="cron-registry-topbar-actions">
-          <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>
-            刷新
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            新建任务
-          </Button>
-        </div>
-      </div>
-
-      <div className="cron-registry-summary">
-        <div className="cron-registry-summary-card">
-          <span>服务状态</span>
-          <strong>{status?.enabled ? '运行中' : '已停止'}</strong>
-        </div>
-        <div className="cron-registry-summary-card">
-          <span>当前任务</span>
-          <strong>{filteredJobs.length}</strong>
-        </div>
-        <div className="cron-registry-summary-card">
-          <span>已启用</span>
-          <strong>{enabledJobsCount}</strong>
-        </div>
-        <div className="cron-registry-summary-card">
-          <span>已暂停</span>
-          <strong>{pausedJobsCount}</strong>
-        </div>
-        <div className="cron-registry-summary-card">
-          <span>下一次唤醒</span>
-          <strong>{formatDateTime(status?.nextWakeAtMs)}</strong>
-        </div>
+    <Flex vertical gap={20} style={{ padding: 'var(--nb-spacing-xs) 0' }}>
+      {/* Metric Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+        <MetricCard
+          label="服务状态"
+          value={status?.enabled ? '运行中' : '已停止'}
+          icon={<CheckCircleOutlined />}
+          tone={status?.enabled ? 'success' : 'warning'}
+        />
+        <MetricCard
+          label="当前任务"
+          value={filteredJobs.length}
+          icon={<ClockCircleOutlined />}
+          tone="primary"
+        />
+        <MetricCard
+          label="已启用"
+          value={enabledJobsCount}
+          icon={<PlayCircleOutlined />}
+          tone="success"
+        />
+        <MetricCard
+          label="已暂停"
+          value={pausedJobsCount}
+          icon={<PauseCircleOutlined />}
+          tone={pausedJobsCount > 0 ? 'warning' : 'neutral'}
+        />
+        <MetricCard
+          label="下一次唤醒"
+          value={formatDateTime(status?.nextWakeAtMs)}
+          icon={<ThunderboltOutlined />}
+          tone="primary"
+        />
       </div>
 
       {status?.deliveryMode === 'agent_only' ? (
         <Alert
           showIcon
           type="info"
-          className="cron-registry-alert"
           message="当前实例默认以 Agent 执行任务，投递目标会按后端兼容字段存储。"
         />
       ) : null}
 
-      <div className="cron-registry-table-shell">
-        <div className="cron-registry-toolbar">
-          <Input
-            allowClear
-            prefix={<SearchOutlined />}
-            placeholder="搜索任务"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <Segmented<CronFilter>
-            value={filter}
-            options={[
-              { label: '全部', value: 'all' },
-              { label: '已启用', value: 'enabled' },
-              { label: '已暂停', value: 'disabled' },
-            ]}
-            onChange={(value) => setFilter(value)}
-          />
-        </div>
+      {/* Task Table */}
+      <SectionCard
+        title="任务列表"
+        action={
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>
+              刷新
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+              新建任务
+            </Button>
+          </Space>
+        }
+      >
+        <Flex vertical gap={16}>
+          <Flex gap={12} wrap="wrap" align="center">
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              placeholder="搜索任务"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              style={{ maxWidth: 320, borderRadius: 10 }}
+            />
+            <Segmented<CronFilter>
+              value={filter}
+              options={[
+                { label: '全部', value: 'all' },
+                { label: '已启用', value: 'enabled' },
+                { label: '已暂停', value: 'disabled' },
+              ]}
+              onChange={(value) => setFilter(value)}
+            />
+          </Flex>
 
-        <Table
-          pagination={false}
-          rowKey="id"
-          loading={loading}
-          dataSource={filteredJobs}
-          locale={{ emptyText: '暂无定时任务' }}
-          scroll={{ x: 980 }}
-          columns={[
-            {
-              title: '任务名称',
-              dataIndex: 'name',
-              key: 'name',
-              render: (value: string, job: CronJob) => (
-                <div className="cron-registry-name-cell">
-                  <div className="cron-registry-name-line">
-                    <strong>{value}</strong>
-                    {getStatusTag(job, runningJobId === job.id)}
-                  </div>
-                  <div className="cron-registry-subline">{job.payload.message}</div>
-                  <div className="cron-registry-chip-row">
-                    {job.deleteAfterRun ? <Tag>运行后删除</Tag> : null}
-                    {job.payload.deliver && job.payload.channel && job.payload.to ? (
-                      <Tag>{`${job.payload.channel}:${job.payload.to}`}</Tag>
-                    ) : null}
-                    {job.source ? <Tag>{job.source}</Tag> : null}
-                  </div>
-                </div>
-              ),
-            },
-            {
-              title: '计划',
-              key: 'schedule',
-              render: (_: unknown, job: CronJob) => (
-                <div className="cron-registry-schedule-cell">
-                  <strong>{getTriggerLabel(job)}</strong>
-                  <span>{getSchedulePreview(job)}</span>
-                </div>
-              ),
-            },
-            {
-              title: '下一次运行',
-              key: 'nextRunAtMs',
-              render: (_: unknown, job: CronJob) => (
-                <div className="cron-registry-time-cell">
-                  <strong>{formatDateTime(job.nextRunAtMs)}</strong>
-                  <span>上次运行：{formatDateTime(job.lastRunAtMs)}</span>
-                </div>
-              ),
-            },
-            {
-              title: '最近结果',
-              key: 'lastStatus',
-              render: (_: unknown, job: CronJob) => (
-                <div className="cron-registry-time-cell">
-                  <strong>{job.lastStatus || '待运行'}</strong>
-                  <span>{job.lastError || `更新时间：${formatDateTime(job.updatedAtMs)}`}</span>
-                </div>
-              ),
-            },
-            {
-              title: '操作',
-              key: 'actions',
-              align: 'right' as const,
-              render: (_: unknown, job: CronJob) => (
-                <Space size={[8, 8]} wrap className="cron-registry-action-row">
-                  <Button
-                    size="small"
-                    icon={<PlayCircleOutlined />}
-                    loading={runningJobId === job.id}
-                    onClick={() => void handleRun(job.id)}
-                  >
-                    执行
-                  </Button>
-                  <Button
-                    size="small"
-                    icon={job.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
-                    onClick={() => void handleToggle(job)}
-                  >
-                    {job.enabled ? '暂停' : '启用'}
-                  </Button>
-                  <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(job)}>
-                    编辑
-                  </Button>
-                  <Popconfirm
-                    title="确定删除这个定时任务吗？"
-                    onConfirm={() => void handleDelete(job.id)}
-                  >
-                    <Button size="small" danger icon={<DeleteOutlined />}>
-                      删除
+          <Table
+            pagination={false}
+            rowKey="id"
+            loading={loading}
+            dataSource={filteredJobs}
+            locale={{ emptyText: '暂无定时任务' }}
+            scroll={{ x: 980 }}
+            columns={[
+              {
+                title: '任务名称',
+                dataIndex: 'name',
+                key: 'name',
+                render: (value: string, job: CronJob) => (
+                  <Flex vertical gap={4}>
+                    <Flex align="center" gap={8} wrap="wrap">
+                      <Typography.Text strong>{value}</Typography.Text>
+                      {getStatusTag(job, runningJobId === job.id)}
+                    </Flex>
+                    <Typography.Text type="secondary" style={{ fontSize: 13 }}>{job.payload.message}</Typography.Text>
+                    <Flex gap={6} wrap="wrap">
+                      {job.deleteAfterRun ? <Tag>运行后删除</Tag> : null}
+                      {job.payload.deliver && job.payload.channel && job.payload.to ? (
+                        <Tag>{`${job.payload.channel}:${job.payload.to}`}</Tag>
+                      ) : null}
+                      {job.source ? <Tag>{job.source}</Tag> : null}
+                    </Flex>
+                  </Flex>
+                ),
+              },
+              {
+                title: '计划',
+                key: 'schedule',
+                render: (_: unknown, job: CronJob) => (
+                  <Flex vertical gap={4}>
+                    <Typography.Text strong style={{ fontSize: 13 }}>{getTriggerLabel(job)}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{getSchedulePreview(job)}</Typography.Text>
+                  </Flex>
+                ),
+              },
+              {
+                title: '下一次运行',
+                key: 'nextRunAtMs',
+                render: (_: unknown, job: CronJob) => (
+                  <Flex vertical gap={4}>
+                    <Typography.Text strong style={{ fontSize: 13 }}>{formatDateTime(job.nextRunAtMs)}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>上次运行：{formatDateTime(job.lastRunAtMs)}</Typography.Text>
+                  </Flex>
+                ),
+              },
+              {
+                title: '最近结果',
+                key: 'lastStatus',
+                render: (_: unknown, job: CronJob) => (
+                  <Flex vertical gap={4}>
+                    <Typography.Text strong style={{ fontSize: 13 }}>{job.lastStatus || '待运行'}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{job.lastError || `更新时间：${formatDateTime(job.updatedAtMs)}`}</Typography.Text>
+                  </Flex>
+                ),
+              },
+              {
+                title: '操作',
+                key: 'actions',
+                align: 'right' as const,
+                render: (_: unknown, job: CronJob) => (
+                  <Space size={[8, 8]} wrap>
+                    <Button
+                      size="small"
+                      icon={<PlayCircleOutlined />}
+                      loading={runningJobId === job.id}
+                      onClick={() => void handleRun(job.id)}
+                    >
+                      执行
                     </Button>
-                  </Popconfirm>
-                </Space>
-              ),
-            },
-          ]}
-        />
-      </div>
+                    <Button
+                      size="small"
+                      icon={job.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+                      onClick={() => void handleToggle(job)}
+                    >
+                      {job.enabled ? '暂停' : '启用'}
+                    </Button>
+                    <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(job)}>
+                      编辑
+                    </Button>
+                    <Popconfirm
+                      title="确定删除这个定时任务吗？"
+                      onConfirm={() => void handleDelete(job.id)}
+                    >
+                      <Button size="small" danger icon={<DeleteOutlined />}>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </Flex>
+      </SectionCard>
 
       <Modal
         destroyOnHidden
@@ -505,7 +524,7 @@ export default function CronPage() {
         width="min(760px, calc(100vw - 24px))"
       >
         <Form form={form} layout="vertical">
-          <div className="cron-dialog-grid cron-dialog-grid-2">
+          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr auto' }}>
             <Form.Item
               label="任务名称"
               name="name"
@@ -570,42 +589,47 @@ export default function CronPage() {
               }
 
               return (
-                <div className="cron-dialog-stack">
-                  <div className="cron-dialog-grid cron-dialog-grid-5">
+                <Flex vertical gap={16}>
+                  <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(5, 1fr)' }}>
                     <Form.Item
                       label="分钟"
                       name="cronMinute"
                       rules={[{ required: true, message: '请输入分钟字段' }]}
+                      style={{ marginBottom: 0 }}
                     >
-                      <Input className="cron-cron-input" placeholder="0" />
+                      <Input placeholder="0" style={{ textAlign: 'center' }} />
                     </Form.Item>
                     <Form.Item
                       label="小时"
                       name="cronHour"
                       rules={[{ required: true, message: '请输入小时字段' }]}
+                      style={{ marginBottom: 0 }}
                     >
-                      <Input className="cron-cron-input" placeholder="9" />
+                      <Input placeholder="9" style={{ textAlign: 'center' }} />
                     </Form.Item>
                     <Form.Item
                       label="日期"
                       name="cronDay"
                       rules={[{ required: true, message: '请输入日期字段' }]}
+                      style={{ marginBottom: 0 }}
                     >
-                      <Input className="cron-cron-input" placeholder="*" />
+                      <Input placeholder="*" style={{ textAlign: 'center' }} />
                     </Form.Item>
                     <Form.Item
                       label="月份"
                       name="cronMonth"
                       rules={[{ required: true, message: '请输入月份字段' }]}
+                      style={{ marginBottom: 0 }}
                     >
-                      <Input className="cron-cron-input" placeholder="*" />
+                      <Input placeholder="*" style={{ textAlign: 'center' }} />
                     </Form.Item>
                     <Form.Item
                       label="星期"
                       name="cronWeekday"
                       rules={[{ required: true, message: '请输入星期字段' }]}
+                      style={{ marginBottom: 0 }}
                     >
-                      <Input className="cron-cron-input" placeholder="1-5" />
+                      <Input placeholder="1-5" style={{ textAlign: 'center' }} />
                     </Form.Item>
                   </div>
 
@@ -613,9 +637,19 @@ export default function CronPage() {
                     <Input placeholder="时区" />
                   </Form.Item>
 
-                  <div className="cron-cron-preview">
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: 12,
+                      background: 'var(--nb-card-subtle-bg)',
+                      border: '1px solid var(--nb-card-subtle-border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
                     <Text type="secondary">当前表达式</Text>
-                    <code>
+                    <code style={{ fontWeight: 600 }}>
                       {buildCronExpr({
                         cronMinute: getFieldValue('cronMinute') || defaultCronParts.cronMinute,
                         cronHour: getFieldValue('cronHour') || defaultCronParts.cronHour,
@@ -625,12 +659,12 @@ export default function CronPage() {
                       })}
                     </code>
                   </div>
-                </div>
+                </Flex>
               )
             }}
           </Form.Item>
 
-          <div className="cron-dialog-grid cron-dialog-grid-2">
+          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr', marginTop: 16 }}>
             <Form.Item label="执行后删除" name="deleteAfterRun" valuePropName="checked">
               <Switch />
             </Form.Item>
@@ -650,7 +684,7 @@ export default function CronPage() {
           >
             {({ getFieldValue }) =>
               getFieldValue('payloadDeliver') ? (
-                <div className="cron-dialog-grid cron-dialog-grid-2">
+                <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
                   <Form.Item label="频道" name="payloadChannel">
                     <Input placeholder="频道" />
                   </Form.Item>
@@ -663,6 +697,6 @@ export default function CronPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </section>
+    </Flex>
   )
 }

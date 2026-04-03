@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { App, Tabs } from 'antd'
+import { Tabs } from 'antd'
 import {
   ClockCircleOutlined,
   ApartmentOutlined,
@@ -22,10 +22,11 @@ import RunBoundaryAuditPanel from './RunBoundaryAudit'
 import RunTree from './RunTree'
 import RunArtifactPanel from './RunArtifact'
 import { getErrorMessage, isActiveStatus, isCancelable } from './utils'
+import { useToast } from '../../toast'
 
 export default function RunsPage() {
   const { devMode } = useDevMode()
-  const { message } = App.useApp()
+  const message = useToast()
   const { runId } = useParams()
   const selectedRunId = runId || null
 

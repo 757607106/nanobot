@@ -1,5 +1,5 @@
-import { CopyOutlined, DeleteOutlined, MessageOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Flex, Modal, Space, Spin, Tabs, Tag, Switch, Typography } from 'antd'
+import { CopyOutlined, DeleteOutlined, EllipsisOutlined, MessageOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
+import { Alert, Button, Dropdown, Empty, Flex, Modal, Space, Spin, Tabs, Tag, Switch, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '../../components/console/PageHeader'
@@ -169,18 +169,32 @@ export default function AgentDetail({
                   会话
                 </Button>
               ) : null}
-              <Button icon={<ReloadOutlined />} onClick={onRefreshWorkspace}>
-                刷新
-              </Button>
+              <Button icon={<ReloadOutlined />} onClick={onRefreshWorkspace} />
               {currentAgent ? (
-                <Button icon={<CopyOutlined />} onClick={onCopy} loading={copying}>
-                  复制
-                </Button>
-              ) : null}
-              {currentAgent ? (
-                <Button danger icon={<DeleteOutlined />} onClick={() => setDeleteDialogOpen(true)}>
-                  删除
-                </Button>
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'copy',
+                        icon: <CopyOutlined />,
+                        label: '复制员工',
+                        onClick: onCopy,
+                        disabled: copying,
+                      },
+                      { type: 'divider' },
+                      {
+                        key: 'delete',
+                        icon: <DeleteOutlined />,
+                        label: '删除员工',
+                        danger: true,
+                        onClick: () => setDeleteDialogOpen(true),
+                      },
+                    ],
+                  }}
+                  placement="bottomRight"
+                >
+                  <Button icon={<EllipsisOutlined />} />
+                </Dropdown>
               ) : null}
               <Button type="primary" icon={<SaveOutlined />} onClick={onSave} loading={saving}>
                 保存

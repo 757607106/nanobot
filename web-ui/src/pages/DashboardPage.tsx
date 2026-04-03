@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import {
   Alert,
-  App,
   Avatar,
   Button,
   Card,
@@ -16,15 +16,12 @@ import {
   theme,
 } from 'antd'
 import {
-  ApiOutlined,
   BookOutlined,
   ClockCircleOutlined,
   MessageOutlined,
   ReloadOutlined,
   RightOutlined,
   RobotOutlined,
-  SettingOutlined,
-  ThunderboltOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
@@ -39,6 +36,7 @@ import type {
   KnowledgeBaseDefinition,
   SessionListResponse,
 } from '../types'
+import { useToast } from '../toast'
 
 const dashboardChannelIcons: Record<string, string> = {
   telegram: '/channel-logos/telegram.png',
@@ -108,52 +106,6 @@ function cardSkeleton(width = 72) {
   return <Skeleton active title={{ width }} paragraph={false} />
 }
 
-interface QuickActionItem {
-  icon: React.ReactNode
-  title: string
-  description: string
-  to: string
-}
-
-const quickActions: QuickActionItem[] = [
-  {
-    icon: <ApiOutlined />,
-    title: '渠道管理',
-    description: '配置消息渠道接入',
-    to: '/channels/list',
-  },
-  {
-    icon: <RobotOutlined />,
-    title: 'Agent Studio',
-    description: '管理数字员工配置',
-    to: '/studio/agents',
-  },
-  {
-    icon: <BookOutlined />,
-    title: '知识库',
-    description: '管理知识库与文档',
-    to: '/knowledge',
-  },
-  {
-    icon: <SettingOutlined />,
-    title: '系统设置',
-    description: '检查实例与健康状态',
-    to: '/system',
-  },
-  {
-    icon: <ThunderboltOutlined />,
-    title: 'MCP 服务',
-    description: '管理工具与服务',
-    to: '/mcp',
-  },
-  {
-    icon: <MessageOutlined />,
-    title: '会话记录',
-    description: '查看对话历史',
-    to: '/chat',
-  },
-]
-
 /** Dashboard 列表项组件 - 统一渠道/会话/技能/自动化列表项样式 */
 interface DashboardListItemProps {
   /** 左侧图标或头像 */
@@ -173,8 +125,6 @@ interface DashboardListItemProps {
   /** 点击处理 */
   onClick?: () => void
 }
-
-import { motion } from 'framer-motion'
 
 function DashboardListItem({
   icon,
@@ -231,7 +181,7 @@ function DashboardListItem({
 }
 
 export default function DashboardPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const [channels, setChannels] = useState<ChannelListResponse | null>(null)
@@ -305,7 +255,7 @@ export default function DashboardPage() {
             {greeting}，欢迎使用 Nanobot
           </Typography.Title>
           <Typography.Text type="secondary" style={{ fontSize: 14, marginTop: 8, display: 'block' }}>
-            {agents.length} 个 Agent · {enabledChannels}/{totalChannels} 个渠道已启用 · {sessions?.total ?? 0} 活跃会话
+            管理您的数字员工、知识库、渠道与自动化任务
           </Typography.Text>
         </div>
         <Space size={16}>

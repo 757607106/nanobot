@@ -7,7 +7,6 @@ import {
 } from '@ant-design/icons'
 import {
   Alert,
-  App,
   Button,
   Card,
   Empty,
@@ -40,6 +39,7 @@ import {
 import { useSetup } from '../setup'
 import { testIds } from '../testIds'
 import type { ConfigData, ConfigMeta, SetupStatus } from '../types'
+import { useToast } from '../toast'
 
 type ChannelMode = 'skip' | 'telegram'
 
@@ -107,7 +107,7 @@ function SectionHeader({
 
 export default function SetupPage() {
   const navigate = useNavigate()
-  const { message } = App.useApp()
+  const message = useToast()
   const screens = Grid.useBreakpoint()
   const { applyStatus, status: setupStatus } = useSetup()
   const { token } = theme.useToken()

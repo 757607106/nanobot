@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ApiOutlined,
   AppstoreOutlined,
-  BellOutlined,
   BookOutlined,
   ClusterOutlined,
   DashboardOutlined,
@@ -12,7 +11,6 @@ import {
   MenuOutlined,
   MessageOutlined,
   RobotOutlined,
-  SearchOutlined,
   SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -191,9 +189,9 @@ export default function AppShell() {
 
   function renderNavigation() {
     return (
-      <Flex vertical className="app-shell-nav h-full">
+      <Flex vertical style={{ height: '100%' }}>
         {/* Logo 区域 */}
-        <Flex align="center" gap={12} className="py-4 px-6">
+        <Flex align="center" gap={12} style={{ padding: '16px 24px' }}>
           <Avatar
             alt={PLATFORM_BRAND_NAME}
             src={PLATFORM_BRAND_LOGO_SRC}
@@ -201,7 +199,7 @@ export default function AppShell() {
             shape="square"
             style={{ flexShrink: 0 }}
           />
-          <div className="min-w-0">
+          <div style={{ minWidth: 0 }}>
             <Typography.Title level={5} style={{ margin: 0, fontSize: 15 }}>
               {PLATFORM_BRAND_NAME}
             </Typography.Title>
@@ -212,7 +210,7 @@ export default function AppShell() {
         </Flex>
 
         {/* 菜单区域 */}
-        <Flex vertical gap={10} className="flex-1 px-3 pt-2">
+        <Flex vertical gap={10} style={{ flex: 1, padding: '8px 12px 0' }}>
           {routeSections.map((section) => {
             const selectedKey = section.routes.find((item) => routeIsActive(location.pathname, item.key))?.key
             const items: MenuProps['items'] = section.routes.map((item) => ({
@@ -256,8 +254,7 @@ export default function AppShell() {
         <Flex
           vertical
           gap={10}
-          className="px-3 pb-3 pt-4"
-          style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}
+          style={{ padding: '16px 12px 12px', borderTop: `1px solid ${token.colorBorderSecondary}` }}
         >
           <Flex align="center" gap={12}>
             <Avatar
@@ -269,7 +266,7 @@ export default function AppShell() {
             >
               {authStatus?.username?.slice(0, 1).toUpperCase()}
             </Avatar>
-            <div className="min-w-0">
+            <div style={{ minWidth: 0 }}>
               <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
                 当前用户
               </Typography.Text>
@@ -300,13 +297,16 @@ export default function AppShell() {
 
   return (
     <div
-      className={`app-shell theme-${resolvedTheme} ${isChatRoute ? 'app-shell-chat' : ''} flex h-screen`}
-      style={{ background: token.colorBgLayout }}
+      className={`app-shell theme-${resolvedTheme} ${isChatRoute ? 'app-shell-chat' : ''}`}
+      style={{ background: token.colorBgLayout, display: 'flex', height: '100vh' }}
     >
       {isDesktop ? (
         <aside
-          className="sticky top-0 h-screen overflow-auto"
           style={{
+            position: 'sticky',
+            top: 0,
+            height: '100vh',
+            overflow: 'auto',
             width: LAYOUT.siderWidth,
             background: token.colorBgContainer,
             borderRight: `1px solid ${token.colorBorderSecondary}`,
@@ -333,17 +333,22 @@ export default function AppShell() {
         </Drawer>
       )}
 
-      <div className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''} flex flex-1 flex-col min-w-0`}>
+      <div className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''}`} style={{ display: 'flex', flex: 1, flexDirection: 'column', minWidth: 0 }}>
         <header
-          className="sticky top-0 z-20 flex items-center justify-between"
           style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             height: LAYOUT.headerHeight,
             paddingInline: isDesktop ? 24 : 16,
             background: token.colorBgContainer,
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
-          <Flex align="center" gap={12} className="min-w-0 flex-1">
+          <Flex align="center" gap={12} style={{ minWidth: 0, flex: 1 }}>
             {!isDesktop ? (
               <Button
                 type="text"
@@ -353,7 +358,7 @@ export default function AppShell() {
               />
             ) : null}
 
-            <div className="min-w-0">
+            <div style={{ minWidth: 0 }}>
               <Typography.Text
                 type="secondary"
                 style={{
@@ -381,11 +386,10 @@ export default function AppShell() {
           </Flex>
 
           {isDesktop ? (
-            <Flex align="center" gap={16} className="min-w-0">
-              <Button type="text" icon={<SearchOutlined />} />
-              <Button type="text" icon={<BellOutlined />} />
+            <Flex align="center" gap={16} style={{ minWidth: 0 }}>
               <Avatar
                 icon={<UserOutlined />}
+                onClick={() => navigate('/system/admin')}
                 style={{
                   backgroundColor: token.colorPrimaryBg,
                   color: token.colorPrimary,
@@ -400,8 +404,10 @@ export default function AppShell() {
         </header>
 
         <main
-          className={`app-content ${isChatRoute ? 'app-content-chat' : ''} flex-1 min-w-0`}
+          className={`app-content ${isChatRoute ? 'app-content-chat' : ''}`}
           style={{
+            flex: 1,
+            minWidth: 0,
             padding: isChatRoute ? '16px 18px 22px' : '22px 22px 28px',
           }}
         >

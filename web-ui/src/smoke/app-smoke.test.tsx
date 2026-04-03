@@ -728,6 +728,17 @@ vi.mock('antd', async () => {
     </div>
   )
 
+  const Dropdown = ({ children, menu }: Props & { menu?: { items?: Array<{ key?: string; label?: React.ReactNode; onClick?: () => void }> } }) => (
+    <div>
+      {children}
+      {menu?.items?.map((item, index) => (
+        <button key={(item as { key?: string }).key ?? index} type="button" onClick={(item as { onClick?: () => void }).onClick}>
+          {(item as { label?: React.ReactNode }).label as React.ReactNode}
+        </button>
+      ))}
+    </div>
+  )
+
   const Modal = ({ children, open }: Props) => (open ? <div>{children}</div> : null)
 
   const Popconfirm = ({ children }: Props) => <>{children}</>
@@ -1018,6 +1029,7 @@ vi.mock('antd', async () => {
     Descriptions,
     Divider,
     Drawer,
+    Dropdown,
     Empty,
     Flex,
     Form,
@@ -3203,8 +3215,8 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('新建员工')).toBeInTheDocument()
     expect(screen.getByText('保存')).toBeInTheDocument()
     // Tab navigation buttons are visible
-    expect(screen.getByText('基本信息')).toBeInTheDocument()
-    expect(screen.getByText('试运行')).toBeInTheDocument()
+    expect(screen.getByText('基本配置')).toBeInTheDocument()
+    expect(screen.getByText('运行日志 (0)')).toBeInTheDocument()
     // Note: Tab panel content rendering depends on CSSMotion which is unreliable in jsdom.
     // The above assertions confirm the drawer opened with correct header and navigation.
   })
@@ -3649,6 +3661,13 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the dashboard page', async () => {
+    mockApi.getSystemStatus.mockResolvedValue(makeSystemStatus())
+    mockApi.getInstalledSkills.mockResolvedValue([])
+    mockApi.getCronStatus.mockResolvedValue({ enabled: true, jobs: 0, nextWakeAtMs: null, deliveryMode: 'agent_only' })
+    mockApi.getChannels.mockResolvedValue(makeChannelsList())
+    mockApi.getAgents.mockResolvedValue(makeAgents())
+    mockApi.getSessions.mockResolvedValue({ items: [] })
+    mockApi.getKnowledgeBases.mockResolvedValue([])
     renderPage(<DashboardPage />)
     expect((await screen.findAllByText('平台总览')).length).toBeGreaterThan(0)
     expect(screen.getByText('待处理事项')).toBeInTheDocument()
@@ -3658,6 +3677,13 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the chat page', async () => {
+    mockApi.getChatWorkspace.mockResolvedValue({ sessionId: 'smoke-session', agentId: 'support-lead' })
+    mockApi.getSessions.mockResolvedValue({
+      items: [{ id: 'smoke-session', sessionId: 'web:smoke-session', title: 'Smoke Session', createdAt: '2026-03-13T10:00:00Z', updatedAt: '2026-03-13T10:00:00Z', messageCount: 1 }],
+    })
+    mockApi.getMessages.mockResolvedValue([])
+    mockApi.getSessionFiles.mockResolvedValue([])
+    mockApi.getAgents.mockResolvedValue(makeAgents())
     renderPage(<ChatPage />)
     expect(await screen.findByText('Smoke Session', { selector: '.conversation-title' })).toBeInTheDocument()
     expect(screen.getByText('拖拽文件到这里')).toBeInTheDocument()
@@ -3670,12 +3696,16 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the cron page', async () => {
+    mockApi.getCronStatus.mockResolvedValue({ enabled: true, jobs: 0, nextWakeAtMs: null, deliveryMode: 'agent_only' })
+    mockApi.getCronJobs.mockResolvedValue({ jobs: [] })
     renderPage(<CronPage />)
-    expect(await screen.findByText('定时任务')).toBeInTheDocument()
+    expect(await screen.findByText('任务列表')).toBeInTheDocument()
     expect(screen.getByText('新建任务')).toBeInTheDocument()
   })
 
   it('renders the skills page', async () => {
+    mockApi.getInstalledSkills.mockResolvedValue([])
+    mockApi.searchMarketplaceSkills.mockResolvedValue({ skills: [], total: 0 })
     renderPage(<SkillsPage />)
     expect(await screen.findByText('技能中心')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('搜索 SkillHub 市场...')).toBeInTheDocument()
@@ -3686,6 +3716,7 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the mcp page', async () => {
+    mockApi.getMcpServers.mockResolvedValue(makeMcpRegistry())
     renderPage(<McpPage />)
     expect(await screen.findByText('MCP 服务器')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导入配置' })).toBeInTheDocument()
@@ -3694,6 +3725,9 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the mcp detail page', async () => {
+    mockApi.getMcpServer.mockResolvedValue(makeMcpRegistry().items[0])
+    mockApi.getMcpTestChat.mockResolvedValue({ messages: [] })
+    installMatchMedia(false)
     renderWithProviders(
       <MemoryRouter
         initialEntries={['/mcp/filesystem']}
@@ -3714,6 +3748,8 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the models page', async () => {
+    mockApi.getConfig.mockResolvedValue(makeConfig())
+    mockApi.getConfigMeta.mockResolvedValue(makeConfigMeta())
     renderPage(<ModelsPage />)
     expect(await screen.findByText('模型与绑定')).toBeInTheDocument()
     expect(screen.getByText('保存所有配置')).toBeInTheDocument()
@@ -3726,6 +3762,9 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the channels page', async () => {
+    mockApi.getConfig.mockResolvedValue(makeConfig())
+    mockApi.getConfigMeta.mockResolvedValue(makeConfigMeta())
+    mockApi.getChannels.mockResolvedValue(makeChannelsList())
     renderPage(<ChannelsPage />)
     expect(await screen.findByText('消息投递设置')).toBeInTheDocument()
     expect(screen.getByText('保存设置')).toBeInTheDocument()
@@ -3756,6 +3795,9 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the channel detail page', async () => {
+    mockApi.getChannel.mockResolvedValue(makeChannelDetail())
+    mockApi.testChannel.mockResolvedValue(makeChannelProbeResult())
+    installMatchMedia(false)
     renderWithProviders(
       <MemoryRouter
         initialEntries={['/channels/telegram']}
@@ -3822,24 +3864,29 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the profile page', async () => {
+    mockApi.getProfile.mockResolvedValue(makeProfile())
     renderPage(<ProfilePage />)
     expect(await screen.findByText('账户管理')).toBeInTheDocument()
     expect(screen.getByText('头像管理')).toBeInTheDocument()
   })
 
   it('renders the operations page', async () => {
+    mockApi.getOpsLogs.mockResolvedValue(makeOpsLogs())
+    mockApi.getOpsActions.mockResolvedValue(makeOpsActions())
     renderPage(<OperationsPage />)
     expect(await screen.findByText('日志与运维')).toBeInTheDocument()
     expect(screen.getByText('运维动作')).toBeInTheDocument()
   })
 
   it('renders the validation page', async () => {
+    mockApi.runValidation.mockResolvedValue(makeValidationResult())
     renderPage(<ValidationPage />)
-    expect(await screen.findByText('配置修复中心')).toBeInTheDocument()
-    expect(screen.getByText('危险配置隔离区')).toBeInTheDocument()
+    expect(screen.getByText('配置修复中心')).toBeInTheDocument()
+    expect(await screen.findByText('危险配置隔离区')).toBeInTheDocument()
   })
 
   it('renders the system page', async () => {
+    mockApi.getSystemStatus.mockResolvedValue(makeSystemStatus())
     renderPage(<SystemPage />)
     expect(await screen.findByText('实例健康与环境')).toBeInTheDocument()
   })

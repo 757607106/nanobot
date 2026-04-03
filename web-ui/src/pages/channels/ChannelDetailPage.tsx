@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
-  App,
   Button,
   Col,
   Empty,
@@ -40,6 +39,7 @@ import {
   getFieldValue,
   updateNestedValue,
 } from './shared'
+import { useToast } from '../../toast'
 
 type ChannelFieldSectionKey = 'credentials' | 'routing' | 'experience' | 'advanced'
 
@@ -83,7 +83,7 @@ function resolveChannelFieldSection(field: FieldMeta): ChannelFieldSectionKey {
 }
 
 export default function ChannelDetailPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const navigate = useNavigate()
   const params = useParams()
   const [form] = Form.useForm()

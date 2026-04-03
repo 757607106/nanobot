@@ -178,6 +178,7 @@ export default function ValidationPage() {
   }
 
   return (
+    <div className="page-stack">
     <Flex vertical gap={24}>
       <PageHeader
         title="配置修复中心"
@@ -258,5 +259,6 @@ export default function ValidationPage() {
         />
       </div>
     </Flex>
+    </div>
   )
 }

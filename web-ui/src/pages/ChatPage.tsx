@@ -30,6 +30,7 @@ import type {
   ChatWorkspaceData,
   SessionSummary,
 } from '../types'
+import { useToast } from '../toast'
 
 const { Title, Text } = Typography
 const { Content, Sider } = Layout
@@ -60,7 +61,8 @@ function formatFileSize(sizeBytes?: number) {
 }
 
 export default function ChatPage({ agentId }: { agentId?: string } = {}) {
-  const { message, modal } = App.useApp()
+  const { modal } = App.useApp()
+  const message = useToast()
   const { token } = theme.useToken()
   const screens = Grid.useBreakpoint()
   const navigate = useNavigate()

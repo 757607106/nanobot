@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import {
   Alert,
-  App,
   Button,
   Card,
   Empty,
@@ -31,6 +30,7 @@ import {
   buildIndexParams,
   getErrorMessage,
 } from './shared'
+import { useToast } from '../../toast'
 
 const { Paragraph, Text, Title } = Typography
 
@@ -91,7 +91,7 @@ export function KnowledgeUploadModal({
   onClose,
   onSuccess,
 }: KnowledgeUploadModalProps) {
-  const { message } = App.useApp()
+  const message = useToast()
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   const [mode, setMode] = useState<UploadMode>('file')

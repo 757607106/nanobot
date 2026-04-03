@@ -37,6 +37,7 @@ import MetricCard from '../components/console/MetricCard'
 import SectionCard from '../components/console/SectionCard'
 import { formatDateTimeZh } from '../locale'
 import type { InstalledSkill, MarketplaceSkill } from '../types'
+import { useToast } from '../toast'
 
 const PAGE_SIZE = 18
 
@@ -92,7 +93,7 @@ function SkillCard({
       }}
     >
       <Flex justify="space-between" align="flex-start" style={{ marginBottom: 12 }}>
-        <div className="flex items-center gap-3" style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
           <div
             style={{
               width: 44,
@@ -203,7 +204,7 @@ function SkillCard({
 }
 
 export default function SkillsPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const { token } = theme.useToken()
   const folderInputRef = useRef<HTMLInputElement>(null)
   const zipInputRef = useRef<HTMLInputElement>(null)
@@ -404,35 +405,32 @@ export default function SkillsPage() {
             size="large"
           />
 
+          {loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--nb-spacing-2xl)' }}>
+              <Spin size="large" />
+            </div>
+          ) : filteredSkills.length === 0 ? (
+            <Empty
+              image={false}
+              description={skills.length === 0 ? '还没有安装技能' : '没有匹配结果'}
+              style={{ padding: 'var(--nb-spacing-2xl)' }}
+            />
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+              {filteredSkills.map((skill) => (
+                <SkillCard
+                  key={skill.id}
+                  skill={skill}
+                  type="installed"
+                  onAction={() => void handleDelete(skill.id)}
+                  actionLoading={deletingId === skill.id}
+                />
+              ))}
+            </div>
+          )}
 
         </Flex>
       </SectionCard>
-
-      <div className="overflow-auto mt-4">
-        {loading ? (
-          <div className="flex items-center justify-center" style={{ padding: 'var(--nb-spacing-2xl)' }}>
-            <Spin size="large" />
-          </div>
-        ) : filteredSkills.length === 0 ? (
-          <Empty
-            image={false}
-            description={skills.length === 0 ? '还没有安装技能' : '没有匹配结果'}
-            style={{ padding: 'var(--nb-spacing-2xl)' }}
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4" style={{ gap: 16 }}>
-            {filteredSkills.map((skill) => (
-              <SkillCard
-                key={skill.id}
-                skill={skill}
-                type="installed"
-                onAction={() => void handleDelete(skill.id)}
-                actionLoading={deletingId === skill.id}
-              />
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 
@@ -464,47 +462,44 @@ export default function SkillsPage() {
             size="large"
           />
 
+          {marketLoading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--nb-spacing-2xl)' }}>
+              <Spin size="large" />
+            </div>
+          ) : marketplaceSkills.length === 0 ? (
+            <Empty description="没有找到匹配的技能" style={{ padding: 'var(--nb-spacing-2xl)' }} />
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                {marketplaceSkills.map((skill) => (
+                  <SkillCard
+                    key={skill.slug}
+                    skill={skill}
+                    type="marketplace"
+                    installed={installedSkillIds.has(skill.slug)}
+                    onAction={() => void handleInstallMarketplaceSkill(skill, installedSkillIds.has(skill.slug))}
+                    actionLoading={installingId === skill.slug}
+                  />
+                ))}
+              </div>
+              {marketplaceSkills.length < marketplaceTotal && (
+                <div style={{ textAlign: 'center', marginTop: 24, paddingBottom: 24 }}>
+                  <Button
+                    type="default"
+                    icon={loadingMore ? <LoadingOutlined /> : <DownloadOutlined />}
+                    loading={loadingMore}
+                    onClick={() => void handleLoadMore()}
+                    style={{ minWidth: 160 }}
+                  >
+                    {loadingMore ? '加载中...' : `加载更多 (${marketplaceSkills.length}/${marketplaceTotal})`}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
 
         </Flex>
       </SectionCard>
-
-      <div className="overflow-auto mt-4">
-        {marketLoading ? (
-          <div className="flex items-center justify-center" style={{ padding: 'var(--nb-spacing-2xl)' }}>
-            <Spin size="large" />
-          </div>
-        ) : marketplaceSkills.length === 0 ? (
-          <Empty description="没有找到匹配的技能" style={{ padding: 'var(--nb-spacing-2xl)' }} />
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4" style={{ gap: 16 }}>
-              {marketplaceSkills.map((skill) => (
-                <SkillCard
-                  key={skill.slug}
-                  skill={skill}
-                  type="marketplace"
-                  installed={installedSkillIds.has(skill.slug)}
-                  onAction={() => void handleInstallMarketplaceSkill(skill, installedSkillIds.has(skill.slug))}
-                  actionLoading={installingId === skill.slug}
-                />
-              ))}
-            </div>
-            {marketplaceSkills.length < marketplaceTotal && (
-              <div className="text-center" style={{ marginTop: 24, paddingBottom: 24 }}>
-                <Button
-                  type="default"
-                  icon={loadingMore ? <LoadingOutlined /> : <DownloadOutlined />}
-                  loading={loadingMore}
-                  onClick={() => void handleLoadMore()}
-                  style={{ minWidth: 160 }}
-                >
-                  {loadingMore ? '加载中...' : `加载更多 (${marketplaceSkills.length}/${marketplaceTotal})`}
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
     </div>
   )
 
@@ -561,7 +556,7 @@ export default function SkillsPage() {
       />
 
       {/* 动态显示的头部 Metric 卡片 */}
-      <div className="console-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+      <div className="console-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
         {activeTab === 'installed' ? (
           <>
             <MetricCard label="已安装合计" value={skills.length} icon={<AppstoreOutlined />} tone="neutral" />

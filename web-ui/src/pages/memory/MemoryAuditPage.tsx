@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Flex, Modal, Space, Spin, Tabs, Tag, Typography } from 'antd'
+import { Alert, Button, Flex, Modal, Space, Spin, Tabs, Tag, Typography } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import PageHeader from '../../components/console/PageHeader'
@@ -22,9 +22,10 @@ import SearchPanel from './SearchPanel'
 import { scopeLabel, statusColor } from './types'
 import type { AuditPanel } from './types'
 import SectionCard from '../../components/console/SectionCard'
+import { useToast } from '../../toast'
 
 export default function MemoryAuditPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const navigate = useNavigate()
   const { agentId } = useParams()
   const selectedAgentId = agentId || null

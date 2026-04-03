@@ -70,6 +70,7 @@ export default function OperationsPage() {
   )
 
   return (
+    <div className="page-stack">
     <Flex vertical gap={24}>
       <PageHeader
         title="日志与运维"
@@ -222,5 +223,6 @@ export default function OperationsPage() {
         </SectionCard>
       </div>
     </Flex>
+    </div>
   )
 }

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
-  App,
   Button,
   Flex,
   Input,
@@ -29,6 +28,7 @@ import SectionCard from '../../components/console/SectionCard'
 import { formatDateTimeZh } from '../../locale'
 import type { ChannelAuditEntry, ChannelAuditListResponse } from '../../types'
 import { getAuditStatusColor, getAuditStatusLabel } from './shared'
+import { useToast } from '../../toast'
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) return error.message
@@ -38,7 +38,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 export default function ChannelAuditPage() {
   const navigate = useNavigate()
-  const { message } = App.useApp()
+  const message = useToast()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

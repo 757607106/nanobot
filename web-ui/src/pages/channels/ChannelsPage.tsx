@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  App,
   Button,
   Card,
   Drawer,
@@ -54,6 +53,7 @@ import {
   updateNestedValue,
 } from './shared'
 import { SPACING } from '../../ui/tokens'
+import { useToast } from '../../toast'
 
 interface ChannelRow {
   key: string
@@ -71,7 +71,7 @@ interface ChannelRow {
 }
 
 export default function ChannelsPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const { token } = theme.useToken()
   const [form] = Form.useForm()
 
@@ -436,7 +436,7 @@ export default function ChannelsPage() {
       />
 
       {/* 统计卡片 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: SPACING.md }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: SPACING.md }}>
         <MetricCard
           label="已接入"
           value={channels.filter((c) => c.configured).length}

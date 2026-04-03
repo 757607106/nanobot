@@ -109,6 +109,7 @@ export default function SystemPage() {
   }
 
   return (
+    <div className="page-stack">
     <Flex vertical gap={24}>
       <PageHeader
         title="实例健康与环境"
@@ -204,7 +205,7 @@ export default function SystemPage() {
                 {status.stats.webSessions}
               </Typography.Title>
               <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6 }}>
-                累计启动 {status.stats.totalSessions} 次会话，处理消息耗费 {status.stats.messages} 条。
+                累计启动 {status.stats.totalSessions} 次会话，处理 {status.stats.messages} 条消息。
               </Typography.Paragraph>
             </div>
           </SectionCard>
@@ -239,5 +240,6 @@ export default function SystemPage() {
         </Flex>
       </div>
     </Flex>
+    </div>
   )
 }

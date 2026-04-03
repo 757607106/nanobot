@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Button, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography } from 'antd'
 import SectionCard from '../../components/console/SectionCard'
+import FormField from '../../components/console/FormField'
 import DevOnly from '../../components/DevOnly'
 import {
   getAllModelBindings,
@@ -131,76 +132,65 @@ export default function AgentEditor({
             gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <Typography.Text type="secondary">名称</Typography.Text>
+          <FormField label="名称">
             <Input
               value={form.name}
               onChange={(event) => onUpdateForm('name', event.target.value)}
               placeholder="员工名称"
               aria-label="名称"
-              style={{ marginTop: 8 }}
             />
-          </div>
+          </FormField>
 
-          <div style={{ minWidth: 0 }}>
-            <Typography.Text type="secondary">标签</Typography.Text>
+          <FormField label="标签">
             <Input
               value={form.tags.join(', ')}
               onChange={(event) => onUpdateForm('tags', parseTags(event.target.value))}
               placeholder="tag1, tag2"
               aria-label="标签"
-              style={{ marginTop: 8 }}
             />
-          </div>
+          </FormField>
 
-          <div style={{ minWidth: 0 }}>
-            <Typography.Text type="secondary">模型绑定</Typography.Text>
+          <FormField label="模型绑定">
             <Select
               value={form.binding}
               onChange={updateBinding}
               options={[{ value: '', label: '跟随默认绑定' }, ...agentBindingOptions]}
               aria-label="模型绑定"
-              style={{ marginTop: 8, width: '100%' }}
+              style={{ width: '100%' }}
             />
-          </div>
+          </FormField>
 
-
-          <div style={{ minWidth: 0, gridColumn: '1 / -1' }}>
-            <Typography.Text type="secondary">职责说明</Typography.Text>
+          <FormField label="职责说明" fullWidth>
             <Input.TextArea
               value={form.description}
               onChange={(event) => onUpdateForm('description', event.target.value)}
               rows={4}
               aria-label="职责说明"
-              style={{ marginTop: 8 }}
             />
-          </div>
+          </FormField>
         </div>
       </SectionCard>
 
       <SectionCard title="角色说明与规则">
         <Flex vertical gap={6}>
-          <div>
-            <Typography.Text type="secondary">角色说明</Typography.Text>
+          <FormField label="角色说明">
             <Input.TextArea
               value={form.systemPrompt}
               onChange={(event) => onUpdateForm('systemPrompt', event.target.value)}
               rows={12}
               aria-label="角色说明"
-              style={{ marginTop: 8, minHeight: 200, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
+              style={{ minHeight: 200, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <Typography.Text type="secondary">工作规则</Typography.Text>
+          <FormField label="工作规则">
             <Input.TextArea
               value={form.rulesText}
               onChange={(event) => onUpdateForm('rulesText', event.target.value)}
               rows={6}
               aria-label="工作规则"
-              style={{ marginTop: 8 }}
             />
-          </div>
+          </FormField>
         </Flex>
       </SectionCard>
 
@@ -214,73 +204,65 @@ export default function AgentEditor({
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
             }}
           >
-            <div style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary">备用供应商</Typography.Text>
-              <Select
-                value={form.provider}
-                onChange={updateProvider}
-                options={[{ value: '', label: '自动推断' }, ...agentProviderOptions]}
-                disabled={Boolean(form.binding)}
-                aria-label="备用供应商"
-                style={{ marginTop: 8, width: '100%' }}
-              />
-            </div>
+            {!form.binding ? (
+              <>
+                <FormField label="备用供应商">
+                  <Select
+                    value={form.provider}
+                    onChange={updateProvider}
+                    options={[{ value: '', label: '自动推断' }, ...agentProviderOptions]}
+                    aria-label="备用供应商"
+                    style={{ width: '100%' }}
+                  />
+                </FormField>
 
-            <div style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary">备用模型</Typography.Text>
-              <Input
-                value={form.model}
-                onChange={(event) => onUpdateForm('model', event.target.value)}
-                disabled={Boolean(form.binding)}
-                aria-label="备用模型"
-                style={{ marginTop: 8 }}
-              />
-            </div>
+                <FormField label="备用模型">
+                  <Input
+                    value={form.model}
+                    onChange={(event) => onUpdateForm('model', event.target.value)}
+                    aria-label="备用模型"
+                  />
+                </FormField>
+              </>
+            ) : null}
 
-            <div style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary">记忆范围</Typography.Text>
+            <FormField label="记忆范围">
               <Select
                 value={form.memoryScope}
                 onChange={(value) => onUpdateForm('memoryScope', value)}
                 options={memoryScopeOptions}
                 aria-label="记忆范围"
-                style={{ marginTop: 8, width: '100%' }}
+                style={{ width: '100%' }}
               />
-            </div>
+            </FormField>
 
-            <div style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary">产物归档天数</Typography.Text>
+            <FormField label="产物归档天数">
               <Input
                 value={form.artifactArchiveAfterDays}
                 onChange={(event) => onUpdateForm('artifactArchiveAfterDays', event.target.value)}
                 placeholder="归档天数"
                 aria-label="产物归档天数"
-                style={{ marginTop: 8 }}
               />
-            </div>
+            </FormField>
 
-            <div style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary">产物删除天数</Typography.Text>
+            <FormField label="产物删除天数">
               <Input
                 value={form.artifactDeleteAfterDays}
                 onChange={(event) => onUpdateForm('artifactDeleteAfterDays', event.target.value)}
                 placeholder="删除天数"
                 aria-label="产物删除天数"
-                style={{ marginTop: 8 }}
               />
-            </div>
+            </FormField>
 
             <DevOnly>
-              <div style={{ minWidth: 0 }}>
-                <Typography.Text type="secondary">运行后端</Typography.Text>
+              <FormField label="运行后端">
                 <Input
                   value={form.backend}
                   onChange={(event) => onUpdateForm('backend', event.target.value)}
                   placeholder="运行后端"
                   aria-label="运行后端"
-                  style={{ marginTop: 8 }}
                 />
-              </div>
+              </FormField>
             </DevOnly>
           </div>
 

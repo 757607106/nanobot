@@ -1,4 +1,4 @@
-import { Button, theme } from 'antd'
+import { Segmented, theme } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PageHeader from '../components/console/PageHeader'
 import CalendarPage from './CalendarPage'
@@ -13,7 +13,6 @@ function normalizeTab(value: string | null): AutomationTabKey {
 export default function AutomationPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { token } = theme.useToken()
   const activeTab = normalizeTab(searchParams.get('tab'))
 
   return (
@@ -22,20 +21,14 @@ export default function AutomationPage() {
         title="自动化管理"
         subtitle="日程事项与定时任务配置"
         actions={
-          <div className="flex gap-3 flex-wrap">
-            <Button
-              type={activeTab === 'calendar' ? 'primary' : 'default'}
-              onClick={() => navigate('/system/automation?tab=calendar')}
-            >
-              日程
-            </Button>
-            <Button
-              type={activeTab === 'cron' ? 'primary' : 'default'}
-              onClick={() => navigate('/system/automation?tab=cron')}
-            >
-              定时任务
-            </Button>
-          </div>
+          <Segmented
+            value={activeTab}
+            options={[
+              { label: '日程', value: 'calendar' },
+              { label: '定时任务', value: 'cron' },
+            ]}
+            onChange={(value) => navigate(`/system/automation?tab=${value}`)}
+          />
         }
       />
 

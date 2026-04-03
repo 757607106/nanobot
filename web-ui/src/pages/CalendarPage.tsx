@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Empty, Input, InputNumber, List, Select, Space, Spin, Switch, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Empty, Input, InputNumber, List, Select, Space, Spin, Switch, Tag, Typography } from 'antd'
 import { CalendarOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { api, ApiError } from '../api'
 import { MotionGroup, MotionPanel } from '../components/MotionSurface'
 import PageHeader from '../components/console/PageHeader'
 import { formatDateTimeZh } from '../locale'
 import type { CalendarEvent, CalendarEventInput, CalendarSettings, CronJob } from '../types'
+import { useToast } from '../toast'
 
 const { Text } = Typography
 
@@ -117,7 +118,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 export default function CalendarPage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [settings, setSettings] = useState<CalendarSettings | null>(null)
   const [jobs, setJobs] = useState<CronJob[]>([])

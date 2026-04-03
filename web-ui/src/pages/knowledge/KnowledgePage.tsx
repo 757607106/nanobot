@@ -1,5 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Flex, Modal, Space, Splitter, theme } from 'antd'
+import { Button, Flex, Modal, Space, Splitter, theme } from 'antd'
 import {
   BranchesOutlined,
   DatabaseOutlined,
@@ -62,9 +62,10 @@ import {
 import KnowledgeList from './KnowledgeList'
 import KnowledgeWorkspace from './KnowledgeWorkspace'
 import './knowledge.css'
+import { useToast } from '../../toast'
 
 export default function KnowledgePage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const navigate = useNavigate()
   const location = useLocation()
   const { kbId } = useParams()

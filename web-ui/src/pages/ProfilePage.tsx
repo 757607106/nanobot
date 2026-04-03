@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Alert,
-  App,
   Avatar,
   Button,
   Card,
@@ -33,6 +32,7 @@ import { formatDateTimeZh } from '../locale'
 import { useAuth } from '../auth'
 import { testIds } from '../testIds'
 import type { ProfileData } from '../types'
+import { useToast } from '../toast'
 
 type DialogMode = 'profile' | 'password' | 'avatar' | null
 
@@ -92,7 +92,7 @@ function FieldGroup({
 }
 
 export default function ProfilePage() {
-  const { message } = App.useApp()
+  const message = useToast()
   const { refresh } = useAuth()
   const { token } = theme.useToken()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -465,7 +465,7 @@ export default function ProfilePage() {
               </Flex>
             </SectionCard>
 
-            <SectionCard title="头像与视觉资产">
+            <SectionCard title="头像管理">
               <Flex vertical gap={20}>
                  <Descriptions
                   colon={false}
