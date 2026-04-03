@@ -1,11 +1,10 @@
-import type { ReactNode } from 'react'
-import { NodeIndexOutlined, PaperClipOutlined, ToolOutlined } from '@ant-design/icons'
+import type { CSSProperties, ReactNode } from 'react'
+import { PaperClipOutlined, ToolOutlined } from '@ant-design/icons'
 import { ThoughtChain } from '@ant-design/x'
 import type { ThoughtChainItem } from '@ant-design/x'
 import type { MessageInfo } from '@ant-design/x-sdk'
 import { Collapse, Flex, Space, Tag, Tooltip, Typography, theme } from 'antd'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { XMarkdown } from '@ant-design/x-markdown'
 import { formatDateTimeZh } from '../locale'
 import type { ChatAttachmentRef, ChatMessage, ChatToolCall } from '../types'
 import { getToolCallName, normalizeChatMessage } from './chatMessageUtils'
@@ -98,9 +97,9 @@ function buildThoughtChainItems(
     const isTool = step.kind === 'tool'
     return {
       key: step.key,
-      icon: isTool ? <ToolOutlined /> : <NodeIndexOutlined />,
-      title: isTool ? `工具：${step.label}` : step.label,
-      description: isTool ? '正在执行工具调用' : '执行过程',
+      icon: <ToolOutlined />,
+      title: isTool ? step.label : step.label,
+      description: isTool ? '工具执行中' : '处理中',
       status: itemStatus,
     }
   })
@@ -111,10 +110,9 @@ function MetaLabel({ children }: { children: ReactNode }) {
     <Text
       type="secondary"
       style={{
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: '0.04em',
-        textTransform: 'uppercase',
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: '0.02em',
       }}
     >
       {children}
@@ -122,10 +120,14 @@ function MetaLabel({ children }: { children: ReactNode }) {
   )
 }
 
-function MarkdownBubble({ content }: { content: string }) {
+/* ── Markdown 渲染 ── */
+function MarkdownBubble({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
   return (
     <div className="markdown-bubble">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <XMarkdown
+        content={content}
+        streaming={isStreaming ? { hasNextChunk: true } : undefined}
+      />
     </div>
   )
 }
@@ -202,6 +204,7 @@ export function AttachmentTags({
   )
 }
 
+/* ── 工具调用卡片 (重构为美观紧凑样式) ── */
 function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
   const { token } = theme.useToken()
 
@@ -209,38 +212,57 @@ function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
     return null
   }
 
+  const codeStyle: CSSProperties = {
+    margin: 0,
+    padding: 12,
+    borderRadius: 8,
+    background: token.colorFillAlter,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
+    fontSize: 12,
+    fontFamily: 'var(--nb-font-mono, monospace)',
+    maxHeight: 320,
+    overflow: 'auto',
+    border: `1px solid ${token.colorBorderSecondary}`,
+  }
+
   return (
-    <Flex vertical gap={8}>
+    <Flex vertical gap={6}>
       <MetaLabel>工具调用</MetaLabel>
       <Collapse
         size="small"
+        expandIconPosition="end"
+        style={{
+          borderRadius: 10,
+          border: `1px solid ${token.colorBorderSecondary}`,
+          background: token.colorFillQuaternary,
+        }}
         items={toolCalls.map((toolCall, index) => {
           const name = getToolCallName(toolCall)
           return {
             key: `${name}-${index}`,
             label: (
-              <Flex justify="space-between" align="center" gap={12} wrap="wrap">
-                <Space size={8}>
-                  <ToolOutlined />
-                  <Text strong>{name}</Text>
-                </Space>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+              <Flex align="center" gap={8}>
+                <div style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 6,
+                  background: `${token.colorPrimary}14`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <ToolOutlined style={{ fontSize: 12, color: token.colorPrimary }} />
+                </div>
+                <Text strong style={{ fontSize: 13 }}>{name}</Text>
+                <Text type="secondary" style={{ fontSize: 11, marginLeft: 'auto' }}>
                   {getToolArgumentsPreview(toolCall)}
                 </Text>
               </Flex>
             ),
             children: (
-              <Paragraph
-                code
-                style={{
-                  margin: 0,
-                  padding: 12,
-                  borderRadius: token.borderRadiusLG,
-                  background: token.colorFillAlter,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                }}
-              >
+              <Paragraph code style={codeStyle}>
                 {formatToolArgumentsBlock(toolCall)}
               </Paragraph>
             ),
@@ -251,43 +273,62 @@ function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
   )
 }
 
+/* ── 工具结果卡片 ── */
 function ToolResultCard({ message }: { message: ChatMessage }) {
   const { token } = theme.useToken()
   const fullContent = String(message.content || '')
   const previewContent = truncateContent(fullContent)
   const isTruncated = previewContent !== fullContent
 
-  const codeBlockStyle: React.CSSProperties = {
+  const codeStyle: CSSProperties = {
     margin: 0,
     padding: 12,
-    borderRadius: token.borderRadiusLG,
+    borderRadius: 8,
     background: token.colorFillAlter,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
     maxHeight: 400,
     overflow: 'auto',
+    fontSize: 12,
+    fontFamily: 'var(--nb-font-mono, monospace)',
+    border: `1px solid ${token.colorBorderSecondary}`,
   }
 
   return (
     <Collapse
       size="small"
+      expandIconPosition="end"
+      style={{
+        borderRadius: 10,
+        border: `1px solid ${token.colorBorderSecondary}`,
+        background: token.colorFillQuaternary,
+      }}
       items={[
         {
           key: 'result',
           label: (
-            <Flex justify="space-between" align="center" gap={12} wrap="wrap">
-              <Space size={8}>
-                <ToolOutlined />
-                <Text strong>{message.name || 'tool'}</Text>
-              </Space>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+            <Flex align="center" gap={8}>
+              <div style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                background: `${token.colorWarning}14`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <ToolOutlined style={{ fontSize: 12, color: token.colorWarning }} />
+              </div>
+              <Text strong style={{ fontSize: 13 }}>{message.name || 'tool'}</Text>
+              <Text type="secondary" style={{ fontSize: 11, marginLeft: 'auto' }}>
                 {message.createdAt ? formatDateTimeZh(message.createdAt) : '刚刚'}
               </Text>
             </Flex>
           ),
           children: (
             <Flex vertical gap={8}>
-              <Paragraph code style={codeBlockStyle}>
+              <Paragraph code style={codeStyle}>
                 {previewContent}
               </Paragraph>
               {isTruncated ? (
@@ -297,9 +338,9 @@ function ToolResultCard({ message }: { message: ChatMessage }) {
                   items={[
                     {
                       key: 'full',
-                      label: '展开完整工具结果',
+                      label: '展开完整结果',
                       children: (
-                        <Paragraph code style={codeBlockStyle}>
+                        <Paragraph code style={codeStyle}>
                           {fullContent}
                         </Paragraph>
                       ),
@@ -329,6 +370,7 @@ export function ChatMessageBody({
   const { token } = theme.useToken()
   const message = normalizeChatMessage(info.message)
   const progressSteps = message.progressSteps ?? []
+  const isStreaming = info.status === 'loading' || info.status === 'updating'
 
   if (message.role === 'tool') {
     return <ToolResultCard message={message} />
@@ -338,12 +380,12 @@ export function ChatMessageBody({
   const showPlaceholderCopy =
     !hasMessageContent &&
     message.role === 'assistant' &&
-    (info.status === 'loading' || info.status === 'updating')
+    isStreaming
 
   return (
     <Flex vertical gap={12}>
       {progressSteps.length > 0 ? (
-        <Flex vertical gap={8}>
+        <Flex vertical gap={6}>
           <MetaLabel>执行过程</MetaLabel>
           {progressDisplay === 'tag-list' ? (
             <Space wrap>
@@ -358,7 +400,7 @@ export function ChatMessageBody({
               items={buildThoughtChainItems(progressSteps, info.status)}
               style={{
                 padding: 10,
-                borderRadius: token.borderRadiusLG,
+                borderRadius: 10,
                 background: token.colorFillQuaternary,
                 border: `1px solid ${token.colorBorderSecondary}`,
               }}
@@ -370,7 +412,10 @@ export function ChatMessageBody({
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
 
       {hasMessageContent ? (
-        <MarkdownBubble content={String(message.content ?? '')} />
+        <MarkdownBubble
+          content={String(message.content ?? '')}
+          isStreaming={message.role === 'assistant' && isStreaming}
+        />
       ) : showPlaceholderCopy ? (
         <Text type="secondary">{assistantLoadingCopy}</Text>
       ) : null}

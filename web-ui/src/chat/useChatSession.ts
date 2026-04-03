@@ -45,6 +45,7 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
   const pendingSyncSessionIdRef = useRef<string | null>(null)
   const shouldSyncSessionRef = useRef(false)
   const wasRequestingRef = useRef(false)
+  const setMessagesRef = useRef((...args: Parameters<typeof setMessages>) => { /* placeholder */ })
 
   const provider = useMemo(() => {
     if (!inAgentMode) {
@@ -184,6 +185,11 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
     void refreshWorkspaceData({ quiet: true })
   }, [agentId, currentSessionId])
 
+  // Keep setMessages ref in sync so the init effect doesn't depend on its identity
+  useEffect(() => {
+    setMessagesRef.current = setMessages
+  }, [setMessages])
+
   useEffect(() => {
     currentSessionIdRef.current = null
     pendingSyncSessionIdRef.current = null
@@ -192,13 +198,14 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
       setCurrentSessionId(null)
     })
     setSessions([])
-    setMessages([])
+    setMessagesRef.current([])
     setSessionFiles([])
     setDraftAttachmentRefs([])
     setPendingAttachments([])
     void loadSessions()
     void refreshWorkspaceData()
-  }, [agentId, setMessages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId])
 
   useEffect(() => {
     const wasRequesting = wasRequestingRef.current
@@ -278,8 +285,40 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
         )
       }
       await Promise.all([loadSessions(sessionId), loadSessionFiles(sessionId), refreshWorkspaceData({ quiet: true })])
+
+      // Auto-rename: if session still has default title, use first user message
+      void autoRenameSessionIfNeeded(sessionId, history)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '同步会话内容失败')
+    }
+  }
+
+  async function autoRenameSessionIfNeeded(sessionId: string, history: ChatMessage[]) {
+    try {
+      const session = sessions.find((s) => s.id === sessionId)
+      if (!session) return
+      const title = session.title
+      // Only auto-rename if still default title
+      if (title && title !== 'New Chat') return
+
+      // Find first user message to derive title
+      const firstUserMsg = history.find((m) => m.role === 'user')
+      if (!firstUserMsg?.content) return
+
+      const raw = String(firstUserMsg.content).replace(/\s+/g, ' ').trim()
+      if (!raw) return
+
+      const newTitle = raw.length > 40 ? `${raw.slice(0, 40)}...` : raw
+      if (inAgentMode && agentId) {
+        await api.renameAgentSession(agentId, sessionId, newTitle)
+      } else {
+        await api.renameSession(sessionId, newTitle)
+      }
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s)),
+      )
+    } catch {
+      // Silent failure — auto-rename is best-effort
     }
   }
 

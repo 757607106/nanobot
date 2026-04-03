@@ -2,7 +2,7 @@ import type { ComponentProps, ComponentRef } from 'react'
 import { forwardRef } from 'react'
 import { Attachments, Sender } from '@ant-design/x'
 import { Button, Card, Flex, Space, Typography, theme } from 'antd'
-import { CloudUploadOutlined, LinkOutlined, PaperClipOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, LinkOutlined } from '@ant-design/icons'
 import { AttachmentTags } from './chatPresentation'
 import { testIds } from '../testIds'
 import type { ChatAttachmentRef, ChatUploadItem } from '../types'
@@ -23,10 +23,6 @@ export interface ChatInputProps {
   onPendingAttachmentsChange: (attachments: ComposerAttachment[]) => void
   draftAttachmentRefs: ChatAttachmentRef[]
   onDraftAttachmentRefsChange: (refs: ChatAttachmentRef[]) => void
-  sessionFiles: ChatUploadItem[]
-  recentUploads: ChatUploadItem[]
-  onOpenLibrary: () => void
-  onToggleSessionFile: (item: ChatUploadItem) => void
   dropContainerRef: React.RefObject<HTMLElement | null>
   isDesktopLayout: boolean
 }
@@ -45,10 +41,6 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
       onPendingAttachmentsChange,
       draftAttachmentRefs,
       onDraftAttachmentRefsChange,
-      sessionFiles,
-      recentUploads,
-      onOpenLibrary,
-      onToggleSessionFile,
       dropContainerRef,
       isDesktopLayout,
     },
@@ -150,14 +142,6 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
                   />
                 </Attachments>
               </span>
-              <Button
-                type="text"
-                icon={<PaperClipOutlined />}
-                onClick={onOpenLibrary}
-                disabled={recentUploads.length === 0}
-              >
-                历史文件
-              </Button>
             </Space>
           }
           footer={

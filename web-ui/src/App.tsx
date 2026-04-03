@@ -261,6 +261,7 @@ export function AppRoutes() {
       >
         <Route path="dashboard" element={withRouteSuspense(<DashboardPage />)} />
         <Route path="chat" element={withRouteSuspense(<ChatPage />)} />
+        <Route path="chat/agent/:agentId" element={withRouteSuspense(<AgentChatPage />)} />
         <Route path="channels" element={withRouteSuspense(<ChannelsLayoutPage />)}>
           <Route index element={<Navigate to="list" replace />} />
           <Route path="list" element={withRouteSuspense(<ChannelsPage />)} />
