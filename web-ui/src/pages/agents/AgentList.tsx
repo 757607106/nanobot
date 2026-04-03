@@ -39,92 +39,173 @@ export default function AgentList({
     })
   }, [agents, searchQuery])
 
+  const avatarColors = [
+    'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%)',
+    'linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)',
+    'linear-gradient(120deg, #d4fc79 0%, #96e6a1 100%)',
+    'linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)',
+    'linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)',
+    'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)',
+  ]
+
+  const getGradientForId = (id: string) => {
+    let hash = 0
+    for (let i = 0; i < id.length; i++) {
+      hash = id.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return avatarColors[Math.abs(hash) % avatarColors.length]
+  }
+
+  const getInitials = (name: string) => {
+    return name.trim().substring(0, 2).toUpperCase() || 'A'
+  }
+
   return (
-    <Flex vertical gap={12}>
-      <PageHeader
-        title="Agent Studio"
-        actions={(
-          <Flex gap={8} wrap="wrap">
-            <Button icon={<ReloadOutlined />} onClick={onRefresh} loading={loadingWorkspace} size="small" />
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => navigate('/studio/agents/new')}
-              size="small"
-              style={{ borderRadius: 10 }}
-            >
-              新建
-            </Button>
-          </Flex>
-        )}
-      />
+    <Flex vertical gap={24} style={{ padding: '32px max(24px, calc((100% - var(--nb-content-max-width)) / 2))' }}>
+      <Flex align="center" justify="space-between" wrap="wrap" gap={16}>
+        <div>
+          <Typography.Title level={3} style={{ margin: 0, fontWeight: 700 }}>
+            数字员工大厅
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            管理并配置您的企业专属 AI Agent 团队
+          </Typography.Text>
+        </div>
+        <Flex gap={12} align="center">
+          <Input
+            placeholder="搜索员工..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
+            allowClear
+            style={{ 
+              borderRadius: 12, 
+              background: 'var(--nb-card-subtle-bg)', 
+              backdropFilter: 'blur(10px)',
+              border: '1px solid var(--nb-card-subtle-border)',
+              width: 250,
+              boxShadow: 'var(--nb-shadow-soft)'
+            }}
+          />
+          <Button icon={<ReloadOutlined />} onClick={onRefresh} loading={loadingWorkspace} shape="circle" size="large" />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/studio/agents/new')}
+            size="large"
+            style={{ borderRadius: 12, fontWeight: 500 }}
+          >
+            新员工入职
+          </Button>
+        </Flex>
+      </Flex>
 
-      <Input
-        placeholder="搜索 Agent..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
-        allowClear
-        style={{ borderRadius: 10, background: 'var(--nb-card-subtle-bg)', border: 'none' }}
-      />
-
-      {error && !selectedAgentId ? <Alert type="error" message={error} showIcon /> : null}
+      {error ? <Alert type="error" message={error} showIcon /> : null}
 
       {loadingWorkspace && agents.length === 0 ? (
-        <Flex justify="center" align="center" style={{ minHeight: 120 }}>
-          <Spin />
+        <Flex justify="center" align="center" style={{ minHeight: 300 }}>
+          <Spin size="large" />
         </Flex>
       ) : filteredAgents.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无匹配 Agent" />
+        <Empty 
+          image="https://gw.alipayobjects.com/zos/antfincdn/ZHrcdLPrvN/empty.svg"
+          description="大厅空空如也，快去配置您的第一个数字员工吧" 
+          style={{ marginTop: 64 }}
+        />
       ) : (
-        <div className="resource-rail-list">
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: 24,
+        }}>
           {filteredAgents.map((record, index) => {
-            const isSelected = selectedAgentId === record.agentId
             return (
               <motion.div
                 key={record.agentId}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03, duration: 0.15 }}
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ delay: index * 0.04, duration: 0.2 }}
+                whileHover={{ scale: 1.02, y: -4 }}
                 onClick={() => navigate(`/studio/agents/${record.agentId}`)}
-                className={`resource-rail-item ${isSelected ? 'is-selected' : ''}`}
+                style={{
+                  cursor: 'pointer',
+                  background: 'var(--nb-surface-strong)',
+                  borderRadius: 24,
+                  padding: 24,
+                  border: '1px solid var(--nb-card-border)',
+                  boxShadow: 'var(--nb-shadow)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 16
+                }}
               >
-                <Flex align="center" gap={8} style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      flexShrink: 0,
-                      background: record.enabled
-                        ? token.colorSuccess
-                        : token.colorTextQuaternary,
-                      boxShadow: record.enabled
-                        ? `0 0 6px ${token.colorSuccess}80`
-                        : 'none',
-                    }}
-                  />
-                  <Typography.Text
-                    strong
-                    ellipsis
-                    style={{ flex: 1, minWidth: 0, fontSize: 14 }}
-                  >
-                    {record.name}
-                  </Typography.Text>
-                </Flex>
-                <Typography.Text
-                  type="secondary"
-                  ellipsis
-                  style={{
-                    fontSize: 12,
-                    marginTop: 4,
-                    display: 'block',
-                    paddingLeft: 15,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {record.description || '暂无描述'}
-                </Typography.Text>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                  <div style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 16,
+                    background: getGradientForId(record.agentId),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'rgba(0,0,0,0.6)',
+                    fontWeight: 800,
+                    fontSize: 20,
+                    boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.4)',
+                    flexShrink: 0
+                  }}>
+                    {getInitials(record.name)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+                    <Typography.Text strong ellipsis style={{ fontSize: 18, display: 'block', color: 'var(--nb-ink)' }}>
+                      {record.name}
+                    </Typography.Text>
+                    <Typography.Text type="secondary" ellipsis style={{ fontSize: 13 }}>
+                      {record.model || '未设定引擎'}
+                    </Typography.Text>
+                  </div>
+                  <div style={{
+                     width: 10,
+                     height: 10,
+                     borderRadius: '50%',
+                     background: record.enabled ? token.colorSuccess : token.colorTextQuaternary,
+                     boxShadow: record.enabled ? `0 0 10px ${token.colorSuccess}` : 'none',
+                     flexShrink: 0,
+                     marginTop: 8
+                  }} />
+                </div>
+                
+                <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} style={{ margin: 0, fontSize: 13, lineHeight: 1.6, flex: 1 }}>
+                  {record.description || '一位神秘的 AI 员工，暂无背景介绍。'}
+                </Typography.Paragraph>
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
+                  {(record.tags || []).slice(0, 3).map((tag, i) => (
+                    <div key={i} style={{
+                      padding: '2px 10px',
+                      background: 'var(--nb-surface)',
+                      border: '1px solid var(--nb-card-subtle-border)',
+                      borderRadius: 12,
+                      fontSize: 12,
+                      color: 'var(--nb-muted)'
+                    }}>
+                      {tag}
+                    </div>
+                  ))}
+                  {record.tags && record.tags.length > 3 && (
+                    <div style={{
+                      padding: '2px 10px',
+                      background: 'rgba(0,0,0,0.02)',
+                      borderRadius: 12,
+                      fontSize: 12,
+                      color: 'var(--nb-muted)'
+                    }}>
+                      +{record.tags.length - 3}
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )
           })}

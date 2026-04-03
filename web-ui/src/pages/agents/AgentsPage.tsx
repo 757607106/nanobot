@@ -98,12 +98,7 @@ export default function AgentsPage() {
     void loadRecentRuns(selectedAgentId)
   }, [isCreateRoute, loadingWorkspace, selectedAgentId])
 
-  useEffect(() => {
-    if (loadingWorkspace || isCreateRoute || selectedAgentId || agents.length === 0) {
-      return
-    }
-    navigate(`/studio/agents/${agents[0].agentId}`, { replace: true })
-  }, [agents, isCreateRoute, loadingWorkspace, navigate, selectedAgentId])
+  // Removed automatic redirect to detail view to support the Master Grid view.
 
   async function loadWorkspace() {
     try {
@@ -378,62 +373,58 @@ export default function AgentsPage() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Splitter className="console-workspace-splitter flex-1">
-        <Splitter.Panel defaultSize={260} min={220} max={360}>
-          <div style={{ height: '100%', overflow: 'auto', padding: '0 0 24px' }}>
-            <AgentList
-              agents={agents}
-              loadingWorkspace={loadingWorkspace}
-              error={error}
-              selectedAgentId={selectedAgentId}
-              onRefresh={loadWorkspace}
-            />
-          </div>
-        </Splitter.Panel>
-
-        <Splitter.Panel min={400}>
-          <div style={{ height: '100%', overflow: 'auto' }}>
-            <AgentDetail
-              isCreateRoute={isCreateRoute}
-              selectedAgentId={selectedAgentId}
-              currentAgent={currentAgent}
-              form={form}
-              agentMemory={agentMemory}
-              agentMemoryCandidates={agentMemoryCandidates}
-              recentRuns={recentRuns}
-              validTools={validTools}
-              skills={skills}
-              mcpServers={mcpServers}
-              knowledgeBases={knowledgeBases}
-              globalConfig={globalConfig}
-              globalConfigMeta={globalConfigMeta}
-              loadingDetail={loadingDetail}
-              loadingMemory={loadingMemory}
-              loadingRuns={loadingRuns}
-              saving={saving}
-              copying={copying}
-              deleting={deleting}
-              error={error}
-              memoryError={memoryError}
-              runError={runError}
-              detailRequestAgentId={detailRequestAgentId}
-              onUpdateForm={updateForm}
-              onToggleArrayItem={toggleArrayItem}
-              onSave={handleSave}
-              onCopy={handleCopy}
-              onDelete={handleDelete}
-              onRefreshWorkspace={loadWorkspace}
-              onRefreshMemory={loadAgentMemoryGovernance}
-              onSaveMemory={handleSaveAgentMemory}
-              onCreateCandidate={handleCreateAgentMemoryCandidate}
-              onApplyCandidate={handleApplyAgentMemoryCandidate}
-              onRejectCandidate={handleRejectAgentMemoryCandidate}
-              onTestRun={handleTestRun}
-              onRefreshRuns={loadRecentRuns}
-            />
-          </div>
-        </Splitter.Panel>
-      </Splitter>
+      {isCreateRoute || selectedAgentId ? (
+        <div style={{ flex: 1, overflow: 'auto', background: 'var(--nb-body-bg)' }}>
+          <AgentDetail
+            isCreateRoute={isCreateRoute}
+            selectedAgentId={selectedAgentId}
+            currentAgent={currentAgent}
+            form={form}
+            agentMemory={agentMemory}
+            agentMemoryCandidates={agentMemoryCandidates}
+            recentRuns={recentRuns}
+            validTools={validTools}
+            skills={skills}
+            mcpServers={mcpServers}
+            knowledgeBases={knowledgeBases}
+            globalConfig={globalConfig}
+            globalConfigMeta={globalConfigMeta}
+            loadingDetail={loadingDetail}
+            loadingMemory={loadingMemory}
+            loadingRuns={loadingRuns}
+            saving={saving}
+            copying={copying}
+            deleting={deleting}
+            error={error}
+            memoryError={memoryError}
+            runError={runError}
+            detailRequestAgentId={detailRequestAgentId}
+            onUpdateForm={updateForm}
+            onToggleArrayItem={toggleArrayItem}
+            onSave={handleSave}
+            onCopy={handleCopy}
+            onDelete={handleDelete}
+            onRefreshWorkspace={loadWorkspace}
+            onRefreshMemory={loadAgentMemoryGovernance}
+            onSaveMemory={handleSaveAgentMemory}
+            onCreateCandidate={handleCreateAgentMemoryCandidate}
+            onApplyCandidate={handleApplyAgentMemoryCandidate}
+            onRejectCandidate={handleRejectAgentMemoryCandidate}
+            onTestRun={handleTestRun}
+            onRefreshRuns={loadRecentRuns}
+          />
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflow: 'auto', padding: '0 0 24px', background: 'var(--nb-body-bg)' }}>
+          <AgentList
+            agents={agents}
+            loadingWorkspace={loadingWorkspace}
+            error={error}
+            selectedAgentId={selectedAgentId}
+            onRefresh={loadWorkspace}
+          />
+        </div>
+      )}
     </div>
   )
 }

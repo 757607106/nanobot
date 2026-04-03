@@ -46,83 +46,98 @@ export default function MemoryTab({
   }, [agentMemory?.content, currentAgent?.agentId])
 
   return (
-    <Flex vertical gap={6}>
-      <SectionCard
-        title="员工长期记忆"
-        action={(
-          <Space wrap size={[8, 8]}>
-            {currentAgent ? <Tag color="blue">{memoryScopeLabel(formMemoryScope)}</Tag> : null}
-            <Tag color="purple">{`${pendingCount} 待处理`}</Tag>
-          </Space>
-        )}
-      >
-        <Flex vertical gap={6}>
-          {memoryError ? <Alert type="error" message={memoryError} showIcon /> : null}
-
-          {!currentAgent ? (
-            <Alert type="info" message="未保存员工" showIcon />
-          ) : (
-            <>
-              <Input.TextArea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                rows={8}
-                placeholder="长期偏好与规范"
-                aria-label="员工长期记忆"
-              />
-              <Space wrap size={[8, 8]}>
-                <Button icon={<ReloadOutlined />} onClick={() => currentAgent && onRefresh(currentAgent.agentId)} loading={loadingMemory}>
-                  刷新
-                </Button>
-                <Button type="primary" icon={<SaveOutlined />} onClick={() => currentAgent && onSaveMemory(currentAgent.agentId, draft)}>
-                  保存记忆
-                </Button>
-                <Button onClick={() => currentAgent && navigate(`/studio/memory/agents/${currentAgent.agentId}`)}>
-                  统一审计
-                </Button>
-              </Space>
-            </>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr',
+      gap: 24,
+      alignItems: 'start'
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <SectionCard
+          title="长期核心记忆"
+          action={(
+            <Space wrap size={[8, 8]}>
+              {currentAgent ? <Tag color="blue" style={{ borderRadius: 12, border: 'none' }}>{memoryScopeLabel(formMemoryScope)}</Tag> : null}
+              <Tag color="purple" style={{ borderRadius: 12, border: 'none' }}>{`${pendingCount} 待处理`}</Tag>
+            </Space>
           )}
-        </Flex>
-      </SectionCard>
+        >
+          <Flex vertical gap={16}>
+            {memoryError ? <Alert type="error" message={memoryError} showIcon style={{ borderRadius: 12 }} /> : null}
 
-      <SectionCard title="提交候选">
-        <Flex vertical gap={6}>
-          <Input.TextArea
-            value={candidateDraft}
-            onChange={(event) => setCandidateDraft(event.target.value)}
-            rows={5}
-            placeholder="候选记忆"
-            aria-label="提交候选"
-          />
-          <Space wrap size={[8, 8]}>
-            <Button onClick={() => currentAgent && onCreateCandidate(currentAgent.agentId, candidateDraft)} disabled={!currentAgent}>
-              提交候选
-            </Button>
-          </Space>
-        </Flex>
-      </SectionCard>
-
-      <SectionCard title="候选记录">
-        {loadingMemory && agentMemoryCandidates.length === 0 ? (
-          <Flex justify="center" align="center" style={{ minHeight: 180 }}>
-            <Spin tip="正在加载候选记录..." />
+            {!currentAgent ? (
+              <Alert type="info" message="未保存员工，无法编辑记忆" showIcon style={{ borderRadius: 12 }} />
+            ) : (
+              <>
+                <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
+                  <Input.TextArea
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    rows={8}
+                    placeholder="在此编辑员工长期的记忆、偏好与专属规范..."
+                    aria-label="员工长期记忆"
+                    style={{ borderRadius: 12, border: 'none', background: 'transparent', lineHeight: 1.6 }}
+                  />
+                </div>
+                <Space wrap size={[8, 8]}>
+                  <Button icon={<ReloadOutlined />} onClick={() => currentAgent && onRefresh(currentAgent.agentId)} loading={loadingMemory} style={{ borderRadius: 12 }}>
+                    刷新提取
+                  </Button>
+                  <Button type="primary" icon={<SaveOutlined />} onClick={() => currentAgent && onSaveMemory(currentAgent.agentId, draft)} style={{ borderRadius: 12 }}>
+                    覆写记忆
+                  </Button>
+                  <Button onClick={() => currentAgent && navigate(`/studio/memory/agents/${currentAgent.agentId}`)} style={{ borderRadius: 12 }}>
+                    全局记忆审计
+                  </Button>
+                </Space>
+              </>
+            )}
           </Flex>
-        ) : agentMemoryCandidates.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无员工记忆候选。" />
-        ) : (
-          <Flex vertical gap={3}>
-            {agentMemoryCandidates.map((candidate) => (
-              <MemoryCandidateCard
-                key={candidate.candidateId}
-                candidate={candidate}
-                onApply={() => currentAgent && onApplyCandidate(currentAgent.agentId, candidate.candidateId)}
-                onReject={() => currentAgent && onRejectCandidate(currentAgent.agentId, candidate.candidateId)}
+        </SectionCard>
+
+        <SectionCard title="候选记忆队列">
+          <Flex vertical gap={24}>
+            <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
+              <Input.TextArea
+                value={candidateDraft}
+                onChange={(event) => setCandidateDraft(event.target.value)}
+                rows={3}
+                placeholder="在此粘贴测试文本来生成并提交流水线候选记忆..."
+                aria-label="提交候选"
+                style={{ borderRadius: 12, border: 'none', background: 'transparent', lineHeight: 1.6 }}
               />
-            ))}
+            </div>
+            <div>
+              <Button onClick={() => currentAgent && onCreateCandidate(currentAgent.agentId, candidateDraft)} disabled={!currentAgent} style={{ borderRadius: 12 }}>
+                人工提交候选
+              </Button>
+            </div>
+
+            {loadingMemory && agentMemoryCandidates.length === 0 ? (
+              <Flex justify="center" align="center" style={{ minHeight: 180 }}>
+                <Spin tip="正在同步候选记录..." />
+              </Flex>
+            ) : agentMemoryCandidates.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="太棒了！所有候选记录均已清空。" style={{ marginTop: 24, marginBottom: 24 }} />
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: 16
+              }}>
+                {agentMemoryCandidates.map((candidate) => (
+                  <MemoryCandidateCard
+                    key={candidate.candidateId}
+                    candidate={candidate}
+                    onApply={() => currentAgent && onApplyCandidate(currentAgent.agentId, candidate.candidateId)}
+                    onReject={() => currentAgent && onRejectCandidate(currentAgent.agentId, candidate.candidateId)}
+                  />
+                ))}
+              </div>
+            )}
           </Flex>
-        )}
-      </SectionCard>
-    </Flex>
+        </SectionCard>
+      </div>
+    </div>
   )
 }

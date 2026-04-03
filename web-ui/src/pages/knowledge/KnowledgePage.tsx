@@ -1,5 +1,6 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Flex, Modal, Space, Splitter, theme } from 'antd'
+import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { Button, Flex, Input, InputNumber, Modal, Select, Space, Splitter, Switch, Typography, theme } from 'antd'
 import {
   BranchesOutlined,
   DatabaseOutlined,
@@ -61,6 +62,8 @@ import {
 } from './columns'
 import KnowledgeList from './KnowledgeList'
 import KnowledgeWorkspace from './KnowledgeWorkspace'
+import { KnowledgeProvider } from './KnowledgeContext'
+import type { KnowledgeContextValue } from './KnowledgeContext'
 import './knowledge.css'
 import { useToast } from '../../toast'
 
@@ -1072,6 +1075,7 @@ export default function KnowledgePage() {
   )
 
   return (
+    <ErrorBoundary>
     <Flex vertical gap={16} className="page-stack">
       <PageHeader
         title="知识库"
@@ -1095,31 +1099,6 @@ export default function KnowledgePage() {
         )}
       />
 
-      <div className="console-metrics-grid">
-        <MetricCard
-          label="知识库数量"
-          value={aggregateStats.knowledgeBaseCount}
-          icon={<DatabaseOutlined />}
-        />
-        <MetricCard
-          label="文件总量"
-          value={aggregateStats.fileCount}
-          icon={<FileTextOutlined />}
-          tone="neutral"
-        />
-        <MetricCard
-          label="已索引文件"
-          value={aggregateStats.indexedCount}
-          icon={<BranchesOutlined />}
-          tone="success"
-        />
-        <MetricCard
-          label="异常条目"
-          value={aggregateStats.errorCount}
-          icon={<FileSearchOutlined />}
-          tone={aggregateStats.errorCount > 0 ? 'error' : 'warning'}
-        />
-      </div>
 
       <Splitter className="console-workspace-splitter" style={{ flex: 1 }}>
         <Splitter.Panel defaultSize={320} min={280} max={440}>
@@ -1134,83 +1113,89 @@ export default function KnowledgePage() {
         </Splitter.Panel>
 
         <Splitter.Panel>
-          <KnowledgeWorkspace
-            currentKb={currentKb}
-            filesState={filesState}
-            jobs={jobs}
-            loading={loading}
-            selectedFileIds={selectedFileIds}
-            fileSearch={fileSearch}
-            queryParams={queryParams}
-            queryText={queryText}
-            queryResult={queryResult}
-            resultView={resultView}
-            sampleQuestions={sampleQuestions}
-            queryParamSchema={queryParamSchema}
-            mindmap={mindmap}
-            graphData={graphData}
-            graphStats={graphStats}
-            graphConfig={graphConfig}
-            benchmarks={benchmarks}
-            evaluationHistory={evaluationHistory}
-            evaluationResult={evaluationResult}
-            evaluationErrorOnly={evaluationErrorOnly}
-            selectedBenchmarkId={selectedBenchmarkId}
-            visibleFiles={visibleFiles}
-            pendingParseCount={pendingParseCount}
-            pendingIndexCount={pendingIndexCount}
-            pendingParseFileIds={pendingParseFileIds}
-            pendingIndexFileIds={pendingIndexFileIds}
-            hasSelectedFiles={hasSelectedFiles}
-            canParseSelectedDocuments={canParseSelectedDocuments}
-            canIndexSelectedDocuments={canIndexSelectedDocuments}
-            hasSingleSelection={hasSingleSelection}
-            parseableSelectedFileIds={parseableSelectedFileIds}
-            indexableSelectedFileIds={indexableSelectedFileIds}
-            selectedDocumentIds={selectedDocumentIds}
-            selectedFiles={selectedFiles}
-            folderOptions={folderOptions}
-            benchmarkColumns={benchmarkColumns}
-            evaluationColumns={evaluationColumns}
-            formState={{ name: formState.name, description: formState.description, enabled: formState.enabled }}
-            indexConfig={{ chunkSize: indexConfig.chunkSize, chunkOverlap: indexConfig.chunkOverlap, chunkPresetId: indexConfig.chunkPresetId, qaSeparator: indexConfig.qaSeparator }}
-            onActiveTabChange={setActiveTab}
-            onFileSearchChange={setFileSearch}
-            onSelectedFileIdsChange={setSelectedFileIds}
-            onRefreshDetail={() => void refreshDetail()}
-            onDeleteKnowledgeBase={handleDeleteKnowledgeBase}
-            onOpenModal={openModal}
-            onSetUrlParentId={setUrlParentId}
-            onParseSelected={(fileIds, notifySkipped) => void handleParseSelected(fileIds, notifySkipped)}
-            onIndexSelected={(fileIds, notifySkipped) => void handleIndexSelected(fileIds, notifySkipped)}
-            onDeleteSelectedFiles={(files) => void handleDeleteSelectedFiles(files)}
-            onOpenMoveModal={openMoveModal}
-            onOpenFileDetail={handleOpenFileDetail}
-            onQueryParamsChange={setQueryParams}
-            onQueryTextChange={setQueryText}
-            onQuery={(query) => void handleQuery(query)}
-            onResultViewChange={setResultView}
-            onSaveQueryDefaults={() => void handleSaveQueryDefaults()}
-            onGenerateQuestions={() => void handleGenerateQuestions()}
-            onGraphConfigChange={(config) => setGraphConfig((prev) => ({ ...prev, ...config }))}
-            onReloadGraph={() => currentKb && void loadGraph(currentKb.kbId)}
-            onRegenerateMindmap={() => void handleGenerateMindmap()}
-            onBenchmarkChange={setSelectedBenchmarkId}
-            onRunEvaluation={() => void handleRunEvaluation()}
-            onRefreshBenchmarks={() => currentKb && void loadBenchmarkState(currentKb.kbId)}
-            onViewEvaluationResult={(taskId, errorOnly) => void handleViewEvaluationResult(taskId, errorOnly)}
-            onDeleteEvaluationResult={handleDeleteEvaluationResult}
-            onOpenBenchmarkGenerate={() => {
+          <KnowledgeProvider value={{
+            currentKb,
+            filesState,
+            jobs,
+            loading,
+            selectedFileIds,
+            fileSearch,
+            queryParams,
+            queryText,
+            queryResult,
+            resultView,
+            sampleQuestions,
+            queryParamSchema,
+            mindmap,
+            graphData,
+            graphStats,
+            graphConfig,
+            benchmarks,
+            evaluationHistory,
+            evaluationResult,
+            evaluationErrorOnly,
+            selectedBenchmarkId,
+            visibleFiles,
+            pendingParseCount,
+            pendingIndexCount,
+            pendingParseFileIds,
+            pendingIndexFileIds,
+            hasSelectedFiles,
+            canParseSelectedDocuments,
+            canIndexSelectedDocuments,
+            hasSingleSelection,
+            parseableSelectedFileIds,
+            indexableSelectedFileIds,
+            selectedDocumentIds,
+            selectedFiles,
+            folderOptions,
+            benchmarkColumns,
+            evaluationColumns,
+            formState,
+            indexConfig,
+            embeddingBindingOptions,
+            llmBindingOptions,
+            onFormStateChange: setFormState,
+            onIndexConfigChange: setIndexConfig,
+            onActiveTabChange: setActiveTab,
+            onFileSearchChange: setFileSearch,
+            onSelectedFileIdsChange: setSelectedFileIds,
+            onRefreshDetail: () => void refreshDetail(),
+            onDeleteKnowledgeBase: handleDeleteKnowledgeBase,
+            onOpenModal: openModal,
+            onSetUrlParentId: setUrlParentId,
+            onParseSelected: (fileIds?: string[], notifySkipped?: boolean) => void handleParseSelected(fileIds, notifySkipped),
+            onIndexSelected: (fileIds?: string[], notifySkipped?: boolean) => void handleIndexSelected(fileIds, notifySkipped),
+            onDeleteSelectedFiles: (files?: KnowledgeDocument[]) => void handleDeleteSelectedFiles(files),
+            onOpenMoveModal: openMoveModal,
+            onOpenFileDetail: handleOpenFileDetail,
+            onQueryParamsChange: setQueryParams,
+            onQueryTextChange: setQueryText,
+            onQuery: (query?: string) => void handleQuery(query),
+            onResultViewChange: setResultView,
+            onSaveQueryDefaults: () => void handleSaveQueryDefaults(),
+            onGenerateQuestions: () => void handleGenerateQuestions(),
+            onGraphConfigChange: (config: { label?: string; depth?: number; maxNodes?: number }) => setGraphConfig((prev) => ({ ...prev, ...config })),
+            onReloadGraph: () => currentKb && void loadGraph(currentKb.kbId),
+            onRegenerateMindmap: () => void handleGenerateMindmap(),
+            onBenchmarkChange: setSelectedBenchmarkId,
+            onRunEvaluation: () => void handleRunEvaluation(),
+            onRefreshBenchmarks: () => currentKb && void loadBenchmarkState(currentKb.kbId),
+            onViewEvaluationResult: (taskId: string, errorOnly?: boolean) => void handleViewEvaluationResult(taskId, errorOnly),
+            onDeleteEvaluationResult: handleDeleteEvaluationResult,
+            onOpenBenchmarkGenerate: () => {
               resetBenchmarkGenerateForm()
               openModal('benchmarkGenerate')
-            }}
-            onOpenBenchmarkUpload={() => {
+            },
+            onOpenBenchmarkUpload: () => {
               resetBenchmarkUploadForm()
               openModal('benchmarkUpload')
-            }}
-            onSaveKnowledgeBase={() => void handleSaveKnowledgeBase()}
-            onGenerateDescription={() => void handleGenerateDescription()}
-          />
+            },
+            onSaveKnowledgeBase: () => void handleSaveKnowledgeBase(),
+            onGenerateDescription: () => void handleGenerateDescription(),
+          }}>
+            <KnowledgeWorkspace />
+          </KnowledgeProvider>
         </Splitter.Panel>
       </Splitter>
 
@@ -1230,95 +1215,88 @@ export default function KnowledgePage() {
       >
         <div className="knowledge-settings-grid">
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">知识库架构</span>
-            <input className="ant-input" value={KNOWLEDGE_ARCHITECTURE_LABEL} disabled />
+            <Typography.Text type="secondary">知识库架构</Typography.Text>
+            <Input value={KNOWLEDGE_ARCHITECTURE_LABEL} disabled />
           </div>
           <div className="studio-form-field studio-form-field-span-2">
-            <span className="ant-typography ant-typography-secondary">名称</span>
-            <input
-              className="ant-input"
+            <Typography.Text type="secondary">名称</Typography.Text>
+            <Input
               value={formState.name}
               onChange={(e) => setFormState((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="知识库名称"
             />
           </div>
           <div className="studio-form-field studio-form-field-span-2">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="ant-typography ant-typography-secondary">描述</span>
-              <button
-                className="ant-btn ant-btn-sm"
+            <Flex justify="space-between" align="center">
+              <Typography.Text type="secondary">描述</Typography.Text>
+              <Button
+                size="small"
                 disabled={!formState.name.trim() || loading.generatingDescription}
+                loading={loading.generatingDescription}
                 onClick={() => void handleGenerateDescription()}
               >
                 AI 生成描述
-              </button>
-            </div>
-            <textarea
-              className="ant-input"
+              </Button>
+            </Flex>
+            <Input.TextArea
               rows={4}
               value={formState.description}
               onChange={(e) => setFormState((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="知识库描述"
             />
           </div>
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">Embedding 模型</span>
-            <select
-              className="ant-select ant-select-show-search"
-              value={formState.embedBindingName || ''}
-              onChange={(e) => setFormState((prev) => ({ ...prev, embedBindingName: e.target.value }))}
-            >
-              {embeddingBindingOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            <Typography.Text type="secondary">Embedding 模型</Typography.Text>
+            <Select
+              value={formState.embedBindingName || undefined}
+              onChange={(value) => setFormState((prev) => ({ ...prev, embedBindingName: value }))}
+              options={embeddingBindingOptions}
+              placeholder="选择 Embedding 模型"
+              showSearch
+              optionFilterProp="label"
+              style={{ width: '100%' }}
+            />
           </div>
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">LLM 模型</span>
-            <select
-              className="ant-select ant-select-show-search"
-              value={formState.llmBindingName || ''}
-              onChange={(e) => setFormState((prev) => ({ ...prev, llmBindingName: e.target.value }))}
-            >
-              {llmBindingOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            <Typography.Text type="secondary">LLM 模型</Typography.Text>
+            <Select
+              value={formState.llmBindingName || undefined}
+              onChange={(value) => setFormState((prev) => ({ ...prev, llmBindingName: value }))}
+              options={llmBindingOptions}
+              placeholder="选择 LLM 模型"
+              showSearch
+              optionFilterProp="label"
+              style={{ width: '100%' }}
+            />
           </div>
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">语言</span>
-            <select
-              className="ant-select"
+            <Typography.Text type="secondary">语言</Typography.Text>
+            <Select
               value={formState.language}
-              onChange={(e) => setFormState((prev) => ({ ...prev, language: e.target.value }))}
-            >
-              {LANGUAGE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+              onChange={(value) => setFormState((prev) => ({ ...prev, language: value }))}
+              options={LANGUAGE_OPTIONS}
+              style={{ width: '100%' }}
+            />
           </div>
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">分块策略</span>
-            <select
-              className="ant-select"
+            <Typography.Text type="secondary">分块策略</Typography.Text>
+            <Select
               value={formState.chunkPresetId}
-              onChange={(e) => setFormState((prev) => ({ ...prev, chunkPresetId: e.target.value }))}
-            >
-              {CHUNK_PRESET_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+              onChange={(value) => setFormState((prev) => ({ ...prev, chunkPresetId: value }))}
+              options={CHUNK_PRESET_OPTIONS}
+              style={{ width: '100%' }}
+            />
           </div>
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">自动生成问题</span>
-            <input
-              type="checkbox"
+            <Typography.Text type="secondary">自动生成问题</Typography.Text>
+            <Switch
               checked={formState.autoGenerateQuestions}
-              onChange={(e) => setFormState((prev) => ({ ...prev, autoGenerateQuestions: e.target.checked }))}
+              onChange={(checked) => setFormState((prev) => ({ ...prev, autoGenerateQuestions: checked }))}
             />
           </div>
           <div className="studio-form-field studio-form-field-span-2">
-            <span className="ant-typography ant-typography-secondary">QA 分隔符</span>
-            <input
-              className="ant-input"
+            <Typography.Text type="secondary">QA 分隔符</Typography.Text>
+            <Input
               placeholder="QA 分隔符"
               value={formState.qaSeparator}
               onChange={(e) => setFormState((prev) => ({ ...prev, qaSeparator: e.target.value }))}
@@ -1335,22 +1313,19 @@ export default function KnowledgePage() {
         okText="创建"
       >
         <Space direction="vertical" style={{ width: '100%' }}>
-          <input
-            className="ant-input"
+          <Input
             placeholder="名称"
             value={folderForm.name}
             onChange={(e) => setFolderForm((prev) => ({ ...prev, name: e.target.value }))}
           />
-          <select
-            className="ant-select"
-            value={folderForm.parentId || ''}
-            onChange={(e) => setFolderForm((prev) => ({ ...prev, parentId: e.target.value || null }))}
-          >
-            <option value="">根目录</option>
-            {folderOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          <Select
+            value={folderForm.parentId || undefined}
+            onChange={(value) => setFolderForm((prev) => ({ ...prev, parentId: value || null }))}
+            options={[{ value: '', label: '根目录' }, ...folderOptions]}
+            placeholder="选择父目录"
+            style={{ width: '100%' }}
+            allowClear
+          />
         </Space>
       </Modal>
 
@@ -1371,22 +1346,19 @@ export default function KnowledgePage() {
         okText="保存"
       >
         <Space direction="vertical" style={{ width: '100%' }}>
-          <input
-            className="ant-input"
+          <Input
             value={moveForm.targetName}
             onChange={(e) => setMoveForm((prev) => ({ ...prev, targetName: e.target.value }))}
             placeholder="新的名称"
           />
-          <select
-            className="ant-select"
-            value={moveForm.targetParentId || ''}
-            onChange={(e) => setMoveForm((prev) => ({ ...prev, targetParentId: e.target.value || null }))}
-          >
-            <option value="">根目录</option>
-            {folderOptions.filter((item) => item.value !== selectedFiles[0]?.fileId).map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          <Select
+            value={moveForm.targetParentId || undefined}
+            onChange={(value) => setMoveForm((prev) => ({ ...prev, targetParentId: value || null }))}
+            options={[{ value: '', label: '根目录' }, ...folderOptions.filter((item) => item.value !== selectedFiles[0]?.fileId)]}
+            placeholder="选择目标目录"
+            style={{ width: '100%' }}
+            allowClear
+          />
         </Space>
       </Modal>
 
@@ -1399,43 +1371,37 @@ export default function KnowledgePage() {
       >
         <div className="knowledge-settings-grid">
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">分块策略</span>
-            <select
-              className="ant-select"
+            <Typography.Text type="secondary">分块策略</Typography.Text>
+            <Select
               value={indexConfig.chunkPresetId}
-              onChange={(e) => setIndexConfig((prev) => ({ ...prev, chunkPresetId: e.target.value }))}
-            >
-              {CHUNK_PRESET_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+              onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkPresetId: value }))}
+              options={CHUNK_PRESET_OPTIONS}
+              style={{ width: '100%' }}
+            />
           </div>
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">Chunk Size</span>
-            <input
-              type="number"
-              className="ant-input"
+            <Typography.Text type="secondary">Chunk Size</Typography.Text>
+            <InputNumber
               min={200}
               max={8000}
               value={indexConfig.chunkSize}
-              onChange={(e) => setIndexConfig((prev) => ({ ...prev, chunkSize: Number(e.target.value || 1000) }))}
+              onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkSize: Number(value || 1000) }))}
+              style={{ width: '100%' }}
             />
           </div>
           <div className="studio-form-field">
-            <span className="ant-typography ant-typography-secondary">Chunk Overlap</span>
-            <input
-              type="number"
-              className="ant-input"
+            <Typography.Text type="secondary">Chunk Overlap</Typography.Text>
+            <InputNumber
               min={0}
               max={4000}
               value={indexConfig.chunkOverlap}
-              onChange={(e) => setIndexConfig((prev) => ({ ...prev, chunkOverlap: Number(e.target.value || 0) }))}
+              onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkOverlap: Number(value || 0) }))}
+              style={{ width: '100%' }}
             />
           </div>
           <div className="studio-form-field studio-form-field-span-2">
-            <span className="ant-typography ant-typography-secondary">QA 分隔符</span>
-            <input
-              className="ant-input"
+            <Typography.Text type="secondary">QA 分隔符</Typography.Text>
+            <Input
               placeholder="QA 分隔符"
               value={indexConfig.qaSeparator}
               onChange={(e) => setIndexConfig((prev) => ({ ...prev, qaSeparator: e.target.value }))}
@@ -1461,42 +1427,37 @@ export default function KnowledgePage() {
                 key={option.key}
                 className={`studio-form-field ${option.type === 'boolean' ? '' : 'studio-form-field-span-2'}`}
               >
-                <span className="ant-typography ant-typography-secondary">{option.label}</span>
+                <Typography.Text type="secondary">{option.label}</Typography.Text>
                 {option.type === 'select' ? (
-                  <select
-                    className="ant-select"
+                  <Select
                     value={String(getQueryConfigValue(option.key) ?? option.default ?? '')}
-                    onChange={(e) => setQueryConfigValue(option.key, e.target.value)}
-                  >
-                    {(option.options || []).map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
+                    onChange={(value) => setQueryConfigValue(option.key, value)}
+                    options={option.options || []}
+                    style={{ width: '100%' }}
+                  />
                 ) : option.type === 'number' ? (
-                  <input
-                    type="number"
-                    className="ant-input"
+                  <InputNumber
                     min={option.min}
                     max={option.max}
                     step={option.step}
                     value={Number(getQueryConfigValue(option.key) ?? option.default ?? 0)}
-                    onChange={(e) => setQueryConfigValue(option.key, Number(e.target.value ?? option.default ?? 0))}
+                    onChange={(value) => setQueryConfigValue(option.key, Number(value ?? option.default ?? 0))}
+                    style={{ width: '100%' }}
                   />
                 ) : (
-                  <input
-                    type="checkbox"
+                  <Switch
                     checked={Boolean(getQueryConfigValue(option.key) ?? option.default ?? false)}
-                    onChange={(e) => setQueryConfigValue(option.key, e.target.checked)}
+                    onChange={(checked) => setQueryConfigValue(option.key, checked)}
                   />
                 )}
                 {option.description ? (
-                  <span className="ant-typography ant-typography-secondary" style={{ display: 'block' }}>{option.description}</span>
+                  <Typography.Text type="secondary" style={{ display: 'block' }}>{option.description}</Typography.Text>
                 ) : null}
               </div>
             ))}
           </div>
         ) : (
-          <div>当前知识库没有额外检索配置</div>
+          <Typography.Text type="secondary">当前知识库没有额外检索配置</Typography.Text>
         )}
       </Modal>
 
@@ -1512,22 +1473,20 @@ export default function KnowledgePage() {
         confirmLoading={loading.uploadingBenchmark}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
-          <input
-            className="ant-input"
+          <Input
             placeholder="基准名称"
             value={benchmarkUploadForm.name}
             onChange={(e) => setBenchmarkUploadForm((prev) => ({ ...prev, name: e.target.value }))}
           />
-          <textarea
-            className="ant-input"
+          <Input.TextArea
             rows={3}
             placeholder="基准描述"
             value={benchmarkUploadForm.description}
             onChange={(e) => setBenchmarkUploadForm((prev) => ({ ...prev, description: e.target.value }))}
           />
-          <button className="ant-btn" onClick={() => benchmarkUploadInputRef.current?.click()}>
+          <Button onClick={() => benchmarkUploadInputRef.current?.click()}>
             {benchmarkUploadForm.file ? `已选择：${benchmarkUploadForm.file.name}` : '选择 JSONL 文件'}
-          </button>
+          </Button>
           <input
             ref={benchmarkUploadInputRef}
             type="file"
@@ -1547,28 +1506,25 @@ export default function KnowledgePage() {
         confirmLoading={loading.generatingBenchmark}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
-          <input
-            className="ant-input"
+          <Input
             placeholder="基准名称"
             value={benchmarkGenerateForm.name}
             onChange={(e) => setBenchmarkGenerateForm((prev) => ({ ...prev, name: e.target.value }))}
           />
-          <textarea
-            className="ant-input"
+          <Input.TextArea
             rows={3}
             placeholder="基准描述"
             value={benchmarkGenerateForm.description}
             onChange={(e) => setBenchmarkGenerateForm((prev) => ({ ...prev, description: e.target.value }))}
           />
           <Space.Compact style={{ width: '100%' }}>
-            <button className="ant-btn" disabled>题目数</button>
-            <input
-              type="number"
-              className="ant-input"
+            <Button disabled>题目数</Button>
+            <InputNumber
               min={1}
               max={50}
               value={benchmarkGenerateForm.count}
-              onChange={(e) => setBenchmarkGenerateForm((prev) => ({ ...prev, count: Number(e.target.value || 10) }))}
+              onChange={(value) => setBenchmarkGenerateForm((prev) => ({ ...prev, count: Number(value || 10) }))}
+              style={{ flex: 1 }}
             />
           </Space.Compact>
         </Space>
@@ -1609,5 +1565,6 @@ export default function KnowledgePage() {
         onClose={() => closeModal('fileDetail')}
       />
     </Flex>
+    </ErrorBoundary>
   )
 }

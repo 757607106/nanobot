@@ -69,10 +69,20 @@ export default function RunsPage() {
     return () => window.clearInterval(timer)
   }, [selectedRun, selectedRunId])
 
-  async function loadRuns() {
+  async function loadRuns(filters?: { agentId?: string }) {
     try {
       setLoadingRuns(true)
-      const payload = await api.getRuns({ limit: 80 })
+      const queryParams = new URLSearchParams(window.location.search)
+      const urlAgentId = queryParams.get('agentId')
+      
+      const agentId = filters !== undefined && 'agentId' in filters 
+        ? filters.agentId 
+        : (urlAgentId || undefined)
+      
+      const payload = await api.getRuns({ 
+        limit: 80,
+        agentId 
+      })
       setRuns(payload.items)
       setError(null)
     } catch (loadError) {

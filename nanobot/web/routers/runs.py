@@ -50,17 +50,23 @@ def list_runs(
     thread_id: str | None = Query(default=None, alias="threadId"),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> JSONResponse:
-    items = _runs_service(request).list_runs(
-        status=status,
-        kind=kind,
-        agent_id=agent_id,
-        session_key=session_key,
-        parent_run_id=parent_run_id,
-        root_run_id=root_run_id,
-        thread_id=thread_id,
-        limit=limit,
-    )
-    return _json_response(200, _ok({"items": items, "total": len(items)}))
+    try:
+        items = _runs_service(request).list_runs(
+            status=status,
+            kind=kind,
+            agent_id=agent_id,
+            session_key=session_key,
+            parent_run_id=parent_run_id,
+            root_run_id=root_run_id,
+            thread_id=thread_id,
+            limit=limit,
+        )
+        return _json_response(200, _ok({"items": items, "total": len(items)}))
+    except Exception as e:
+        import traceback
+        with open("/tmp/nanobot_run_error.txt", "w") as f:
+            f.write(traceback.format_exc())
+        return _json_response(200, {"success": False, "error": str(e), "traceback": traceback.format_exc()})
 
 
 @router.post("/api/v1/runs/artifacts/retention/sweep")

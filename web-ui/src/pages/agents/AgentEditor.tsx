@@ -123,160 +123,175 @@ export default function AgentEditor({
   }
 
   return (
-    <Flex vertical gap={6}>
-      <SectionCard title="基本信息">
-        <div
-          style={{
-            display: 'grid',
-            gap: 16,
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          }}
-        >
-          <FormField label="名称">
-            <Input
-              value={form.name}
-              onChange={(event) => onUpdateForm('name', event.target.value)}
-              placeholder="员工名称"
-              aria-label="名称"
-            />
-          </FormField>
-
-          <FormField label="标签">
-            <Input
-              value={form.tags.join(', ')}
-              onChange={(event) => onUpdateForm('tags', parseTags(event.target.value))}
-              placeholder="tag1, tag2"
-              aria-label="标签"
-            />
-          </FormField>
-
-          <FormField label="模型绑定">
-            <Select
-              value={form.binding}
-              onChange={updateBinding}
-              options={[{ value: '', label: '跟随默认绑定' }, ...agentBindingOptions]}
-              aria-label="模型绑定"
-              style={{ width: '100%' }}
-            />
-          </FormField>
-
-          <FormField label="职责说明" fullWidth>
-            <Input.TextArea
-              value={form.description}
-              onChange={(event) => onUpdateForm('description', event.target.value)}
-              rows={4}
-              aria-label="职责说明"
-            />
-          </FormField>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="角色说明与规则">
-        <Flex vertical gap={6}>
-          <FormField label="角色说明">
-            <Input.TextArea
-              value={form.systemPrompt}
-              onChange={(event) => onUpdateForm('systemPrompt', event.target.value)}
-              rows={12}
-              aria-label="角色说明"
-              style={{ minHeight: 200, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
-            />
-          </FormField>
-
-          <FormField label="工作规则">
-            <Input.TextArea
-              value={form.rulesText}
-              onChange={(event) => onUpdateForm('rulesText', event.target.value)}
-              rows={6}
-              aria-label="工作规则"
-            />
-          </FormField>
-        </Flex>
-      </SectionCard>
-
-      <SectionCard title="运行设置">
-        <Flex vertical gap={6}>
-
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+      gap: 24,
+      alignItems: 'start'
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <SectionCard title="核心设定">
           <div
             style={{
               display: 'grid',
               gap: 16,
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gridTemplateColumns: '1fr',
             }}
           >
-            {!form.binding ? (
-              <>
-                <FormField label="备用供应商">
-                  <Select
-                    value={form.provider}
-                    onChange={updateProvider}
-                    options={[{ value: '', label: '自动推断' }, ...agentProviderOptions]}
-                    aria-label="备用供应商"
-                    style={{ width: '100%' }}
-                  />
-                </FormField>
+            <FormField label="员工名称">
+              <Input
+                value={form.name}
+                onChange={(event) => onUpdateForm('name', event.target.value)}
+                placeholder="例如：全栈工程师"
+                aria-label="名称"
+                style={{ borderRadius: 12, padding: '8px 12px' }}
+              />
+            </FormField>
 
-                <FormField label="备用模型">
-                  <Input
-                    value={form.model}
-                    onChange={(event) => onUpdateForm('model', event.target.value)}
-                    aria-label="备用模型"
-                  />
-                </FormField>
-              </>
-            ) : null}
+            <FormField label="能力标签">
+              <Input
+                value={form.tags.join(', ')}
+                onChange={(event) => onUpdateForm('tags', parseTags(event.target.value))}
+                placeholder="Python, React, API设计"
+                aria-label="标签"
+                style={{ borderRadius: 12, padding: '8px 12px' }}
+              />
+            </FormField>
 
-            <FormField label="记忆范围">
+            <FormField label="模型引擎配置">
               <Select
-                value={form.memoryScope}
-                onChange={(value) => onUpdateForm('memoryScope', value)}
-                options={memoryScopeOptions}
-                aria-label="记忆范围"
+                value={form.binding}
+                onChange={updateBinding}
+                options={[{ value: '', label: '跟随系统默认引擎' }, ...agentBindingOptions]}
+                aria-label="模型绑定"
                 style={{ width: '100%' }}
               />
             </FormField>
 
-            <FormField label="产物归档天数">
-              <Input
-                value={form.artifactArchiveAfterDays}
-                onChange={(event) => onUpdateForm('artifactArchiveAfterDays', event.target.value)}
-                placeholder="归档天数"
-                aria-label="产物归档天数"
+            <FormField label="身份背景与职责" fullWidth>
+              <Input.TextArea
+                value={form.description}
+                onChange={(event) => onUpdateForm('description', event.target.value)}
+                rows={3}
+                placeholder="用一两句话描述该员工的擅长领域"
+                aria-label="职责说明"
+                style={{ borderRadius: 12 }}
               />
             </FormField>
+          </div>
+        </SectionCard>
 
-            <FormField label="产物删除天数">
-              <Input
-                value={form.artifactDeleteAfterDays}
-                onChange={(event) => onUpdateForm('artifactDeleteAfterDays', event.target.value)}
-                placeholder="删除天数"
-                aria-label="产物删除天数"
-              />
-            </FormField>
+        <SectionCard title="引擎高级参数">
+          <Flex vertical gap={16}>
+            <div
+              style={{
+                display: 'grid',
+                gap: 16,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              }}
+            >
+              {!form.binding ? (
+                <>
+                  <FormField label="备用接口 (Provider)">
+                    <Select
+                      value={form.provider}
+                      onChange={updateProvider}
+                      options={[{ value: '', label: '自动推断' }, ...agentProviderOptions]}
+                      aria-label="备用供应商"
+                      style={{ width: '100%' }}
+                    />
+                  </FormField>
 
-            <DevOnly>
-              <FormField label="运行后端">
-                <Input
-                  value={form.backend}
-                  onChange={(event) => onUpdateForm('backend', event.target.value)}
-                  placeholder="运行后端"
-                  aria-label="运行后端"
+                  <FormField label="模型版本 (Model)">
+                    <Input
+                      value={form.model}
+                      onChange={(event) => onUpdateForm('model', event.target.value)}
+                      aria-label="备用模型"
+                      style={{ borderRadius: 12 }}
+                    />
+                  </FormField>
+                </>
+              ) : null}
+
+              <FormField label="自动记忆提取">
+                <Select
+                  value={form.memoryScope}
+                  onChange={(value) => onUpdateForm('memoryScope', value)}
+                  options={memoryScopeOptions}
+                  aria-label="记忆范围"
+                  style={{ width: '100%' }}
                 />
               </FormField>
-            </DevOnly>
-          </div>
 
-          {modelSuggestions.length > 0 && !form.binding ? (
-            <Space wrap size={[8, 8]}>
-              {modelSuggestions.slice(0, 6).map((modelName) => (
-                <Button key={modelName} size="small" onClick={() => onUpdateForm('model', modelName)}>
-                  {modelName}
-                </Button>
-              ))}
-            </Space>
-          ) : null}
-        </Flex>
-      </SectionCard>
-    </Flex>
+              <FormField label="产物归档天数">
+                <Input
+                  value={form.artifactArchiveAfterDays}
+                  onChange={(event) => onUpdateForm('artifactArchiveAfterDays', event.target.value)}
+                  placeholder="永久保存"
+                  aria-label="产物归档天数"
+                  style={{ borderRadius: 12 }}
+                />
+              </FormField>
+              
+              <DevOnly>
+                <FormField label="运行后端">
+                  <Input
+                    value={form.backend}
+                    onChange={(event) => onUpdateForm('backend', event.target.value)}
+                    placeholder="默认路由"
+                    aria-label="运行后端"
+                    style={{ borderRadius: 12 }}
+                  />
+                </FormField>
+              </DevOnly>
+            </div>
+
+            {modelSuggestions.length > 0 && !form.binding ? (
+              <Space wrap size={[8, 8]}>
+                {modelSuggestions.slice(0, 6).map((modelName) => (
+                  <Button key={modelName} size="small" onClick={() => onUpdateForm('model', modelName)} style={{ borderRadius: 12 }}>
+                    {modelName}
+                  </Button>
+                ))}
+              </Space>
+            ) : null}
+          </Flex>
+        </SectionCard>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <SectionCard title="核心逻辑指令 (System Prompts)">
+          <Flex vertical gap={24}>
+            <FormField label="System Directives (核心指令)">
+              <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
+                <Input.TextArea
+                  value={form.systemPrompt}
+                  onChange={(event) => onUpdateForm('systemPrompt', event.target.value)}
+                  rows={14}
+                  aria-label="角色说明"
+                  style={{ 
+                    borderRadius: 12, border: 'none', background: 'transparent',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    lineHeight: 1.6
+                  }}
+                />
+              </div>
+            </FormField>
+
+            <FormField label="Behavioral Guidelines (行为守则)">
+              <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
+                <Input.TextArea
+                  value={form.rulesText}
+                  onChange={(event) => onUpdateForm('rulesText', event.target.value)}
+                  rows={8}
+                  aria-label="工作规则"
+                  style={{ borderRadius: 12, border: 'none', background: 'transparent', lineHeight: 1.6 }}
+                />
+              </div>
+            </FormField>
+          </Flex>
+        </SectionCard>
+      </div>
+    </div>
   )
 }

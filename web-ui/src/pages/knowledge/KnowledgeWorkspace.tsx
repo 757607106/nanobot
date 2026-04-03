@@ -7,8 +7,10 @@ import {
   Empty,
   Flex,
   Input,
+  Select,
   Space,
   Spin,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -35,7 +37,7 @@ import SectionCard from '../../components/console/SectionCard'
 import MetricCard from '../../components/console/MetricCard'
 import { formatDateTimeZh } from '../../locale'
 import { api } from '../../api'
-import { KNOWLEDGE_ARCHITECTURE_LABEL, canDeleteKnowledgeFile, canParseKnowledgeFile, canIndexKnowledgeFile, statusColor, statusLabel } from './shared'
+import { KNOWLEDGE_ARCHITECTURE_LABEL, canDeleteKnowledgeFile, canParseKnowledgeFile, canIndexKnowledgeFile, statusColor, statusLabel, LANGUAGE_OPTIONS, CHUNK_PRESET_OPTIONS } from './shared'
 import type {
   KnowledgeBaseDefinition,
   KnowledgeDocument,
@@ -51,6 +53,7 @@ import type {
   KnowledgeEvaluationResult,
   KnowledgeQueryParamSchema,
 } from '../../types'
+import { useKnowledge } from './KnowledgeContext'
 import { KnowledgeQueryTab } from './KnowledgeQueryTab'
 const KnowledgeGraphTab = lazy(() => import('./KnowledgeGraphTab').then(mod => ({ default: mod.KnowledgeGraphTab })))
 import { KnowledgeMindmapTab } from './KnowledgeMindmapTab'
@@ -58,169 +61,83 @@ import { KnowledgeEvaluationTab } from './KnowledgeEvaluationTab'
 import { KnowledgeBenchmarksTab } from './KnowledgeBenchmarksTab'
 import type { ColumnsType } from 'antd/es/table'
 
-interface KnowledgeWorkspaceProps {
-  currentKb: KnowledgeBaseDefinition | null
-  filesState: KnowledgeFileListResponse
-  jobs: KnowledgeIngestJob[]
-  loading: {
-    detail: boolean
-    query: boolean
-    graph: boolean
-    mindmap: boolean
-    benchmark: boolean
-    runningEvaluation: boolean
-    parsing: boolean
-    indexing: boolean
-    saving: boolean
-    generatingDescription: boolean
-  }
-  selectedFileIds: string[]
-  fileSearch: string
-  queryParams: KnowledgeQueryParams
-  queryText: string
-  queryResult: KnowledgeRetrieveResult | null
-  resultView: 'formatted' | 'raw'
-  sampleQuestions: string[]
-  queryParamSchema: KnowledgeQueryParamSchema | null
-  mindmap: KnowledgeMindmapNode | null
-  graphData: KnowledgeGraphData | null
-  graphStats: KnowledgeGraphStats | null
-  graphConfig: { label: string; depth: number; maxNodes: number }
-  benchmarks: KnowledgeBenchmark[]
-  evaluationHistory: KnowledgeEvaluationSummary[]
-  evaluationResult: KnowledgeEvaluationResult | null
-  evaluationErrorOnly: boolean
-  selectedBenchmarkId: string | null
-  visibleFiles: KnowledgeDocument[]
-  pendingParseCount: number
-  pendingIndexCount: number
-  pendingParseFileIds: string[]
-  pendingIndexFileIds: string[]
-  hasSelectedFiles: boolean
-  canParseSelectedDocuments: boolean
-  canIndexSelectedDocuments: boolean
-  hasSingleSelection: boolean
-  parseableSelectedFileIds: string[]
-  indexableSelectedFileIds: string[]
-  selectedDocumentIds: string[]
-  selectedFiles: KnowledgeDocument[]
-  folderOptions: { label: string; value: string }[]
-  benchmarkColumns: ColumnsType<KnowledgeBenchmark>
-  evaluationColumns: ColumnsType<KnowledgeEvaluationSummary>
-  formState: {
-    name: string
-    description: string
-    enabled: boolean
-  }
-  indexConfig: {
-    chunkSize: number
-    chunkOverlap: number
-    chunkPresetId: string
-    qaSeparator: string
-  }
-  onActiveTabChange: (tab: string) => void
-  onFileSearchChange: (value: string) => void
-  onSelectedFileIdsChange: (ids: string[]) => void
-  onRefreshDetail: () => void
-  onDeleteKnowledgeBase: () => void
-  onOpenModal: (name: 'folder' | 'url' | 'move' | 'indexConfig' | 'queryConfig' | 'benchmarkGenerate' | 'benchmarkUpload') => void
-  onSetUrlParentId: (id: string | null) => void
-  onParseSelected: (fileIds?: string[], notifySkipped?: boolean) => void
-  onIndexSelected: (fileIds?: string[], notifySkipped?: boolean) => void
-  onDeleteSelectedFiles: (files?: KnowledgeDocument[]) => void
-  onOpenMoveModal: () => void
-  onOpenFileDetail: (file: KnowledgeDocument) => void
-  onQueryParamsChange: (params: KnowledgeQueryParams) => void
-  onQueryTextChange: (text: string) => void
-  onQuery: (query?: string) => void
-  onResultViewChange: (view: 'formatted' | 'raw') => void
-  onSaveQueryDefaults: () => void
-  onGenerateQuestions: () => void
-  onGraphConfigChange: (config: { label?: string; depth?: number; maxNodes?: number }) => void
-  onReloadGraph: () => void
-  onRegenerateMindmap: () => void
-  onBenchmarkChange: (id: string | null) => void
-  onRunEvaluation: () => void
-  onRefreshBenchmarks: () => void
-  onViewEvaluationResult: (taskId: string, errorOnly?: boolean) => void
-  onDeleteEvaluationResult: (taskId: string) => void
-  onOpenBenchmarkGenerate: () => void
-  onOpenBenchmarkUpload: () => void
-  onSaveKnowledgeBase: () => void
-  onGenerateDescription: () => void
-}
-
-export default function KnowledgeWorkspace({
-  currentKb,
-  filesState,
-  jobs,
-  loading,
-  selectedFileIds,
-  fileSearch,
-  queryParams,
-  queryText,
-  queryResult,
-  resultView,
-  queryParamSchema,
-  mindmap,
-  graphData,
-  graphStats,
-  graphConfig,
-  benchmarks,
-  evaluationHistory,
-  evaluationResult,
-  evaluationErrorOnly,
-  selectedBenchmarkId,
-  visibleFiles,
-  pendingParseCount,
-  pendingIndexCount,
-  pendingParseFileIds,
-  pendingIndexFileIds,
-  hasSelectedFiles,
-  canParseSelectedDocuments,
-  canIndexSelectedDocuments,
-  hasSingleSelection,
-  parseableSelectedFileIds,
-  indexableSelectedFileIds,
-  selectedDocumentIds,
-  selectedFiles,
-  folderOptions,
-  benchmarkColumns,
-  evaluationColumns,
-  formState,
-  indexConfig,
-  onActiveTabChange,
-  onFileSearchChange,
-  onSelectedFileIdsChange,
-  onRefreshDetail,
-  onDeleteKnowledgeBase,
-  onOpenModal,
-  onSetUrlParentId,
-  onParseSelected,
-  onIndexSelected,
-  onDeleteSelectedFiles,
-  onOpenMoveModal,
-  onOpenFileDetail,
-  onQueryParamsChange,
-  onQueryTextChange,
-  onQuery,
-  onResultViewChange,
-  onSaveQueryDefaults,
-  onGraphConfigChange,
-  onReloadGraph,
-  onRegenerateMindmap,
-  onBenchmarkChange,
-  onRunEvaluation,
-  onRefreshBenchmarks,
-  onViewEvaluationResult,
-  onDeleteEvaluationResult,
-  onOpenBenchmarkGenerate,
-  onOpenBenchmarkUpload,
-  onSaveKnowledgeBase,
-  onGenerateDescription,
-}: KnowledgeWorkspaceProps) {
+export default function KnowledgeWorkspace() {
+  const ctx = useKnowledge()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('files')
+
+  const {
+    currentKb,
+    filesState,
+    jobs,
+    loading,
+    selectedFileIds,
+    fileSearch,
+    queryParams,
+    queryText,
+    queryResult,
+    resultView,
+    queryParamSchema,
+    mindmap,
+    graphData,
+    graphStats,
+    graphConfig,
+    benchmarks,
+    evaluationHistory,
+    evaluationResult,
+    evaluationErrorOnly,
+    selectedBenchmarkId,
+    visibleFiles,
+    pendingParseCount,
+    pendingIndexCount,
+    pendingParseFileIds,
+    pendingIndexFileIds,
+    hasSelectedFiles,
+    canParseSelectedDocuments,
+    canIndexSelectedDocuments,
+    hasSingleSelection,
+    parseableSelectedFileIds,
+    indexableSelectedFileIds,
+    selectedDocumentIds,
+    selectedFiles,
+    folderOptions,
+    benchmarkColumns,
+    evaluationColumns,
+    formState,
+    indexConfig,
+    embeddingBindingOptions,
+    llmBindingOptions,
+    onFormStateChange,
+    onActiveTabChange,
+    onFileSearchChange,
+    onSelectedFileIdsChange,
+    onRefreshDetail,
+    onDeleteKnowledgeBase,
+    onOpenModal,
+    onSetUrlParentId,
+    onParseSelected,
+    onIndexSelected,
+    onDeleteSelectedFiles,
+    onOpenMoveModal,
+    onOpenFileDetail,
+    onQueryParamsChange,
+    onQueryTextChange,
+    onQuery,
+    onResultViewChange,
+    onSaveQueryDefaults,
+    onGraphConfigChange,
+    onReloadGraph,
+    onRegenerateMindmap,
+    onBenchmarkChange,
+    onRunEvaluation,
+    onRefreshBenchmarks,
+    onViewEvaluationResult,
+    onDeleteEvaluationResult,
+    onOpenBenchmarkGenerate,
+    onOpenBenchmarkUpload,
+    onSaveKnowledgeBase,
+    onGenerateDescription,
+  } = ctx
 
   const selectableVisibleFileIds = useMemo(
     () => visibleFiles
@@ -646,14 +563,90 @@ export default function KnowledgeWorkspace({
           )}
         >
           <div className="knowledge-settings-grid">
-            {/* Settings content will be rendered by parent */}
             <div className="studio-form-field">
               <Typography.Text type="secondary">知识库名称</Typography.Text>
-              <Typography.Text strong>{formState.name}</Typography.Text>
+              <Input
+                value={formState.name}
+                onChange={(e) => onFormStateChange({ ...formState, name: e.target.value })}
+                placeholder="名称"
+              />
+            </div>
+            <div className="studio-form-field">
+              <Typography.Text type="secondary">启用状态</Typography.Text>
+              <div style={{ marginTop: 6 }}>
+                <Switch
+                  checked={formState.enabled}
+                  onChange={(checked) => onFormStateChange({ ...formState, enabled: checked })}
+                />
+              </div>
             </div>
             <div className="studio-form-field studio-form-field-span-2">
               <Typography.Text type="secondary">描述</Typography.Text>
-              <Typography.Text>{formState.description || '暂无描述'}</Typography.Text>
+              <Input.TextArea
+                rows={4}
+                value={formState.description}
+                onChange={(e) => onFormStateChange({ ...formState, description: e.target.value })}
+                placeholder="知识库描述"
+              />
+            </div>
+            <div className="studio-form-field">
+              <Typography.Text type="secondary">Embedding 模型</Typography.Text>
+              <Select
+                value={formState.embedBindingName || undefined}
+                onChange={(value) => onFormStateChange({ ...formState, embedBindingName: value })}
+                options={embeddingBindingOptions}
+                placeholder="选择 Embedding 模型"
+                showSearch
+                optionFilterProp="label"
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="studio-form-field">
+              <Typography.Text type="secondary">LLM 模型</Typography.Text>
+              <Select
+                value={formState.llmBindingName || undefined}
+                onChange={(value) => onFormStateChange({ ...formState, llmBindingName: value })}
+                options={llmBindingOptions}
+                placeholder="选择 LLM 模型"
+                showSearch
+                optionFilterProp="label"
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="studio-form-field">
+              <Typography.Text type="secondary">语言</Typography.Text>
+              <Select
+                value={formState.language}
+                onChange={(value) => onFormStateChange({ ...formState, language: value })}
+                options={LANGUAGE_OPTIONS}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="studio-form-field">
+              <Typography.Text type="secondary">分块策略</Typography.Text>
+              <Select
+                value={formState.chunkPresetId}
+                onChange={(value) => onFormStateChange({ ...formState, chunkPresetId: value })}
+                options={CHUNK_PRESET_OPTIONS}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="studio-form-field">
+              <Typography.Text type="secondary">自动生成问题</Typography.Text>
+              <div style={{ marginTop: 6 }}>
+                <Switch
+                  checked={formState.autoGenerateQuestions}
+                  onChange={(checked) => onFormStateChange({ ...formState, autoGenerateQuestions: checked })}
+                />
+              </div>
+            </div>
+            <div className="studio-form-field">
+              <Typography.Text type="secondary">QA 分隔符</Typography.Text>
+              <Input
+                placeholder="QA 分隔符"
+                value={formState.qaSeparator}
+                onChange={(e) => onFormStateChange({ ...formState, qaSeparator: e.target.value })}
+              />
             </div>
           </div>
         </SectionCard>
@@ -721,36 +714,11 @@ export default function KnowledgeWorkspace({
               ))}
             </Space>
 
-            <div className="resource-summary-strip">
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">索引完成度</span>
-                <span className="resource-summary-value" style={{ fontSize: 18 }}>
-                  {filesState.stats.fileCount > 0
-                    ? `${Math.round((filesState.stats.indexedCount / Math.max(filesState.stats.fileCount, 1)) * 100)}%`
-                    : '0%'}
-                </span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">待处理文件</span>
-                <span className="resource-summary-value">{pendingParseCount + pendingIndexCount}</span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">评测资产</span>
-                <span className="resource-summary-value">{benchmarks.length}</span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">当前模式</span>
-                <span className="resource-summary-value" style={{ fontSize: 18 }}>
-                  {queryParams.mode || 'hybrid'}
-                </span>
-              </div>
-            </div>
-
             <div className="knowledge-metrics-grid">
-              <MetricCard label="文件数" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
+              <MetricCard label="文件记录" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
               <MetricCard label="已索引" value={filesState.stats.indexedCount} icon={<BranchesOutlined />} tone="success" />
-              <MetricCard label="文件夹" value={filesState.stats.folderCount} icon={<FolderOpenOutlined />} tone="warning" />
-              <MetricCard label="异常" value={filesState.stats.errorCount} icon={<DeleteOutlined />} tone={filesState.stats.errorCount > 0 ? 'error' : 'neutral'} />
+              <MetricCard label="待处理" value={pendingParseCount + pendingIndexCount} icon={<RetweetOutlined />} tone={pendingParseCount + pendingIndexCount > 0 ? 'warning' : 'neutral'} />
+              <MetricCard label="异常" value={filesState.stats.errorCount} icon={<FileSearchOutlined />} tone={filesState.stats.errorCount > 0 ? 'error' : 'neutral'} />
             </div>
           </Flex>
         </SectionCard>

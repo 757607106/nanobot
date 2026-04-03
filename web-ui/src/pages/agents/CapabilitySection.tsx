@@ -24,7 +24,11 @@ export default function CapabilitySection({
       {items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
       ) : (
-        <div className="resource-rail-grid">
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: 16
+        }}>
           {items.map((item) => {
             const selected = selectedKeys.includes(item.key)
 
@@ -40,25 +44,35 @@ export default function CapabilitySection({
                     onToggle(item.key)
                   }
                 }}
-                className={`resource-rail-item ${selected ? 'is-selected' : ''}`}
+                style={{
+                  cursor: 'pointer',
+                  padding: 20,
+                  borderRadius: 16,
+                  border: `1px solid ${selected ? 'var(--nb-token-color-primary)' : 'var(--nb-card-border)'}`,
+                  background: selected ? 'var(--nb-token-color-primary-bg)' : 'var(--nb-surface)',
+                  boxShadow: selected ? 'var(--nb-shadow-soft)' : 'none',
+                  transition: 'all 0.2s ease',
+                  position: 'relative'
+                }}
               >
-                <Flex justify="space-between" align="flex-start" gap={8}>
+                <Flex justify="space-between" align="flex-start" gap={12}>
                   <Flex vertical gap={6} style={{ minWidth: 0, flex: '1 1 auto' }}>
                     <Space wrap size={[8, 8]}>
-                      <Typography.Text strong className="resource-rail-item-title">{item.name}</Typography.Text>
-                      {item.isOrphan ? <Tag color="warning">遗留引用</Tag> : null}
-                      {selected ? <Tag color="processing">已挂载</Tag> : null}
+                      <Typography.Text strong style={{ fontSize: 15, color: selected ? 'var(--nb-token-color-primary-text)' : 'inherit' }}>
+                        {item.name}
+                      </Typography.Text>
+                      {item.isOrphan ? <Tag color="warning" style={{ borderRadius: 12, border: 'none' }}>遗留引用</Tag> : null}
                     </Space>
                     <Typography.Paragraph
                       type="secondary"
-                      className="resource-rail-item-description"
+                      style={{ margin: 0, fontSize: 13, lineHeight: 1.5, opacity: selected ? 0.8 : 1 }}
                       ellipsis={{ rows: 2, tooltip: item.description }}
                     >
                       {item.description}
                     </Typography.Paragraph>
                   </Flex>
 
-                  <div onClick={(event) => event.stopPropagation()}>
+                  <div onClick={(event) => event.stopPropagation()} style={{ flexShrink: 0 }}>
                     <Checkbox checked={selected} onChange={() => onToggle(item.key)} />
                   </div>
                 </Flex>

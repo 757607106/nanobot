@@ -1,11 +1,12 @@
-import { useMemo } from 'react'
-import { Alert, Button, Card, Space, Table, Tag, Typography } from 'antd'
+import { useMemo, useEffect, useState } from 'react'
+import { Alert, Button, Card, Space, Table, Tag, Typography, Select } from 'antd'
 import type { TableProps } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PageHeader from '../../components/console/PageHeader'
 import { formatDateTimeZh } from '../../locale'
-import type { AgentRunSummary } from '../../types'
+import type { AgentRunSummary, AgentDefinition } from '../../types'
+import { api } from '../../api'
 import { statusBadgeStatus, statusLabel } from './utils'
 
 const { Text } = Typography
@@ -14,13 +15,20 @@ interface RunsListProps {
   runs: AgentRunSummary[]
   loading: boolean
   error: string | null
-  onRefresh: () => void
+  onRefresh: (filters?: { agentId?: string }) => void
 }
 
 export default function RunsList({ runs, loading, error, onRefresh }: RunsListProps) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const threadFilter = (searchParams.get('threadId') || '').trim()
+  const agentFilter = (searchParams.get('agentId') || '').trim()
+
+  const [agents, setAgents] = useState<AgentDefinition[]>([])
+  
+  useEffect(() => {
+    api.getAgents().then(setAgents).catch(() => {})
+  }, [])
 
   const activeCount = useMemo(
     () => runs.filter((item) => ['queued', 'running', 'cancel_requested'].includes(item.status)).length,
@@ -31,6 +39,17 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
     () => runs.filter((item) => item.status === 'failed').length,
     [runs]
   )
+
+  const handleAgentChange = (value: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (value) {
+      next.set('agentId', value)
+    } else {
+      next.delete('agentId')
+    }
+    setSearchParams(next)
+    onRefresh({ agentId: value || undefined })
+  }
 
   const columns: TableProps<AgentRunSummary>['columns'] = [
     {
@@ -101,9 +120,19 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
           ? `加载失败：${error}`
           : `${activeCount > 0 ? `运行中: ${activeCount}  ` : ''}${failedCount > 0 ? `失败: ${failedCount}` : ''}`}
         actions={
-          <Button icon={<ReloadOutlined />} onClick={onRefresh} loading={loading}>
-            刷新列表
-          </Button>
+          <Space>
+            <Select
+              allowClear
+              placeholder="通过 Agent 筛选"
+              value={agentFilter || undefined}
+              onChange={handleAgentChange}
+              style={{ width: 200 }}
+              options={agents.map(a => ({ value: a.agentId, label: a.name }))}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => onRefresh({ agentId: agentFilter || undefined })} loading={loading}>
+              刷新列表
+            </Button>
+          </Space>
         }
       />
 

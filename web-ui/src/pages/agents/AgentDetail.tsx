@@ -19,7 +19,6 @@ import type {
 import AgentEditor from './AgentEditor'
 import CapabilitiesTab from './CapabilitiesTab'
 import MemoryTab from './MemoryTab'
-import TestTab from './TestTab'
 import type { AgentFormState, AgentTab } from './types'
 import { memoryScopeLabel } from './utils'
 
@@ -150,27 +149,105 @@ export default function AgentDetail({
     )
   }
 
+  const avatarColors = [
+    'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%)',
+    'linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)',
+    'linear-gradient(120deg, #d4fc79 0%, #96e6a1 100%)',
+    'linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)',
+    'linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)',
+    'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)',
+  ]
+
+  const getGradientForId = (id: string | undefined) => {
+    if (!id) return avatarColors[0]
+    let hash = 0
+    for (let i = 0; i < id.length; i++) {
+      hash = id.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return avatarColors[Math.abs(hash) % avatarColors.length]
+  }
+
+  const getInitials = (name: string | undefined) => {
+    return (name || '').trim().substring(0, 2).toUpperCase() || 'A'
+  }
+
   return (
-    <Flex vertical gap={6}>
-      <PageHeader
-        title={detailTitle}
-        subtitle={detailSubtitle}
-        actions={(
-          <Flex gap={8} align="center" wrap="wrap">
+    <Flex vertical gap={24} style={{ padding: '32px max(24px, calc((100% - var(--nb-content-max-width)) / 2))', minHeight: '100vh', background: 'var(--nb-body-bg)' }}>
+      
+      <div style={{
+        background: 'var(--nb-surface-strong)',
+        borderRadius: 24,
+        padding: '32px',
+        border: '1px solid var(--nb-card-border)',
+        boxShadow: 'var(--nb-shadow-soft)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Subtle background glow */}
+        <div style={{
+          position: 'absolute',
+          top: -100,
+          right: -100,
+          width: 300,
+          height: 300,
+          background: getGradientForId(currentAgent?.agentId),
+          filter: 'blur(80px)',
+          opacity: 0.3,
+          zIndex: 0,
+          borderRadius: '50%'
+        }} />
+
+        <Flex justify="space-between" align="flex-start" style={{ position: 'relative', zIndex: 1 }}>
+          <Flex gap={24} align="center">
+            <div style={{
+              width: 80,
+              height: 80,
+              borderRadius: 24,
+              background: getGradientForId(currentAgent?.agentId),
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'rgba(0,0,0,0.6)',
+              fontWeight: 800,
+              fontSize: 28,
+              boxShadow: 'inset 0 4px 8px rgba(255,255,255,0.5), 0 10px 25px -5px rgba(0,0,0,0.1)',
+              flexShrink: 0
+            }}>
+              {getInitials(detailTitle)}
+            </div>
+            <Flex vertical gap={8}>
+              <Typography.Title level={2} style={{ margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 12 }}>
+                {detailTitle}
+                {!isCreateRoute && (
+                  <Tag color={form.enabled ? 'processing' : 'default'} style={{ borderRadius: 12, padding: '2px 10px', fontSize: 13, border: 'none', margin: 0 }}>
+                    {form.enabled ? 'Active' : 'Inactive'}
+                  </Tag>
+                )}
+              </Typography.Title>
+              <Typography.Text type="secondary" style={{ fontSize: 15, maxWidth: 600 }}>
+                {detailSubtitle || '设定该数字员工的基础行为准则与响应模型'}
+              </Typography.Text>
+            </Flex>
+          </Flex>
+
+          <Flex gap={12} align="center" wrap="wrap">
+            <Button onClick={() => navigate('/studio/agents')} style={{ borderRadius: 12 }}>
+              返回大厅
+            </Button>
             <Switch
               checked={form.enabled}
               onChange={(checked) => onUpdateForm('enabled', checked)}
               checkedChildren="ON"
               unCheckedChildren="OFF"
             />
-            <Space wrap size={[8, 8]}>
-              {currentAgent ? (
-                <Button icon={<MessageOutlined />} onClick={() => navigate(`/studio/agents/${currentAgent.agentId}/chat`)}>
-                  会话
+            {currentAgent && (
+              <>
+                <Button type="dashed" icon={<MessageOutlined />} onClick={() => navigate(`/studio/agents/${currentAgent.agentId}/chat`)} style={{ borderRadius: 12 }}>
+                  发起会话
                 </Button>
-              ) : null}
-              <Button icon={<ReloadOutlined />} onClick={onRefreshWorkspace} />
-              {currentAgent ? (
                 <Dropdown
                   menu={{
                     items: [
@@ -185,7 +262,7 @@ export default function AgentDetail({
                       {
                         key: 'delete',
                         icon: <DeleteOutlined />,
-                        label: '删除员工',
+                        label: '辞退员工 (删除)',
                         danger: true,
                         onClick: () => setDeleteDialogOpen(true),
                       },
@@ -193,87 +270,76 @@ export default function AgentDetail({
                   }}
                   placement="bottomRight"
                 >
-                  <Button icon={<EllipsisOutlined />} />
+                  <Button icon={<EllipsisOutlined />} style={{ borderRadius: 12 }} />
                 </Dropdown>
-              ) : null}
-              <Button type="primary" icon={<SaveOutlined />} onClick={onSave} loading={saving}>
-                保存
-              </Button>
-            </Space>
+              </>
+            )}
+            <Button type="primary" icon={<SaveOutlined />} onClick={onSave} loading={saving} style={{ borderRadius: 12, fontWeight: 500 }}>
+              保存变更
+            </Button>
           </Flex>
-        )}
-      />
+        </Flex>
 
-      {error ? <Alert type="error" message={error} showIcon /> : null}
+        {error ? <Alert type="error" message={error} showIcon style={{ borderRadius: 12 }} /> : null}
+      </div>
 
-      <Tabs
-        activeKey={detailTab}
-        onChange={(value) => setDetailTab(value as AgentTab)}
-        size="small"
-        tabBarGutter={18}
-        items={[
-          {
-            key: 'basic',
-            label: '基本配置',
-            children: (
-              <AgentEditor
-                form={form}
-                currentAgent={currentAgent}
-                globalConfig={globalConfig}
-                globalConfigMeta={globalConfigMeta}
-                onUpdateForm={onUpdateForm}
-              />
-            ),
-          },
-          {
-            key: 'capabilities',
-            label: `能力配置 (${capabilityCount})`,
-            children: (
-              <CapabilitiesTab
-                form={form}
-                validTools={validTools}
-                skills={skills}
-                mcpServers={mcpServers}
-                knowledgeBases={knowledgeBases}
-                onToggleArrayItem={onToggleArrayItem}
-              />
-            ),
-          },
-          {
-            key: 'memory',
-            label: `记忆治理 (${pendingMemoryCount})`,
-            children: (
-              <MemoryTab
-                currentAgent={currentAgent}
-                agentMemory={agentMemory}
-                agentMemoryCandidates={agentMemoryCandidates}
-                formMemoryScope={form.memoryScope}
-                loadingMemory={loadingMemory}
-                memoryError={memoryError}
-                onRefresh={onRefreshMemory}
-                onSaveMemory={onSaveMemory}
-                onCreateCandidate={onCreateCandidate}
-                onApplyCandidate={onApplyCandidate}
-                onRejectCandidate={onRejectCandidate}
-              />
-            ),
-          },
-          {
-            key: 'test',
-            label: `运行日志 (${recentRuns.length})`,
-            children: (
-              <TestTab
-                currentAgent={currentAgent}
-                recentRuns={recentRuns}
-                loadingRuns={loadingRuns}
-                runError={runError}
-                onTestRun={onTestRun}
-                onRefreshRuns={onRefreshRuns}
-              />
-            ),
-          },
-        ]}
-      />
+      <div style={{ padding: '0 8px' }}>
+        <Tabs
+          activeKey={detailTab}
+          onChange={(value) => setDetailTab(value as AgentTab)}
+          type="line"
+          size="large"
+          tabBarStyle={{ marginBottom: 24 }}
+          items={[
+            {
+              key: 'basic',
+              label: <span style={{ fontWeight: 500, fontSize: 15 }}>核心配置 (Engine & Rules)</span>,
+              children: (
+                <AgentEditor
+                  form={form}
+                  currentAgent={currentAgent}
+                  globalConfig={globalConfig}
+                  globalConfigMeta={globalConfigMeta}
+                  onUpdateForm={onUpdateForm}
+                />
+              ),
+            },
+            {
+              key: 'capabilities',
+              label: <span style={{ fontWeight: 500, fontSize: 15 }}>外接能力 ({capabilityCount})</span>,
+              children: (
+                <CapabilitiesTab
+                  form={form}
+                  validTools={validTools}
+                  skills={skills}
+                  mcpServers={mcpServers}
+                  knowledgeBases={knowledgeBases}
+                  onToggleArrayItem={onToggleArrayItem}
+                />
+              ),
+            },
+            {
+              key: 'memory',
+              label: <span style={{ fontWeight: 500, fontSize: 15 }}>记忆治理 ({pendingMemoryCount})</span>,
+              children: (
+                <MemoryTab
+                  currentAgent={currentAgent}
+                  agentMemory={agentMemory}
+                  agentMemoryCandidates={agentMemoryCandidates}
+                  formMemoryScope={form.memoryScope}
+                  loadingMemory={loadingMemory}
+                  memoryError={memoryError}
+                  onRefresh={onRefreshMemory}
+                  onSaveMemory={onSaveMemory}
+                  onCreateCandidate={onCreateCandidate}
+                  onApplyCandidate={onApplyCandidate}
+                  onRejectCandidate={onRejectCandidate}
+                />
+              ),
+            },
+          ]}
+        />
+      </div>
 
       <Modal
         open={deleteDialogOpen}
