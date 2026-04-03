@@ -1644,7 +1644,7 @@ function makeAgents() {
       instanceId: 'instance-default',
       name: 'Support Lead',
       description: 'Coordinate support response quality.',
-      systemPrompt: 'Coordinate the support team.',
+      systemPrompt: 'Coordinate the support issues.',
       rules: ['Route work clearly'],
       model: 'deepseek/deepseek-chat',
       backend: null,
@@ -1660,10 +1660,10 @@ function makeAgents() {
       updatedAt: '2026-03-14T09:00:00Z',
     },
     {
-      agentId: 'support-member',
+      agentId: 'support-bot',
       tenantId: 'default',
       instanceId: 'instance-default',
-      name: 'Support Member',
+      name: 'Support Bot',
       description: 'Prepare support-ready drafts.',
       systemPrompt: 'Handle assigned support tasks.',
       rules: ['Ground answers in knowledge'],
@@ -1951,7 +1951,7 @@ describe('web app smoke pages', () => {
       channelName: 'discord',
       channelChatId: '*',
       targetType: 'agent',
-      targetId: 'support-member',
+      targetId: 'support-bot',
       priority: 0,
       enabled: true,
       metadata: {},
@@ -3410,7 +3410,7 @@ describe('web app smoke pages', () => {
       channelName: 'qq',
       channelChatId: '*',
       targetType: 'agent',
-      targetId: 'support-member',
+      targetId: 'support-bot',
       priority: 0,
       enabled: true,
       metadata: {},
@@ -3435,7 +3435,7 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText('请重新选择 AI 员工')).toBeInTheDocument()
 
     const selects = screen.getAllByRole('combobox')
-    fireEvent.change(selects[1], { target: { value: 'support-member' } })
+    fireEvent.change(selects[1], { target: { value: 'support-bot' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => {
@@ -3443,7 +3443,7 @@ describe('web app smoke pages', () => {
         'cb-test-legacy',
         expect.objectContaining({
           targetType: 'agent',
-          targetId: 'support-member',
+          targetId: 'support-bot',
         }),
       )
     })

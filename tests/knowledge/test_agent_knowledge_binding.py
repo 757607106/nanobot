@@ -196,12 +196,12 @@ def test_prepare_agent_execution_middleware_chain_preserves_prompt_order() -> No
             "knowledgeBindingIds": ["kb-ops"],
         },
         task="How do we restart nanobot safely?",
-        additional_prompt_sections=["# Team Context\nEscalate carefully."],
+        additional_prompt_sections=["# Extra Context\nEscalate carefully."],
     )
 
     prompt = prepared.system_prompt_override or ""
-    assert prompt.index("You are an ops agent.") < prompt.index("# Team Context")
-    assert prompt.index("# Team Context") < prompt.index("# Knowledge Policy")
+    assert prompt.index("You are an ops agent.") < prompt.index("# Extra Context")
+    assert prompt.index("# Extra Context") < prompt.index("# Knowledge Policy")
     assert prompt.index("# Knowledge Policy") < prompt.index("# Retrieved Knowledge")
     assert len(prepared.runtime_prompt_fragments) == 2
     assert prepared.runtime_prompt_fragments[0].startswith("# Knowledge Policy")

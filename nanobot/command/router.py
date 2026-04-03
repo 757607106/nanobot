@@ -31,8 +31,8 @@ class CommandRouter:
       1. *priority* — exact-match commands handled before the dispatch lock
          (e.g. /stop, /restart).
       2. *exact* — exact-match commands handled inside the dispatch lock.
-      3. *prefix* — longest-prefix-first match (e.g. "/team ").
-      4. *interceptors* — fallback predicates (e.g. team-mode active check).
+      3. *prefix* — longest-prefix-first match (e.g. "/help ").
+      4. *interceptors* — fallback predicates (e.g. auth-mode active check).
     """
 
     def __init__(self) -> None:

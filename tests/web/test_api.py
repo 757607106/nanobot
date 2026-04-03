@@ -681,7 +681,7 @@ def test_web_api_mcp_registry_index_uses_existing_config_and_cached_metadata(
                         str(tmp_path / "workspace"),
                     ],
                 },
-                "team-docs": {
+                "corp-docs": {
                     "type": "streamableHttp",
                     "url": "https://mcp.example.com/tools",
                     "enabled": False,
@@ -745,9 +745,9 @@ def test_web_api_mcp_registry_index_uses_existing_config_and_cached_metadata(
     assert items["filesystem"]["sourceKind"] == "repository"
     assert items["filesystem"]["repoUrl"] == "https://github.com/modelcontextprotocol/servers"
 
-    assert items["team-docs"]["enabled"] is False
-    assert items["team-docs"]["transport"] == "streamableHttp"
-    assert items["team-docs"]["status"] == "disabled"
+    assert items["corp-docs"]["enabled"] is False
+    assert items["corp-docs"]["transport"] == "streamableHttp"
+    assert items["corp-docs"]["status"] == "disabled"
 
     assert items["broken-local"]["enabled"] is True
     assert items["broken-local"]["transport"] == "stdio"
