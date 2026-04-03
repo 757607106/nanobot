@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
-import { Alert, Button, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { Button, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography } from 'antd'
 import SectionCard from '../../components/console/SectionCard'
 import DevOnly from '../../components/DevOnly'
-import { useDevMode } from '../../devMode'
 import {
   getAllModelBindings,
   getPreferredProvider,
@@ -32,9 +30,6 @@ export default function AgentEditor({
   globalConfigMeta,
   onUpdateForm,
 }: AgentEditorProps) {
-  const navigate = useNavigate()
-  const { devMode } = useDevMode()
-
   const agentProviderOptions = useMemo(
     () => getProviderOptions(globalConfigMeta),
     [globalConfigMeta],
@@ -78,6 +73,24 @@ export default function AgentEditor({
     return getModelSuggestions(provider, form.model || null)
   }, [availableBindings, form.binding, form.model, form.provider, globalConfig, globalConfigMeta])
 
+  const promptLength = form.systemPrompt.trim().length
+  const ruleCount = useMemo(
+    () => form.rulesText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .length,
+    [form.rulesText],
+  )
+
+  const retentionSummary = form.artifactArchiveAfterDays.trim()
+    ? `${form.artifactArchiveAfterDays.trim()} 天后归档`
+    : '未设置归档'
+
+  const routeSummary = form.binding
+    ? form.binding
+    : [form.provider, form.model].filter(Boolean).join(' / ') || '自动推断'
+
   function updateProvider(value: string) {
     const nextProvider = value
     const currentModel = form.model.trim()
@@ -110,20 +123,7 @@ export default function AgentEditor({
 
   return (
     <Flex vertical gap={6}>
-      <SectionCard title="运行画像">
-        <Descriptions
-          size="small"
-          column={{ xs: 1, sm: 2, lg: 4 }}
-          items={[
-            { key: 'binding', label: '模型绑定', children: form.binding || '跟随默认绑定' },
-            { key: 'provider', label: '供应商', children: selectedBindingProviderLabel || form.provider || '自动推断' },
-            { key: 'memory', label: '记忆范围', children: memoryScopeLabel(form.memoryScope) },
-            { key: 'knowledge', label: '知识库', children: `${form.knowledgeBindingIds.length} 个已绑定` },
-          ]}
-        />
-      </SectionCard>
-
-      <SectionCard title="身份与职责">
+      <SectionCard title="基本信息">
         <div
           style={{
             display: 'grid',
@@ -164,17 +164,6 @@ export default function AgentEditor({
             />
           </div>
 
-          <div style={{ minWidth: 0 }}>
-            <Typography.Text type="secondary">启用状态</Typography.Text>
-            <div style={{ marginTop: 12 }}>
-              <Switch
-                checked={form.enabled}
-                onChange={(checked) => onUpdateForm('enabled', checked)}
-                checkedChildren="启用"
-                unCheckedChildren="停用"
-              />
-            </div>
-          </div>
 
           <div style={{ minWidth: 0, gridColumn: '1 / -1' }}>
             <Typography.Text type="secondary">职责说明</Typography.Text>
@@ -198,7 +187,7 @@ export default function AgentEditor({
               onChange={(event) => onUpdateForm('systemPrompt', event.target.value)}
               rows={12}
               aria-label="角色说明"
-              style={{ marginTop: 8 }}
+              style={{ marginTop: 8, minHeight: 200, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
             />
           </div>
 
@@ -215,13 +204,8 @@ export default function AgentEditor({
         </Flex>
       </SectionCard>
 
-      <SectionCard title="运行策略">
+      <SectionCard title="运行设置">
         <Flex vertical gap={6}>
-          <Alert
-            type="info"
-            showIcon
-            message="选中模型绑定后，下方供应商与模型只作为补充信息保留，不再作为主配置入口。"
-          />
 
           <div
             style={{

@@ -15,6 +15,7 @@ import {
   Switch,
   Tag,
   Typography,
+  Upload,
 } from 'antd'
 import {
   DeleteOutlined,
@@ -474,32 +475,26 @@ export function KnowledgeUploadModal({
 
           {mode === 'file' ? (
             <Card size="small" className="knowledge-upload-card" title="文件上传">
-              <div
-                className="knowledge-upload-dropzone"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={handleDrop}
-                onClick={() => inputRef.current?.click()}
-                role="button"
-                tabIndex={0}
+              <Upload.Dragger
+                multiple
+                beforeUpload={(file, fileList) => {
+                  appendFiles(fileList as unknown as File[])
+                  return false // Prevent automatic upload
+                }}
+                showUploadList={false}
+                fileList={[]}
+                style={{ padding: '32px 0', background: 'var(--nb-card-subtle-bg)', border: '1px dashed var(--nb-card-subtle-border)', borderRadius: 12 }}
               >
-                <UploadOutlined />
-                <div>
-                  <Text strong>点击或拖拽文件到这里</Text>
-                  <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    支持多文件上传，文件会在提交时写入知识库。
-                  </Paragraph>
-                </div>
-                <Button type="primary" icon={<UploadOutlined />}>
-                  选择文件
-                </Button>
-                <input
-                  ref={inputRef}
-                  type="file"
-                  multiple
-                  style={{ display: 'none' }}
-                  onChange={handleFileInputChange}
-                />
-              </div>
+                <p className="ant-upload-drag-icon">
+                  <UploadOutlined style={{ fontSize: 36, color: 'var(--nb-accent)' }} />
+                </p>
+                <p className="ant-upload-text" style={{ fontSize: 16, fontWeight: 500, margin: '8px 0' }}>
+                  点击或拖拽文件到此区域
+                </p>
+                <p className="ant-upload-hint" style={{ fontSize: 13, color: 'var(--nb-text-secondary)', padding: '0 24px' }}>
+                  支持单次上传多份文件，文件会在点击底部的“上传到知识库”时被批量处理写入。
+                </p>
+              </Upload.Dragger>
 
               {selectedFiles.length > 0 ? (
                 <List

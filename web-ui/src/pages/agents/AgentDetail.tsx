@@ -1,5 +1,5 @@
 import { CopyOutlined, DeleteOutlined, MessageOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Flex, Modal, Space, Spin, Tabs, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Flex, Modal, Space, Spin, Tabs, Tag, Switch, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '../../components/console/PageHeader'
@@ -106,6 +106,8 @@ export default function AgentDetail({
   const navigate = useNavigate()
   const [detailTab, setDetailTab] = useState<AgentTab>('basic')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const capabilityCount = form.toolAllowlist.length + form.skillIds.length + form.mcpServerIds.length + form.knowledgeBindingIds.length
+  const pendingMemoryCount = agentMemoryCandidates.filter((item) => item.status === 'proposed').length
 
   const isDetailPending = Boolean(selectedAgentId) && !isCreateRoute && (
     loadingDetail || detailRequestAgentId !== selectedAgentId
@@ -116,12 +118,12 @@ export default function AgentDetail({
     : currentAgent?.name || form.name || '选择数字员工'
 
   const detailSubtitle = isCreateRoute
-    ? '创建新的员工配置。'
-    : currentAgent?.description || form.description || '维护角色说明、能力绑定、记忆治理和试运行。'
+    ? undefined
+    : currentAgent?.description || form.description || undefined
 
   if (isDetailPending) {
     return (
-      <SectionCard title="员工工作台">
+      <SectionCard title="员工详情">
         <Flex justify="center" align="center" style={{ minHeight: 220 }}>
           <Spin tip="正在加载员工详情..." />
         </Flex>
@@ -131,11 +133,11 @@ export default function AgentDetail({
 
   if (!isCreateRoute && !selectedAgentId) {
     return (
-      <SectionCard title="员工工作台">
+      <SectionCard title="员工详情">
         <Flex justify="center" align="center" style={{ minHeight: 260 }}>
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="选中一个员工后，右侧会展开配置、能力、记忆和试运行。"
+            description="未选择员工"
           >
             <Space wrap size={[8, 8]}>
               <Button type="primary" onClick={() => navigate('/studio/agents/new')}>
@@ -154,41 +156,41 @@ export default function AgentDetail({
         title={detailTitle}
         subtitle={detailSubtitle}
         actions={(
-          <>
-            {currentAgent ? (
-              <Button icon={<MessageOutlined />} onClick={() => navigate(`/studio/agents/${currentAgent.agentId}/chat`)}>
-                会话
+          <Flex gap={8} align="center" wrap="wrap">
+            <Switch
+              checked={form.enabled}
+              onChange={(checked) => onUpdateForm('enabled', checked)}
+              checkedChildren="ON"
+              unCheckedChildren="OFF"
+            />
+            <Space wrap size={[8, 8]}>
+              {currentAgent ? (
+                <Button icon={<MessageOutlined />} onClick={() => navigate(`/studio/agents/${currentAgent.agentId}/chat`)}>
+                  会话
+                </Button>
+              ) : null}
+              <Button icon={<ReloadOutlined />} onClick={onRefreshWorkspace}>
+                刷新
               </Button>
-            ) : null}
-            <Button icon={<ReloadOutlined />} onClick={onRefreshWorkspace}>
-              刷新
-            </Button>
-            {currentAgent ? (
-              <Button icon={<CopyOutlined />} onClick={onCopy} loading={copying}>
-                复制
+              {currentAgent ? (
+                <Button icon={<CopyOutlined />} onClick={onCopy} loading={copying}>
+                  复制
+                </Button>
+              ) : null}
+              {currentAgent ? (
+                <Button danger icon={<DeleteOutlined />} onClick={() => setDeleteDialogOpen(true)}>
+                  删除
+                </Button>
+              ) : null}
+              <Button type="primary" icon={<SaveOutlined />} onClick={onSave} loading={saving}>
+                保存
               </Button>
-            ) : null}
-            {currentAgent ? (
-              <Button danger icon={<DeleteOutlined />} onClick={() => setDeleteDialogOpen(true)}>
-                删除
-              </Button>
-            ) : null}
-            <Button type="primary" icon={<SaveOutlined />} onClick={onSave} loading={saving}>
-              保存
-            </Button>
-          </>
+            </Space>
+          </Flex>
         )}
       />
 
       {error ? <Alert type="error" message={error} showIcon /> : null}
-
-      <Space wrap size={[8, 8]}>
-        <Tag color={form.enabled ? 'success' : 'default'}>{form.enabled ? '已启用' : '已停用'}</Tag>
-        {currentAgent?.sourceTemplateName ? <Tag color="purple">{`模板 · ${currentAgent.sourceTemplateName}`}</Tag> : null}
-        <Tag color="blue">{form.binding ? `绑定 · ${form.binding}` : '跟随默认绑定'}</Tag>
-        <Tag>{memoryScopeLabel(form.memoryScope)}</Tag>
-        {currentAgent ? <Tag>{currentAgent.agentId}</Tag> : <Tag>未保存</Tag>}
-      </Space>
 
       <Tabs
         activeKey={detailTab}
@@ -198,7 +200,7 @@ export default function AgentDetail({
         items={[
           {
             key: 'basic',
-            label: '基本信息',
+            label: '基本配置',
             children: (
               <AgentEditor
                 form={form}
@@ -211,7 +213,7 @@ export default function AgentDetail({
           },
           {
             key: 'capabilities',
-            label: '能力配置',
+            label: `能力配置 (${capabilityCount})`,
             children: (
               <CapabilitiesTab
                 form={form}
@@ -225,7 +227,7 @@ export default function AgentDetail({
           },
           {
             key: 'memory',
-            label: '记忆治理',
+            label: `记忆治理 (${pendingMemoryCount})`,
             children: (
               <MemoryTab
                 currentAgent={currentAgent}
@@ -244,7 +246,7 @@ export default function AgentDetail({
           },
           {
             key: 'test',
-            label: '试运行',
+            label: `运行日志 (${recentRuns.length})`,
             children: (
               <TestTab
                 currentAgent={currentAgent}

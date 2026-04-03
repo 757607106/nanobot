@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import {
   Alert,
   Badge,
@@ -52,7 +52,7 @@ import type {
   KnowledgeQueryParamSchema,
 } from '../../types'
 import { KnowledgeQueryTab } from './KnowledgeQueryTab'
-import { KnowledgeGraphTab } from './KnowledgeGraphTab'
+const KnowledgeGraphTab = lazy(() => import('./KnowledgeGraphTab').then(mod => ({ default: mod.KnowledgeGraphTab })))
 import { KnowledgeMindmapTab } from './KnowledgeMindmapTab'
 import { KnowledgeEvaluationTab } from './KnowledgeEvaluationTab'
 import { KnowledgeBenchmarksTab } from './KnowledgeBenchmarksTab'
@@ -161,7 +161,6 @@ export default function KnowledgeWorkspace({
   queryText,
   queryResult,
   resultView,
-  sampleQuestions,
   queryParamSchema,
   mindmap,
   graphData,
@@ -207,7 +206,6 @@ export default function KnowledgeWorkspace({
   onQuery,
   onResultViewChange,
   onSaveQueryDefaults,
-  onGenerateQuestions,
   onGraphConfigChange,
   onReloadGraph,
   onRegenerateMindmap,
@@ -258,7 +256,12 @@ export default function KnowledgeWorkspace({
       dataIndex: 'status',
       key: 'status',
       width: 120,
-      render: (status) => <Tag color={statusColor(status)}>{statusLabel(status)}</Tag>,
+      render: (status) => (
+        <Badge
+          status={statusColor(status) as 'success' | 'processing' | 'default' | 'error' | 'warning'}
+          text={statusLabel(status)}
+        />
+      ),
     },
     {
       title: '类型',
@@ -332,11 +335,27 @@ export default function KnowledgeWorkspace({
 
   const renderFilesTab = () => (
     <Flex vertical gap={16}>
-      <SectionCard
-        title="文件目录"
-        description="统一在表格里完成筛选、解析、建索引和轻量操作。"
-      >
+      <SectionCard title="文件目录">
         <Flex vertical gap={16}>
+          <div className="resource-summary-strip">
+            <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
+              <span className="resource-summary-label">当前选择</span>
+              <span className="resource-summary-value">{selectedFileIds.length}</span>
+            </div>
+            <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
+              <span className="resource-summary-label">待解析</span>
+              <span className="resource-summary-value">{pendingParseCount}</span>
+            </div>
+            <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
+              <span className="resource-summary-label">待索引</span>
+              <span className="resource-summary-value">{pendingIndexCount}</span>
+            </div>
+            <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
+              <span className="resource-summary-label">最近任务</span>
+              <span className="resource-summary-value">{jobs.length}</span>
+            </div>
+          </div>
+
           <Flex justify="space-between" align="center" gap={12} wrap="wrap">
             <div className="knowledge-file-search">
               <Input
@@ -520,7 +539,6 @@ export default function KnowledgeWorkspace({
           queryLoading={loading.query}
           queryResult={queryResult}
           resultView={resultView}
-          sampleQuestions={sampleQuestions}
           onModeChange={(value) =>
             onQueryParamsChange({
               ...queryParams,
@@ -531,7 +549,6 @@ export default function KnowledgeWorkspace({
           onChunkTopKChange={(value) => onQueryParamsChange({ ...queryParams, chunkTopK: value })}
           onEnableRerankChange={(checked) => onQueryParamsChange({ ...queryParams, enableRerank: checked })}
           onSaveQueryDefaults={onSaveQueryDefaults}
-          onGenerateQuestions={onGenerateQuestions}
           onOpenQueryConfig={() => onOpenModal('queryConfig')}
           onResultViewChange={onResultViewChange}
           onQueryTextChange={onQueryTextChange}
@@ -543,18 +560,20 @@ export default function KnowledgeWorkspace({
       key: 'graph',
       label: '知识图谱',
       children: (
-        <KnowledgeGraphTab
-          graphLabel={graphConfig.label}
-          graphDepth={graphConfig.depth}
-          graphMaxNodes={graphConfig.maxNodes}
-          graphLoading={loading.graph}
-          graphData={graphData}
-          graphStats={graphStats}
-          onGraphLabelChange={(value) => onGraphConfigChange({ label: value })}
-          onGraphDepthChange={(value) => onGraphConfigChange({ depth: value })}
-          onGraphMaxNodesChange={(value) => onGraphConfigChange({ maxNodes: value })}
-          onReload={onReloadGraph}
-        />
+        <Suspense fallback={<Flex justify="center" align="center" style={{ minHeight: 400 }}><Spin tip="正在加载知识图谱引擎..." /></Flex>}>
+          <KnowledgeGraphTab
+            graphLabel={graphConfig.label}
+            graphDepth={graphConfig.depth}
+            graphMaxNodes={graphConfig.maxNodes}
+            graphLoading={loading.graph}
+            graphData={graphData}
+            graphStats={graphStats}
+            onGraphLabelChange={(value) => onGraphConfigChange({ label: value })}
+            onGraphDepthChange={(value) => onGraphConfigChange({ depth: value })}
+            onGraphMaxNodesChange={(value) => onGraphConfigChange({ maxNodes: value })}
+            onReload={onReloadGraph}
+          />
+        </Suspense>
       ),
     },
     {
@@ -570,7 +589,7 @@ export default function KnowledgeWorkspace({
     },
     {
       key: 'evaluation',
-      label: 'RAG 评测',
+      label: `RAG 评测 (${evaluationHistory.length})`,
       children: (
         <KnowledgeEvaluationTab
           selectedBenchmarkId={selectedBenchmarkId}
@@ -587,7 +606,7 @@ export default function KnowledgeWorkspace({
     },
     {
       key: 'benchmarks',
-      label: '评估基准',
+      label: `评估基准 (${benchmarks.length})`,
       children: (
         <KnowledgeBenchmarksTab
           benchmarkLoading={loading.benchmark}
@@ -645,7 +664,7 @@ export default function KnowledgeWorkspace({
   if (loading.detail) {
     return (
       <div className="knowledge-workspace-container">
-        <SectionCard title="知识库工作区" description="正在加载知识库详情。">
+        <SectionCard title="知识库">
           <Flex justify="center" align="center" className="knowledge-workspace-loading">
             <Spin tip="正在加载知识库详情..." />
           </Flex>
@@ -657,10 +676,10 @@ export default function KnowledgeWorkspace({
   if (!currentKb) {
     return (
       <div className="knowledge-workspace-container">
-        <SectionCard title="知识库工作区" description="先从左侧打开一个知识库。">
+        <SectionCard title="知识库">
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="选择知识库后，这里会展开文件、检索、图谱和评测。"
+            description="未选择知识库"
           >
             <Button
               type="primary"
@@ -683,7 +702,6 @@ export default function KnowledgeWorkspace({
           description={currentKb.description || '当前知识库还没有描述。'}
           action={(
             <Space wrap size={[8, 8]}>
-              <Button onClick={() => startTransition(() => navigate('/knowledge'))}>返回列表</Button>
               <Button icon={<ReloadOutlined />} onClick={onRefreshDetail}>
                 刷新
               </Button>
@@ -703,6 +721,31 @@ export default function KnowledgeWorkspace({
               ))}
             </Space>
 
+            <div className="resource-summary-strip">
+              <div className="resource-summary-tile">
+                <span className="resource-summary-label">索引完成度</span>
+                <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                  {filesState.stats.fileCount > 0
+                    ? `${Math.round((filesState.stats.indexedCount / Math.max(filesState.stats.fileCount, 1)) * 100)}%`
+                    : '0%'}
+                </span>
+              </div>
+              <div className="resource-summary-tile">
+                <span className="resource-summary-label">待处理文件</span>
+                <span className="resource-summary-value">{pendingParseCount + pendingIndexCount}</span>
+              </div>
+              <div className="resource-summary-tile">
+                <span className="resource-summary-label">评测资产</span>
+                <span className="resource-summary-value">{benchmarks.length}</span>
+              </div>
+              <div className="resource-summary-tile">
+                <span className="resource-summary-label">当前模式</span>
+                <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                  {queryParams.mode || 'hybrid'}
+                </span>
+              </div>
+            </div>
+
             <div className="knowledge-metrics-grid">
               <MetricCard label="文件数" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
               <MetricCard label="已索引" value={filesState.stats.indexedCount} icon={<BranchesOutlined />} tone="success" />
@@ -716,7 +759,7 @@ export default function KnowledgeWorkspace({
           <Alert
             type="warning"
             showIcon
-            message="当前知识库还有待处理文件，建议先完成解析和建索引，再继续做检索测试或评测。"
+            message="存在待处理文件"
             action={(
               <Space wrap size={[8, 8]}>
                 {pendingParseCount > 0 && (
@@ -742,10 +785,7 @@ export default function KnowledgeWorkspace({
           />
         )}
 
-        <SectionCard
-          title="工作区"
-          description="文件、检索、图谱、评测与设置。"
-        >
+        <SectionCard title="工作区">
           <Tabs
             activeKey={activeTab}
             onChange={handleTabChange}

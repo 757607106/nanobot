@@ -52,7 +52,7 @@ export default function MetricCard({
       }}
       styles={{
         body: {
-          padding: 'var(--nb-spacing-md)',
+          padding: '12px 16px',
         },
       }}
     >
@@ -66,8 +66,8 @@ export default function MetricCard({
         }}
       />
 
-      <Flex vertical gap={12}>
-        <Flex justify="space-between" align="center" gap={12} className="metric-card-head">
+      <Flex vertical gap={6}>
+        <Flex justify="space-between" align="center" gap={8} className="metric-card-head">
           <Typography.Text
             className="metric-card-label"
             type="secondary"
@@ -84,8 +84,8 @@ export default function MetricCard({
           {icon ? (
             <div
               style={{
-                width: 32,
-                height: 32,
+                width: 28,
+                height: 28,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -107,7 +107,7 @@ export default function MetricCard({
           valueStyle={{
             margin: 0,
             lineHeight: 1.05,
-            fontSize: 'clamp(1.45rem, 1.9vw, 1.9rem)',
+            fontSize: 'clamp(1.25rem, 1.6vw, 1.55rem)',
             fontWeight: 700,
             color: token.colorText,
             wordBreak: 'break-word',

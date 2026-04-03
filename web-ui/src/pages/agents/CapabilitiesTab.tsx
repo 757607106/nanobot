@@ -4,6 +4,7 @@ import { useDevMode } from '../../devMode'
 import type { AgentTemplateTool, InstalledSkill, KnowledgeBaseDefinition, McpServerEntry } from '../../types'
 import type { AgentFormState } from './types'
 import CapabilitySection from './CapabilitySection'
+import SectionCard from '../../components/console/SectionCard'
 
 interface CapabilitiesTabProps {
   form: AgentFormState
@@ -75,11 +76,23 @@ export default function CapabilitiesTab({
     return Array.from(map.entries()).map(([key, meta]) => ({ key, ...meta }))
   }, [form.knowledgeBindingIds, knowledgeBases])
 
+  const orphanCount = useMemo(
+    () => [toolItems, skillItems, mcpItems, knowledgeItems]
+      .flat()
+      .filter((item) => item.isOrphan)
+      .length,
+    [knowledgeItems, mcpItems, skillItems, toolItems],
+  )
+
+  const selectedCapabilityCount = form.toolAllowlist.length
+    + form.skillIds.length
+    + form.mcpServerIds.length
+    + form.knowledgeBindingIds.length
+
   return (
     <Flex vertical gap={6}>
       <CapabilitySection
         title={`工具 (${form.toolAllowlist.length})`}
-        description="只保留当前任务需要的工具。"
         items={toolItems}
         selectedKeys={form.toolAllowlist}
         onToggle={(key) => onToggleArrayItem('toolAllowlist', key)}
@@ -87,7 +100,6 @@ export default function CapabilitiesTab({
       />
       <CapabilitySection
         title={`技能 (${form.skillIds.length})`}
-        description="按复用能力选择技能。"
         items={skillItems}
         selectedKeys={form.skillIds}
         onToggle={(key) => onToggleArrayItem('skillIds', key)}
@@ -95,7 +107,6 @@ export default function CapabilitiesTab({
       />
       <CapabilitySection
         title={`${devMode ? 'MCP 服务' : '连接'} (${form.mcpServerIds.length})`}
-        description="按需暴露外部连接。"
         items={mcpItems}
         selectedKeys={form.mcpServerIds}
         onToggle={(key) => onToggleArrayItem('mcpServerIds', key)}
@@ -103,7 +114,6 @@ export default function CapabilitiesTab({
       />
       <CapabilitySection
         title={`知识库 (${form.knowledgeBindingIds.length})`}
-        description="限制可引用的知识范围。"
         items={knowledgeItems}
         selectedKeys={form.knowledgeBindingIds}
         onToggle={(key) => onToggleArrayItem('knowledgeBindingIds', key)}

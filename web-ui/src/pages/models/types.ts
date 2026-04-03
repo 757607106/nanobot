@@ -27,6 +27,8 @@ export type ProviderIconAsset = {
 export type ProviderCardItem = {
   name: string
   label: string
+  categoryLabel: string
+  description: string
   configured: boolean
   defaultProvider: boolean
   bindingsCount: number

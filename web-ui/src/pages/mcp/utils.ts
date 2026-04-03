@@ -101,6 +101,33 @@ export function parseMappingInput(raw: string, label: string, separator: '=' | '
   return parseLineMapping(raw, label, separator)
 }
 
+export function isSensitiveKey(key: string) {
+  const normalized = key.trim().toLowerCase()
+  return ['authorization', 'proxy-authorization'].includes(normalized)
+    || normalized.includes('token')
+    || normalized.includes('secret')
+    || normalized.includes('password')
+    || normalized.includes('apikey')
+    || normalized.includes('api-key')
+}
+
+export function maskSecretValue(value: string) {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) {
+    return ''
+  }
+  if (trimmed.length <= 8) {
+    return '••••••••'
+  }
+  return `${trimmed.slice(0, 4)}••••••${trimmed.slice(-4)}`
+}
+
+export function maskSensitiveMapping(input: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(input).map(([key, value]) => [key, isSensitiveKey(key) ? maskSecretValue(value) : value]),
+  )
+}
+
 export function buildServerConfig(draft: {
   type: EditableTransport
   command: string

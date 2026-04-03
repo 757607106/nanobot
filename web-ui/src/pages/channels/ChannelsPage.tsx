@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   App,
   Button,
   Card,
+  Drawer,
   Dropdown,
   Empty,
   Flex,
@@ -12,9 +13,9 @@ import {
   Input,
   InputNumber,
   Modal,
+  Progress,
   Select,
   Space,
-  Splitter,
   Switch,
   Tag,
   Typography,
@@ -22,6 +23,7 @@ import {
 } from 'antd'
 import {
   CheckCircleOutlined,
+  CloseOutlined,
   ExperimentOutlined,
   ReloadOutlined,
   SaveOutlined,
@@ -29,7 +31,6 @@ import {
   SettingOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import MetricCard from '../../components/console/MetricCard'
 import PageHeader from '../../components/console/PageHeader'
@@ -46,8 +47,6 @@ import type {
 import {
   ChannelAvatar,
   ChannelStatusTag,
-  ChannelCategoryTag,
-  getChannelStatusColor,
   getProbeStatusColor,
   getProbeCheckColor,
   parseListValue,
@@ -74,7 +73,6 @@ interface ChannelRow {
 export default function ChannelsPage() {
   const { message } = App.useApp()
   const { token } = theme.useToken()
-  const navigate = useNavigate()
   const [form] = Form.useForm()
 
   const [data, setData] = useState<ChannelListResponse | null>(null)
@@ -91,6 +89,7 @@ export default function ChannelsPage() {
   const [probeMap, setProbeMap] = useState<Record<string, ChannelProbeResult | null>>({})
 
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
 
@@ -168,6 +167,11 @@ export default function ChannelsPage() {
   const activeDetail = selectedChannel ? detailMap[selectedChannel] : null
   const activeDraft = selectedChannel ? draftMap[selectedChannel] ?? {} : {}
   const activeProbe = selectedChannel ? probeMap[selectedChannel] : null
+  const activeRequiredCount = activeChannel?.meta.primaryFields.length ?? 0
+  const activeCompletedCount = activeChannel ? activeRequiredCount - activeChannel.missingFields.length : 0
+  const configPercent = activeRequiredCount > 0
+    ? Math.round((activeCompletedCount / activeRequiredCount) * 100)
+    : 100
 
   async function loadChannels() {
     try {
@@ -175,9 +179,6 @@ export default function ChannelsPage() {
       const result = await api.getChannels()
       setData(result)
       setDeliverySettings(result.delivery)
-      if (!selectedChannel && result.items.length > 0) {
-        setSelectedChannel(result.items[0].name)
-      }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载渠道列表失败')
     } finally {
@@ -187,7 +188,6 @@ export default function ChannelsPage() {
 
   async function loadChannelDetail(channelName: string, force = false) {
     if (!force && detailMap[channelName]) return
-
     try {
       const result = await api.getChannel(channelName)
       setDetailMap((current) => ({ ...current, [channelName]: result }))
@@ -214,7 +214,6 @@ export default function ChannelsPage() {
   async function saveChannel(channelName: string) {
     const draft = draftMap[channelName]
     if (!draft) return
-
     try {
       setSaving(true)
       const result = await api.updateChannel(channelName, draft)
@@ -240,7 +239,6 @@ export default function ChannelsPage() {
   async function testChannel(channelName: string) {
     const draft = draftMap[channelName]
     if (!draft) return
-
     try {
       setTesting(true)
       const result = await api.testChannel(channelName, draft)
@@ -256,7 +254,6 @@ export default function ChannelsPage() {
   async function toggleChannel(channelName: string, enabled: boolean) {
     const detail = detailMap[channelName]
     if (!detail) return
-
     try {
       const payload = { ...detail.config, enabled }
       const result = await api.updateChannel(channelName, payload)
@@ -282,6 +279,11 @@ export default function ChannelsPage() {
       ...current,
       [channelName]: updateNestedValue(current[channelName] || {}, path, value),
     }))
+  }
+
+  function openChannelDrawer(channelName: string) {
+    setSelectedChannel(channelName)
+    setDrawerOpen(true)
   }
 
   function renderField(channelName: string, field: FieldMeta): ReactNode {
@@ -412,10 +414,9 @@ export default function ChannelsPage() {
   )
 
   return (
-    <Flex vertical gap={18} className="console-page channels-page">
+    <Flex vertical gap={18} className="page-stack">
       <PageHeader
-        title="渠道注册表"
-        subtitle="管理消息渠道接入和投递设置"
+        title="渠道接入"
         actions={
           <Space>
             <Dropdown dropdownRender={() => deliverySettingsMenu} trigger={['click']} placement="bottomRight">
@@ -443,7 +444,7 @@ export default function ChannelsPage() {
           icon={<CheckCircleOutlined style={{ fontSize: 16 }} />}
         />
         <MetricCard
-          label="已启用"
+          label="运行中"
           value={channels.filter((c) => c.enabled).length}
           tone="success"
           icon={<CheckCircleOutlined style={{ fontSize: 16 }} />}
@@ -456,97 +457,160 @@ export default function ChannelsPage() {
         />
       </div>
 
-      <Splitter className="console-workspace-splitter" style={{ minHeight: 600 }}>
-        <Splitter.Panel defaultSize={320} min={260} max={400}>
-          <SectionCard title="渠道列表">
-            <Flex vertical gap="var(--nb-spacing-md)" style={{ height: '100%' }}>
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索渠道"
-                prefix={<SearchOutlined />}
-                allowClear
-              />
-              <div style={{ flex: 1, overflow: 'auto', marginInline: -18, paddingInline: 18 }}>
-                {filteredChannels.length === 0 ? (
-                  <Empty description="没有匹配的渠道" />
-                ) : (
-                  filteredChannels.map((channel, index) => {
-                    const isSelected = selectedChannel === channel.name
-                    return (
-                      <motion.div
-                        key={channel.key}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.03 }}
-                        whileHover={{ y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setSelectedChannel(channel.name)}
-                        style={{
-                          padding: 'var(--nb-spacing-sm)',
-                          borderRadius: 'var(--nb-radius-md)',
-                          cursor: 'pointer',
-                          marginBottom: 'var(--nb-spacing-xs)',
-                          background: isSelected ? 'var(--nb-card-subtle-bg)' : 'transparent',
-                          border: `1px solid ${isSelected ? token.colorPrimary : 'transparent'}`,
-                          transition: 'all 0.2s ease',
-                        }}
-                      >
-                        <Flex justify="space-between" align="center" gap={SPACING.xs}>
-                          <Flex align="center" gap={SPACING.sm} style={{ minWidth: 0, flex: 1 }}>
-                            <ChannelAvatar channelName={channel.name} label={channel.label} />
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <Flex align="center" gap={SPACING.xs}>
-                                <Typography.Text
-                                  strong
-                                  ellipsis
-                                  style={{ fontSize: 14, flex: 1 }}
-                                >
-                                  {channel.label}
-                                </Typography.Text>
-                                {/* 状态圆点 */}
-                                <div
-                                  style={{
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: '50%',
-                                    background:
-                                      channel.status === 'enabled'
-                                        ? token.colorSuccess
-                                        : channel.status === 'configured'
-                                          ? token.colorPrimary
-                                          : channel.status === 'incomplete'
-                                            ? token.colorWarning
-                                            : token.colorTextDisabled,
-                                    flexShrink: 0,
-                                  }}
-                                />
-                              </Flex>
-                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                                {channelCategoryLabels[channel.category]}
-                              </Typography.Text>
-                            </div>
-                          </Flex>
-                        </Flex>
-                      </motion.div>
-                    )
-                  })
-                )}
-              </div>
-            </Flex>
-          </SectionCard>
-        </Splitter.Panel>
+      {/* 搜索栏 */}
+      <Input
+        size="large"
+        placeholder="搜索渠道名称或平台"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        prefix={<SearchOutlined />}
+        allowClear
+        style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)', border: 'none' }}
+      />
 
-        <Splitter.Panel min={400}>
-          {activeChannel ? (
-            <Flex vertical gap={SPACING.md}>
-              <SectionCard
-                title={activeChannel.label}
-                description={activeChannel.description}
-                action={
-                  <Space>
-                    <Flex align="center" gap={SPACING.xs}>
-                      <Typography.Text type="secondary">启用</Typography.Text>
+      {/* 渠道卡片网格 */}
+      <SectionCard title="接入渠道">
+        {filteredChannels.length === 0 ? (
+          <Empty description="没有匹配的渠道" />
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+              gap: SPACING.md,
+            }}
+          >
+            {filteredChannels.map((channel, index) => (
+              <motion.div
+                key={channel.key}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.04, duration: 0.2 }}
+                whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(99,102,241,0.1)' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => openChannelDrawer(channel.name)}
+                style={{
+                  background: 'var(--nb-card-subtle-bg)',
+                  border: `1px solid ${selectedChannel === channel.name ? token.colorPrimary : 'var(--nb-card-subtle-border)'}`,
+                  borderRadius: 16,
+                  padding: '20px 18px 16px',
+                  cursor: 'pointer',
+                  transition: 'border-color 200ms ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                }}
+              >
+                {/* 图标 + 名称 + 状态 */}
+                <Flex align="flex-start" justify="space-between">
+                  <ChannelAvatar channelName={channel.name} label={channel.label} size={44} />
+                  <Tag
+                    bordered={false}
+                    color={channel.enabled ? 'success' : channel.configured ? 'processing' : 'default'}
+                    style={{ margin: 0, borderRadius: 8, fontSize: 11 }}
+                  >
+                    {channel.enabled ? '运行中' : channel.configured ? '已配置' : '未配置'}
+                  </Tag>
+                </Flex>
+
+                {/* 渠道名 */}
+                <div>
+                  <Typography.Text strong style={{ fontSize: 15, display: 'block' }}>
+                    {channel.label}
+                  </Typography.Text>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 12, display: 'block', marginTop: 3 }}
+                    ellipsis
+                  >
+                    {channelCategoryLabels[channel.category]}
+                  </Typography.Text>
+                </div>
+
+                {/* 配置进度 */}
+                {activeRequiredCount > 0 && channel.name === selectedChannel ? null : (
+                  channel.meta.primaryFields.length > 0 && (
+                    <Progress
+                      percent={
+                        channel.meta.primaryFields.length > 0
+                          ? Math.round(
+                              ((channel.meta.primaryFields.length - channel.missingFields.length) /
+                                channel.meta.primaryFields.length) *
+                                100,
+                            )
+                          : 100
+                      }
+                      size="small"
+                      showInfo={false}
+                      strokeColor={channel.enabled ? token.colorSuccess : token.colorPrimary}
+                      trailColor="var(--nb-card-subtle-border)"
+                    />
+                  )
+                )}
+
+                {/* 配置按钮 */}
+                <Button
+                  size="small"
+                  type={channel.configured ? 'default' : 'primary'}
+                  block
+                  style={{ borderRadius: 8, marginTop: 'auto' }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openChannelDrawer(channel.name)
+                  }}
+                >
+                  {channel.configured ? '管理配置' : '开始配置'}
+                </Button>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* 渠道配置 Drawer */}
+      <Drawer
+        title={null}
+        placement="right"
+        width={520}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        closeIcon={null}
+        styles={{
+          body: { padding: 0 },
+          header: { display: 'none' },
+          wrapper: { boxShadow: '-12px 0 40px rgba(0,0,0,0.12)' },
+        }}
+      >
+        <AnimatePresence>
+          {drawerOpen && activeChannel && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.2 }}
+              style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+            >
+              {/* Drawer 头部 */}
+              <div
+                style={{
+                  padding: '20px 24px 16px',
+                  borderBottom: `1px solid var(--nb-border)`,
+                  background: 'var(--nb-surface-strong)',
+                }}
+              >
+                <Flex align="center" justify="space-between">
+                  <Flex align="center" gap={12}>
+                    <ChannelAvatar channelName={activeChannel.name} label={activeChannel.label} size={40} />
+                    <div>
+                      <Typography.Text strong style={{ fontSize: 16, display: 'block' }}>
+                        {activeChannel.label}
+                      </Typography.Text>
+                      <ChannelStatusTag status={activeChannel.status} />
+                    </div>
+                  </Flex>
+                  <Flex align="center" gap={12}>
+                    <Flex align="center" gap={6}>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>启用</Typography.Text>
                       <Switch
                         size="small"
                         checked={Boolean(activeDraft.enabled ?? activeChannel.enabled)}
@@ -560,96 +624,138 @@ export default function ChannelsPage() {
                       />
                     </Flex>
                     <Button
-                      icon={<ExperimentOutlined />}
-                      onClick={() => void testChannel(activeChannel.name)}
-                      loading={testing}
-                    >
-                      测试连接
-                    </Button>
-                    <Button
-                      type="primary"
-                      icon={<SaveOutlined />}
-                      onClick={() => void saveChannel(activeChannel.name)}
-                      loading={saving}
-                      data-testid={testIds.channels.detailSave}
-                    >
-                      保存
-                    </Button>
-                  </Space>
-                }
-              >
-                <Flex vertical gap={SPACING.md}>
-                  {activeChannel.missingFields.length > 0 && (
-                    <Card
+                      type="text"
+                      icon={<CloseOutlined />}
+                      onClick={() => setDrawerOpen(false)}
                       size="small"
-                      style={{
-                        background: `${token.colorWarning}10`,
-                        borderColor: token.colorWarning,
-                      }}
-                      styles={{ body: { padding: 'var(--nb-spacing-sm)' } }}
-                    >
-                      <Flex align="center" gap={SPACING.xs}>
-                        <WarningOutlined style={{ color: token.colorWarning }} />
-                        <Typography.Text>
-                          缺少必填字段：{activeChannel.missingFields.join('、')}
-                        </Typography.Text>
-                      </Flex>
-                    </Card>
-                  )}
-
-                  {activeProbe && (
-                    <Card
-                      size="small"
-                      title="连接测试结果"
-                      styles={{ body: { padding: 'var(--nb-spacing-md)' } }}
-                    >
-                      <Flex vertical gap={SPACING.xs}>
-                        <Space wrap>
-                          <Tag color={getProbeStatusColor(activeProbe.status)}>
-                            {activeProbe.statusLabel}
-                          </Tag>
-                          <Typography.Text type="secondary">{activeProbe.summary}</Typography.Text>
-                        </Space>
-                        {activeProbe.checks.length > 0 && (
-                          <Flex vertical gap={SPACING.xs} style={{ marginTop: SPACING.sm }}>
-                            {activeProbe.checks.map((check) => (
-                              <Flex key={check.key} justify="space-between" align="center" gap={SPACING.xs}>
-                                <Typography.Text type="secondary">{check.label}</Typography.Text>
-                                <Tag color={getProbeCheckColor(check.status)}>
-                                  {check.status === 'pass' ? '通过' : check.status === 'warn' ? '警告' : '失败'}
-                                </Tag>
-                              </Flex>
-                            ))}
-                          </Flex>
-                        )}
-                      </Flex>
-                    </Card>
-                  )}
-
-                  <Form form={form} layout="vertical">
-                    <div
-                      style={{
-                        display: 'grid',
-                        gap: SPACING.sm,
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                      }}
-                    >
-                      {activeChannel.meta.primaryFields.map((field) =>
-                        renderField(activeChannel.name, field),
-                      )}
-                    </div>
-                  </Form>
+                    />
+                  </Flex>
                 </Flex>
-              </SectionCard>
-            </Flex>
-          ) : (
-            <SectionCard title="渠道配置">
-              <Empty description="请从左侧选择一个渠道" />
-            </SectionCard>
-          )}
-        </Splitter.Panel>
-      </Splitter>
 
+                {/* 配置进度 */}
+                {activeChannel.meta.primaryFields.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <Flex justify="space-between" align="center" style={{ marginBottom: 6 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        配置进度
+                      </Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {activeCompletedCount}/{activeRequiredCount}
+                      </Typography.Text>
+                    </Flex>
+                    <Progress
+                      percent={configPercent}
+                      size="small"
+                      showInfo={false}
+                      strokeColor={configPercent === 100 ? token.colorSuccess : token.colorPrimary}
+                      trailColor="var(--nb-card-subtle-border)"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Drawer 内容 */}
+              <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
+                {/* 缺失字段警告 */}
+                {activeChannel.missingFields.length > 0 && (
+                  <Card
+                    size="small"
+                    style={{
+                      background: `${token.colorWarning}10`,
+                      borderColor: token.colorWarning,
+                      marginBottom: SPACING.md,
+                    }}
+                    styles={{ body: { padding: 'var(--nb-spacing-sm)' } }}
+                  >
+                    <Flex align="center" gap={SPACING.xs}>
+                      <WarningOutlined style={{ color: token.colorWarning }} />
+                      <Typography.Text>
+                        缺少必填字段：{activeChannel.missingFields.join('、')}
+                      </Typography.Text>
+                    </Flex>
+                  </Card>
+                )}
+
+                {/* 测试结果 */}
+                {activeProbe && (
+                  <Card
+                    size="small"
+                    title="连接测试结果"
+                    styles={{ body: { padding: 'var(--nb-spacing-md)' } }}
+                    style={{ marginBottom: SPACING.md }}
+                  >
+                    <Flex vertical gap={SPACING.xs}>
+                      <Space wrap>
+                        <Tag color={getProbeStatusColor(activeProbe.status)}>
+                          {activeProbe.statusLabel}
+                        </Tag>
+                        <Typography.Text type="secondary">{activeProbe.summary}</Typography.Text>
+                      </Space>
+                      {activeProbe.checks.length > 0 && (
+                        <Flex vertical gap={SPACING.xs} style={{ marginTop: SPACING.sm }}>
+                          {activeProbe.checks.map((check) => (
+                            <Flex key={check.key} justify="space-between" align="center" gap={SPACING.xs}>
+                              <Typography.Text type="secondary">{check.label}</Typography.Text>
+                              <Tag color={getProbeCheckColor(check.status)}>
+                                {check.status === 'pass' ? '通过' : check.status === 'warn' ? '警告' : '失败'}
+                              </Tag>
+                            </Flex>
+                          ))}
+                        </Flex>
+                      )}
+                    </Flex>
+                  </Card>
+                )}
+
+                {/* 配置表单 */}
+                <Form form={form} layout="vertical">
+                  <div
+                    style={{
+                      display: 'grid',
+                      gap: SPACING.sm,
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    }}
+                  >
+                    {activeChannel.meta.primaryFields.map((field) =>
+                      renderField(activeChannel.name, field),
+                    )}
+                  </div>
+                </Form>
+              </div>
+
+              {/* Drawer 底部操作栏 */}
+              <div
+                style={{
+                  padding: '14px 24px',
+                  borderTop: `1px solid var(--nb-border)`,
+                  background: 'var(--nb-surface-strong)',
+                }}
+              >
+                <Flex gap={8} justify="flex-end">
+                  <Button
+                    icon={<ExperimentOutlined />}
+                    onClick={() => void testChannel(activeChannel.name)}
+                    loading={testing}
+                  >
+                    测试连接
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    onClick={() => void saveChannel(activeChannel.name)}
+                    loading={saving}
+                    data-testid={testIds.channels.detailSave}
+                  >
+                    保存配置
+                  </Button>
+                </Flex>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Drawer>
+
+      {/* 停用确认弹窗 */}
       <Modal
         open={Boolean(confirmDisable)}
         title="停用渠道"

@@ -97,6 +97,13 @@ export default function AgentsPage() {
     void loadRecentRuns(selectedAgentId)
   }, [isCreateRoute, loadingWorkspace, selectedAgentId])
 
+  useEffect(() => {
+    if (loadingWorkspace || isCreateRoute || selectedAgentId || agents.length === 0) {
+      return
+    }
+    navigate(`/studio/agents/${agents[0].agentId}`, { replace: true })
+  }, [agents, isCreateRoute, loadingWorkspace, navigate, selectedAgentId])
+
   async function loadWorkspace() {
     try {
       setLoadingWorkspace(true)
@@ -369,14 +376,12 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="console-page agents-page" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Splitter className="console-workspace-splitter flex-1">
-        <Splitter.Panel defaultSize={360} min={300} max={440}>
+        <Splitter.Panel defaultSize={260} min={220} max={360}>
           <div style={{ height: '100%', overflow: 'auto', padding: '0 0 24px' }}>
             <AgentList
               agents={agents}
-              knowledgeBases={knowledgeBases}
-              recentRuns={recentRuns}
               loadingWorkspace={loadingWorkspace}
               error={error}
               selectedAgentId={selectedAgentId}

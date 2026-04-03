@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ApiOutlined,
   AppstoreOutlined,
+  BellOutlined,
   BookOutlined,
   ClusterOutlined,
   DashboardOutlined,
@@ -11,6 +12,7 @@ import {
   MenuOutlined,
   MessageOutlined,
   RobotOutlined,
+  SearchOutlined,
   SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -379,13 +381,20 @@ export default function AppShell() {
           </Flex>
 
           {isDesktop ? (
-            <Flex vertical align="flex-end" className="min-w-0">
-              <Typography.Text strong ellipsis style={{ maxWidth: 220 }}>
-                {authStatus?.username || '未登录'}
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                {resolvedTheme === 'dark' ? '深色界面' : '浅色界面'}
-              </Typography.Text>
+            <Flex align="center" gap={16} className="min-w-0">
+              <Button type="text" icon={<SearchOutlined />} />
+              <Button type="text" icon={<BellOutlined />} />
+              <Avatar
+                icon={<UserOutlined />}
+                style={{
+                  backgroundColor: token.colorPrimaryBg,
+                  color: token.colorPrimary,
+                  cursor: 'pointer',
+                  border: `1px solid ${token.colorBorderSecondary}`
+                }}
+              >
+                {authStatus?.username?.slice(0, 1).toUpperCase()}
+              </Avatar>
             </Flex>
           ) : null}
         </header>

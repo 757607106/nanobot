@@ -3,14 +3,13 @@ import {
   Alert,
   App,
   Button,
-  Card,
   Flex,
   Input,
   Select,
   Space,
-  Spin,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import {
@@ -24,6 +23,9 @@ import {
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../../api'
+import MetricCard from '../../components/console/MetricCard'
+import PageHeader from '../../components/console/PageHeader'
+import SectionCard from '../../components/console/SectionCard'
 import { formatDateTimeZh } from '../../locale'
 import type { ChannelAuditEntry, ChannelAuditListResponse } from '../../types'
 import { getAuditStatusColor, getAuditStatusLabel } from './shared'
@@ -131,14 +133,22 @@ export default function ChannelAuditPage() {
       title: '渠道',
       dataIndex: 'channelName',
       key: 'channelName',
-      width: 100,
-      render: (name: string, record: ChannelAuditEntry) => (
-        <Space size={4}>
-          <Tag>{name}</Tag>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {record.chatId}
+      width: 120,
+      render: (name: string) => (
+        <Tag>{name}</Tag>
+      ),
+    },
+    {
+      title: '会话 ID',
+      dataIndex: 'chatId',
+      key: 'chatId',
+      width: 240,
+      render: (chatId: string) => (
+        <Tooltip title={chatId}>
+          <Typography.Text ellipsis className="console-inline-code" style={{ maxWidth: 200 }}>
+            {chatId || '-'}
           </Typography.Text>
-        </Space>
+        </Tooltip>
       ),
     },
     {
@@ -155,23 +165,28 @@ export default function ChannelAuditPage() {
     {
       title: '目标',
       key: 'target',
-      width: 140,
+      width: 180,
       render: (_: unknown, record: ChannelAuditEntry) =>
         record.targetType && record.targetId ? (
-          <Tag color="processing" icon={<RobotOutlined />}>
-            {record.targetId}
-          </Tag>
+          <Tooltip title={record.targetId}>
+            <Tag color="processing" icon={<RobotOutlined />} style={{ maxWidth: 160 }}>
+              <span style={{ display: 'inline-block', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                {record.targetId}
+              </span>
+            </Tag>
+          </Tooltip>
         ) : null,
     },
     {
       title: '消息预览',
       dataIndex: 'messagePreview',
       key: 'messagePreview',
+      width: 320,
       ellipsis: true,
       render: (preview: string) => (
         <Typography.Text
           ellipsis={{ tooltip: preview }}
-          style={{ maxWidth: 300 }}
+          style={{ maxWidth: 280 }}
         >
           {preview || '-'}
         </Typography.Text>
@@ -195,43 +210,31 @@ export default function ChannelAuditPage() {
   ]
 
   return (
-    <Flex vertical gap={16}>
-      <Flex justify="space-between" align="center" gap={12} wrap="wrap">
-        <Space size={16}>
-          <Flex align="center" gap={6}>
-            <MessageOutlined />
-            <Typography.Text strong>{summary.total}</Typography.Text>
-            <Typography.Text type="secondary">条记录</Typography.Text>
-          </Flex>
-          <Flex align="center" gap={6}>
-            <ApartmentOutlined style={{ color: 'var(--nb-success)' }} />
-            <Typography.Text strong>{summary.dispatched}</Typography.Text>
-            <Typography.Text type="secondary">已派发</Typography.Text>
-          </Flex>
-          <Flex align="center" gap={6}>
-            <WarningOutlined style={{ color: 'var(--nb-error)' }} />
-            <Typography.Text strong>{summary.failed}</Typography.Text>
-            <Typography.Text type="secondary">需排查</Typography.Text>
-          </Flex>
-          <Flex align="center" gap={6}>
-            <LinkOutlined style={{ color: 'var(--nb-muted)' }} />
-            <Typography.Text strong>{summary.unmatched}</Typography.Text>
-            <Typography.Text type="secondary">未命中</Typography.Text>
-          </Flex>
-        </Space>
-        <Space>
-          <Button icon={<LinkOutlined />} onClick={() => navigate('/channels/bindings')}>
-            消息路由
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadAudit()} loading={loading}>
-            刷新
-          </Button>
-        </Space>
-      </Flex>
+    <div className="page-stack">
+      <PageHeader
+        title="渠道审计"
+        actions={
+          <Space>
+            <Button icon={<LinkOutlined />} onClick={() => navigate('/channels/bindings')}>
+              消息路由
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadAudit()} loading={loading}>
+              刷新
+            </Button>
+          </Space>
+        }
+      />
 
-      {error && <Alert type="error" showIcon message={error} />}
+      <div className="console-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+        <MetricCard label="审计总量" value={summary.total} icon={<MessageOutlined />} tone="neutral" />
+        <MetricCard label="已派发" value={summary.dispatched} icon={<ApartmentOutlined />} tone="success" />
+        <MetricCard label="需排查" value={summary.failed} icon={<WarningOutlined />} tone={summary.failed > 0 ? 'error' : 'neutral'} />
+        <MetricCard label="未命中" value={summary.unmatched} icon={<LinkOutlined />} tone="warning" />
+      </div>
 
-      <Card styles={{ body: { padding: 12 } }}>
+      {error ? <Alert type="error" showIcon message={error} /> : null}
+
+      <SectionCard title="筛选与记录">
         <Flex justify="space-between" align="center" gap={12} wrap="wrap">
           <Space>
             <Input
@@ -239,14 +242,14 @@ export default function ChannelAuditPage() {
               onChange={(e) => setQuery(e.target.value)}
               onPressEnter={() => void loadAudit()}
               prefix={<SearchOutlined />}
-              placeholder="搜索审计记录"
-              style={{ width: 240 }}
+              placeholder="搜索 chatId、目标、消息或错误"
+              style={{ width: 260 }}
               allowClear
             />
             <Select
               value={channelName}
               onChange={setChannelName}
-              style={{ width: 140 }}
+              style={{ width: 150 }}
               options={channels.map((item) => ({
                 value: item,
                 label: item === 'all' ? '全部渠道' : item,
@@ -255,7 +258,7 @@ export default function ChannelAuditPage() {
             <Select
               value={status}
               onChange={setStatus}
-              style={{ width: 140 }}
+              style={{ width: 160 }}
               options={[
                 { value: 'all', label: '全部状态' },
                 { value: 'dispatched', label: '已派发' },
@@ -265,56 +268,53 @@ export default function ChannelAuditPage() {
                 { value: 'dispatch_error', label: '派发失败' },
               ]}
             />
-            <Button onClick={() => void loadAudit()}>筛选</Button>
+            <Button type="primary" onClick={() => void loadAudit()}>
+              搜索
+            </Button>
           </Space>
           <Typography.Text type="secondary">最近 {data.limit} 条</Typography.Text>
         </Flex>
-      </Card>
 
-      <Card styles={{ body: { padding: 0 } }}>
-        {loading ? (
-          <Flex justify="center" align="center" style={{ minHeight: 300 }}>
-            <Spin size="large" />
-          </Flex>
-        ) : (
-          <Table
-            dataSource={filteredItems}
-            columns={columns}
-            rowKey="auditId"
-            size="small"
-            pagination={{ pageSize: 20, showSizeChanger: false }}
-            scroll={{ x: 1000 }}
-            expandable={{
-              expandedRowRender: (record) => (
-                <Flex vertical gap={8} style={{ padding: '8px 0' }}>
-                  {record.responsePreview && (
-                    <div>
-                      <Typography.Text strong>返回：</Typography.Text>
-                      <Typography.Text>{record.responsePreview}</Typography.Text>
-                    </div>
-                  )}
-                  {record.errorMessage && (
-                    <div>
-                      <Typography.Text type="danger" strong>错误：</Typography.Text>
-                      <Typography.Text type="danger">{record.errorMessage}</Typography.Text>
-                    </div>
-                  )}
-                  <Space split={<Typography.Text type="secondary">|</Typography.Text>}>
-                    <Typography.Text type="secondary">tenant: {record.tenantId}</Typography.Text>
-                    <Typography.Text type="secondary">sender: {record.senderId}</Typography.Text>
-                    <Typography.Text type="secondary">session: {record.sessionKey}</Typography.Text>
-                    {record.bindingId && (
-                      <Typography.Text type="secondary">binding: {record.bindingId}</Typography.Text>
-                    )}
-                  </Space>
-                </Flex>
-              ),
-              rowExpandable: (record) =>
-                Boolean(record.responsePreview || record.errorMessage),
-            }}
-          />
-        )}
-      </Card>
-    </Flex>
+        <Table
+          dataSource={filteredItems}
+          columns={columns}
+          rowKey="auditId"
+          size="small"
+          pagination={{ pageSize: 20, showSizeChanger: false }}
+          scroll={{ x: 1320 }}
+          locale={{
+            emptyText: error ? '审计记录加载失败，请刷新后重试。' : '当前筛选条件下没有记录。',
+          }}
+          expandable={{
+            expandedRowRender: (record) => (
+              <Flex vertical gap={8} style={{ padding: '8px 0' }}>
+                {record.responsePreview ? (
+                  <div>
+                    <Typography.Text strong>返回：</Typography.Text>
+                    <Typography.Text>{record.responsePreview}</Typography.Text>
+                  </div>
+                ) : null}
+                {record.errorMessage ? (
+                  <div>
+                    <Typography.Text type="danger" strong>错误：</Typography.Text>
+                    <Typography.Text type="danger">{record.errorMessage}</Typography.Text>
+                  </div>
+                ) : null}
+                <Space split={<Typography.Text type="secondary">|</Typography.Text>}>
+                  <Typography.Text type="secondary">tenant: {record.tenantId}</Typography.Text>
+                  <Typography.Text type="secondary">sender: {record.senderId}</Typography.Text>
+                  <Typography.Text type="secondary">session: {record.sessionKey}</Typography.Text>
+                  {record.bindingId ? (
+                    <Typography.Text type="secondary">binding: {record.bindingId}</Typography.Text>
+                  ) : null}
+                </Space>
+              </Flex>
+            ),
+            rowExpandable: (record) => Boolean(record.responsePreview || record.errorMessage),
+          }}
+          style={{ marginTop: 18 }}
+        />
+      </SectionCard>
+    </div>
   )
 }

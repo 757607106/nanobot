@@ -1,5 +1,5 @@
-import { Button, Empty, Flex, Space, Tag, Typography, theme } from 'antd'
-import { DeleteOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
+import { Button, Empty, Flex, Space, Tag, Typography } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import SectionCard from '../../components/console/SectionCard'
 import { capabilityLabel } from './utils'
@@ -28,11 +28,10 @@ export default function ModelBindings({
   onDelete,
   onAddModel,
 }: ModelBindingsProps) {
-  const { token } = theme.useToken()
-
   return (
     <SectionCard
       title="模型绑定"
+      description="把供应商模型包装成稳定路由，供 Agent、知识库和默认工作流复用。"
       action={
         <Button type="primary" icon={<PlusOutlined />} onClick={onAddModel} style={{ borderRadius: 12 }}>
           添加模型
@@ -77,7 +76,7 @@ export default function ModelBindings({
                       {binding.label || binding.bindingName}
                     </Typography.Text>
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 13, opacity: 0.8 }}>
-                      ID: {binding.model || '--'}
+                      路由 ID: {binding.bindingName}
                     </Typography.Text>
                   </Flex>
                   {isDefault && (
@@ -87,14 +86,27 @@ export default function ModelBindings({
                   )}
                 </Flex>
 
-                <div style={{ flex: 1, marginTop: 12 }}>
-                  <Tag 
-                    color={capabilityColor(binding.capabilityType as CapabilityType)} 
-                    bordered={false}
-                    style={{ borderRadius: 6, fontSize: 11, padding: '0 8px' }}
-                  >
-                    {capabilityLabel(binding.capabilityType as CapabilityType).toUpperCase()}
-                  </Tag>
+                <div className="resource-summary-strip" style={{ marginTop: 14 }}>
+                  <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
+                    <span className="resource-summary-label">模型 ID</span>
+                    <Typography.Text
+                      ellipsis={{ tooltip: binding.model || '--' }}
+                      className="console-inline-code"
+                      style={{ display: 'inline-flex', marginTop: 4, maxWidth: '100%' }}
+                    >
+                      {binding.model || '--'}
+                    </Typography.Text>
+                  </div>
+                  <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
+                    <span className="resource-summary-label">能力类型</span>
+                    <Tag
+                      color={capabilityColor(binding.capabilityType as CapabilityType)}
+                      bordered={false}
+                      style={{ borderRadius: 6, fontSize: 11, padding: '0 8px', marginTop: 4 }}
+                    >
+                      {capabilityLabel(binding.capabilityType as CapabilityType).toUpperCase()}
+                    </Tag>
+                  </div>
                 </div>
 
                 <Flex justify="space-between" align="center" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>

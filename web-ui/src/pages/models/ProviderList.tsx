@@ -24,7 +24,7 @@ export default function ProviderList({
   return (
     <Flex vertical gap={16}>
       <Input
-        placeholder="搜索供应商"
+        placeholder="搜索供应商或网关"
         allowClear
         prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
         value={searchQuery}
@@ -36,7 +36,7 @@ export default function ProviderList({
       {providers.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的供应商" />
       ) : (
-        <Flex vertical gap={10}>
+        <div className="resource-rail-list">
           {providers.map((item) => {
             const selected = item.name === activeProviderName
 
@@ -48,44 +48,70 @@ export default function ProviderList({
                 key={item.name}
                 type="button"
                 onClick={() => onSelect(item.name)}
-                className="flex w-full text-left"
+                className={`resource-rail-item ${selected ? 'is-selected' : ''}`}
                 style={{
-                  padding: '16px',
-                  border: `1px solid ${selected ? 'var(--nb-accent)' : 'transparent'}`,
-                  borderRadius: 16,
-                  background: selected ? 'var(--nb-card-selected-bg)' : 'var(--nb-card-subtle-bg)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: selected ? '0 4px 12px rgba(0,0,0,0.06)' : 'none',
+                  display: 'block',
                 }}
               >
                 <Flex align="center" gap={16} style={{ width: '100%' }}>
                   <ProviderAvatar providerName={item.name} label={item.label} />
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <Flex justify="space-between" align="center" gap={8}>
-                      <Typography.Text strong style={{ fontSize: 16 }}>{item.label}</Typography.Text>
-                      {item.defaultProvider && (
-                        <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 8, fontSize: 11 }}>
-                          DEFAULT
+                    <div className="resource-rail-item-head">
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <Typography.Text strong className="resource-rail-item-title">
+                          {item.label}
+                        </Typography.Text>
+                        <Typography.Paragraph
+                          className="resource-rail-item-subtitle"
+                          ellipsis={{ rows: 1 }}
+                          style={{ marginBottom: 0 }}
+                        >
+                          {item.categoryLabel}
+                        </Typography.Paragraph>
+                      </div>
+                      <Space size={6} wrap>
+                        {item.defaultProvider ? (
+                          <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 8, fontSize: 11 }}>
+                            默认
+                          </Tag>
+                        ) : null}
+                        <Tag
+                          color={item.configured ? 'success' : 'warning'}
+                          bordered={false}
+                          style={{ margin: 0, borderRadius: 8, fontSize: 11 }}
+                        >
+                          {item.configured ? '已配置' : '待补齐'}
                         </Tag>
-                      )}
-                    </Flex>
-                    <Flex align="center" gap={8} style={{ marginTop: 4 }}>
-                      {item.configured ? (
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--nb-success)' }} />
-                      ) : (
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--nb-text-quaternary)' }} />
-                      )}
+                      </Space>
+                    </div>
+
+                    <Typography.Paragraph
+                      className="resource-rail-item-description"
+                      ellipsis={{ rows: 2 }}
+                    >
+                      {item.description}
+                    </Typography.Paragraph>
+
+                    <Flex align="center" justify="space-between" gap={8} style={{ marginTop: 12 }}>
                       <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                        {item.bindingsCount} 个模型配置
+                        {item.bindingsCount} 个模型路由
                       </Typography.Text>
+                      <div
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: item.configured ? 'var(--nb-success)' : 'var(--nb-text-quaternary)',
+                          flexShrink: 0,
+                        }}
+                      />
                     </Flex>
                   </div>
                 </Flex>
               </motion.button>
             )
           })}
-        </Flex>
+        </div>
       )}
     </Flex>
   )

@@ -12,6 +12,7 @@ import {
   Skeleton,
   Tag,
   Typography,
+  Space,
   theme,
 } from 'antd'
 import {
@@ -107,16 +108,6 @@ function cardSkeleton(width = 72) {
   return <Skeleton active title={{ width }} paragraph={false} />
 }
 
-function getChannelStatusColor(status: string) {
-  if (status === 'enabled') {
-    return 'green'
-  }
-  if (status === 'incomplete') {
-    return 'orange'
-  }
-  return 'default'
-}
-
 interface QuickActionItem {
   icon: React.ReactNode
   title: string
@@ -183,6 +174,8 @@ interface DashboardListItemProps {
   onClick?: () => void
 }
 
+import { motion } from 'framer-motion'
+
 function DashboardListItem({
   icon,
   avatarSrc,
@@ -193,27 +186,27 @@ function DashboardListItem({
   extra,
   onClick,
 }: DashboardListItemProps) {
-  const { token } = theme.useToken()
-
   const leftContent = icon ?? (
     <Avatar
       src={avatarSrc}
-      size={36}
-      style={{ background: `var(--nb-accent-soft)`, color: 'var(--nb-accent)', flexShrink: 0 }}
+      size={40}
+      shape="square"
+      style={{ background: `var(--nb-accent-soft)`, color: 'var(--nb-accent)', flexShrink: 0, borderRadius: 10 }}
     >
       {avatarPlaceholder}
     </Avatar>
   )
 
   return (
-    <div
+    <motion.div
       onClick={onClick}
+      whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.04)' }}
       style={{
-        padding: 'var(--nb-spacing-sm)',
-        borderRadius: token.borderRadiusLG,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        background: token.colorBgLayout,
+        padding: '12px 16px',
+        borderRadius: 16,
+        background: 'var(--nb-card-subtle-bg)',
         cursor: onClick ? 'pointer' : 'default',
+        transition: 'background-color 0.2s ease',
       }}
     >
       <Flex align="center" gap={'var(--nb-spacing-sm)'}>
@@ -233,7 +226,7 @@ function DashboardListItem({
         </div>
         {extra}
       </Flex>
-    </div>
+    </motion.div>
   )
 }
 
@@ -260,6 +253,9 @@ export default function DashboardPage() {
   const recentSessions = useMemo(() => (sessions?.items || []).slice(0, 5), [sessions])
   const dashboardChannelCards = useMemo(() => (channels?.items || []).slice(0, 6), [channels])
   const highlightedSkills = useMemo(() => skills.slice(0, 6), [skills])
+  
+  const hour = new Date().getHours()
+  const greeting = hour < 6 ? '凌晨好' : hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
 
   async function loadDashboard() {
     try {
@@ -290,21 +286,46 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="w-full">
-      <Flex vertical gap={24}>
-        <PageHeader
-          title="平台总览"
-          subtitle="运行态、渠道、技能和调度一览"
-          actions={
-            <Button
-              icon={<ReloadOutlined spin={loading} />}
-              onClick={() => void loadDashboard()}
-              disabled={loading}
-            >
-              刷新
-            </Button>
-          }
-        />
+    <div className="page-stack">
+      {/* Hero Strip */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(99,102,241,0.02) 100%)',
+          border: '1px solid var(--nb-border)',
+          borderRadius: 20,
+          padding: '28px 32px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.05)',
+        }}
+      >
+        <div>
+          <Typography.Title level={2} style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>
+            {greeting}，欢迎使用 Nanobot
+          </Typography.Title>
+          <Typography.Text type="secondary" style={{ fontSize: 14, marginTop: 8, display: 'block' }}>
+            {agents.length} 个 Agent · {enabledChannels}/{totalChannels} 个渠道已启用 · {sessions?.total ?? 0} 活跃会话
+          </Typography.Text>
+        </div>
+        <Space size={16}>
+          <Button
+            icon={<ReloadOutlined spin={loading} />}
+            onClick={() => void loadDashboard()}
+            disabled={loading}
+          >
+            刷新状态
+          </Button>
+          <Button
+            type="primary"
+            icon={<MessageOutlined />}
+            onClick={() => navigate('/chat')}
+            style={{ borderRadius: 12, paddingInline: 24, height: 40 }}
+          >
+            开始对话
+          </Button>
+        </Space>
+      </div>
 
         {error ? <Alert type="error" showIcon message={error} /> : null}
 
@@ -348,64 +369,10 @@ export default function DashboardPage() {
           </Col>
         </Row>
 
-        {/* 快速操作区 */}
-        <div>
-          <Typography.Title level={5} style={{ marginBottom: 'var(--nb-spacing-md)' }}>
-            快速操作
-          </Typography.Title>
-          <Row gutter={[16, 16]}>
-            {quickActions.map((item) => (
-              <Col xs={24} sm={12} md={8} key={item.to}>
-                <Card
-                  hoverable
-                  className="hover:-translate-y-0.5 transition-transform cursor-pointer"
-                  style={{
-                    borderColor: token.colorBorderSecondary,
-                  }}
-                  styles={{
-                    body: {
-                      padding: 'var(--nb-spacing-md)',
-                    },
-                  }}
-                  onClick={() => navigate(item.to)}
-                >
-                  <Flex align="center" gap={'var(--nb-spacing-sm)'}>
-                    <div
-                      style={{
-                        width: 48,
-                        height: 48,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: 'var(--nb-radius-md)',
-                        background: 'linear-gradient(135deg, var(--nb-accent) 0%, var(--nb-accent-2) 100%)',
-                        color: '#fff',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {item.icon}
-                    </div>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <Typography.Text strong>{item.title}</Typography.Text>
-                      <Typography.Paragraph
-                        type="secondary"
-                        style={{ margin: '4px 0 0', fontSize: 'var(--nb-text-xs)' }}
-                        ellipsis
-                      >
-                        {item.description}
-                      </Typography.Paragraph>
-                    </div>
-                    <RightOutlined style={{ color: token.colorTextQuaternary }} />
-                  </Flex>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        </div>
 
         {/* 渠道状态 & 最近会话 */}
         <Row gutter={[16, 16]}>
-          <Col xs={24} lg={12}>
+          <Col xs={24} lg={9}>
             <SectionCard
               title="渠道状态"
               action={
@@ -446,7 +413,7 @@ export default function DashboardPage() {
             </SectionCard>
           </Col>
 
-          <Col xs={24} lg={12}>
+          <Col xs={24} lg={15}>
             <SectionCard
               title="最近会话"
               action={
@@ -528,74 +495,19 @@ export default function DashboardPage() {
               }
             >
               <Flex vertical gap={'var(--nb-spacing-sm)'}>
-                <div
-                  style={{
-                    padding: 'var(--nb-spacing-sm)',
-                    borderRadius: token.borderRadiusLG,
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                    background: token.colorBgLayout,
-                  }}
-                >
-                  <Flex justify="space-between" align="center">
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
-                      任务引擎
-                    </Typography.Text>
-                    <Flex gap={'var(--nb-spacing-xs)'}>
-                      <Tag color={cron?.enabled ? 'green' : 'orange'} style={{ margin: 0 }}>
-                        {cron?.enabled ? '运行中' : '已停止'}
-                      </Tag>
-                      <Tag style={{ margin: 0 }}>任务数 {cron?.jobs ?? 0}</Tag>
-                    </Flex>
-                  </Flex>
-                  <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', display: 'block', marginTop: 'var(--nb-spacing-xs)' }}>
-                    {cron?.enabled ? '正在运行，新的计划任务会按调度继续推进。' : '当前已停止，计划任务不会继续执行。'}
-                  </Typography.Text>
-                </div>
-
-                <div
-                  style={{
-                    padding: 'var(--nb-spacing-sm)',
-                    borderRadius: token.borderRadiusLG,
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                    background: token.colorBgLayout,
-                  }}
-                >
-                  <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
-                    下一次唤醒
-                  </Typography.Text>
-                  <Typography.Paragraph style={{ margin: 'var(--nb-spacing-xs) 0 0', fontSize: 'var(--nb-text-sm)' }}>
-                    {formatNextWake(cron?.nextWakeAtMs)}
-                  </Typography.Paragraph>
-                  <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
-                    当前投递模式：{cron?.deliveryMode === 'agent_only' ? 'Agent Only' : cron?.deliveryMode || '--'}
-                  </Typography.Text>
-                </div>
-
-                <div
-                  style={{
-                    padding: 'var(--nb-spacing-sm)',
-                    borderRadius: token.borderRadiusLG,
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                    background: token.colorBgLayout,
-                  }}
-                >
-                  <Flex justify="space-between" align="center">
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
-                      渠道运行态
-                    </Typography.Text>
-                    <Typography.Text style={{ fontSize: 'var(--nb-text-sm)' }}>
-                      {enabledChannels} / {totalChannels}
-                    </Typography.Text>
-                  </Flex>
-                  <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', display: 'block', marginTop: 'var(--nb-spacing-xs)' }}>
-                    已启用渠道 / 总渠道数
-                  </Typography.Text>
-                </div>
+                <DashboardListItem
+                  title="任务引擎"
+                  subtitle={`${cron?.jobs ?? 0} 个任务 · 下次唤醒 ${formatNextWake(cron?.nextWakeAtMs)}`}
+                  tag={
+                    <Tag color={cron?.enabled ? 'green' : 'orange'} style={{ margin: 0, fontSize: 'var(--nb-text-2xs)' }}>
+                      {cron?.enabled ? '运行中' : '已停止'}
+                    </Tag>
+                  }
+                />
               </Flex>
             </SectionCard>
           </Col>
         </Row>
-      </Flex>
     </div>
   )
 }

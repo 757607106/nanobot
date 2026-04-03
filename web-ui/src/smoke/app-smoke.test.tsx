@@ -430,7 +430,13 @@ vi.mock('antd', async () => {
     checked?: boolean
     value?: unknown
     options?: Array<{ label: React.ReactNode; value: string | number }>
-    items?: Array<{ key?: string; label?: React.ReactNode; children?: React.ReactNode; icon?: React.ReactNode }>
+    items?: Array<{
+      key?: string
+      label?: React.ReactNode
+      children?: React.ReactNode
+      icon?: React.ReactNode
+      dot?: React.ReactNode
+    }>
     selectedKeys?: string[]
     activeKey?: string
     icon?: React.ReactNode

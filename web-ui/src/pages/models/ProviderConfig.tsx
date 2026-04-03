@@ -5,6 +5,7 @@ import SectionCard from '../../components/console/SectionCard'
 import ProviderAvatar from './ProviderAvatar'
 import { hasCredentialMaterial } from './utils'
 import type { ConfigData, ConfigMeta, ModelBinding } from '../../types'
+import { providerCategoryLabels } from '../../configMeta'
 
 interface FieldGroupProps {
   label: string
@@ -51,7 +52,7 @@ export default function ProviderConfig({
 
   return (
     <SectionCard
-      title={providerMeta.label}
+      title="供应商配置"
       action={(
         <Space wrap>
           <Button icon={<ExperimentOutlined />} onClick={onTestConnection}>
@@ -75,15 +76,36 @@ export default function ProviderConfig({
               <Typography.Title level={4} style={{ margin: 0 }}>
                 {providerMeta.label}
               </Typography.Title>
-              <Typography.Text type="secondary">
-                {providerMeta.category}
-              </Typography.Text>
             </div>
           </Flex>
           <Space size={8} wrap>
+            <Tag color="blue">{providerCategoryLabels[providerMeta.category] || providerMeta.category}</Tag>
             {isConfigured ? <Tag color="green">已配置凭据</Tag> : <Tag color="gold">待补齐凭据</Tag>}
           </Space>
         </Flex>
+
+        <div className="resource-summary-strip">
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">接入方式</span>
+            <span className="resource-summary-value" style={{ fontSize: 18 }}>
+              {providerMeta.isOauth ? 'OAuth' : 'API Key'}
+            </span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">默认地址</span>
+            <span className="resource-summary-value" style={{ fontSize: 16 }}>
+              {providerMeta.defaultApiBase ? '已提供' : '自定义'}
+            </span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">当前默认绑定</span>
+            <span className="resource-summary-value" style={{ fontSize: 16 }}>
+              {bindings[defaultBindingName ?? '']?.provider === providerName
+                ? bindings[defaultBindingName ?? '']?.label || defaultBindingName
+                : '未占用'}
+            </span>
+          </div>
+        </div>
 
         <Descriptions
           size="small"
@@ -92,7 +114,11 @@ export default function ProviderConfig({
             {
               key: 'base',
               label: '默认地址',
-              children: providerMeta.defaultApiBase || '未提供',
+              children: (
+                <span className="console-inline-code">
+                  {providerMeta.defaultApiBase || '未提供'}
+                </span>
+              ),
             },
             {
               key: 'default',

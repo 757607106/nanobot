@@ -1,24 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
-import { App, Button, Empty, Spin, theme } from 'antd'
-import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { useParams, useNavigate } from 'react-router-dom'
+import { App, Button, Card, Empty, Skeleton } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 import { api } from '../../api'
 import type { ConfigData, McpServerEntry, McpServerListResponse } from '../../types'
 import { createEmptyDraft, ServerDraft } from './utils'
 import ServerCard from './ServerCard'
 import AddServerModal from './AddServerModal'
+import McpServerDetailDrawer from './DetailPage'
 
 import PageHeader from '../../components/console/PageHeader'
-import MetricCard from '../../components/console/MetricCard'
 import SectionCard from '../../components/console/SectionCard'
 
 export default function McpPage() {
+  const { serverName } = useParams()
+  const navigate = useNavigate()
   const { message, modal } = App.useApp()
-  const { token } = theme.useToken()
   const [data, setData] = useState<McpServerListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [actingName, setActingName] = useState<string | null>(null)
+  // Create dialog state (edit is done in the Drawer)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingEntry, setEditingEntry] = useState<McpServerEntry | null>(null)
   const [draft, setDraft] = useState<ServerDraft>(createEmptyDraft())
   const [saving, setSaving] = useState(false)
 
@@ -75,29 +77,7 @@ export default function McpPage() {
   }
 
   function openCreateDialog() {
-    setEditingEntry(null)
     setDraft(createEmptyDraft('stdio'))
-    setDialogOpen(true)
-  }
-
-  function openEditDialog(entry: McpServerEntry) {
-    setEditingEntry(entry)
-    const type = entry.transport === 'unknown' ? 'stdio' : entry.transport
-    setDraft({
-      name: entry.name,
-      displayName: entry.displayName || entry.name,
-      type: type as 'stdio' | 'sse' | 'streamableHttp',
-      command: entry.command || '',
-      argsText: (entry.args || []).join(' '),
-      envText: Object.entries(entry.env || {})
-        .map(([key, value]) => `${key}=${value}`)
-        .join('\n'),
-      url: entry.url || '',
-      headersText: Object.entries(entry.headers || {})
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('\n'),
-      toolTimeout: Number(entry.toolTimeout || 30),
-    })
     setDialogOpen(true)
   }
 
@@ -114,28 +94,24 @@ export default function McpPage() {
   }) {
     try {
       setSaving(true)
-      if (editingEntry) {
-        await api.updateMcpServer(editingEntry.name, config)
-        message.success('配置已保存')
-      } else {
-        const serverName = draft.name.trim()
-        const currentConfig = await api.getConfig()
-        const nextConfig: ConfigData = {
-          ...currentConfig,
-          tools: {
-            ...currentConfig.tools,
-            mcpServers: {
-              ...(currentConfig.tools.mcpServers ?? {}),
-              [serverName]: {
-                ...config,
-                enabled: true,
-              },
+      // Only create new server (edit goes through DetailPage Drawer)
+      const newServerName = draft.name.trim()
+      const currentConfig = await api.getConfig()
+      const nextConfig: ConfigData = {
+        ...currentConfig,
+        tools: {
+          ...currentConfig.tools,
+          mcpServers: {
+            ...(currentConfig.tools.mcpServers ?? {}),
+            [newServerName]: {
+              ...config,
+              enabled: true,
             },
           },
-        }
-        await api.updateConfig(nextConfig)
-        message.success('服务器已添加')
+        },
       }
+      await api.updateConfig(nextConfig)
+      message.success('服务器已添加')
       setDialogOpen(false)
       await loadServers()
     } finally {
@@ -145,78 +121,53 @@ export default function McpPage() {
 
   if (loading && !data) {
     return (
-      <div
-        className="flex items-center justify-center"
-        style={{ minHeight: 400 }}
-      >
-        <Spin size="large" />
+      <div className="page-stack" style={{ maxWidth: 1600, marginInline: 'auto', paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
+        <PageHeader title="MCP 扩展" />
+        <SectionCard title="服务器清单">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3" style={{ gap: 'var(--nb-spacing-md)' }}>
+            {[1, 2, 3].map((key) => (
+              <Card
+                key={key}
+                style={{ borderRadius: 16, borderColor: 'var(--nb-card-subtle-border)', boxShadow: 'none', background: 'var(--nb-card-subtle-bg)' }}
+              >
+                <Skeleton active avatar={{ shape: 'square', size: 44, style: { borderRadius: 12 } }} title={{ width: 120 }} paragraph={{ rows: 2 }} />
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--nb-border)' }}>
+                  <Skeleton.Button active size="small" shape="round" block style={{ height: 28 }} />
+                </div>
+              </Card>
+            ))}
+          </div>
+        </SectionCard>
       </div>
     )
   }
 
   return (
-    <div
-      className="page-stack"
-      style={{
-        maxWidth: 1600,
-        marginInline: 'auto',
-        paddingInline: 'var(--nb-spacing-lg)',
-        paddingBlock: 'var(--nb-spacing-lg)',
-      }}
-    >
+    <div className="page-stack" style={{ maxWidth: 1600, marginInline: 'auto', paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
       <PageHeader
         title="MCP 扩展"
-        subtitle="管理 Model Context Protocol 服务器配置"
         actions={
-          <div className="flex gap-2">
-            <Button icon={<UploadOutlined />}>
-              导入配置
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDialog}>
-              添加服务器
-            </Button>
-          </div>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDialog}>
+            添加服务器
+          </Button>
         }
       />
 
-      {/* Statistics */}
-      {servers.length > 0 && (
-        <div
-          className="grid"
-          style={{
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 'var(--nb-spacing-md)',
-          }}
-        >
-          <MetricCard label="共计接入" value={servers.length} tone="neutral" />
-          <MetricCard label="已启用" value={servers.filter((s) => s.enabled).length} tone="success" />
-          <MetricCard label="待维护" value={servers.filter((s) => s.status === 'incomplete').length} tone="warning" />
-        </div>
-      )}
-
-      {/* Server Grid */}
-      <SectionCard>
+      <SectionCard title={`服务器清单 (${servers.length})`}>
         {servers.length > 0 ? (
-          <div
-            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-            style={{ gap: 'var(--nb-spacing-md)' }}
-          >
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3" style={{ gap: 'var(--nb-spacing-md)' }}>
             {servers.map((entry) => (
               <ServerCard
                 key={entry.name}
                 entry={entry}
                 loading={actingName === entry.name}
                 onToggle={handleToggle}
-                onEdit={openEditDialog}
                 onDelete={handleDelete}
               />
             ))}
           </div>
         ) : (
-          <Empty
-            description="暂无 MCP 服务器"
-            style={{ paddingBlock: 'var(--nb-spacing-xl)' }}
-          >
+          <Empty description="暂无 MCP 服务器" style={{ paddingBlock: 'var(--nb-spacing-xl)' }}>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDialog}>
               添加第一个服务器
             </Button>
@@ -224,16 +175,25 @@ export default function McpPage() {
         )}
       </SectionCard>
 
-      {/* Add/Edit Modal */}
+      {/* Create-only modal (edit is done in the detail Drawer) */}
       <AddServerModal
         open={dialogOpen}
-        editingEntry={editingEntry}
+        editingEntry={null}
         draft={draft}
         existingNames={existingNames}
         saving={saving}
         onDraftChange={setDraft}
         onClose={() => setDialogOpen(false)}
         onSave={handleSave}
+      />
+
+      <McpServerDetailDrawer
+        serverName={serverName}
+        open={!!serverName}
+        onClose={() => {
+          navigate('/mcp')
+          void loadServers()
+        }}
       />
     </div>
   )

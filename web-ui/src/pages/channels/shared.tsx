@@ -88,19 +88,20 @@ export function getAuditStatusLabel(status: string): string {
   }
 }
 
-export function ChannelAvatar({ channelName, label }: { channelName: string; label: string }) {
+export function ChannelAvatar({ channelName, label, size = 36 }: { channelName: string; label: string; size?: number }) {
   const { token } = theme.useToken()
   const src = channelIcons[channelName]
 
   return (
     <Avatar
       src={src || undefined}
-      size={36}
+      size={size}
       shape="square"
       style={{
         background: `${token.colorPrimary}16`,
         color: token.colorPrimary,
         flexShrink: 0,
+        borderRadius: size >= 40 ? 12 : 8,
       }}
     >
       {label.slice(0, 1)}
@@ -108,8 +109,15 @@ export function ChannelAvatar({ channelName, label }: { channelName: string; lab
   )
 }
 
+const channelStatusLabels: Record<string, string> = {
+  enabled: '运行中',
+  configured: '已配置',
+  incomplete: '待补全',
+  unconfigured: '未配置',
+}
+
 export function ChannelStatusTag({ status, label }: { status: ChannelStateItem['status']; label?: string }) {
-  return <Tag color={getChannelStatusColor(status)}>{label || status}</Tag>
+  return <Tag color={getChannelStatusColor(status)}>{label || channelStatusLabels[status] || status}</Tag>
 }
 
 export function ChannelCategoryTag({ category }: { category: keyof typeof channelCategoryLabels }) {

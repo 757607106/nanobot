@@ -14,7 +14,6 @@ const ChannelsPage = lazy(() => import('./pages/channels').then((m) => ({ defaul
 const ChannelDetailPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelDetailPage })))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const McpPage = lazy(() => import('./pages/mcp'))
-const McpServerDetailPage = lazy(() => import('./pages/mcp/DetailPage'))
 const ModelsPage = lazy(() => import('./pages/models'))
 const OperationsPage = lazy(() => import('./pages/OperationsPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
@@ -293,7 +292,7 @@ export function AppRoutes() {
           <Route path="knowledge/:kbId" element={<LegacyKnowledgeRedirect />} />
         </Route>
         <Route path="mcp" element={withRouteSuspense(<McpPage />)} />
-        <Route path="mcp/:serverName" element={withRouteSuspense(<McpServerDetailPage />)} />
+        <Route path="mcp/:serverName" element={withRouteSuspense(<McpPage />)} />
         <Route path="skills" element={withRouteSuspense(<SkillsPage />)} />
         <Route path="system" element={withRouteSuspense(<SystemLayoutPage />)}>
           <Route index element={withRouteSuspense(<SystemPage />)} />

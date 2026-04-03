@@ -4,7 +4,7 @@ import { Flex, Typography, theme } from 'antd'
 interface PageHeaderProps {
   eyebrow?: string
   title: string
-  subtitle?: string
+  subtitle?: ReactNode
   actions?: ReactNode
 }
 

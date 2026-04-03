@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   App,
+  Alert,
   Button,
-  Card,
   Empty,
   Flex,
   Form,
@@ -13,7 +13,6 @@ import {
   Space,
   Spin,
   Switch,
-  Table,
   Tag,
   Typography,
 } from 'antd'
@@ -27,6 +26,9 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api'
+import PageHeader from '../../components/console/PageHeader'
+import MetricCard from '../../components/console/MetricCard'
+import SectionCard from '../../components/console/SectionCard'
 import DevOnly from '../../components/DevOnly'
 import { testIds } from '../../testIds'
 import type {
@@ -35,6 +37,7 @@ import type {
   ChannelBindingMutationInput,
   ChannelStateItem,
 } from '../../types'
+import { ChannelAvatar } from './shared'
 
 interface BindingFormState {
   channelName: string
@@ -184,6 +187,26 @@ export default function ChannelBindingsPage() {
     currentBinding && !agents.some((agent) => agent.agentId === currentBinding.targetId),
   )
 
+  const enabledBindingCount = useMemo(
+    () => bindings.filter((binding) => binding.enabled).length,
+    [bindings],
+  )
+
+  const wildcardBindingCount = useMemo(
+    () => bindings.filter((binding) => (binding.channelChatId || '*').trim() === '*').length,
+    [bindings],
+  )
+
+  const boundChannelCount = useMemo(
+    () => new Set(bindings.map((binding) => binding.channelName)).size,
+    [bindings],
+  )
+
+  const selectedTargetLabel = useMemo(
+    () => targetOptions.find((target) => target.value === formState.targetId)?.label || formState.targetId || '待选择',
+    [formState.targetId, targetOptions],
+  )
+
   async function handleSave() {
     if (!formState.channelName.trim()) {
       message.warning('请选择渠道')
@@ -241,41 +264,6 @@ export default function ChannelBindingsPage() {
     })
   }
 
-  const columns = [
-    {
-      title: '渠道',
-      dataIndex: 'channelName',
-      key: 'channelName',
-      render: (name: string, record: ChannelBinding) => (
-        <Space>
-          <LinkOutlined />
-          <span>{name}</span>
-          {record.channelChatId !== '*' && (
-            <Typography.Text type="secondary">({record.channelChatId})</Typography.Text>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: '目标员工',
-      dataIndex: 'targetId',
-      key: 'targetId',
-      render: (_: string, record: ChannelBinding) => resolveTargetName(record),
-    },
-    {
-      title: '状态',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      render: (enabled: boolean) => <Tag color={enabled ? 'success' : 'default'}>{enabled ? '启用' : '禁用'}</Tag>,
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      key: 'priority',
-      render: (priority: number) => (priority > 0 ? priority : '-'),
-    },
-  ]
-
   if (loading) {
     return (
       <Flex justify="center" align="center" style={{ minHeight: 400 }}>
@@ -285,159 +273,241 @@ export default function ChannelBindingsPage() {
   }
 
   return (
-    <Flex vertical gap={16}>
-      <Flex justify="space-between" align="center" gap={12} wrap="wrap">
-        <Space>
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索绑定"
-            prefix={<SearchOutlined />}
-            allowClear
-            style={{ width: 200 }}
-          />
-          <Switch
-            checked={showEnabledOnly}
-            onChange={setShowEnabledOnly}
-            checkedChildren="已启用"
-            unCheckedChildren="全部"
-          />
-        </Space>
-        <Space>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => navigate('/channels/bindings/new')}
+    <div className="page-stack">
+      <PageHeader
+        title="消息路由"
+        actions={(
+          <Space wrap size={[8, 8]}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => navigate('/channels/bindings/new')}
+            >
+              新建绑定
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()}>
+              刷新
+            </Button>
+          </Space>
+        )}
+      />
+
+      <div className="console-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+        <MetricCard label="路由总数" value={bindings.length} icon={<LinkOutlined />} tone="neutral" />
+        <MetricCard label="启用规则" value={enabledBindingCount} icon={<SaveOutlined />} tone="success" />
+        <MetricCard label="覆盖渠道" value={boundChannelCount} icon={<SearchOutlined />} tone="primary" />
+        <MetricCard label="通配规则" value={wildcardBindingCount} icon={<PlusOutlined />} tone="warning" />
+      </div>
+
+      <Flex gap={16} align="stretch" style={{ minHeight: 560 }}>
+        <div style={{ width: 380, flexShrink: 0 }}>
+          <SectionCard
+            title="绑定目录"
+            action={<span className="console-inline-code">{filteredBindings.length} rules</span>}
           >
-            新建绑定
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadWorkspace()}>
-            刷新
-          </Button>
-        </Space>
-      </Flex>
-
-      <Flex gap={16} style={{ minHeight: 500 }}>
-        <Card style={{ width: 400 }} styles={{ body: { padding: 0 } }}>
-          <Table
-            dataSource={filteredBindings}
-            columns={columns}
-            rowKey="bindingId"
-            size="small"
-            pagination={false}
-            scroll={{ y: 450 }}
-            onRow={(record) => ({
-              onClick: () => navigate(`/channels/bindings/${record.bindingId}`),
-              style: {
-                cursor: 'pointer',
-                background: record.bindingId === params.bindingId ? 'var(--nb-accent-soft)' : undefined,
-              },
-            })}
-            locale={{ emptyText: <Empty description="暂无绑定" /> }}
-          />
-        </Card>
-
-        <Card style={{ flex: 1 }} styles={{ body: { padding: 16 } }}>
-          <Flex vertical gap={16}>
-            <Flex justify="space-between" align="center">
-              <Typography.Title level={5} style={{ margin: 0 }}>
-                {currentBinding ? '编辑绑定' : '新建绑定'}
-              </Typography.Title>
-              {currentBinding && <Tag color="purple">{currentBinding.bindingId}</Tag>}
-            </Flex>
-
-            <Space wrap>
-              <Tag>{formState.channelName || '未选渠道'}</Tag>
-              <Tag>{formState.channelChatId || '*'}</Tag>
-              <Tag color={formState.enabled ? 'success' : 'default'}>
-                {formState.enabled ? '启用' : '禁用'}
-              </Tag>
-              {formState.targetId && (
-                <Tag color="processing">
-                  {targetOptions.find((t) => t.value === formState.targetId)?.label || formState.targetId}
-                </Tag>
-              )}
-              {currentBindingMissingTarget && <Tag color="warning">请重新选择员工</Tag>}
-            </Space>
-
-            <Form form={form} layout="vertical">
-              <Form.Item label="渠道名称" required>
-                <Select
-                  showSearch
-                  value={formState.channelName || undefined}
-                  placeholder="选择渠道"
-                  options={channelOptions}
-                  onChange={(val) => setFormState((s) => ({ ...s, channelName: val }))}
-                  allowClear
-                />
-              </Form.Item>
-
-              <Form.Item label="聊天 ID">
+            <Flex vertical gap={14}>
+              <Flex gap={12} wrap="wrap">
                 <Input
-                  value={formState.channelChatId}
-                  placeholder="聊天 ID / 目标"
-                  onChange={(e) => setFormState((s) => ({ ...s, channelChatId: e.target.value }))}
-                />
-              </Form.Item>
-
-              <Form.Item label="目标员工" required>
-                <Select
-                  showSearch
-                  value={formState.targetId || undefined}
-                  placeholder="选择员工"
-                  options={targetOptions}
-                  onChange={(val) => setFormState((s) => ({ ...s, targetId: val }))}
-                  optionFilterProp="label"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索渠道、会话或员工"
+                  prefix={<SearchOutlined />}
                   allowClear
+                  style={{ flex: '1 1 220px' }}
                 />
-              </Form.Item>
-
-              <DevOnly>
-                <Form.Item label="优先级">
-                  <InputNumber
-                    value={formState.priority}
-                    min={0}
-                    onChange={(val) => setFormState((s) => ({ ...s, priority: val ?? 0 }))}
-                    style={{ width: '100%' }}
-                  />
-                </Form.Item>
-              </DevOnly>
-
-              <Form.Item label="启用状态">
                 <Switch
-                  checked={formState.enabled}
-                  onChange={(checked) => setFormState((s) => ({ ...s, enabled: checked }))}
-                  checkedChildren="启用"
-                  unCheckedChildren="禁用"
+                  checked={showEnabledOnly}
+                  onChange={setShowEnabledOnly}
+                  checkedChildren="已启用"
+                  unCheckedChildren="全部"
                 />
-              </Form.Item>
-            </Form>
+              </Flex>
 
-            <Flex gap={8}>
-              {currentBinding && (
-                <Button
-                  danger
-                  icon={<DeleteOutlined />}
-                  loading={deleting}
-                  onClick={handleDelete}
-                  data-testid={testIds.channelBindings.delete}
-                >
-                  删除
-                </Button>
+              {filteredBindings.length === 0 ? (
+                <div className="workspace-empty-state">
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={searchQuery || showEnabledOnly ? '没有匹配结果' : '暂无路由'}
+                  >
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/channels/bindings/new')}>
+                      创建第一条绑定
+                    </Button>
+                  </Empty>
+                </div>
+              ) : (
+                <div className="resource-rail-list">
+                  {filteredBindings.map((binding) => {
+                    const active = binding.bindingId === params.bindingId
+                    return (
+                      <div
+                        key={binding.bindingId}
+                        role="button"
+                        tabIndex={0}
+                        className={`resource-rail-item ${active ? 'is-selected' : ''}`}
+                        onClick={() => navigate(`/channels/bindings/${binding.bindingId}`)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            navigate(`/channels/bindings/${binding.bindingId}`)
+                          }
+                        }}
+                      >
+                        <Flex justify="space-between" align="flex-start" gap={12}>
+                          <Flex gap={12} style={{ minWidth: 0, flex: 1 }}>
+                            <ChannelAvatar channelName={binding.channelName} label={binding.channelName} />
+                            <Flex vertical gap={6} style={{ minWidth: 0, flex: 1 }}>
+                              <Typography.Text strong className="resource-rail-item-title">
+                                {binding.channelName}
+                              </Typography.Text>
+                              <Typography.Text type="secondary" className="resource-rail-item-subtitle">
+                                {binding.channelChatId === '*' ? '命中全部会话' : `会话 ${binding.channelChatId}`}
+                              </Typography.Text>
+                              <Typography.Paragraph type="secondary" className="resource-rail-item-description">
+                                派发到 {resolveTargetName(binding)}
+                              </Typography.Paragraph>
+                              <div className="resource-rail-meta">
+                                <Tag color={binding.enabled ? 'success' : 'default'}>
+                                  {binding.enabled ? '启用' : '禁用'}
+                                </Tag>
+                                {binding.priority > 0 ? <Tag>优先级 {binding.priority}</Tag> : null}
+                              </div>
+                            </Flex>
+                          </Flex>
+                          <LinkOutlined style={{ color: 'var(--nb-text-quaternary)' }} />
+                        </Flex>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                loading={saving}
-                onClick={handleSave}
-                data-testid={testIds.channelBindings.save}
-              >
-                {isNewMode ? '创建' : '保存'}
-              </Button>
             </Flex>
-          </Flex>
-        </Card>
+          </SectionCard>
+        </div>
+
+        <Flex vertical gap={16} style={{ flex: 1, minWidth: 0 }}>
+          <SectionCard
+            title={currentBinding ? '规则详情' : '新建规则'}
+            action={currentBinding ? <Tag color="purple">{currentBinding.bindingId}</Tag> : null}
+          >
+            <div className="resource-summary-strip">
+              <div className="resource-summary-tile">
+                <span className="resource-summary-label">来源渠道</span>
+                <span className="resource-summary-value" style={{ fontSize: 18 }}>{formState.channelName || '待选择'}</span>
+              </div>
+              <div className="resource-summary-tile">
+                <span className="resource-summary-label">命中会话</span>
+                <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                  {formState.channelChatId?.trim() ? formState.channelChatId : '*'}
+                </span>
+              </div>
+              <div className="resource-summary-tile">
+                <span className="resource-summary-label">派发目标</span>
+                <span className="resource-summary-value" style={{ fontSize: 18 }}>{selectedTargetLabel}</span>
+              </div>
+              <div className="resource-summary-tile">
+                <span className="resource-summary-label">规则状态</span>
+                <span className="resource-summary-value" style={{ fontSize: 18 }}>{formState.enabled ? '启用' : '禁用'}</span>
+              </div>
+            </div>
+
+            {currentBindingMissingTarget ? <Alert type="warning" showIcon message="目标员工不存在" /> : null}
+          </SectionCard>
+
+          <Form form={form} layout="vertical" requiredMark={false} component={false}>
+            <Flex vertical gap={16}>
+              <SectionCard
+                title="命中条件"
+              >
+                <div className="console-modal-grid">
+                  <Form.Item label="渠道名称" required>
+                    <Select
+                      showSearch
+                      value={formState.channelName || undefined}
+                      placeholder="选择渠道"
+                      options={channelOptions}
+                      onChange={(val) => setFormState((s) => ({ ...s, channelName: val }))}
+                      allowClear
+                    />
+                  </Form.Item>
+
+                  <Form.Item label="聊天 ID">
+                    <Input
+                      value={formState.channelChatId}
+                      placeholder="留空或 * 表示匹配全部会话"
+                      onChange={(e) => setFormState((s) => ({ ...s, channelChatId: e.target.value }))}
+                    />
+                  </Form.Item>
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="派发目标"
+                action={(
+                  <Switch
+                    checked={formState.enabled}
+                    onChange={(checked) => setFormState((s) => ({ ...s, enabled: checked }))}
+                    checkedChildren="启用"
+                    unCheckedChildren="禁用"
+                  />
+                )}
+              >
+                <div className="console-modal-grid">
+                  <Form.Item label="目标员工" required>
+                    <Select
+                      showSearch
+                      value={formState.targetId || undefined}
+                      placeholder="选择员工"
+                      options={targetOptions}
+                      onChange={(val) => setFormState((s) => ({ ...s, targetId: val }))}
+                      optionFilterProp="label"
+                      allowClear
+                    />
+                  </Form.Item>
+
+                  <DevOnly>
+                    <Form.Item label="优先级">
+                      <InputNumber
+                        value={formState.priority}
+                        min={0}
+                        onChange={(val) => setFormState((s) => ({ ...s, priority: val ?? 0 }))}
+                        style={{ width: '100%' }}
+                      />
+                    </Form.Item>
+                  </DevOnly>
+                </div>
+              </SectionCard>
+            </Flex>
+          </Form>
+
+          <SectionCard
+            title="操作"
+            action={(
+              <Space wrap size={[8, 8]}>
+                {currentBinding ? (
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    loading={deleting}
+                    onClick={handleDelete}
+                    data-testid={testIds.channelBindings.delete}
+                  >
+                    删除
+                  </Button>
+                ) : null}
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  loading={saving}
+                  onClick={handleSave}
+                  data-testid={testIds.channelBindings.save}
+                >
+                  {isNewMode ? '创建' : '保存'}
+                </Button>
+              </Space>
+            )}
+          />
+        </Flex>
       </Flex>
-    </Flex>
+    </div>
   )
 }

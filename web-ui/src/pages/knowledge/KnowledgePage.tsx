@@ -283,6 +283,13 @@ export default function KnowledgePage() {
   }, [selectedKbId, defaultEmbeddingBindingName, defaultLlmBindingName])
 
   useEffect(() => {
+    if (loading.workspace || shouldOpenCreateModal || selectedKbId || knowledgeBases.length === 0) {
+      return
+    }
+    startTransition(() => navigate(`/knowledge/${knowledgeBases[0].kbId}`, { replace: true }))
+  }, [knowledgeBases, loading.workspace, navigate, selectedKbId, shouldOpenCreateModal])
+
+  useEffect(() => {
     if (activeTab === 'graph' && currentKb) {
       void loadGraph(currentKb.kbId)
     }
@@ -1064,10 +1071,9 @@ export default function KnowledgePage() {
   )
 
   return (
-    <Flex vertical gap={18} className="console-page knowledge-page">
+    <Flex vertical gap={16} className="page-stack">
       <PageHeader
-        title="文档知识库"
-        subtitle="知识库目录、文件、检索和治理设置。"
+        title="知识库"
         actions={(
           <>
             <Button icon={<ReloadOutlined />} onClick={() => void loadKnowledgeBases()}>
@@ -1092,27 +1098,23 @@ export default function KnowledgePage() {
         <MetricCard
           label="知识库数量"
           value={aggregateStats.knowledgeBaseCount}
-          helper={`${aggregateStats.enabledCount} 个处于启用状态`}
           icon={<DatabaseOutlined />}
         />
         <MetricCard
           label="文件总量"
           value={aggregateStats.fileCount}
-          helper="跨全部知识库统计"
           icon={<FileTextOutlined />}
           tone="neutral"
         />
         <MetricCard
           label="已索引文件"
           value={aggregateStats.indexedCount}
-          helper="可直接参与检索和评测"
           icon={<BranchesOutlined />}
           tone="success"
         />
         <MetricCard
           label="异常条目"
           value={aggregateStats.errorCount}
-          helper="建议优先处理解析或索引失败的条目"
           icon={<FileSearchOutlined />}
           tone={aggregateStats.errorCount > 0 ? 'error' : 'warning'}
         />

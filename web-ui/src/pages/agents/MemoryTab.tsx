@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Button, Empty, Flex, Input, Space, Spin, Tag } from 'antd'
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -41,6 +41,10 @@ export default function MemoryTab({
 
   const pendingCount = agentMemoryCandidates.filter((item) => item.status === 'proposed').length
 
+  useEffect(() => {
+    setDraft(agentMemory?.content || '')
+  }, [agentMemory?.content, currentAgent?.agentId])
+
   return (
     <Flex vertical gap={6}>
       <SectionCard
@@ -56,7 +60,7 @@ export default function MemoryTab({
           {memoryError ? <Alert type="error" message={memoryError} showIcon /> : null}
 
           {!currentAgent ? (
-            <Alert type="info" message="先保存员工，再治理其长期记忆。" showIcon />
+            <Alert type="info" message="未保存员工" showIcon />
           ) : (
             <>
               <Input.TextArea

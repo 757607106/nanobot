@@ -1,16 +1,37 @@
-import { useEffect, useRef, useState } from 'react'
-import { Alert, App, Button, Descriptions, Empty, Flex, Input, InputNumber, Select, Space, Spin, Switch, Tag, Typography, theme } from 'antd'
-import { ArrowLeftOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Alert,
+  App,
+  Button,
+  Descriptions,
+  Empty,
+  Flex,
+  Input,
+  InputNumber,
+  Select,
+  Space,
+  Spin,
+  Switch,
+  Tag,
+  Typography,
+  theme,
+} from 'antd'
+import {
+  EyeInvisibleOutlined,
+  EyeOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  SaveOutlined,
+} from '@ant-design/icons'
+import { Drawer } from 'antd'
 import { api } from '../../api'
 import { formatDateTimeZh } from '../../locale'
 import { testIds } from '../../testIds'
 import type { McpProbeResult, McpServerEntry } from '../../types'
-import { transportLabels } from './utils'
-import PageHeader from '../../components/console/PageHeader'
+import { maskSensitiveMapping, transportLabels } from './utils'
 import SectionCard from '../../components/console/SectionCard'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 
 interface DetailDraft {
   displayName: string
@@ -48,11 +69,25 @@ function parseJsonMapping(raw: string): Record<string, string> {
   return Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, String(value ?? '')]))
 }
 
-export default function DetailPage() {
+function maskMappingText(raw: string) {
+  try {
+    return JSON.stringify(maskSensitiveMapping(parseJsonMapping(raw)), null, 2)
+  } catch {
+    return raw
+  }
+}
+
+export default function McpServerDetailDrawer({
+  serverName,
+  open = true,
+  onClose = () => {},
+}: {
+  serverName?: string
+  open?: boolean
+  onClose?: () => void
+}) {
   const { message } = App.useApp()
-  const navigate = useNavigate()
   const { token } = theme.useToken()
-  const { serverName } = useParams()
   const [entry, setEntry] = useState<McpServerEntry | null>(null)
   const [draft, setDraft] = useState<DetailDraft | null>(null)
   const draftRef = useRef<DetailDraft | null>(null)
@@ -62,15 +97,16 @@ export default function DetailPage() {
   const [probing, setProbing] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showSensitive, setShowSensitive] = useState(false)
 
   useEffect(() => {
-    if (!serverName) {
+    if (!serverName || !open) {
       setLoading(false)
       setError('缺少 MCP 名称')
       return
     }
     void loadServer(serverName)
-  }, [serverName])
+  }, [serverName, open])
 
   useEffect(() => {
     draftRef.current = draft
@@ -176,23 +212,36 @@ export default function DetailPage() {
     }
   }
 
+  const visibleHeaders = useMemo(
+    () => showSensitive ? (entry?.headers || {}) : maskSensitiveMapping(entry?.headers || {}),
+    [entry?.headers, showSensitive],
+  )
+  const visibleEnv = useMemo(
+    () => showSensitive ? (entry?.env || {}) : maskSensitiveMapping(entry?.env || {}),
+    [entry?.env, showSensitive],
+  )
+
   if (loading) {
     return (
-      <div className="center-box page-card">
-        <Spin size="large" />
-      </div>
+      <Drawer open={open} onClose={onClose} width={720} destroyOnClose title="正在加载...">
+        <Flex justify="center" align="center" style={{ minHeight: 200 }}>
+          <Spin size="large" />
+        </Flex>
+      </Drawer>
     )
   }
 
   if (!serverName || !entry || !draft) {
     return (
-      <div className="page-card">
-        {error ? (
-          <Alert type="error" message="加载失败" description={error} />
-        ) : (
-          <Empty description="MCP 不存在" />
-        )}
-      </div>
+      <Drawer open={open} onClose={onClose} width={720} destroyOnClose title="加载失败">
+        <div style={{ padding: 24 }}>
+          {error ? (
+            <Alert type="error" message="加载失败" description={error} />
+          ) : (
+            <Empty description="MCP 不存在" />
+          )}
+        </div>
+      </Drawer>
     )
   }
 
@@ -207,200 +256,287 @@ export default function DetailPage() {
   const actionBusy = saving || probing || toggling
 
   return (
-    <div className="page-stack max-w-[1600px] mx-auto" style={{ padding: 'var(--nb-panel-padding)' }}>
-      <PageHeader
-        title={entry.displayName || entry.name}
-        subtitle={`${transportLabels[draft.type]} · ${draft.enabled ? '已启用' : '已停用'}`}
-        actions={
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mcp')}>
-              返回
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadServer(serverName)}>
-              刷新
-            </Button>
-          </Space>
-        }
-      />
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title={entry.displayName || entry.name}
+      width={780}
+      extra={
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void loadServer(serverName!)}>
+            刷新
+          </Button>
+        </Space>
+      }
+      styles={{ body: { background: 'var(--nb-bg)', padding: 'var(--nb-spacing-lg)' } }}
+      destroyOnClose
+    >
+      <Flex vertical gap={16}>
+        {/* Probe alert */}
+        {showProbeAlert && probeAlertMessage && (
+          <Alert type={probeAlertType} message={probeAlertMessage} showIcon />
+        )}
 
-      {showProbeAlert && probeAlertMessage && (
-        <Alert type={probeAlertType} message={probeAlertMessage} showIcon />
-      )}
+        {/* Status summary */}
+        <Descriptions
+          size="small"
+          column={2}
+          bordered
+          style={{ background: token.colorBgContainer, borderRadius: 8 }}
+        >
+          <Descriptions.Item label="服务 ID">
+            <Text code>{entry.name}</Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="状态">
+            <Tag color={entry.enabled ? 'success' : 'default'}>
+              {entry.enabled ? '已启用' : '已停用'}
+            </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="传输方式">
+            <Text code>{transportLabels[entry.transport] || entry.transport}</Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="工具数">
+            {entry.toolCountKnown ? `${entry.toolCount} 个` : '待探测'}
+          </Descriptions.Item>
+          <Descriptions.Item label="最近探测">
+            {entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '尚未探测'}
+          </Descriptions.Item>
+          <Descriptions.Item label="探测状态">
+            {entry.lastProbeStatus || '--'}
+          </Descriptions.Item>
+        </Descriptions>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr minmax(260px, 320px)', gap: 24, alignItems: 'start' }}>
+        {/* Config form */}
         <SectionCard
           title="连接配置"
           action={
-            <Flex gap={6}>
-              <Tag>{transportLabels[draft.type]}</Tag>
-              <Tag color={draft.enabled ? 'success' : 'default'}>
-                {draft.enabled ? '已启用' : '已停用'}
-              </Tag>
-            </Flex>
+            <Button
+              size="small"
+              icon={showSensitive ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+              onClick={() => setShowSensitive((current) => !current)}
+            >
+              {showSensitive ? '隐藏敏感值' : '查看敏感值'}
+            </Button>
           }
         >
-
-          <Descriptions column={2} size="small" style={{ marginBottom: 24 }}>
-            <Descriptions.Item label="服务 ID">
-              <Text code>{entry.name}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="最近探测">
-              {entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '--'}
-            </Descriptions.Item>
-            <Descriptions.Item label="工具缓存">
-              {entry.toolCountKnown ? entry.toolCount : '待探测'}
-            </Descriptions.Item>
-            <Descriptions.Item label="最后状态">
-              {entry.lastProbeStatus || '--'}
-            </Descriptions.Item>
-          </Descriptions>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-            {/* 展示名称 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 14, fontWeight: 500 }}>展示名称</label>
-              <Input
-                value={draft.displayName}
-                onChange={(e) => applyDraftPatch({ displayName: e.target.value })}
-                data-testid={testIds.mcp.detailDisplayName}
-              />
+          <Flex vertical gap={16}>
+            {/* Row 1: name + enable */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>展示名称</label>
+                <Input
+                  value={draft.displayName}
+                  onChange={(e) => applyDraftPatch({ displayName: e.target.value })}
+                  data-testid={testIds.mcp.detailDisplayName}
+                />
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  background: 'var(--nb-card-subtle-bg)',
+                  height: 40,
+                }}
+              >
+                <Text style={{ fontSize: 13, whiteSpace: 'nowrap' }}>聊天中启用</Text>
+                <Switch
+                  checked={draft.enabled}
+                  onChange={(checked) => applyDraftPatch({ enabled: checked })}
+                  size="small"
+                />
+              </div>
             </div>
 
-            {/* 启用开关 */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 8, background: 'var(--nb-card-subtle-bg)' }}>
-              <Text strong>聊天中启用</Text>
-              <Switch
-                checked={draft.enabled}
-                onChange={(checked) => applyDraftPatch({ enabled: checked })}
-              />
+            {/* Row 2: transport + timeout */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>传输方式</label>
+                <Select
+                  value={draft.type}
+                  onChange={(value) => applyDraftPatch({ type: value })}
+                  options={[
+                    { label: 'stdio（本地进程）', value: 'stdio' },
+                    { label: 'SSE', value: 'sse' },
+                    { label: 'HTTP（Streamable）', value: 'streamableHttp' },
+                  ]}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>超时时间（秒）</label>
+                <InputNumber
+                  min={1}
+                  style={{ width: '100%' }}
+                  value={draft.toolTimeout}
+                  onChange={(value) => applyDraftPatch({ toolTimeout: Number(value || 30) })}
+                />
+              </div>
             </div>
 
-            {/* 传输方式 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 14, fontWeight: 500 }}>传输方式</label>
-              <Select
-                value={draft.type}
-                onChange={(value) => applyDraftPatch({ type: value })}
-                options={[
-                  { label: 'stdio', value: 'stdio' },
-                  { label: 'SSE', value: 'sse' },
-                  { label: 'HTTP', value: 'streamableHttp' },
-                ]}
-              />
-            </div>
-
-            {/* 超时时间 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 14, fontWeight: 500 }}>超时时间（秒）</label>
-              <InputNumber
-                min={1}
-                style={{ width: '100%' }}
-                value={draft.toolTimeout}
-                onChange={(value) => applyDraftPatch({ toolTimeout: Number(value || 30) })}
-              />
-            </div>
-
+            {/* Conditional: stdio vs http */}
             {draft.type === 'stdio' ? (
               <>
-                {/* 命令 */}
-                <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <label style={{ fontSize: 14, fontWeight: 500 }}>命令</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>命令</label>
                   <Input
                     value={draft.command}
                     onChange={(e) => applyDraftPatch({ command: e.target.value })}
+                    placeholder="例：uvx mcp-server-name"
+                    style={{ fontFamily: 'monospace' }}
                   />
                 </div>
-
-                {/* 参数 */}
-                <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <label style={{ fontSize: 14, fontWeight: 500 }}>参数（每行一个）</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>参数（每行一个）</label>
                   <Input.TextArea
-                    rows={4}
+                    rows={3}
                     value={draft.argsText}
                     onChange={(e) => applyDraftPatch({ argsText: e.target.value })}
                     style={{ fontFamily: 'monospace' }}
                   />
                 </div>
-
-                {/* 环境变量 */}
-                <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <label style={{ fontSize: 14, fontWeight: 500 }}>环境变量 JSON</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>环境变量（JSON）</label>
                   <Input.TextArea
-                    rows={6}
-                    value={draft.envText}
+                    rows={5}
+                    value={showSensitive ? draft.envText : maskMappingText(draft.envText)}
                     onChange={(e) => applyDraftPatch({ envText: e.target.value })}
-                    style={{ fontFamily: 'monospace' }}
+                    style={{ fontFamily: 'monospace', fontSize: 12 }}
                     data-testid={testIds.mcp.detailEnv}
+                    readOnly={!showSensitive}
+                    placeholder='{"KEY": "VALUE"}'
                   />
                 </div>
+                {Object.keys(visibleEnv).length > 0 && (
+                  <div
+                    style={{
+                      padding: 12,
+                      borderRadius: 8,
+                      background: 'var(--nb-card-subtle-bg)',
+                      border: '1px solid var(--nb-card-subtle-border)',
+                      fontFamily: 'IBM Plex Mono, monospace',
+                      fontSize: 11,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      color: token.colorTextSecondary,
+                    }}
+                  >
+                    {JSON.stringify(visibleEnv, null, 2)}
+                  </div>
+                )}
               </>
             ) : (
               <>
-                {/* URL */}
-                <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <label style={{ fontSize: 14, fontWeight: 500 }}>URL</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>URL</label>
                   <Input
                     value={draft.url}
                     onChange={(e) => applyDraftPatch({ url: e.target.value })}
+                    placeholder="https://example.com/mcp"
                   />
                 </div>
-
-                {/* 请求头 */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: 14, fontWeight: 500 }}>请求头 JSON</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>请求头（JSON）</label>
                   <Input.TextArea
-                    rows={6}
-                    value={draft.headersText}
+                    rows={5}
+                    value={showSensitive ? draft.headersText : maskMappingText(draft.headersText)}
                     onChange={(e) => applyDraftPatch({ headersText: e.target.value })}
-                    style={{ fontFamily: 'monospace' }}
+                    style={{ fontFamily: 'monospace', fontSize: 12 }}
+                    readOnly={!showSensitive}
+                    placeholder='{"Authorization": "Bearer ..."}'
                   />
                 </div>
+                {Object.keys(visibleHeaders).length > 0 && (
+                  <div
+                    style={{
+                      padding: 12,
+                      borderRadius: 8,
+                      background: 'var(--nb-card-subtle-bg)',
+                      border: '1px solid var(--nb-card-subtle-border)',
+                      fontFamily: 'IBM Plex Mono, monospace',
+                      fontSize: 11,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      color: token.colorTextSecondary,
+                    }}
+                  >
+                    {JSON.stringify(visibleHeaders, null, 2)}
+                  </div>
+                )}
               </>
             )}
-          </div>
 
-          <Flex gap={8} style={{ flexWrap: 'wrap', marginTop: 24, paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
-            <Button onClick={() => void handleToggle(!entry.enabled)} loading={toggling} disabled={actionBusy}>
-              {entry.enabled ? '立即停用' : '立即启用'}
-            </Button>
-            <Button icon={<SaveOutlined />} onClick={() => void handleSave()} loading={saving} disabled={actionBusy}>
-              保存配置
-            </Button>
-            <Button onClick={() => void handleProbe()} loading={probing} disabled={actionBusy}>
-              立即探测
-            </Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSave(true)} loading={saving || probing} disabled={actionBusy}>
-              保存并探测
-            </Button>
+            {/* Sensitive info hint */}
+            <Alert
+              type="info"
+              showIcon
+              icon={<SafetyCertificateOutlined />}
+              message="敏感值默认遮罩，点击【查看敏感值】后短暂显示，降低管理页泄漏风险。"
+            />
+
+            {/* Action buttons */}
+            <Flex gap={8} wrap="wrap" style={{ paddingTop: 8, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+              <Button
+                onClick={() => void handleToggle(!entry.enabled)}
+                loading={toggling}
+                disabled={actionBusy}
+              >
+                {entry.enabled ? '立即停用' : '立即启用'}
+              </Button>
+              <Button
+                icon={<SaveOutlined />}
+                onClick={() => void handleSave()}
+                loading={saving}
+                disabled={actionBusy}
+              >
+                保存配置
+              </Button>
+              <Button
+                onClick={() => void handleProbe()}
+                loading={probing}
+                disabled={actionBusy}
+              >
+                立即探测
+              </Button>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                onClick={() => void handleSave(true)}
+                loading={saving || probing}
+                disabled={actionBusy}
+              >
+                保存并探测
+              </Button>
+            </Flex>
           </Flex>
         </SectionCard>
 
+        {/* Tool list */}
         <SectionCard
           title="可用工具"
           action={<Tag>{entry.toolCountKnown ? `${entry.toolCount} 个` : '待探测'}</Tag>}
         >
-
           {probe && !probe.ok && probe.missingEnv.length > 0 && (
             <Alert
               type="warning"
               message="缺失环境变量"
               description={
-                <div className="flex flex-wrap gap-1" style={{ marginTop: 8 }}>
+                <Flex wrap="wrap" gap={4} style={{ marginTop: 8 }}>
                   {probe.missingEnv.map((item) => <Tag key={item}>{item}</Tag>)}
-                </div>
+                </Flex>
               }
               style={{ marginBottom: 16 }}
             />
           )}
-
           {toolNames.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
+            <Flex wrap="wrap" gap={6}>
               {toolNames.map((toolName) => (
                 <Tag key={toolName} style={{ fontFamily: 'monospace' }}>
                   {toolName}
                 </Tag>
               ))}
-            </div>
+            </Flex>
           ) : (
             <Empty
               description="暂无工具，请保存配置后探测"
@@ -408,7 +544,7 @@ export default function DetailPage() {
             />
           )}
         </SectionCard>
-      </div>
-    </div>
+      </Flex>
+    </Drawer>
   )
 }

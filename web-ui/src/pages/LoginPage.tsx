@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Alert, Button, Card, Input, Typography, theme } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import { AnimatePresence, motion } from 'framer-motion'
 import { PLATFORM_BRAND_ICON_SRC, PLATFORM_BRAND_NAME } from '../branding'
 import { MotionPanel } from '../components/MotionSurface'
 import { testIds } from '../testIds'
@@ -67,10 +68,10 @@ export default function LoginPage() {
     <div
       className="min-h-screen flex items-center justify-center p-8 overflow-hidden relative"
       style={{
-        background: `linear-gradient(180deg, ${token.colorBgLayout} 0%, ${token.colorBgContainer} 100%)`,
+        background: `radial-gradient(120% 100% at 50% 0%, ${token.colorPrimary}20 0%, ${token.colorBgLayout} 50%, ${token.colorBgContainer} 100%)`,
       }}
     >
-      {/* 背景装饰 */}
+      {/* 背景装饰 (极光效果) */}
       <div
         className="fixed pointer-events-none z-0"
         style={{
@@ -111,10 +112,10 @@ export default function LoginPage() {
           <div className="flex flex-col items-center gap-6 text-center">
             <div 
               style={{ 
-                width: 140, 
-                height: 140, 
-                padding: 12,
-                borderRadius: 28,
+                width: 80, 
+                height: 80, 
+                padding: 10,
+                borderRadius: 20,
                 background: 'var(--nb-card-subtle-bg)',
                 border: '1px solid var(--nb-card-subtle-border)',
                 display: 'flex',
@@ -172,19 +173,29 @@ export default function LoginPage() {
               />
             </label>
 
-            {initializing ? (
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium">确认密码</span>
-                <Input.Password
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  data-testid={testIds.auth.confirmPassword}
-                  size="large"
-                  style={{ borderRadius: 12 }}
-                />
-              </label>
-            ) : null}
+            <AnimatePresence>
+              {initializing ? (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <label className="flex flex-col gap-2 pb-2">
+                    <span className="text-sm font-medium">确认密码</span>
+                    <Input.Password
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      data-testid={testIds.auth.confirmPassword}
+                      size="large"
+                      style={{ borderRadius: 12 }}
+                    />
+                  </label>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
 
             {formError || error ? (
               <Alert

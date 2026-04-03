@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Button, Card, Space, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -97,7 +97,9 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
     <div className="page-stack">
       <PageHeader
         title="执行记录"
-        subtitle={`${activeCount > 0 ? `运行中: ${activeCount}  ` : ''}${failedCount > 0 ? `失败: ${failedCount}` : ''}`}
+        subtitle={error
+          ? `加载失败：${error}`
+          : `${activeCount > 0 ? `运行中: ${activeCount}  ` : ''}${failedCount > 0 ? `失败: ${failedCount}` : ''}`}
         actions={
           <Button icon={<ReloadOutlined />} onClick={onRefresh} loading={loading}>
             刷新列表
@@ -111,6 +113,16 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
           variant="borderless"
           styles={{ body: { padding: 0 } }}
         >
+          {error ? (
+            <Alert
+              type="error"
+              showIcon
+              style={{ margin: '16px 24px 0' }}
+              message="运行记录加载失败"
+              description={error}
+            />
+          ) : null}
+
           {threadFilter && (
             <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--nb-border)' }}>
               <Tag

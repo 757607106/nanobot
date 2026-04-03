@@ -1,10 +1,10 @@
-import { Checkbox, Empty, Flex, Space, Tag, Typography, theme } from 'antd'
+import { Checkbox, Empty, Flex, Space, Tag, Typography } from 'antd'
 import SectionCard from '../../components/console/SectionCard'
 import type { CapabilityItem } from './types'
 
 interface CapabilitySectionProps {
   title: string
-  description: string
+  description?: string
   emptyText: string
   items: CapabilityItem[]
   selectedKeys: string[]
@@ -19,14 +19,12 @@ export default function CapabilitySection({
   selectedKeys,
   onToggle,
 }: CapabilitySectionProps) {
-  const { token } = theme.useToken()
-
   return (
     <SectionCard title={title} description={description}>
       {items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
       ) : (
-        <Flex vertical gap={3}>
+        <div className="resource-rail-grid">
           {items.map((item) => {
             const selected = selectedKeys.includes(item.key)
 
@@ -42,21 +40,20 @@ export default function CapabilitySection({
                     onToggle(item.key)
                   }
                 }}
-                style={{
-                  border: `1px solid ${selected ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
-                  background: selected ? token.colorPrimaryBg : token.colorBgContainer,
-                  borderRadius: token.borderRadiusLG,
-                  padding: 16,
-                  cursor: 'pointer',
-                }}
+                className={`resource-rail-item ${selected ? 'is-selected' : ''}`}
               >
-                <Flex justify="space-between" align="flex-start" gap={4}>
-                  <Flex vertical gap={2} style={{ minWidth: 0, flex: '1 1 auto' }}>
+                <Flex justify="space-between" align="flex-start" gap={8}>
+                  <Flex vertical gap={6} style={{ minWidth: 0, flex: '1 1 auto' }}>
                     <Space wrap size={[8, 8]}>
-                      <Typography.Text strong>{item.name}</Typography.Text>
+                      <Typography.Text strong className="resource-rail-item-title">{item.name}</Typography.Text>
                       {item.isOrphan ? <Tag color="warning">遗留引用</Tag> : null}
+                      {selected ? <Tag color="processing">已挂载</Tag> : null}
                     </Space>
-                    <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+                    <Typography.Paragraph
+                      type="secondary"
+                      className="resource-rail-item-description"
+                      ellipsis={{ rows: 2, tooltip: item.description }}
+                    >
                       {item.description}
                     </Typography.Paragraph>
                   </Flex>
@@ -68,7 +65,7 @@ export default function CapabilitySection({
               </div>
             )
           })}
-        </Flex>
+        </div>
       )}
     </SectionCard>
   )

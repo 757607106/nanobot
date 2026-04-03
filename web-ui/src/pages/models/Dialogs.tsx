@@ -1,4 +1,4 @@
-import { Alert, Button, Flex, Input, Modal, Segmented, Table, Tag, Typography, theme } from 'antd'
+import { Alert, Button, Empty, Flex, Input, Modal, Segmented, Space, Table, Tag, Typography, theme } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { capabilityLabel, inferCapabilityType } from './utils'
 import type { AddModelDraft, CapabilityType, TestDraft } from './types'
@@ -29,41 +29,72 @@ function FieldGroup({ label, children }: FieldGroupProps) {
 interface AddModelDialogProps {
   open: boolean
   draft: AddModelDraft
+  providerLabel: string
+  existingBindingCount: number
+  suggestedRouteId: string
   onDraftChange: (draft: AddModelDraft) => void
   onConfirm: () => void
   onCancel: () => void
 }
 
-export function AddModelDialog({ open, draft, onDraftChange, onConfirm, onCancel }: AddModelDialogProps) {
+export function AddModelDialog({
+  open,
+  draft,
+  providerLabel,
+  existingBindingCount,
+  suggestedRouteId,
+  onDraftChange,
+  onConfirm,
+  onCancel,
+}: AddModelDialogProps) {
   return (
     <Modal
       open={open}
       title="添加模型"
+      width={760}
       okText="确认"
       cancelText="取消"
       destroyOnHidden
       centered
       onOk={onConfirm}
       onCancel={onCancel}
+      styles={{ body: { paddingTop: 12 } }}
     >
-      <Flex vertical gap={16} style={{ marginTop: 8 }}>
-        <FieldGroup label="模型 ID">
-          <Input
-            aria-label="模型 ID"
-            value={draft.modelId}
-            onChange={(e) => onDraftChange({ ...draft, modelId: e.target.value })}
-            placeholder="模型 ID"
-          />
-        </FieldGroup>
+      <div className="console-modal-stack">
+        <div className="resource-summary-strip">
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">供应商</span>
+            <span className="resource-summary-value" style={{ fontSize: 16 }}>{providerLabel || '未选择'}</span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">当前路由数</span>
+            <span className="resource-summary-value">{existingBindingCount}</span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">路由 ID</span>
+            <span className="resource-summary-value" style={{ fontSize: 16 }}>{suggestedRouteId || '等待输入'}</span>
+          </div>
+        </div>
 
-        <FieldGroup label="展示名称">
-          <Input
-            aria-label="展示名称"
-            value={draft.modelName}
-            onChange={(e) => onDraftChange({ ...draft, modelName: e.target.value })}
-            placeholder="展示名称"
-          />
-        </FieldGroup>
+        <div className="console-modal-grid">
+          <FieldGroup label="模型 ID">
+            <Input
+              aria-label="模型 ID"
+              value={draft.modelId}
+              onChange={(e) => onDraftChange({ ...draft, modelId: e.target.value })}
+              placeholder="例如 deepseek/deepseek-chat"
+            />
+          </FieldGroup>
+
+          <FieldGroup label="展示名称">
+            <Input
+              aria-label="展示名称"
+              value={draft.modelName}
+              onChange={(e) => onDraftChange({ ...draft, modelName: e.target.value })}
+              placeholder="例如 DeepSeek Chat"
+            />
+          </FieldGroup>
+        </div>
 
         <FieldGroup label="能力类型">
           <Segmented
@@ -77,7 +108,7 @@ export function AddModelDialog({ open, draft, onDraftChange, onConfirm, onCancel
             ]}
           />
         </FieldGroup>
-      </Flex>
+      </div>
     </Modal>
   )
 }
@@ -91,6 +122,11 @@ interface RemoteModelsDialogProps {
 }
 
 export function RemoteModelsDialog({ open, models, error, onClose, onImport }: RemoteModelsDialogProps) {
+  const modelRows = models.map((modelId) => ({
+    modelId,
+    type: inferCapabilityType(modelId),
+  }))
+
   const columns: TableColumnsType<{ modelId: string; type: CapabilityType }> = [
     {
       title: '模型 ID',
@@ -114,12 +150,20 @@ export function RemoteModelsDialog({ open, models, error, onClose, onImport }: R
       align: 'right',
       width: 100,
       render: (_, record) => (
-        <Button size="small" type="link" onClick={() => onImport(record.modelId)}>
-          导入
-        </Button>
-      ),
+          <Button size="small" type="link" onClick={() => onImport(record.modelId)}>
+            导入
+          </Button>
+        ),
     },
   ]
+
+  const typedCounts = modelRows.reduce(
+    (acc, item) => {
+      acc[item.type] += 1
+      return acc
+    },
+    { text_chat: 0, embedding: 0, multimodal: 0 } satisfies Record<CapabilityType, number>,
+  )
 
   return (
     <Modal
@@ -131,23 +175,54 @@ export function RemoteModelsDialog({ open, models, error, onClose, onImport }: R
       width={720}
       onCancel={onClose}
     >
-      <Flex vertical gap={12} style={{ marginTop: 8 }}>
+      <div className="console-modal-stack">
+        <div className="resource-summary-strip">
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">可发现模型</span>
+            <span className="resource-summary-value">{modelRows.length}</span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">文本对话</span>
+            <span className="resource-summary-value">{typedCounts.text_chat}</span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">多模态</span>
+            <span className="resource-summary-value">{typedCounts.multimodal}</span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">嵌入模型</span>
+            <span className="resource-summary-value">{typedCounts.embedding}</span>
+          </div>
+        </div>
+
         {error ? <Alert type="error" showIcon message={error} /> : null}
-        {models.length > 0 ? (
+        {modelRows.length > 0 ? (
           <Table
             rowKey="modelId"
             pagination={false}
             size="small"
             columns={columns}
-            dataSource={models.map((modelId) => ({
-              modelId,
-              type: inferCapabilityType(modelId),
-            }))}
+            dataSource={modelRows}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="当前供应商还没有返回模型列表"
+                />
+              ),
+            }}
           />
         ) : (
-          !error && <div style={{ textAlign: 'center', padding: '24px 0' }}>暂无模型</div>
+          !error && (
+            <div className="workspace-empty-state" style={{ minHeight: 180 }}>
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="当前供应商还没有返回模型列表"
+              />
+            </div>
+          )
         )}
-      </Flex>
+      </div>
     </Modal>
   )
 }
@@ -172,11 +247,14 @@ export function TestConnectionDialog({
   onCancel,
 }: TestConnectionDialogProps) {
   const { token } = theme.useToken()
+  const hasApiKey = Boolean(draft.apiKey.trim())
+  const hasApiBase = Boolean(draft.apiBase.trim())
 
   return (
     <Modal
       open={open}
       title="测试连接"
+      width={760}
       okText="开始测试"
       cancelText="取消"
       destroyOnHidden
@@ -184,30 +262,48 @@ export function TestConnectionDialog({
       confirmLoading={testing}
       onOk={onConfirm}
       onCancel={onCancel}
+      styles={{ body: { paddingTop: 12 } }}
     >
-      <Flex vertical gap={16} style={{ marginTop: 8 }}>
-        <FieldGroup label="模型 ID">
-          <Input
-            aria-label="模型 ID"
-            value={draft.model}
-            onChange={(e) => onDraftChange({ ...draft, model: e.target.value })}
-            placeholder="模型 ID"
-          />
-        </FieldGroup>
+      <div className="console-modal-stack">
+        <div className="resource-summary-strip">
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">目标模型</span>
+            <span className="resource-summary-value" style={{ fontSize: 16 }}>{draft.model || '待输入'}</span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">API Key</span>
+            <span className="resource-summary-value">{hasApiKey ? '已提供' : '未提供'}</span>
+          </div>
+          <div className="resource-summary-tile">
+            <span className="resource-summary-label">API Base</span>
+            <span className="resource-summary-value">{hasApiBase ? '已指定' : '默认地址'}</span>
+          </div>
+        </div>
+
+        <div className="console-modal-grid">
+          <FieldGroup label="模型 ID">
+            <Input
+              aria-label="模型 ID"
+              value={draft.model}
+              onChange={(e) => onDraftChange({ ...draft, model: e.target.value })}
+              placeholder="模型 ID"
+            />
+          </FieldGroup>
+
+          <FieldGroup label="API Base URL">
+            <Input
+              aria-label="API Base URL"
+              value={draft.apiBase}
+              onChange={(e) => onDraftChange({ ...draft, apiBase: e.target.value })}
+            />
+          </FieldGroup>
+        </div>
 
         <FieldGroup label="API Key">
           <Input.Password
             aria-label="API Key"
             value={draft.apiKey}
             onChange={(e) => onDraftChange({ ...draft, apiKey: e.target.value })}
-          />
-        </FieldGroup>
-
-        <FieldGroup label="API Base URL">
-          <Input
-            aria-label="API Base URL"
-            value={draft.apiBase}
-            onChange={(e) => onDraftChange({ ...draft, apiBase: e.target.value })}
           />
         </FieldGroup>
 
@@ -221,10 +317,14 @@ export function TestConnectionDialog({
             }}
           >
             <Flex vertical gap={12}>
-              <Typography.Text strong style={{ color: result.ok ? token.colorSuccess : token.colorError }}>
-                测试{result.ok ? '通过' : '失败'}
-                {result.model ? ` (${result.model})` : ''}
-              </Typography.Text>
+              <Space wrap size={[8, 8]}>
+                <Typography.Text strong style={{ color: result.ok ? token.colorSuccess : token.colorError }}>
+                  测试{result.ok ? '通过' : '失败'}
+                  {result.model ? ` (${result.model})` : ''}
+                </Typography.Text>
+                <Tag color={result.ok ? 'success' : 'error'}>{result.finishReason || (result.ok ? 'completed' : 'failed')}</Tag>
+                {typeof result.latencyMs === 'number' ? <Tag>{result.latencyMs} ms</Tag> : null}
+              </Space>
 
               {result.responsePreview ? (
                 <pre
@@ -248,7 +348,7 @@ export function TestConnectionDialog({
             </Flex>
           </div>
         ) : null}
-      </Flex>
+      </div>
     </Modal>
   )
 }
@@ -257,6 +357,7 @@ interface DeleteConfirmDialogProps {
   open: boolean
   bindingName: string | null
   bindingLabel: string | null
+  isDefault: boolean
   onConfirm: () => void
   onCancel: () => void
 }
@@ -265,6 +366,7 @@ export function DeleteConfirmDialog({
   open,
   bindingName,
   bindingLabel,
+  isDefault,
   onConfirm,
   onCancel,
 }: DeleteConfirmDialogProps) {
@@ -280,9 +382,14 @@ export function DeleteConfirmDialog({
       onOk={onConfirm}
       onCancel={onCancel}
     >
-      <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
-        确定要删除「{bindingLabel || bindingName}」吗？
-      </Typography.Paragraph>
+      <div className="console-modal-stack">
+        <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+          确定要删除「{bindingLabel || bindingName}」吗？
+        </Typography.Paragraph>
+        <Typography.Text type="secondary">
+          {isDefault ? '当前路由为默认绑定。' : '删除后该路由不可用。'}
+        </Typography.Text>
+      </div>
     </Modal>
   )
 }

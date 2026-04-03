@@ -1,14 +1,14 @@
 import { Card, Tag, Tooltip, theme } from 'antd'
-import { CodeOutlined, DeleteOutlined, EditOutlined, GlobalOutlined, PoweroffOutlined } from '@ant-design/icons'
+import { CodeOutlined, DeleteOutlined, GlobalOutlined, PoweroffOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import type { McpServerEntry, McpServerStatus } from '../../types'
 import { transportLabels } from './utils'
+import { formatDateTimeZh } from '../../locale'
 
 interface ServerCardProps {
   entry: McpServerEntry
   loading: boolean
   onToggle: (entry: McpServerEntry) => void
-  onEdit: (entry: McpServerEntry) => void
   onDelete: (entry: McpServerEntry) => void
 }
 
@@ -18,7 +18,7 @@ const statusConfig: Record<McpServerStatus, { label: string; color: string }> = 
   disabled: { label: '已停用', color: 'default' },
 }
 
-export default function ServerCard({ entry, loading, onToggle, onEdit, onDelete }: ServerCardProps) {
+export default function ServerCard({ entry, loading, onToggle, onDelete }: ServerCardProps) {
   const navigate = useNavigate()
   const { token } = theme.useToken()
 
@@ -131,9 +131,25 @@ export default function ServerCard({ entry, loading, onToggle, onEdit, onDelete 
         <Tag color={entry.enabled ? 'green' : 'default'}>
           {entry.enabled ? '已启用' : '已停用'}
         </Tag>
+        <Tag color="default">{entry.sourceLabel}</Tag>
         {entry.toolCountKnown && entry.toolCount ? (
           <Tag color="blue">{entry.toolCount} 工具</Tag>
         ) : null}
+      </div>
+
+      <div className="resource-summary-strip" style={{ marginBottom: 'var(--nb-spacing-sm)' }}>
+        <div className="resource-summary-tile" style={{ padding: '10px 12px' }}>
+          <span className="resource-summary-label">验证状态</span>
+          <span className="resource-summary-helper" style={{ marginTop: 0 }}>
+            {entry.lastProbeStatus || statusInfo.label}
+          </span>
+        </div>
+        <div className="resource-summary-tile" style={{ padding: '10px 12px' }}>
+          <span className="resource-summary-label">最近探测</span>
+          <span className="resource-summary-helper" style={{ marginTop: 0 }}>
+            {entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '尚未探测'}
+          </span>
+        </div>
       </div>
 
       {/* Tool Names */}
@@ -204,28 +220,6 @@ export default function ServerCard({ entry, loading, onToggle, onEdit, onDelete 
                 color: entry.enabled ? token.colorSuccess : token.colorTextDisabled,
               }}
             />
-          </button>
-        </Tooltip>
-        <Tooltip title="编辑">
-          <button
-            type="button"
-            style={{
-              padding: 'var(--nb-spacing-xs)',
-              borderRadius: 'var(--nb-radius-md)',
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              transition: 'background 150ms ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = token.colorBgTextHover
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-            }}
-            onClick={() => onEdit(entry)}
-          >
-            <EditOutlined style={{ fontSize: 16, color: token.colorTextSecondary }} />
           </button>
         </Tooltip>
         <Tooltip title="删除">

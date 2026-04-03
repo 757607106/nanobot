@@ -29,13 +29,12 @@ export default function KnowledgeList({
   return (
     <div className="knowledge-list-container">
       <SectionCard
-        title="知识库列表"
-        description="筛选并切换知识库。"
-        action={<Tag>{`${visibleKnowledgeBases.length}/${knowledgeBases.length}`}</Tag>}
+        title="知识库目录"
+        action={<span className="console-inline-code">{`${visibleKnowledgeBases.length}/${knowledgeBases.length}`}</span>}
       >
         <Flex vertical gap={16}>
           <Input
-            placeholder="搜索知识库"
+            placeholder="搜索知识库、标签或描述"
             value={knowledgeSearch}
             onChange={(event) => onSearchChange(event.target.value)}
             prefix={<SearchOutlined />}
@@ -53,48 +52,59 @@ export default function KnowledgeList({
               description="当前没有匹配的知识库。"
             />
           ) : (
-            <Flex vertical gap={12}>
+            <div className="resource-rail-list">
               {visibleKnowledgeBases.map((item, index) => {
                 const isSelected = item.kbId === selectedKbId
                 return (
                   <motion.div
                     key={item.kbId}
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.04)' }}
-                    whileTap={{ scale: 0.98 }}
+                    transition={{ delay: index * 0.04 }}
                     onClick={() => startTransition(() => navigate(`/knowledge/${item.kbId}`))}
-                    className={`knowledge-list-item ${isSelected ? 'selected' : ''}`}
+                    className={`resource-rail-item ${isSelected ? 'is-selected' : ''}`}
                   >
-                    <Flex vertical gap={10}>
-                      <Typography.Text
-                        strong
-                        className="knowledge-list-item-title"
-                        style={{ color: isSelected ? token.colorPrimary : undefined }}
+                    <div className="resource-rail-item-head" style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 10,
+                          background: `hsl(${(item.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: 16,
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}
                       >
-                        {item.name}
-                      </Typography.Text>
-                      <Typography.Paragraph
-                        ellipsis={{ rows: 2 }}
-                        className="knowledge-list-item-desc"
-                      >
-                        {item.description || '暂无描述'}
-                      </Typography.Paragraph>
-                      <div className="knowledge-list-item-meta">
-                        <span className="knowledge-list-item-count">{`${item.stats?.fileCount || 0} 文件`}</span>
-                        <Tag
-                          color={item.enabled ? 'success' : 'default'}
-                          className="knowledge-list-item-status"
-                        >
-                          {item.enabled ? '启用' : '停用'}
-                        </Tag>
+                        {item.name.charAt(0).toUpperCase()}
                       </div>
-                    </Flex>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <Typography.Text
+                          strong
+                          className="resource-rail-item-title"
+                          style={{ color: isSelected ? token.colorPrimary : undefined, fontSize: 14, display: 'block' }}
+                        >
+                          {item.name}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {item.enabled ? '检索可用' : '已停用'} · {item.stats?.fileCount || 0} 文件 · {item.stats?.indexedCount || 0} 已索引
+                        </Typography.Text>
+                      </div>
+                      <Tag
+                        color={item.enabled ? 'success' : 'default'}
+                        style={{ margin: 0, fontSize: 11 }}
+                      >
+                        {item.enabled ? '启用' : '停用'}
+                      </Tag>
+                    </div>
                   </motion.div>
                 )
               })}
-            </Flex>
+            </div>
           )}
         </Flex>
       </SectionCard>

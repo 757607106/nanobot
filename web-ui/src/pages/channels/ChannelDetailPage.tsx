@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ChangeEvent } from 'react'
 import {
   Alert,
   App,
   Button,
-  Card,
   Col,
   Empty,
   Flex,
@@ -30,10 +28,11 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import { channelCategoryLabels, channelMetas, type FieldMeta } from '../../configMeta'
+import PageHeader from '../../components/console/PageHeader'
+import SectionCard from '../../components/console/SectionCard'
 import { testIds } from '../../testIds'
 import type { ChannelDetailResponse, ChannelProbeResult, WhatsAppBindingStatus, WeixinBindingStatus } from '../../types'
 import {
-  ChannelAvatar,
   getChannelStatusColor,
   getProbeStatusColor,
   getProbeCheckColor,
@@ -41,6 +40,47 @@ import {
   getFieldValue,
   updateNestedValue,
 } from './shared'
+
+type ChannelFieldSectionKey = 'credentials' | 'routing' | 'experience' | 'advanced'
+
+const channelFieldSectionMeta: Record<ChannelFieldSectionKey, { title: string }> = {
+  credentials: {
+    title: '接入凭据',
+  },
+  routing: {
+    title: '路由范围',
+  },
+  experience: {
+    title: '消息体验',
+  },
+  advanced: {
+    title: '附加配置',
+  },
+}
+
+function resolveChannelFieldSection(field: FieldMeta): ChannelFieldSectionKey {
+  const key = `${field.path.join('.')}:${field.label}`.toLowerCase()
+
+  if (
+    ['allowfrom', 'groupallowfrom', 'grouppolicy', 'sessions', 'panels'].some((token) => key.includes(token))
+  ) {
+    return 'routing'
+  }
+
+  if (
+    ['reply', 'welcome', 'emoji', 'msgformat', 'consent', 'e2ee', 'proxy', 'gateway', 'intents', 'delay'].some((token) => key.includes(token))
+  ) {
+    return 'experience'
+  }
+
+  if (
+    ['token', 'secret', 'key', 'client', 'appid', 'appsecret', 'bridge', 'host', 'baseurl', 'homeserver', 'userid', 'deviceid', 'botid', 'imap'].some((token) => key.includes(token))
+  ) {
+    return 'credentials'
+  }
+
+  return 'advanced'
+}
 
 export default function ChannelDetailPage() {
   const { message } = App.useApp()
@@ -88,10 +128,32 @@ export default function ChannelDetailPage() {
     )
   }, [detail, meta])
 
+  const missingFieldRoots = useMemo(
+    () => new Set(detail?.channel.missingRequiredFields ?? []),
+    [detail],
+  )
+
   const completedFieldCount = useMemo(
     () => (meta ? meta.primaryFields.length - missingLabels.length : 0),
     [meta, missingLabels.length],
   )
+
+  const fieldSections = useMemo(() => {
+    if (!meta) return []
+    const groups = Object.entries(channelFieldSectionMeta).map(([key, value]) => ({
+      key: key as ChannelFieldSectionKey,
+      ...value,
+      fields: [] as FieldMeta[],
+    }))
+    const groupMap = new Map(groups.map((item) => [item.key, item]))
+
+    meta.primaryFields.forEach((field) => {
+      const sectionKey = resolveChannelFieldSection(field)
+      groupMap.get(sectionKey)?.fields.push(field)
+    })
+
+    return groups.filter((item) => item.fields.length > 0)
+  }, [meta])
 
   async function loadChannel() {
     try {
@@ -219,17 +281,24 @@ export default function ChannelDetailPage() {
   function renderField(field: FieldMeta) {
     const value = getFieldValue(draftConfig, field.path)
     const key = field.path.join('.')
+    const isMissing = missingFieldRoots.has(field.path[0])
+    const labelNode = (
+      <Space wrap size={[6, 6]}>
+        <span>{field.label}</span>
+        {isMissing ? <Tag color="warning">待补齐</Tag> : null}
+      </Space>
+    )
 
     switch (field.kind) {
       case 'switch':
         return (
-          <Form.Item key={key} label={field.label} valuePropName="checked">
+          <Form.Item key={key} label={labelNode} valuePropName="checked">
             <Switch checked={Boolean(value)} onChange={(checked) => updateField(field.path, checked)} />
           </Form.Item>
         )
       case 'select':
         return (
-          <Form.Item key={key} label={field.label}>
+          <Form.Item key={key} label={labelNode}>
             <Select
               value={typeof value === 'string' ? value : undefined}
               onChange={(val) => updateField(field.path, val)}
@@ -240,7 +309,7 @@ export default function ChannelDetailPage() {
         )
       case 'number':
         return (
-          <Form.Item key={key} label={field.label}>
+          <Form.Item key={key} label={labelNode}>
             <InputNumber
               value={typeof value === 'number' ? value : undefined}
               onChange={(val) => updateField(field.path, val ?? 0)}
@@ -253,7 +322,7 @@ export default function ChannelDetailPage() {
         )
       case 'list':
         return (
-          <Form.Item key={key} label={field.label}>
+          <Form.Item key={key} label={labelNode}>
             <Input.TextArea
               rows={3}
               value={Array.isArray(value) ? value.join('\n') : ''}
@@ -264,7 +333,7 @@ export default function ChannelDetailPage() {
         )
       case 'textarea':
         return (
-          <Form.Item key={key} label={field.label}>
+          <Form.Item key={key} label={labelNode}>
             <Input.TextArea
               rows={3}
               value={String(value ?? '')}
@@ -275,7 +344,7 @@ export default function ChannelDetailPage() {
         )
       case 'password':
         return (
-          <Form.Item key={key} label={field.label}>
+          <Form.Item key={key} label={labelNode}>
             <Input.Password
               value={String(value ?? '')}
               placeholder={field.placeholder}
@@ -285,7 +354,7 @@ export default function ChannelDetailPage() {
         )
       default:
         return (
-          <Form.Item key={key} label={field.label}>
+          <Form.Item key={key} label={labelNode}>
             <Input
               value={String(value ?? '')}
               placeholder={field.placeholder}
@@ -309,38 +378,53 @@ export default function ChannelDetailPage() {
   }
 
   return (
-    <Flex vertical gap={16}>
-      <Flex justify="space-between" align="flex-start" gap={12} wrap="wrap">
-        <Flex align="center" gap={12}>
-          <ChannelAvatar channelName={meta.name} label={meta.label} />
-          <div>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              {meta.label}
-            </Typography.Title>
-            <Space size={4}>
-              <Tag>{channelCategoryLabels[meta.category]}</Tag>
-              <Tag color={getChannelStatusColor(detail.channel.status)}>
-                {detail.channel.statusLabel}
-              </Tag>
-            </Space>
-          </div>
-        </Flex>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadChannel()}>
-            刷新
-          </Button>
-          <Button onClick={() => navigate('/channels/bindings')}>消息路由</Button>
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            loading={saving}
-            onClick={() => void saveChannel()}
-            data-testid={testIds.channels.detailSave}
-          >
-            保存
-          </Button>
-        </Space>
-      </Flex>
+    <div className="page-stack">
+      <PageHeader
+        title={meta.label}
+        subtitle={meta.description}
+        actions={(
+          <Space wrap size={[8, 8]}>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadChannel()}>
+              刷新
+            </Button>
+            <Button onClick={() => navigate('/channels/bindings')}>消息路由</Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving}
+              onClick={() => void saveChannel()}
+              data-testid={testIds.channels.detailSave}
+            >
+              保存
+            </Button>
+          </Space>
+        )}
+      />
+
+      <div className="resource-summary-strip">
+        <div className="resource-summary-tile">
+          <span className="resource-summary-label">渠道分类</span>
+          <span className="resource-summary-value" style={{ fontSize: 18 }}>
+            {channelCategoryLabels[meta.category]}
+          </span>
+        </div>
+        <div className="resource-summary-tile">
+          <span className="resource-summary-label">配置进度</span>
+          <span className="resource-summary-value">{completedFieldCount}/{meta.primaryFields.length}</span>
+        </div>
+        <div className="resource-summary-tile">
+          <span className="resource-summary-label">运行状态</span>
+          <span className="resource-summary-value" style={{ fontSize: 18 }}>
+            {detail.channel.statusLabel}
+          </span>
+        </div>
+        <div className="resource-summary-tile">
+          <span className="resource-summary-label">验证结果</span>
+          <span className="resource-summary-value" style={{ fontSize: 18 }}>
+            {probeResult ? probeResult.statusLabel : '未测试'}
+          </span>
+        </div>
+      </div>
 
       {missingLabels.length > 0 && (
         <Alert
@@ -352,60 +436,57 @@ export default function ChannelDetailPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
-          <Card
-            title={
-              <Flex justify="space-between" align="center">
-                <span>配置字段</span>
-                <Tag>
-                  {completedFieldCount}/{meta.primaryFields.length}
-                </Tag>
-              </Flex>
-            }
-          >
-            <Form form={form} layout="vertical">
-              <Row gutter={[12, 0]}>
-                {meta.primaryFields.map((field) => (
-                  <Col
-                    key={field.path.join('.')}
-                    xs={24}
-                    md={field.kind === 'textarea' || field.kind === 'list' ? 24 : 12}
-                  >
-                    {renderField(field)}
-                  </Col>
-                ))}
-              </Row>
-            </Form>
-          </Card>
+          <Form form={form} layout="vertical" requiredMark={false} component={false}>
+            <Flex vertical gap={16}>
+              {fieldSections.map((section) => (
+                <SectionCard
+                  key={section.key}
+                  title={section.title}
+                  action={<Tag>{section.fields.length} 项</Tag>}
+                >
+                  <Row gutter={[12, 0]}>
+                    {section.fields.map((field) => (
+                      <Col
+                        key={field.path.join('.')}
+                        xs={24}
+                        md={field.kind === 'textarea' || field.kind === 'list' ? 24 : 12}
+                      >
+                        {renderField(field)}
+                      </Col>
+                    ))}
+                  </Row>
+                </SectionCard>
+              ))}
+            </Flex>
+          </Form>
         </Col>
 
         <Col xs={24} lg={10}>
           <Flex vertical gap={16}>
-            <Card
-              title="运行状态"
-              extra={
+            <SectionCard
+              title="状态"
+              action={(
                 <Switch
                   checked={Boolean(draftConfig.enabled)}
                   onChange={(checked) => updateField(['enabled'], checked)}
                 />
-              }
+              )}
             >
-              <Flex vertical gap={8}>
-                <Flex justify="space-between">
-                  <Typography.Text type="secondary">当前状态</Typography.Text>
-                  <Tag color={getChannelStatusColor(detail.channel.status)}>
-                    {detail.channel.statusLabel}
-                  </Tag>
-                </Flex>
-                <Flex justify="space-between">
-                  <Typography.Text type="secondary">缺失字段</Typography.Text>
-                  <Typography.Text>{missingLabels.length || '已齐全'}</Typography.Text>
-                </Flex>
-              </Flex>
-            </Card>
+              <div className="resource-summary-strip">
+                <div className="resource-summary-tile">
+                  <span className="resource-summary-label">当前状态</span>
+                  <span className="resource-summary-value" style={{ fontSize: 18 }}>{detail.channel.statusLabel}</span>
+                </div>
+                <div className="resource-summary-tile">
+                  <span className="resource-summary-label">缺失字段</span>
+                  <span className="resource-summary-value">{missingLabels.length}</span>
+                </div>
+              </div>
+            </SectionCard>
 
-            <Card
-              title="连通性检测"
-              extra={
+            <SectionCard
+              title="检测"
+              action={(
                 <Button
                   size="small"
                   icon={<SearchOutlined />}
@@ -415,42 +496,54 @@ export default function ChannelDetailPage() {
                 >
                   测试
                 </Button>
-              }
+              )}
             >
               {probeResult ? (
-                <Flex vertical gap={8}>
-                  <Space wrap>
-                    <Tag color={getProbeStatusColor(probeResult.status)}>
-                      {probeResult.statusLabel}
-                    </Tag>
-                    {probeResult.bindingRequired && <Tag color="warning">仍需绑定</Tag>}
-                  </Space>
-                  <Typography.Text strong>{probeResult.summary}</Typography.Text>
-                  {probeResult.detail && (
-                    <Typography.Text type="secondary">{probeResult.detail}</Typography.Text>
-                  )}
+                <Flex vertical gap={12}>
+                  <div className="resource-summary-strip">
+                    <div className="resource-summary-tile">
+                      <span className="resource-summary-label">检测结论</span>
+                      <span className="resource-summary-value" style={{ fontSize: 18 }}>{probeResult.statusLabel}</span>
+                    </div>
+                    <div className="resource-summary-tile">
+                      <span className="resource-summary-label">绑定状态</span>
+                      <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                        {probeResult.bindingRequired ? '仍需绑定' : '已就绪'}
+                      </span>
+                    </div>
+                  </div>
+
                   {probeResult.checks.length > 0 && (
-                    <Flex vertical gap={4} style={{ marginTop: 8 }}>
+                    <div className="resource-rail-list">
                       {probeResult.checks.map((check) => (
-                        <Flex key={check.key} justify="space-between" align="center" gap={8}>
-                          <Typography.Text type="secondary">{check.label}</Typography.Text>
-                          <Tag color={getProbeCheckColor(check.status)}>
-                            {check.status === 'pass' ? '通过' : check.status === 'warn' ? '警告' : '失败'}
-                          </Tag>
-                        </Flex>
+                        <div key={check.key} className="resource-rail-item">
+                          <Flex justify="space-between" align="flex-start" gap={12}>
+                            <Flex vertical gap={6} style={{ minWidth: 0, flex: 1 }}>
+                              <Typography.Text strong className="resource-rail-item-title">{check.label}</Typography.Text>
+                              <Typography.Text type="secondary" className="resource-rail-item-description">
+                                {check.detail}
+                              </Typography.Text>
+                            </Flex>
+                            <Tag color={getProbeCheckColor(check.status)}>
+                              {check.status === 'pass' ? '通过' : check.status === 'warn' ? '警告' : '失败'}
+                            </Tag>
+                          </Flex>
+                        </div>
                       ))}
-                    </Flex>
+                    </div>
                   )}
                 </Flex>
               ) : (
-                <Typography.Text type="secondary">点击测试按钮检测连接状态</Typography.Text>
+                <div className="workspace-empty-state" style={{ minHeight: 160 }}>
+                  <Empty description="暂无检测结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </div>
               )}
-            </Card>
+            </SectionCard>
 
             {isWhatsApp && (
-              <Card
+              <SectionCard
                 title="绑定流程"
-                extra={
+                action={(
                   <Space>
                     <Button
                       size="small"
@@ -482,10 +575,24 @@ export default function ChannelDetailPage() {
                       停止
                     </Button>
                   </Space>
-                }
+                )}
               >
                 {whatsappBinding ? (
                   <Flex vertical gap={12}>
+                    <div className="resource-summary-strip">
+                      <div className="resource-summary-tile">
+                        <span className="resource-summary-label">桥接进程</span>
+                        <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                          {whatsappBinding.running ? '运行中' : '未运行'}
+                        </span>
+                      </div>
+                      <div className="resource-summary-tile">
+                        <span className="resource-summary-label">认证状态</span>
+                        <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                          {whatsappBinding.authPresent ? '已认证' : '未认证'}
+                        </span>
+                      </div>
+                    </div>
                     <Space wrap>
                       <Tag color={whatsappBinding.running ? 'success' : 'default'}>
                         {whatsappBinding.running ? '运行中' : '未运行'}
@@ -501,7 +608,7 @@ export default function ChannelDetailPage() {
                       </Flex>
                     ) : (
                       <Typography.Text type="secondary">
-                        {whatsappBinding.authPresent ? '已存在认证数据' : '启动后显示二维码'}
+                        {whatsappBinding.authPresent ? '已存在认证数据' : '未生成二维码'}
                       </Typography.Text>
                     )}
                     {whatsappBinding.lastError && (
@@ -511,13 +618,13 @@ export default function ChannelDetailPage() {
                 ) : (
                   <Typography.Text type="secondary">暂未读取到绑定状态</Typography.Text>
                 )}
-              </Card>
+              </SectionCard>
             )}
 
             {isWeixin && (
-              <Card
+              <SectionCard
                 title="微信扫码绑定"
-                extra={
+                action={(
                   <Space>
                     <Button
                       size="small"
@@ -546,10 +653,24 @@ export default function ChannelDetailPage() {
                       停止
                     </Button>
                   </Space>
-                }
+                )}
               >
                 {weixinBinding ? (
                   <Flex vertical gap={12}>
+                    <div className="resource-summary-strip">
+                      <div className="resource-summary-tile">
+                        <span className="resource-summary-label">桥接进程</span>
+                        <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                          {weixinBinding.running ? '运行中' : '未运行'}
+                        </span>
+                      </div>
+                      <div className="resource-summary-tile">
+                        <span className="resource-summary-label">认证状态</span>
+                        <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                          {weixinBinding.authenticated ? '已认证' : '未认证'}
+                        </span>
+                      </div>
+                    </div>
                     <Space wrap>
                       <Tag color={weixinBinding.running ? 'processing' : 'default'}>
                         {weixinBinding.running ? '运行中' : '未运行'}
@@ -565,7 +686,7 @@ export default function ChannelDetailPage() {
                       </Flex>
                     ) : (
                       <Typography.Text type="secondary">
-                        {weixinBinding.authenticated ? '已成功登录' : '点击获取二维码'}
+                        {weixinBinding.authenticated ? '已成功登录' : '未生成二维码'}
                       </Typography.Text>
                     )}
                     {weixinBinding.lastError && (
@@ -575,11 +696,11 @@ export default function ChannelDetailPage() {
                 ) : (
                   <Typography.Text type="secondary">暂未读取到状态</Typography.Text>
                 )}
-              </Card>
+              </SectionCard>
             )}
           </Flex>
         </Col>
       </Row>
-    </Flex>
+    </div>
   )
 }
