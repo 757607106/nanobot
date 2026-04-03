@@ -835,7 +835,7 @@ export function KnowledgeGraphTab({
         </div>
       ) : (
         <div className="knowledge-loading-panel">
-          <Empty description="知识图谱暂时为空" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description="知识图谱暂时为空" image={false} className="minimal-empty" />
         </div>
       )}
     </div>

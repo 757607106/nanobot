@@ -74,7 +74,7 @@ export default function OperationsPage() {
     <Flex vertical gap={24}>
       <PageHeader
         title="日志与运维"
-        subtitle="把日志尾部、可执行动作和最近状态放在同一个排障入口里。"
+        subtitle="日志 · 动作 · 状态"
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadOps()} loading={loading}>
             刷新
@@ -86,42 +86,42 @@ export default function OperationsPage() {
         <MetricCard
           label="日志文件"
           value={logs?.items.length ?? 0}
-          helper="当前可读取的日志源"
+          helper="Sources"
           icon={<FileTextOutlined />}
           tone="primary"
         />
         <MetricCard
           label="动作数量"
           value={actions.length}
-          helper="已注册的运维入口"
+          helper="Endpoints"
           icon={<DatabaseOutlined />}
           tone="neutral"
         />
         <MetricCard
           label="已配置"
           value={configuredActions}
-          helper="当前可以直接执行"
+          helper="Ready"
           icon={<CodeOutlined />}
           tone={configuredActions > 0 ? 'success' : 'warning'}
         />
         <MetricCard
           label="执行中"
           value={runningActions}
-          helper="后台正在处理的动作"
+          helper="Processing"
           icon={<PlayCircleOutlined />}
           tone={runningActions > 0 ? 'warning' : 'neutral'}
         />
       </div>
 
       <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">
-        <SectionCard title="日志尾部" description="保留最近的关键日志片段，用于快速定位异常。">
+        <SectionCard title="日志尾部">
           {logs?.items.length ? (
             <Flex vertical gap={12}>
               {logs.items.slice(0, 3).map((item) => (
                 <div
                   key={item.path}
-                  className="overflow-hidden rounded-2xl"
-                  style={{ border: `1px solid ${token.colorBorderSecondary}` }}
+                  className="overflow-hidden"
+                  style={{ borderRadius: 'var(--nb-radius-sm)', border: `1px solid ${token.colorBorderSecondary}` }}
                 >
                   <Flex vertical gap={12} className="p-[18px]">
                     <Flex justify="space-between" align="flex-start" gap={12} wrap="wrap">
@@ -135,12 +135,13 @@ export default function OperationsPage() {
                     </Flex>
 
                     <pre
-                      className="m-0 p-3.5 rounded-2xl overflow-auto"
+                      className="m-0 p-[var(--nb-spacing-md)] overflow-auto"
                       style={{
+                        borderRadius: 'var(--nb-radius-sm)',
                         background: token.colorBgLayout,
                         color: token.colorText,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 12,
+                        fontFamily: 'var(--nb-font-mono)',
+                        fontSize: 'var(--nb-text-xs)',
                         lineHeight: 1.6,
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
@@ -157,14 +158,15 @@ export default function OperationsPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="运维动作" description="按动作状态执行排障、同步或恢复操作。">
+        <SectionCard title="运维动作">
           {actions.length ? (
             <Flex vertical gap={12}>
               {actions.map((item) => (
                 <div
                   key={item.name}
-                  className="p-[18px] rounded-2xl"
+                  className="p-[var(--nb-spacing-md)]"
                   style={{
+                    borderRadius: 'var(--nb-radius-sm)',
                     border: `1px solid ${token.colorBorderSecondary}`,
                     background: token.colorBgLayout,
                   }}
@@ -218,7 +220,7 @@ export default function OperationsPage() {
           ) : loading ? (
             <Alert type="info" showIcon message="正在加载运维动作..." />
           ) : (
-            <Empty description="暂无可用运维动作。" />
+            <Empty description="暂无可用运维动作" image={false} className="minimal-empty" />
           )}
         </SectionCard>
       </div>

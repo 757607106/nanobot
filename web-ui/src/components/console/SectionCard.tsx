@@ -20,12 +20,14 @@ export default function SectionCard({
     <Card
       className="section-card"
       loading={loading}
+      bordered={false}
       style={{
         height: '100%',
+        background: 'transparent',
       }}
       styles={{
         body: {
-          padding: 'var(--nb-card-padding)',
+          padding: 'var(--nb-spacing-lg)',
         },
       }}
     >
@@ -43,7 +45,7 @@ export default function SectionCard({
               className="section-card-title"
               style={{
                 margin: 0,
-                fontSize: 16,
+                fontSize: 'var(--nb-text-lg)',
                 letterSpacing: '0.01em',
               }}
             >
@@ -55,9 +57,8 @@ export default function SectionCard({
                 className="section-card-description"
                 type="secondary"
                 style={{
-                  margin: '6px 0 0',
-                  maxWidth: 560,
-                  lineHeight: 1.5,
+                  margin: 'var(--nb-spacing-xs) 0 0',
+                  lineHeight: 'var(--nb-line-body)',
                 }}
               >
                 {description}

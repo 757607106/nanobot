@@ -97,9 +97,8 @@ export function ChatSidebar({
               textTransform: 'uppercase',
             }}
           >
-            会话中心
+            历史会话
           </Text>
-          <Text type="secondary">统一管理历史会话、搜索结果与上下文入口。</Text>
         </Flex>
       }
       extra={
@@ -142,7 +141,7 @@ export function ChatSidebar({
           </Flex>
         ) : filteredSessions.length === 0 ? (
           <Flex align="center" justify="center" style={{ minHeight: 220 }}>
-            <Empty description={sessionQuery ? '没有匹配的会话' : '还没有历史会话'} />
+            <Empty description={sessionQuery ? '无匹配项' : '暂无会话'} />
           </Flex>
         ) : (
           <Conversations

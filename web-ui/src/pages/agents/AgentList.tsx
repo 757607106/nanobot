@@ -109,7 +109,7 @@ export default function AgentList({
       ) : filteredAgents.length === 0 ? (
         <Empty 
           image="https://gw.alipayobjects.com/zos/antfincdn/ZHrcdLPrvN/empty.svg"
-          description="大厅空空如也，快去配置您的第一个数字员工吧" 
+          description="暂无数据" 
           style={{ marginTop: 64 }}
         />
       ) : (
@@ -129,37 +129,37 @@ export default function AgentList({
                 onClick={() => navigate(`/studio/agents/${record.agentId}`)}
                 style={{
                   cursor: 'pointer',
-                  background: 'var(--nb-surface-strong)',
-                  borderRadius: 24,
-                  padding: 24,
-                  border: '1px solid var(--nb-card-border)',
-                  boxShadow: 'var(--nb-shadow)',
+                  background: 'var(--nb-surface-panel-bg)',
+                  backdropFilter: 'blur(16px) saturate(140%)',
+                  borderRadius: 'var(--nb-radius-lg)',
+                  padding: 'var(--nb-spacing-md)',
+                  boxShadow: 'inset 0 0 0 1px var(--nb-surface-panel-border), var(--nb-surface-panel-shadow)',
                   position: 'relative',
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 16
+                  gap: 12
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                   <div style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 16,
+                    width: 48,
+                    height: 48,
+                    borderRadius: 'var(--nb-radius-md)',
                     background: getGradientForId(record.agentId),
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: 'rgba(0,0,0,0.6)',
                     fontWeight: 800,
-                    fontSize: 20,
+                    fontSize: 18,
                     boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.4)',
                     flexShrink: 0
                   }}>
                     {getInitials(record.name)}
                   </div>
                   <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
-                    <Typography.Text strong ellipsis style={{ fontSize: 18, display: 'block', color: 'var(--nb-ink)' }}>
+                    <Typography.Text strong ellipsis style={{ fontSize: 'var(--nb-text-md)', display: 'block', color: 'var(--nb-ink)' }}>
                       {record.name}
                     </Typography.Text>
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 13 }}>
@@ -184,11 +184,8 @@ export default function AgentList({
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
                   {(record.tags || []).slice(0, 3).map((tag, i) => (
                     <div key={i} style={{
-                      padding: '2px 10px',
-                      background: 'var(--nb-surface)',
-                      border: '1px solid var(--nb-card-subtle-border)',
-                      borderRadius: 12,
-                      fontSize: 12,
+                      borderRadius: 'var(--nb-radius-sm)',
+                      fontSize: 'var(--nb-text-2xs)',
                       color: 'var(--nb-muted)'
                     }}>
                       {tag}

@@ -326,8 +326,8 @@ export default function ChannelBindingsPage() {
               {filteredBindings.length === 0 ? (
                 <div className="workspace-empty-state">
                   <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={searchQuery || showEnabledOnly ? '没有匹配结果' : '暂无路由'}
+                    image={false} className="minimal-empty"
+                    description={searchQuery || showEnabledOnly ? '无匹配项' : '暂无数据'}
                   >
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/channels/bindings/new')}>
                       创建第一条绑定
@@ -392,21 +392,21 @@ export default function ChannelBindingsPage() {
             <div className="resource-summary-strip">
               <div className="resource-summary-tile">
                 <span className="resource-summary-label">来源渠道</span>
-                <span className="resource-summary-value" style={{ fontSize: 18 }}>{formState.channelName || '待选择'}</span>
+                <span className="resource-summary-value" style={{ fontSize: 'var(--nb-text-lg)' }}>{formState.channelName || '待选择'}</span>
               </div>
               <div className="resource-summary-tile">
                 <span className="resource-summary-label">命中会话</span>
-                <span className="resource-summary-value" style={{ fontSize: 18 }}>
+                <span className="resource-summary-value" style={{ fontSize: 'var(--nb-text-lg)' }}>
                   {formState.channelChatId?.trim() ? formState.channelChatId : '*'}
                 </span>
               </div>
               <div className="resource-summary-tile">
                 <span className="resource-summary-label">派发目标</span>
-                <span className="resource-summary-value" style={{ fontSize: 18 }}>{selectedTargetLabel}</span>
+                <span className="resource-summary-value" style={{ fontSize: 'var(--nb-text-lg)' }}>{selectedTargetLabel}</span>
               </div>
               <div className="resource-summary-tile">
                 <span className="resource-summary-label">规则状态</span>
-                <span className="resource-summary-value" style={{ fontSize: 18 }}>{formState.enabled ? '启用' : '禁用'}</span>
+                <span className="resource-summary-value" style={{ fontSize: 'var(--nb-text-lg)' }}>{formState.enabled ? '启用' : '禁用'}</span>
               </div>
             </div>
 

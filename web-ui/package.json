@@ -16,6 +16,7 @@
   "dependencies": {
     "@ant-design/icons": "^5.6.1",
     "@ant-design/x": "^1.6.1",
+    "@ant-design/x-markdown": "^2.5.0",
     "@ant-design/x-sdk": "^2.3.0",
     "@antv/g6": "^5.0.51",
     "antd": "^5.27.0",

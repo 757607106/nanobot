@@ -25,7 +25,7 @@ export default function PreferencesPage() {
     <div className="page-stack">
       <PageHeader
         title="偏好设置"
-        subtitle="定制您的显示、主题和开发预览。"
+        subtitle="显示 · 主题 · 开发"
       />
 
       <div className="page-content-wrapper px-[var(--nb-layout-gutter)]">
@@ -38,7 +38,7 @@ export default function PreferencesPage() {
         >
           <SectionCard 
             title="显示主题" 
-            description="选择您喜欢的界面外观，或跟随系统。风格将在保存后立即应用。"
+            description="选择界面外观，或跟随系统"
           >
             <Flex vertical gap={16}>
               <Segmented
@@ -57,7 +57,7 @@ export default function PreferencesPage() {
 
           <SectionCard 
             title="开发者预览" 
-            description="开启后可在界面中看到额外的调试信息、底层日志和运维入口。"
+            description="显示额外的调试信息和运维入口"
           >
             <div
               style={{

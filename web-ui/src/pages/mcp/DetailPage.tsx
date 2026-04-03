@@ -540,7 +540,7 @@ export default function McpServerDetailDrawer({
           ) : (
             <Empty
               description="暂无工具，请保存配置后探测"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              image={false} className="minimal-empty"
             />
           )}
         </SectionCard>

@@ -91,9 +91,9 @@ export function KnowledgeEvaluationTab({
           columns={columns}
           locale={{
             emptyText: benchmarks.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无评测基准" />
+              <Empty image={false} className="minimal-empty" description="暂无评测基准" />
             ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无评测历史" />
+              <Empty image={false} className="minimal-empty" description="暂无评测历史" />
             ),
           }}
         />

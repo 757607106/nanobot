@@ -95,8 +95,8 @@ export default function SystemPage() {
     return (
       <Flex vertical gap={24}>
         <PageHeader
-          title="实例健康与环境"
-          subtitle="当前无法读取实例状态，请先检查服务可达性与配置。"
+          title="系统状态"
+          subtitle="无法连接服务"
           actions={(
             <Button icon={<ReloadOutlined />} onClick={() => void loadStatus()}>
               重试
@@ -112,8 +112,7 @@ export default function SystemPage() {
     <div className="page-stack">
     <Flex vertical gap={24}>
       <PageHeader
-        title="实例健康与环境"
-        subtitle="查看服务状态、默认模型、渠道和调度。"
+        title="系统状态"
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadStatus()} loading={loading}>
             刷新
@@ -127,7 +126,7 @@ export default function SystemPage() {
         <MetricCard
           label="健康状态"
           value="在线"
-          helper="健康探针与系统状态接口可达"
+          helper="Online"
           icon={<CheckCircleOutlined />}
           tone="success"
         />
@@ -141,14 +140,14 @@ export default function SystemPage() {
         <MetricCard
           label="消息渠道"
           value={status.stats.enabledChannelCount}
-          helper={status.stats.enabledChannels.join('、') || '暂无已启用渠道'}
+          helper={status.stats.enabledChannels.join(', ') || '—'}
           icon={<ClusterOutlined />}
           tone={status.stats.enabledChannelCount > 0 ? 'success' : 'warning'}
         />
         <MetricCard
           label="计划任务"
           value={status.cron.jobs}
-          helper={status.cron.enabled ? '调度引擎运行中' : '调度引擎未启用'}
+          helper={status.cron.enabled ? 'Active' : 'Inactive'}
           icon={<ScheduleOutlined />}
           tone={status.cron.enabled ? 'success' : 'warning'}
         />
@@ -157,7 +156,6 @@ export default function SystemPage() {
       <div className="grid gap-4 grid-cols-[minmax(0,1.12fr)_minmax(320px,0.88fr)]">
         <SectionCard
           title="运行清单"
-          description="工作区、配置文件和运行环境信息。"
           action={<Tag color="blue">v{status.web.version}</Tag>}
         >
           <Flex vertical gap={20}>
@@ -177,7 +175,7 @@ export default function SystemPage() {
                 已启用渠道
               </Typography.Title>
               <Flex gap={8} wrap="wrap" className="mt-3">
-                {(status.stats.enabledChannels.length > 0 ? status.stats.enabledChannels : ['暂无已启用渠道']).map((item) => (
+                {(status.stats.enabledChannels.length > 0 ? status.stats.enabledChannels : ['—']).map((item) => (
                   <Tag key={item} color="blue">
                     {item}
                   </Tag>
@@ -188,7 +186,7 @@ export default function SystemPage() {
         </SectionCard>
 
         <Flex vertical gap={16}>
-          <SectionCard title="服务流量" description="Web 会话与累计消息。">
+          <SectionCard title="服务流量">
             <div
               style={{
                 padding: '20px',
@@ -205,12 +203,12 @@ export default function SystemPage() {
                 {status.stats.webSessions}
               </Typography.Title>
               <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6 }}>
-                累计启动 {status.stats.totalSessions} 次会话，处理 {status.stats.messages} 条消息。
+                {status.stats.totalSessions} 会话 · {status.stats.messages} 消息
               </Typography.Paragraph>
             </div>
           </SectionCard>
 
-          <SectionCard title="调度状态" description="任务数量和下一次唤醒时间。">
+          <SectionCard title="调度状态">
             <Flex vertical gap={12}>
               <Flex gap={8} wrap="wrap">
                 <Tag color={status.cron.enabled ? 'green' : 'orange'}>

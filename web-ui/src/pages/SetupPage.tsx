@@ -336,7 +336,7 @@ export default function SetupPage() {
     <div className="page-stack">
       <PageHeader
         title="系统初始化"
-        subtitle="欢迎使用 Nanobot！请完成以下核心配置以开启您的 AI 协作之旅。"
+        subtitle="初始化配置"
       />
 
       <div className="page-content-wrapper px-[var(--nb-layout-gutter)] pb-12">
@@ -346,7 +346,7 @@ export default function SetupPage() {
           {/* 模型接入 */}
           <SectionCard
             title="1. 模型接入"
-            description="连接至大语言模型供应方。建议使用 DeepSeek 或 OpenAI 兼容接口。"
+            description="连接至模型供应方"
             action={<Tag color="blue" bordered={false} style={{ borderRadius: 6 }}>REQUIRED</Tag>}
           >
             <div style={{ marginTop: 8 }}>
@@ -421,7 +421,7 @@ export default function SetupPage() {
              {/* Agent 默认值 */}
             <SectionCard
               title="2. Agent 工作参数"
-              description="配置智能体的全局默认行为与资源限制。"
+              description="配置 Agent 默认行为"
               action={<Tag color="blue" bordered={false} style={{ borderRadius: 6 }}>REQUIRED</Tag>}
             >
               <div style={{ marginTop: 8 }}>
@@ -516,7 +516,7 @@ export default function SetupPage() {
             {/* 消息频道 */}
             <SectionCard
               title="消息渠道"
-              description="可选：将 Nanobot 接入通讯软件。"
+              description="可选：接入通讯软件"
               action={<Tag bordered={false} style={{ borderRadius: 6 }}>OPTIONAL</Tag>}
             >
               <Flex vertical gap={16} style={{ marginTop: 8 }}>
@@ -566,7 +566,7 @@ export default function SetupPage() {
                   </Form>
                 ) : (
                   <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    image={false} className="minimal-empty"
                     description="暂不接入"
                     style={{ margin: '24px 0' }}
                   />

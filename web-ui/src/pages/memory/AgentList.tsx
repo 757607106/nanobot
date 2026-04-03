@@ -35,7 +35,7 @@ export default function AgentList({
         />
 
         {visibleAgents.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的员工。" />
+          <Empty image={false} className="minimal-empty" description="暂无符合条件的员工。" />
         ) : (
           <Flex vertical gap={12}>
             {visibleAgents.map((item) => (

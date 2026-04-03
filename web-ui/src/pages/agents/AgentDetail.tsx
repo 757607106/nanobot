@@ -135,7 +135,7 @@ export default function AgentDetail({
       <SectionCard title="员工详情">
         <Flex justify="center" align="center" style={{ minHeight: 260 }}>
           <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            image={false} className="minimal-empty"
             description="未选择员工"
           >
             <Space wrap size={[8, 8]}>

@@ -44,7 +44,7 @@ export default function CandidatePanel({
           />
 
           {filteredCandidates.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无候选记忆。" />
+            <Empty image={false} className="minimal-empty" description="暂无候选记忆。" />
           ) : (
             <Flex vertical gap={12}>
               {filteredCandidates.map((candidate) => (

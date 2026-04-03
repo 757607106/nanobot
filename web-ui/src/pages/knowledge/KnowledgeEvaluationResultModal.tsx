@@ -104,7 +104,7 @@ export function KnowledgeEvaluationResultModal({
           />
         </Space>
       ) : (
-        <Empty description="还没有评测结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description="还没有评测结果" image={false} className="minimal-empty" />
       )}
     </Modal>
   )

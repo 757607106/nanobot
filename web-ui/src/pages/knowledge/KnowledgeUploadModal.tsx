@@ -521,7 +521,7 @@ export function KnowledgeUploadModal({
                   )}
                 />
               ) : (
-                <Empty description="还没有选择文件" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty description="还没有选择文件" image={false} className="minimal-empty" />
               )}
             </Card>
           ) : null}

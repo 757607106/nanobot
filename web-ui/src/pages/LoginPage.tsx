@@ -1,11 +1,10 @@
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
-import { Alert, Button, Card, Input, Typography, theme } from 'antd'
+import { Alert, Button, Input, Typography } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PLATFORM_BRAND_ICON_SRC, PLATFORM_BRAND_NAME } from '../branding'
-import { MotionPanel } from '../components/MotionSurface'
 import { testIds } from '../testIds'
 
 interface LoginLocationState {
@@ -22,10 +21,65 @@ function resolveNextPath(state: LoginLocationState | null | undefined) {
   return nextPath
 }
 
+/* ───── Animated Soft Orb ───── */
+function GlowOrb({ color, size, position, delay }: {
+  color: string
+  size: number
+  position: { top?: string; bottom?: string; left?: string; right?: string }
+  delay: number
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{
+        opacity: [0.5, 0.8, 0.5],
+        scale: [1, 1.15, 1],
+        x: [0, 20, -15, 0],
+        y: [0, -25, 15, 0],
+      }}
+      transition={{
+        duration: 14,
+        delay,
+        repeat: Infinity,
+        ease: 'easeInOut',
+      }}
+      style={{
+        position: 'absolute',
+        ...position,
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
+        filter: 'blur(80px)',
+        pointerEvents: 'none',
+      }}
+    />
+  )
+}
+
+/* ───── Stagger ───── */
+const EASE: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94]
+
+const stagger = {
+  container: {
+    hidden: {},
+    visible: {
+      transition: { staggerChildren: 0.08, delayChildren: 0.3 },
+    },
+  },
+  item: {
+    hidden: { opacity: 0, y: 16 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.45, ease: EASE },
+    },
+  },
+}
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { token } = theme.useToken()
   const { bootstrap, error, login, status, submitting } = useAuth()
   const initializing = !status?.initialized
   const [username, setUsername] = useState('')
@@ -40,20 +94,10 @@ export default function LoginPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-
     const cleanUsername = username.trim()
-    if (cleanUsername.length < 3) {
-      setFormError('管理员名称至少需要 3 个字符。')
-      return
-    }
-    if (password.length < 8) {
-      setFormError('密码至少需要 8 个字符。')
-      return
-    }
-    if (initializing && password !== confirmPassword) {
-      setFormError('两次输入的密码不一致。')
-      return
-    }
+    if (cleanUsername.length < 3) { setFormError('管理员名称至少需要 3 个字符。'); return }
+    if (password.length < 8) { setFormError('密码至少需要 8 个字符。'); return }
+    if (initializing && password !== confirmPassword) { setFormError('两次输入的密码不一致。'); return }
 
     setFormError(null)
     if (initializing) {
@@ -64,115 +108,151 @@ export default function LoginPage() {
     navigate(nextPath, { replace: true })
   }
 
+  const inputStyle = {
+    borderRadius: 10,
+    height: 46,
+    background: 'rgba(255, 255, 255, 0.7)',
+    border: '1px solid rgba(0, 0, 0, 0.06)',
+    fontSize: 14,
+    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.03)',
+  }
+
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-8 overflow-hidden relative"
       style={{
-        background: `radial-gradient(120% 100% at 50% 0%, ${token.colorPrimary}20 0%, ${token.colorBgLayout} 50%, ${token.colorBgContainer} 100%)`,
+        position: 'relative',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+        overflow: 'hidden',
+        background: 'linear-gradient(160deg, #EDF2FA 0%, #F0F4FB 30%, #F5F7FA 60%, #EEF1F8 100%)',
       }}
     >
-      {/* 背景装饰 (极光效果) */}
+      {/* ───── Background: Soft Grid ───── */}
       <div
-        className="fixed pointer-events-none z-0"
         style={{
-          inset: '-8% auto auto -6%',
-          width: 420,
-          height: 420,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${token.colorPrimary}20 0%, transparent 68%)`,
-          filter: 'blur(12px)',
-        }}
-      />
-      <div
-        className="fixed pointer-events-none z-0"
-        style={{
-          inset: 'auto -10% 6% auto',
-          width: 520,
-          height: 520,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${token.colorInfo}18 0%, transparent 64%)`,
-          filter: 'blur(12px)',
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `
+            linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px)
+          `,
+          backgroundSize: '80px 80px',
+          maskImage: 'radial-gradient(ellipse 70% 50% at 50% 45%, black 20%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 70% 50% at 50% 45%, black 20%, transparent 100%)',
         }}
       />
 
-      <MotionPanel hover={false}>
-        <Card
-          className="relative z-10 w-full max-w-[480px] overflow-hidden"
-          styles={{
-            body: { padding: '48px 40px' },
-          }}
+      {/* ───── Background: Luminous Orbs ───── */}
+      <GlowOrb color="rgba(59, 130, 246, 0.2)" size={700} position={{ top: '-20%', left: '-10%' }} delay={0} />
+      <GlowOrb color="rgba(16, 185, 129, 0.15)" size={500} position={{ bottom: '-15%', right: '-5%' }} delay={3} />
+      <GlowOrb color="rgba(139, 92, 246, 0.12)" size={450} position={{ top: '40%', right: '10%' }} delay={6} />
+
+      {/* ───── Login Card ───── */}
+      <motion.div
+        variants={stagger.container}
+        initial="hidden"
+        animate="visible"
+        style={{
+          position: 'relative',
+          zIndex: 10,
+          width: '100%',
+          maxWidth: 400,
+        }}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 24 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
           style={{
-            borderRadius: 32,
-            border: 'none',
-            background: 'var(--nb-card-bg)',
-            boxShadow: '0 32px 128px -16px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--nb-card-subtle-border)',
+            padding: '44px 36px',
+            borderRadius: 20,
+            background: 'rgba(255, 255, 255, 0.72)',
+            backdropFilter: 'blur(40px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+            border: '1px solid rgba(255, 255, 255, 0.8)',
+            boxShadow: `
+              0 0 0 1px rgba(0,0,0,0.03),
+              0 1px 2px rgba(0,0,0,0.04),
+              0 8px 24px -4px rgba(0,0,0,0.06),
+              0 24px 48px -8px rgba(59, 130, 246, 0.06)
+            `,
           }}
-          variant="borderless"
         >
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div 
-              style={{ 
-                width: 80, 
-                height: 80, 
-                padding: 10,
+          {/* ── Brand Lockup ── */}
+          <motion.div variants={stagger.item} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 36, textAlign: 'center' }}>
+            <div
+              style={{
+                width: 72,
+                height: 72,
                 borderRadius: 20,
-                background: 'var(--nb-card-subtle-bg)',
-                border: '1px solid var(--nb-card-subtle-border)',
+                background: 'linear-gradient(145deg, rgba(255,255,255,0.95), rgba(240,245,255,0.9))',
+                border: '1px solid rgba(0,0,0,0.06)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                marginBottom: 14,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06), 0 0 0 1px rgba(255,255,255,0.8) inset',
               }}
             >
-              <img
-                className="w-full h-full object-contain"
-                src={PLATFORM_BRAND_ICON_SRC}
-                alt={PLATFORM_BRAND_NAME}
-              />
+              <img src={PLATFORM_BRAND_ICON_SRC} alt={PLATFORM_BRAND_NAME} style={{ width: 52, height: 52, objectFit: 'contain' }} />
             </div>
-            <div className="flex flex-col gap-2">
-              <Typography.Title
-                level={1}
-                style={{
-                  margin: 0,
-                  fontSize: 48,
-                  letterSpacing: '-0.05em',
-                  fontWeight: 900,
-                  color: 'var(--nb-ink)',
-                }}
-              >
-                {PLATFORM_BRAND_NAME}
-              </Typography.Title>
-              <Typography.Text type="secondary" style={{ fontSize: 16, opacity: 0.8 }}>
-                {initializing ? '欢迎来到您的 AI 工作站。' : '请输入凭据以继续工作。'}
-              </Typography.Text>
-            </div>
-          </div>
+            <Typography.Text strong style={{ color: '#0F172A', fontSize: 20, fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em', display: 'block', lineHeight: 1 }}>
+              {PLATFORM_BRAND_NAME}
+            </Typography.Text>
+          </motion.div>
 
-          <form className="flex flex-col gap-4 mt-5" onSubmit={handleSubmit}>
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium">账号</span>
+          {/* ── Heading ── */}
+          <motion.div variants={stagger.item} style={{ marginBottom: 28 }}>
+            <h1
+              style={{
+                margin: 0,
+                fontFamily: 'var(--nb-font-display)',
+                fontSize: 28,
+                fontWeight: 700,
+                letterSpacing: '-0.03em',
+                lineHeight: 1.15,
+                color: '#0F172A',
+              }}
+            >
+              {initializing ? '初始化系统' : '欢迎回来'}
+            </h1>
+          </motion.div>
+
+          <form onSubmit={handleSubmit}>
+            {/* ── Username ── */}
+            <motion.div variants={stagger.item} style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: 500 }}>
+                账号
+              </label>
               <Input
                 autoComplete="username"
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                placeholder="admin"
+                onChange={(e) => setUsername(e.target.value)}
                 data-testid={testIds.auth.username}
-                size="large"
-                style={{ borderRadius: 12 }}
+                style={inputStyle}
               />
-            </label>
+            </motion.div>
 
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium">{initializing ? '设置密码' : '密码'}</span>
+            {/* ── Password ── */}
+            <motion.div variants={stagger.item} style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: 500 }}>
+                {initializing ? '设置密码' : '密码'}
+              </label>
               <Input.Password
                 autoComplete={initializing ? 'new-password' : 'current-password'}
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                onChange={(e) => setPassword(e.target.value)}
                 data-testid={testIds.auth.password}
-                size="large"
-                style={{ borderRadius: 12 }}
+                style={inputStyle}
               />
-            </label>
+            </motion.div>
 
+            {/* ── Confirm Password ── */}
             <AnimatePresence>
               {initializing ? (
                 <motion.div
@@ -180,55 +260,80 @@ export default function LoginPage() {
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.3 }}
-                  style={{ overflow: 'hidden' }}
+                  style={{ overflow: 'hidden', marginBottom: 16 }}
                 >
-                  <label className="flex flex-col gap-2 pb-2">
-                    <span className="text-sm font-medium">确认密码</span>
-                    <Input.Password
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
-                      data-testid={testIds.auth.confirmPassword}
-                      size="large"
-                      style={{ borderRadius: 12 }}
-                    />
+                  <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: 500 }}>
+                    确认密码
                   </label>
+                  <Input.Password
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    placeholder="••••••••"
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    data-testid={testIds.auth.confirmPassword}
+                    style={inputStyle}
+                  />
                 </motion.div>
               ) : null}
             </AnimatePresence>
 
+            {/* ── Error ── */}
             {formError || error ? (
-              <Alert
-                type="error"
-                showIcon
-                message={formError || error}
-                className="rounded-xl"
-              />
+              <motion.div variants={stagger.item} style={{ marginBottom: 12 }}>
+                <Alert
+                  type="error"
+                  showIcon
+                  message={formError || error}
+                  style={{
+                    borderRadius: 10,
+                    border: '1px solid rgba(239, 68, 68, 0.15)',
+                    background: 'rgba(254, 242, 242, 0.8)',
+                  }}
+                />
+              </motion.div>
             ) : null}
 
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={submitting}
-              block
-              size="large"
-              style={{
-                borderRadius: 14,
-                height: 52,
-                fontSize: 16,
-                fontWeight: 600,
-                marginTop: 12,
-                background: 'var(--nb-accent)',
-                border: 'none',
-                boxShadow: '0 12px 32px -8px color-mix(in srgb, var(--nb-accent) 45%, transparent)',
-              }}
-              data-testid={testIds.auth.submit}
-            >
-              {initializing ? '初始化并进入' : '即刻登录'}
-            </Button>
+            {/* ── Submit ── */}
+            <motion.div variants={stagger.item} style={{ marginTop: 8 }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={submitting}
+                block
+                style={{
+                  height: 46,
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  fontFamily: 'var(--nb-font-display)',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                  boxShadow: '0 4px 14px -2px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255,255,255,0.15)',
+                }}
+                data-testid={testIds.auth.submit}
+              >
+                {initializing ? '初始化' : '登录'}
+              </Button>
+            </motion.div>
           </form>
-        </Card>
-      </MotionPanel>
+
+
+        </motion.div>
+
+        {/* ── Subtle glow beneath card ── */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: -30,
+            left: '15%',
+            right: '15%',
+            height: 60,
+            background: 'radial-gradient(ellipse, rgba(59, 130, 246, 0.08) 0%, transparent 70%)',
+            filter: 'blur(16px)',
+            pointerEvents: 'none',
+          }}
+        />
+      </motion.div>
     </div>
   )
 }

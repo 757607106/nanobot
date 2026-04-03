@@ -75,7 +75,7 @@ export default function SearchPanel({
       >
         <SectionCard title="结果">
           {results.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无检索结果。" />
+            <Empty image={false} className="minimal-empty" description="暂无检索结果。" />
           ) : (
             <Flex vertical gap={12}>
               {results.map((item) => (

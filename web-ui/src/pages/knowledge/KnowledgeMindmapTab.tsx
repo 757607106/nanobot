@@ -106,7 +106,7 @@ export function KnowledgeMindmapTab({ mindmapLoading, mindmap, onRegenerate }: K
         </div>
       ) : (
         <div className="knowledge-loading-panel">
-          <Empty description="暂无知识导图" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description="暂无知识导图" image={false} className="minimal-empty" />
         </div>
       )}
 

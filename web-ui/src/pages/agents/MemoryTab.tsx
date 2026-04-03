@@ -118,7 +118,7 @@ export default function MemoryTab({
                 <Spin tip="正在同步候选记录..." />
               </Flex>
             ) : agentMemoryCandidates.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="太棒了！所有候选记录均已清空。" style={{ marginTop: 24, marginBottom: 24 }} />
+              <Empty image={false} className="minimal-empty" description="已清空" style={{ marginTop: 24, marginBottom: 24 }} />
             ) : (
               <div style={{
                 display: 'grid',

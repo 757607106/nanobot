@@ -206,7 +206,7 @@ export function RemoteModelsDialog({ open, models, error, onClose, onImport }: R
             locale={{
               emptyText: (
                 <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  image={false} className="minimal-empty"
                   description="当前供应商还没有返回模型列表"
                 />
               ),
@@ -216,7 +216,7 @@ export function RemoteModelsDialog({ open, models, error, onClose, onImport }: R
           !error && (
             <div className="workspace-empty-state" style={{ minHeight: 180 }}>
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={false} className="minimal-empty"
                 description="当前供应商还没有返回模型列表"
               />
             </div>

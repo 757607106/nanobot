@@ -51,7 +51,7 @@ export function KnowledgeFileDetailModal({
           <Spin size="large" />
         </div>
       ) : !detail ? (
-        <Empty description="暂无文件详情" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description="暂无文件详情" image={false} className="minimal-empty" />
       ) : (
         <div className="knowledge-file-detail-shell">
           <div className="knowledge-file-detail-header">
@@ -102,14 +102,14 @@ export function KnowledgeFileDetailModal({
                 ))}
               </div>
             ) : (
-              <Empty description="当前文件还没有分块结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description="当前文件还没有分块结果" image={false} className="minimal-empty" />
             )
           ) : detail.content.trim() ? (
             <div className="knowledge-file-detail-markdown">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{detail.content}</ReactMarkdown>
             </div>
           ) : (
-            <Empty description="当前文件还没有可预览内容" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            <Empty description="当前文件还没有可预览内容" image={false} className="minimal-empty" />
           )}
         </div>
       )}

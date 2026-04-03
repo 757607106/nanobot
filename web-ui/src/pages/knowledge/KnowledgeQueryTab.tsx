@@ -354,7 +354,7 @@ export function KnowledgeQueryTab({
                       ))}
                     </Space>
                   ) : (
-                    <Empty description="暂无文档块" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    <Empty description="暂无文档块" image={false} className="minimal-empty" />
                   )}
                 </Card>
                 <Card size="small" title={`引用 (${queryResult.data?.references?.length || 0})`}>
@@ -372,7 +372,7 @@ export function KnowledgeQueryTab({
           </>
         ) : (
           <div className="workspace-empty-state">
-            <Empty description="暂无结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            <Empty description="暂无结果" image={false} className="minimal-empty" />
           </div>
         )}
       </SectionCard>

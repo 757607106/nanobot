@@ -169,7 +169,7 @@ function SkillCard({
         ellipsis={{ rows: 2 }}
         style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}
       >
-        {skill.description || '暂无详细描述。'}
+        {skill.description || '—'}
       </Typography.Paragraph>
 
       <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
@@ -412,7 +412,7 @@ export default function SkillsPage() {
           ) : filteredSkills.length === 0 ? (
             <Empty
               image={false}
-              description={skills.length === 0 ? '还没有安装技能' : '没有匹配结果'}
+              description={skills.length === 0 ? '暂无数据' : '无匹配项'}
               style={{ padding: 'var(--nb-spacing-2xl)' }}
             />
           ) : (
@@ -467,7 +467,7 @@ export default function SkillsPage() {
               <Spin size="large" />
             </div>
           ) : marketplaceSkills.length === 0 ? (
-            <Empty description="没有找到匹配的技能" style={{ padding: 'var(--nb-spacing-2xl)' }} />
+            <Empty description="无匹配项" style={{ padding: 'var(--nb-spacing-2xl)' }} />
           ) : (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>

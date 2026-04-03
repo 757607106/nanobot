@@ -43,36 +43,26 @@ export default function MetricCard({
   return (
     <Card
       className={`metric-card metric-card-${tone}`}
+      bordered={false}
       style={{
         position: 'relative',
         height: '100%',
         overflow: 'hidden',
-        borderColor: `${toneColor}28`,
-        boxShadow: 'none',
+        background: 'transparent',
       }}
       styles={{
         body: {
-          padding: '12px 16px',
+          padding: 'var(--nb-spacing-md) var(--nb-spacing-lg)',
         },
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          insetInline: 0,
-          top: 0,
-          height: 2,
-          background: toneColor,
-        }}
-      />
-
       <Flex vertical gap={6}>
         <Flex justify="space-between" align="center" gap={8} className="metric-card-head">
           <Typography.Text
             className="metric-card-label"
             type="secondary"
             style={{
-              fontSize: 12,
+              fontSize: 'var(--nb-text-xs)',
               fontWeight: 700,
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
@@ -107,7 +97,7 @@ export default function MetricCard({
           valueStyle={{
             margin: 0,
             lineHeight: 1.05,
-            fontSize: 'clamp(1.25rem, 1.6vw, 1.55rem)',
+            fontSize: 'var(--nb-scale-xl)',
             fontWeight: 700,
             color: token.colorText,
             wordBreak: 'break-word',

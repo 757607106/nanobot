@@ -396,7 +396,7 @@ export default function KnowledgeWorkspace() {
               }),
             }}
             locale={{
-              emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有匹配的文件或文件夹。" />,
+              emptyText: <Empty image={false} className="minimal-empty" description="暂无数据" />,
             }}
           />
         </Flex>
@@ -404,10 +404,10 @@ export default function KnowledgeWorkspace() {
 
       <SectionCard
         title="最近任务"
-        description="聚焦最近的解析和索引任务，方便快速回看异常。"
+        description=""
       >
         {jobs.slice(0, 6).length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无后台任务" />
+          <Empty image={false} className="minimal-empty" description="暂无后台任务" />
         ) : (
           <Flex vertical gap={12}>
             {jobs.slice(0, 6).map((item) => (
@@ -671,7 +671,7 @@ export default function KnowledgeWorkspace() {
       <div className="knowledge-workspace-container">
         <SectionCard title="知识库">
           <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            image={false} className="minimal-empty"
             description="未选择知识库"
           >
             <Button
@@ -692,7 +692,7 @@ export default function KnowledgeWorkspace() {
       <Flex vertical gap={16}>
         <SectionCard
           title={currentKb.name}
-          description={currentKb.description || '当前知识库还没有描述。'}
+          description={currentKb.description || '—'}
           action={(
             <Space wrap size={[8, 8]}>
               <Button icon={<ReloadOutlined />} onClick={onRefreshDetail}>

@@ -22,7 +22,7 @@ export default function CapabilitySection({
   return (
     <SectionCard title={title} description={description}>
       {items.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
+        <Empty image={false} className="minimal-empty" description={emptyText} />
       ) : (
         <div style={{
           display: 'grid',

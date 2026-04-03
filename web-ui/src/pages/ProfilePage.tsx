@@ -297,7 +297,7 @@ export default function ProfilePage() {
   if (loading && !profile) {
     return (
       <div className="page-stack">
-        <PageHeader title="账户管理" subtitle="正在加载资料..." />
+        <PageHeader title="账户" subtitle="加载中..." />
         <div className="page-content-wrapper px-[var(--nb-layout-gutter)]">
           <Flex vertical gap={24}>
             <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
@@ -315,7 +315,7 @@ export default function ProfilePage() {
       <Flex vertical gap={24}>
         <PageHeader
           title="账户管理"
-          subtitle="当前无法读取管理员资料。"
+          subtitle="无法加载"
           actions={(
             <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()}>
               刷新
@@ -331,7 +331,7 @@ export default function ProfilePage() {
     <div className="page-stack">
       <PageHeader
         title="账户管理"
-        subtitle="维护管理员资料、密码安全和级别。"
+        subtitle="资料 · 安全 · 权限"
         actions={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void loadProfile()} disabled={loading}>

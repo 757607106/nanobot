@@ -50,7 +50,7 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
         {
           key: '/dashboard',
           icon: <DashboardOutlined />,
-          label: '平台总览',
+          label: '总览',
           testId: testIds.app.navDashboard,
         },
       ],
@@ -62,7 +62,7 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
         {
           key: '/chat',
           icon: <MessageOutlined />,
-          label: '对话工作台',
+          label: '对话',
           testId: testIds.app.navChat,
         },
         {
@@ -74,13 +74,13 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
         {
           key: '/channels',
           icon: <ClusterOutlined />,
-          label: '渠道注册表',
+          label: '渠道',
           testId: testIds.app.navChannels,
         },
         {
           key: '/knowledge',
           icon: <BookOutlined />,
-          label: '知识工作区',
+          label: '知识库',
           testId: testIds.app.navKnowledge,
         },
       ],
@@ -92,17 +92,17 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
         {
           key: '/models',
           icon: <ExperimentOutlined />,
-          label: '模型与绑定',
+          label: '模型',
         },
         {
           key: '/skills',
           icon: <AppstoreOutlined />,
-          label: '技能中心',
+          label: '技能',
         },
         {
           key: '/mcp',
           icon: <ApiOutlined />,
-          label: devMode ? 'MCP 扩展' : '连接管理',
+          label: devMode ? 'MCP' : '连接',
           testId: testIds.app.navMcp,
         },
       ],
@@ -114,7 +114,7 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
         {
           key: '/system',
           icon: <SettingOutlined />,
-          label: '实例设置',
+          label: '设置',
         },
       ],
     },
@@ -267,15 +267,15 @@ export default function AppShell() {
               {authStatus?.username?.slice(0, 1).toUpperCase()}
             </Avatar>
             <div style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
-                当前用户
+              <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11, letterSpacing: '0.04em' }}>
+                Account
               </Typography.Text>
               <Typography.Text
                 strong
                 style={{ display: 'block', maxWidth: 180 }}
                 ellipsis
               >
-                {authStatus?.username || '未登录'}
+                {authStatus?.username || '—'}
               </Typography.Text>
             </div>
           </Flex>
@@ -308,9 +308,9 @@ export default function AppShell() {
             height: '100vh',
             overflow: 'auto',
             width: LAYOUT.siderWidth,
-            background: token.colorBgContainer,
-            borderRight: `1px solid ${token.colorBorderSecondary}`,
-            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            background: 'var(--nb-sider-bg)',
+            borderRight: '1px solid var(--nb-sider-border)',
+            boxShadow: 'var(--nb-sider-shadow)',
           }}
         >
           {renderNavigation()}

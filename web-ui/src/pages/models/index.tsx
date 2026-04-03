@@ -364,7 +364,7 @@ export default function ModelsPage() {
         name: provider.name,
         label: provider.label,
         categoryLabel: providerCategoryLabels[provider.category] || provider.category,
-        description: providerDescriptions[provider.name] || '统一管理凭据、模型发现和默认路由。',
+        description: providerDescriptions[provider.name] || '—',
         configured,
         defaultProvider,
         bindingsCount: providerBindingsCount,
@@ -447,7 +447,7 @@ export default function ModelsPage() {
 
       <SectionCard title="接入模型供应商">
         {providerCards.length === 0 ? (
-          <Empty description="没有匹配的供应商" />
+          <Empty description="无匹配项" />
         ) : (
           <div
             style={{

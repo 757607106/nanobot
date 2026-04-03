@@ -1,14 +1,15 @@
 import { theme as antdTheme, type ThemeConfig } from 'antd'
 import type { ResolvedTheme } from '../../themeMode'
 
-const CONSOLE_FONT_FAMILY = '"IBM Plex Sans", "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif'
+const CONSOLE_FONT_FAMILY = '"Outfit", "IBM Plex Sans", "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif'
 
 // 基础设计常量
 const BORDER_RADIUS = {
-  sm: 10,
-  md: 14,
-  lg: 20,
-  xl: 28,
+  xs: 2,
+  sm: 4,
+  md: 6,
+  lg: 8,
+  xl: 12,
 } as const
 
 const SPACING = {
@@ -69,11 +70,10 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       // === 边框与分割线 ===
       colorBorderSecondary: colors.borderSecondary,
 
-      // === 圆角体系 ===
       borderRadius: BORDER_RADIUS.md,
       borderRadiusLG: BORDER_RADIUS.lg,
       borderRadiusSM: BORDER_RADIUS.sm,
-      borderRadiusXS: 6,
+      borderRadiusXS: BORDER_RADIUS.xs,
 
       // === 字体体系 ===
       fontSize: 14,
@@ -149,7 +149,7 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
 
       // === Button 组件 ===
       Button: {
-        borderRadius: 12,
+        borderRadius: BORDER_RADIUS.md,
         controlHeight: 40,
         controlHeightSM: 32,
         controlHeightLG: 48,

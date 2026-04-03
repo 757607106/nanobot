@@ -48,8 +48,8 @@ export default function KnowledgeList({
             </Flex>
           ) : visibleKnowledgeBases.length === 0 ? (
             <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="当前没有匹配的知识库。"
+              image={false} className="minimal-empty"
+              description="无匹配项"
             />
           ) : (
             <div className="resource-rail-list">

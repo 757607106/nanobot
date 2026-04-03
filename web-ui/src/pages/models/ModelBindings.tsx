@@ -31,7 +31,7 @@ export default function ModelBindings({
   return (
     <SectionCard
       title="模型绑定"
-      description="把供应商模型包装成稳定路由，供 Agent、知识库和默认工作流复用。"
+      description=""
       action={
         <Button type="primary" icon={<PlusOutlined />} onClick={onAddModel} style={{ borderRadius: 12 }}>
           添加模型
@@ -39,7 +39,7 @@ export default function ModelBindings({
       }
     >
       {bindings.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无模型绑定" />
+        <Empty image={false} className="minimal-empty" description="暂无模型绑定" />
       ) : (
         <div
           style={{

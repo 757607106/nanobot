@@ -28,5 +28,5 @@ export default function SourcePreview({
     )
   }
 
-  return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
+  return <Empty image={false} className="minimal-empty" description={emptyText} />
 }

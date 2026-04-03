@@ -34,7 +34,7 @@ export default function ProviderList({
       />
 
       {providers.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的供应商" />
+        <Empty image={false} className="minimal-empty" description="无匹配项" />
       ) : (
         <div className="resource-rail-list">
           {providers.map((item) => {

@@ -32,13 +32,13 @@ export default function OverviewPanel({
             {agentMemory.content}
           </Typography.Paragraph>
         ) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前 Agent Profile Memory 为空。" />
+          <Empty image={false} className="minimal-empty" description="暂无数据" />
         )}
       </SectionCard>
 
       <SectionCard title="执行记录">
         {recentRuns.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无运行记录。" />
+          <Empty image={false} className="minimal-empty" description="暂无运行记录。" />
         ) : (
           <Flex vertical gap={12}>
             {recentRuns.slice(0, 5).map((run) => (

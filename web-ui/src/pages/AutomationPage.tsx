@@ -19,7 +19,7 @@ export default function AutomationPage() {
     <div className="page-stack">
       <PageHeader
         title="自动化管理"
-        subtitle="日程事项与定时任务配置"
+        subtitle="定时任务 · 日程"
         actions={
           <Segmented
             value={activeTab}

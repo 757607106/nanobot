@@ -535,7 +535,7 @@ export default function ChannelDetailPage() {
                 </Flex>
               ) : (
                 <div className="workspace-empty-state" style={{ minHeight: 160 }}>
-                  <Empty description="暂无检测结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  <Empty description="暂无检测结果" image={false} className="minimal-empty" />
                 </div>
               )}
             </SectionCard>

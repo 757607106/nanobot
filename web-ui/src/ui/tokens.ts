@@ -29,30 +29,30 @@ export const SPACING = {
 // ==================== 圆角梯度 ====================
 // 对应 CSS 变量: --nb-radius-card, --nb-radius-button 等
 export const BORDER_RADIUS = {
-  /** 6px - 极小圆角 */
-  xs: 6,
-  /** 10px - 小圆角 */
-  sm: 10,
-  /** 12px - 按钮/输入框圆角 (对应 --nb-radius-button, --nb-radius-input) */
-  md: 12,
-  /** 16px - 卡片圆角 (对应 --nb-radius-card) */
-  lg: 16,
-  /** 20px - 大圆角 (对应 --nb-radius-xl) */
-  xl: 20,
-  /** 24px - 模态框圆角 (对应 --nb-radius-modal) */
-  '2xl': 24,
-  /** 28px - 超大圆角 */
-  '3xl': 28,
+  /** 2px - 极小圆角 */
+  xs: 2,
+  /** 4px - 小圆角 */
+  sm: 4,
+  /** 6px - 按钮/输入框圆角 (对应 --nb-radius-button, --nb-radius-input) */
+  md: 6,
+  /** 8px - 卡片圆角 (对应 --nb-radius-card) */
+  lg: 8,
+  /** 12px - 大圆角 (对应 --nb-radius-xl) */
+  xl: 12,
+  /** 16px - 模态框圆角 (对应 --nb-radius-modal) */
+  '2xl': 16,
+  /** 20px - 超大圆角 */
+  '3xl': 20,
   /** 999px - 全圆角 (Tag/Pill 等) */
   full: 999,
   /** 卡片圆角 (对应 --nb-radius-card) */
-  card: 16,
+  card: 8,
   /** 按钮圆角 (对应 --nb-radius-button) */
-  button: 12,
+  button: 6,
   /** 输入框圆角 (对应 --nb-radius-input) */
-  input: 12,
+  input: 6,
   /** 模态框圆角 (对应 --nb-radius-modal) */
-  modal: 24,
+  modal: 12,
 } as const
 
 // ==================== 阴影层级 ====================

@@ -67,8 +67,9 @@ function ValidationQueue({
             return (
               <div
                 key={item.key}
-                className="p-[18px] rounded-2xl"
+                className="p-[var(--nb-spacing-md)]"
                 style={{
+                  borderRadius: 'var(--nb-radius-sm)',
                   border: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorBgLayout,
                 }}
@@ -103,13 +104,14 @@ function ValidationQueue({
         </Flex>
       ) : (
         <div
-          className="min-h-[160px] grid place-items-center rounded-2xl"
+          className="min-h-[120px] grid place-items-center"
           style={{
+            borderRadius: 'var(--nb-radius-md)',
             border: `1px dashed ${token.colorBorderSecondary}`,
             background: token.colorBgLayout,
           }}
         >
-          <Empty description={emptyText} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description={emptyText} image={false} className="minimal-empty" />
         </div>
       )}
     </SectionCard>
@@ -154,7 +156,7 @@ export default function ValidationPage() {
       <Flex vertical gap={24}>
         <PageHeader
           title="配置修复中心"
-          subtitle="正在收集实例配置、运行环境和风险项。"
+          subtitle="正在检查..."
         />
       </Flex>
     )
@@ -165,7 +167,7 @@ export default function ValidationPage() {
       <Flex vertical gap={24}>
         <PageHeader
           title="配置修复中心"
-          subtitle="当前无法生成验证结果。"
+          subtitle="检查失败"
           actions={(
             <Button icon={<ReloadOutlined />} onClick={() => void loadValidation()}>
               重试
@@ -182,7 +184,7 @@ export default function ValidationPage() {
     <Flex vertical gap={24}>
       <PageHeader
         title="配置修复中心"
-        subtitle="把阻塞项、提醒项和风险配置收拢到一个排查视图里。"
+        subtitle="系统检查"
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadValidation()} loading={loading}>
             重新检查
@@ -201,7 +203,7 @@ export default function ValidationPage() {
         <MetricCard
           label="当前状态"
           value={summary.label}
-          helper="以当前校验结果为准"
+          helper="Total"
           icon={
             result.summary.status === 'ready'
               ? <CheckCircleOutlined />
@@ -220,21 +222,21 @@ export default function ValidationPage() {
         <MetricCard
           label="阻塞项"
           value={result.summary.failures}
-          helper="需要先处理后再继续"
+          helper="Required"
           icon={<CloseCircleOutlined />}
           tone={result.summary.failures > 0 ? 'error' : 'neutral'}
         />
         <MetricCard
           label="提醒项"
           value={result.summary.warnings}
-          helper="影响稳定性或完整性"
+          helper="Warnings"
           icon={<WarningOutlined />}
           tone={result.summary.warnings > 0 ? 'warning' : 'neutral'}
         />
         <MetricCard
           label="检查总数"
           value={actionItems.length}
-          helper="包含额外风险配置"
+          helper="Advisory"
           icon={<CheckCircleOutlined />}
           tone="primary"
         />
@@ -243,7 +245,7 @@ export default function ValidationPage() {
       <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">
         <ValidationQueue
           title="核心检查"
-          description="处理模型、运行环境、入口和路径相关问题。"
+          description=""
           items={result.checks}
           emptyText="暂无核心检查结果"
           loading={loading}
@@ -251,7 +253,7 @@ export default function ValidationPage() {
         />
         <ValidationQueue
           title="危险配置隔离区"
-          description="隔离危险配置和会影响实例稳定性的额外风险。"
+          description=""
           items={result.dangerousOptions}
           emptyText="暂无额外风险项"
           loading={loading}

@@ -86,7 +86,7 @@ export function KnowledgeBenchmarkPreviewModal({
           />
         </Space>
       ) : (
-        <Empty description="还没有评估基准" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description="还没有评估基准" image={false} className="minimal-empty" />
       )}
     </Modal>
   )

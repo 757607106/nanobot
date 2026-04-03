@@ -8,7 +8,11 @@ export default function AntdPageProvider({ children }: { children: ReactNode }) 
   const { resolvedTheme } = useThemeMode()
 
   return (
-    <ConfigProvider locale={zhCN} theme={buildAntdThemeConfig(resolvedTheme)}>
+    <ConfigProvider 
+      locale={zhCN} 
+      theme={buildAntdThemeConfig(resolvedTheme)}
+      renderEmpty={() => <div className="minimal-empty"><div className="ant-empty-description">NO DATA DIRECTORY</div></div>}
+    >
       <AntdApp>
         {children}
       </AntdApp>

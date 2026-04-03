@@ -166,8 +166,8 @@ export function ChatMessages({
           <Empty
             description={
               currentSessionId
-                ? '发送第一条消息，开始这轮协作。'
-                : '新建会话后，即可开始提问或上传文件。'
+                ? '开始对话'
+                : '新建会话以开始'
             }
           />
           {quickPrompts?.length ? (

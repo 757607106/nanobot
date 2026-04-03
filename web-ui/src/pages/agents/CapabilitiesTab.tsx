@@ -103,7 +103,7 @@ export default function CapabilitiesTab({
         items={skillItems}
         selectedKeys={form.skillIds}
         onToggle={(key) => onToggleArrayItem('skillIds', key)}
-        emptyText="暂无已安装技能。"
+        emptyText="暂无数据"
       />
       <CapabilitySection
         title={`${devMode ? 'MCP 服务' : '连接'} (${form.mcpServerIds.length})`}

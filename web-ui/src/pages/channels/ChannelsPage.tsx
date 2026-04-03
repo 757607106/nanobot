@@ -471,7 +471,7 @@ export default function ChannelsPage() {
       {/* 渠道卡片网格 */}
       <SectionCard title="接入渠道">
         {filteredChannels.length === 0 ? (
-          <Empty description="没有匹配的渠道" />
+          <Empty description="无匹配项" />
         ) : (
           <div
             style={{
