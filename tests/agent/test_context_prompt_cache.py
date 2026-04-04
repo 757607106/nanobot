@@ -73,11 +73,17 @@ def test_runtime_context_is_separate_untrusted_user_message(tmp_path) -> None:
     assert "Return exactly: OK" in user_content
 
 
-def test_system_prompt_uses_virtual_workspace_path(tmp_path) -> None:
+def test_subagent_result_does_not_create_consecutive_assistant_messages(tmp_path) -> None:
     workspace = _make_workspace(tmp_path)
-    builder = ContextBuilder(workspace, virtual_workspace_path="/workspace")
+    builder = ContextBuilder(workspace)
 
-    prompt = builder.build_system_prompt()
+    messages = builder.build_messages(
+        history=[{"role": "assistant", "content": "previous result"}],
+        current_message="subagent result",
+        channel="cli",
+        chat_id="direct",
+        current_role="assistant",
+    )
 
-    assert "Your workspace is at: /workspace" in prompt
-    assert str(workspace) not in prompt
+    for left, right in zip(messages, messages[1:]):
+        assert not (left.get("role") == right.get("role") == "assistant")

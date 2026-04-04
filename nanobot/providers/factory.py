@@ -39,6 +39,10 @@ def make_provider_from_config(
             api_base=provider_cfg.api_base,
             default_model=model_name,
         )
+    elif backend == "github_copilot":
+        from nanobot.providers.github_copilot_provider import GitHubCopilotProvider
+
+        provider = GitHubCopilotProvider(default_model=model_name)
     elif backend == "anthropic":
         from nanobot.providers.anthropic_provider import AnthropicProvider
 

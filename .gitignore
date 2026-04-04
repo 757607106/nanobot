@@ -4,6 +4,7 @@
 .docs
 .env
 node_modules/
+.web
 *.pyc
 dist/
 build/
