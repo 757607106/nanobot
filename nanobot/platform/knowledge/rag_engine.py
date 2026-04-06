@@ -496,10 +496,7 @@ class RAGEngine:
         if kb_id in self._instances and self._instance_runtime_keys.get(kb_id) == runtime_key:
             return self._instances[kb_id]
 
-        runtime = self._kb_runtime_config(kb_id)
-        runtime_key = self._runtime_cache_key(runtime)
-        if kb_id in self._instances and self._instance_runtime_keys.get(kb_id) == runtime_key:
-            return self._instances[kb_id]
+        # Runtime config changed — evict stale instance
         if kb_id in self._instances:
             await self.reset_kb(kb_id)
 
@@ -677,16 +674,52 @@ class RAGEngine:
 
         return resolved_model, custom_llm_provider, resolved_api_base or None
 
-    def _build_llm_func(self, runtime: dict[str, Any] | None = None):
-        """Build the async LLM function for RAG-Anything / LightRAG."""
-        from litellm import acompletion
-
+    def _resolve_llm_completion_kwargs(
+        self,
+        runtime: dict[str, Any] | None = None,
+    ) -> tuple[str, str, str | None, str | None, dict | None]:
+        """Resolve LLM runtime parameters and return (model, provider_name, api_key, api_base, extra_headers)."""
         resolved_runtime = dict(runtime or {})
         api_key = str(resolved_runtime.get("llm_api_key") or self._api_key or "")
         api_base = str(resolved_runtime.get("llm_api_base") or self._api_base or "").strip() or None
         model = str(resolved_runtime.get("llm_model") or self._default_model or "").strip()
         provider_name = str(resolved_runtime.get("llm_provider_name") or self._provider_name or "").strip()
         extra_headers = dict(resolved_runtime.get("llm_extra_headers") or self._extra_headers or {}) or None
+        return model, provider_name, api_key, api_base, extra_headers
+
+    def _build_completion_kw(
+        self,
+        *,
+        model: str,
+        provider_name: str,
+        api_key: str,
+        api_base: str | None,
+        extra_headers: dict | None,
+    ) -> dict[str, Any]:
+        """Build the common kwargs dict for litellm acompletion calls."""
+        resolved_model, custom_llm_provider, resolved_api_base = self._resolve_litellm_runtime(
+            model=model,
+            provider_name=provider_name,
+            api_key=api_key,
+            api_base=api_base,
+        )
+        kw: dict[str, Any] = {"model": resolved_model}
+        if api_key:
+            kw["api_key"] = api_key
+        if resolved_api_base:
+            kw["api_base"] = resolved_api_base
+        if custom_llm_provider:
+            kw["custom_llm_provider"] = custom_llm_provider
+        if extra_headers:
+            kw["extra_headers"] = extra_headers
+        kw["timeout"] = self._llm_timeout
+        return kw
+
+    def _build_llm_func(self, runtime: dict[str, Any] | None = None):
+        """Build the async LLM function for RAG-Anything / LightRAG."""
+        from litellm import acompletion
+
+        model, provider_name, api_key, api_base, extra_headers = self._resolve_llm_completion_kwargs(runtime)
 
         async def llm_model_func(
             prompt: str,
@@ -701,22 +734,11 @@ class RAGEngine:
                 messages.extend(history_messages)
             messages.append({"role": "user", "content": prompt})
 
-            resolved_model, custom_llm_provider, resolved_api_base = self._resolve_litellm_runtime(
-                model=model,
-                provider_name=provider_name,
-                api_key=api_key,
-                api_base=api_base,
+            kw = self._build_completion_kw(
+                model=model, provider_name=provider_name,
+                api_key=api_key, api_base=api_base, extra_headers=extra_headers,
             )
-            kw: dict[str, Any] = {"model": resolved_model, "messages": messages}
-            if api_key:
-                kw["api_key"] = api_key
-            if resolved_api_base:
-                kw["api_base"] = resolved_api_base
-            if custom_llm_provider:
-                kw["custom_llm_provider"] = custom_llm_provider
-            if extra_headers:
-                kw["extra_headers"] = extra_headers
-            kw["timeout"] = self._llm_timeout
+            kw["messages"] = messages
 
             # Forward supported kwargs
             for passthrough in ("temperature", "max_tokens"):
@@ -792,12 +814,7 @@ class RAGEngine:
         """Build the vision model function for multimodal processing."""
         from litellm import acompletion
 
-        resolved_runtime = dict(runtime or {})
-        api_key = str(resolved_runtime.get("llm_api_key") or self._api_key or "")
-        api_base = str(resolved_runtime.get("llm_api_base") or self._api_base or "").strip() or None
-        model = str(resolved_runtime.get("llm_model") or self._default_model or "").strip()
-        provider_name = str(resolved_runtime.get("llm_provider_name") or self._provider_name or "").strip()
-        extra_headers = dict(resolved_runtime.get("llm_extra_headers") or self._extra_headers or {}) or None
+        model, provider_name, api_key, api_base, extra_headers = self._resolve_llm_completion_kwargs(runtime)
 
         async def vision_model_func(
             prompt: str,
@@ -807,22 +824,10 @@ class RAGEngine:
             messages: list | None = None,
             **kwargs: Any,
         ) -> str:
-            resolved_model, custom_llm_provider, resolved_api_base = self._resolve_litellm_runtime(
-                model=model,
-                provider_name=provider_name,
-                api_key=api_key,
-                api_base=api_base,
+            kw = self._build_completion_kw(
+                model=model, provider_name=provider_name,
+                api_key=api_key, api_base=api_base, extra_headers=extra_headers,
             )
-            kw: dict[str, Any] = {"model": resolved_model}
-            if api_key:
-                kw["api_key"] = api_key
-            if resolved_api_base:
-                kw["api_base"] = resolved_api_base
-            if custom_llm_provider:
-                kw["custom_llm_provider"] = custom_llm_provider
-            if extra_headers:
-                kw["extra_headers"] = extra_headers
-            kw["timeout"] = self._llm_timeout
 
             # VLM enhanced query: pre-built messages
             if messages:
@@ -1649,9 +1654,43 @@ def create_rag_engine_from_config(
         and str(getattr(rag_graph_store, "provider", "") or "").strip().lower() == "neo4j"
         and str(getattr(rag_graph_store, "uri", "") or "").strip()
     )
+
+    # --- Vector storage selection ---
+    # Use Milvus only when explicitly configured (non-default URI).
+    # Otherwise fall back to NanoVectorDBStorage (zero-dependency local files).
+    milvus_uri = str(getattr(rag_config.milvus, "uri", "") or "").strip()
+    _default_milvus_uri = "http://127.0.0.1:19530"
+    use_milvus = bool(milvus_uri and milvus_uri != _default_milvus_uri)
+
+    if not use_milvus and milvus_uri == _default_milvus_uri:
+        # Check if Milvus is actually reachable at the default address
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            result = sock.connect_ex(("127.0.0.1", 19530))
+            sock.close()
+            use_milvus = result == 0
+        except Exception:
+            use_milvus = False
+
+    if use_milvus:
+        vector_storage = "MilvusVectorDBStorage"
+        vector_db_kwargs: dict[str, Any] = {
+            "index_type": str(getattr(rag_config.milvus, "index_type", "AUTOINDEX") or "AUTOINDEX").strip()
+            or "AUTOINDEX",
+            "metric_type": str(getattr(rag_config.milvus, "metric_type", "COSINE") or "COSINE").strip()
+            or "COSINE",
+        }
+        logger.info("RAG vector storage: Milvus ({})", milvus_uri)
+    else:
+        vector_storage = "NanoVectorDBStorage"
+        vector_db_kwargs = {}
+        logger.info("RAG vector storage: NanoVectorDB (local file storage)")
+
     lightrag_base_kwargs: dict[str, Any] = {
         "kv_storage": "JsonKVStorage",
-        "vector_storage": "MilvusVectorDBStorage",
+        "vector_storage": vector_storage,
         "graph_storage": "Neo4JStorage" if use_neo4j_graph else "NetworkXStorage",
         "doc_status_storage": "JsonDocStatusStorage",
         "default_llm_timeout": int(getattr(rag_config, "llm_timeout", 60) or 60),
@@ -1662,20 +1701,19 @@ def create_rag_engine_from_config(
             1,
             int(getattr(rag_config, "embedding_func_max_async", 8) or 8),
         ),
-        "vector_db_storage_cls_kwargs": {
-            "index_type": str(getattr(rag_config.milvus, "index_type", "AUTOINDEX") or "AUTOINDEX").strip()
-            or "AUTOINDEX",
-            "metric_type": str(getattr(rag_config.milvus, "metric_type", "COSINE") or "COSINE").strip()
-            or "COSINE",
-        },
     }
-    storage_env = {
-        "MILVUS_URI": str(getattr(rag_config.milvus, "uri", "") or "").strip(),
-        "MILVUS_DB_NAME": str(getattr(rag_config.milvus, "db_name", "") or "").strip(),
-        "MILVUS_USER": str(getattr(rag_config.milvus, "user", "") or "").strip(),
-        "MILVUS_PASSWORD": str(getattr(rag_config.milvus, "password", "") or "").strip(),
-        "MILVUS_TOKEN": str(getattr(rag_config.milvus, "token", "") or "").strip(),
-    }
+    if vector_db_kwargs:
+        lightrag_base_kwargs["vector_db_storage_cls_kwargs"] = vector_db_kwargs
+
+    storage_env: dict[str, str] = {}
+    if use_milvus:
+        storage_env = {
+            "MILVUS_URI": milvus_uri,
+            "MILVUS_DB_NAME": str(getattr(rag_config.milvus, "db_name", "") or "").strip(),
+            "MILVUS_USER": str(getattr(rag_config.milvus, "user", "") or "").strip(),
+            "MILVUS_PASSWORD": str(getattr(rag_config.milvus, "password", "") or "").strip(),
+            "MILVUS_TOKEN": str(getattr(rag_config.milvus, "token", "") or "").strip(),
+        }
     if use_neo4j_graph and rag_graph_store is not None:
         storage_env.update(
             {
@@ -1704,3 +1742,4 @@ def create_rag_engine_from_config(
         lightrag_base_kwargs=lightrag_base_kwargs,
         storage_env=storage_env,
     )
+

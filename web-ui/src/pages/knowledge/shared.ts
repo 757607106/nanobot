@@ -7,7 +7,7 @@ import type {
   KnowledgeQueryParams,
 } from '../../types'
 
-export const KNOWLEDGE_ARCHITECTURE_LABEL = 'LightRAG / Milvus'
+export const KNOWLEDGE_ARCHITECTURE_LABEL = 'LightRAG'
 export const DEFAULT_KNOWLEDGE_CHUNK_SIZE = 1000
 export const DEFAULT_KNOWLEDGE_CHUNK_OVERLAP = 200
 
