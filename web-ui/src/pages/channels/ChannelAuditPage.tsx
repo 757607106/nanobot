@@ -29,6 +29,7 @@ import { formatDateTimeZh } from '../../locale'
 import type { ChannelAuditEntry, ChannelAuditListResponse } from '../../types'
 import { getAuditStatusColor, getAuditStatusLabel } from './shared'
 import { useToast } from '../../toast'
+import { useDevMode } from '../../devMode'
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) return error.message
@@ -39,6 +40,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 export default function ChannelAuditPage() {
   const navigate = useNavigate()
   const message = useToast()
+  const { devMode } = useDevMode()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -112,7 +114,7 @@ export default function ChannelAuditPage() {
     [filteredItems],
   )
 
-  const columns = [
+  const allColumns = [
     {
       title: '时间',
       dataIndex: 'createdAt',
@@ -138,30 +140,32 @@ export default function ChannelAuditPage() {
         <Tag>{name}</Tag>
       ),
     },
-    {
-      title: '会话 ID',
-      dataIndex: 'chatId',
-      key: 'chatId',
-      width: 240,
-      render: (chatId: string) => (
-        <Tooltip title={chatId}>
-          <Typography.Text ellipsis className="console-inline-code" style={{ maxWidth: 200 }}>
-            {chatId || '-'}
-          </Typography.Text>
-        </Tooltip>
-      ),
-    },
-    {
-      title: '命中',
-      dataIndex: 'resolutionKind',
-      key: 'resolutionKind',
-      width: 100,
-      render: (kind: string) => (
-        <Tag>
-          {kind === 'wildcard' ? '通配' : kind === 'exact' ? '精确' : '未命中'}
-        </Tag>
-      ),
-    },
+    ...(devMode ? [
+      {
+        title: '会话 ID',
+        dataIndex: 'chatId',
+        key: 'chatId',
+        width: 240,
+        render: (chatId: string) => (
+          <Tooltip title={chatId}>
+            <Typography.Text ellipsis className="console-inline-code" style={{ maxWidth: 200 }}>
+              {chatId || '-'}
+            </Typography.Text>
+          </Tooltip>
+        ),
+      },
+      {
+        title: '命中',
+        dataIndex: 'resolutionKind',
+        key: 'resolutionKind',
+        width: 100,
+        render: (kind: string) => (
+          <Tag>
+            {kind === 'wildcard' ? '通配' : kind === 'exact' ? '精确' : '未命中'}
+          </Tag>
+        ),
+      },
+    ] : []),
     {
       title: '目标',
       key: 'target',
@@ -277,7 +281,7 @@ export default function ChannelAuditPage() {
 
         <Table
           dataSource={filteredItems}
-          columns={columns}
+          columns={allColumns}
           rowKey="auditId"
           size="small"
           pagination={{ pageSize: 20, showSizeChanger: false }}

@@ -257,12 +257,13 @@ export default function RunsPage() {
         icon: <ClockCircleOutlined />,
         children: <RunTimeline run={selectedRun} devMode={devMode} />,
       },
-      {
+      // 审计 Tab 仅 devMode 显示
+      ...(devMode ? [{
         key: 'boundary',
         label: '审计',
         icon: <InfoCircleOutlined />,
         children: <RunBoundaryAuditPanel audit={boundaryAudit} devMode={devMode} />,
-      },
+      }] : []),
       {
         key: 'tree',
         label: '任务树',

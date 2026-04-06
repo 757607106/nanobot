@@ -77,7 +77,7 @@ BASE_INFO: dict[str, str] = {"channel_version": WEIXIN_CHANNEL_VERSION}
 
 # Session-expired error code
 ERRCODE_SESSION_EXPIRED = -14
-SESSION_PAUSE_DURATION_S = 60 * 60
+SESSION_PAUSE_DURATION_S = 5 * 60  # 5 minutes (was 60 min)
 
 # Retry constants (matching the reference plugin's monitor.ts)
 MAX_CONSECUTIVE_FAILURES = 3
@@ -504,10 +504,43 @@ class WeixinChannel(BaseChannel):
         if self.config.token:
             self._token = self.config.token
         elif not self._load_state():
-            if not await self._qr_login():
-                logger.error("WeChat login failed. Run 'nanobot channels login weixin' to authenticate.")
-                self._running = False
-                return
+            if self.bus is None:
+                # CLI mode — interactive QR login in the console
+                if not await self._qr_login():
+                    logger.error("WeChat login failed. Run 'nanobot channels login weixin' to authenticate.")
+                    self._running = False
+                    return
+            else:
+                # Web UI mode — wait for binding service to provide token
+                logger.info(
+                    "WeChat: no saved credentials. Use the Web UI '扫码绑定' to authenticate."
+                )
+                while self._running:
+                    await asyncio.sleep(5)
+                    if self._load_state():
+                        logger.info("WeChat: credentials found in state file, starting channel.")
+                        break
+                else:
+                    return
+
+        # Validate that get_updates_buf matches current token.
+        # The cursor (protobuf) embeds the bot token; using a stale cursor
+        # with a different token causes the API to reject with errcode -14.
+        if self._get_updates_buf and self._token:
+            try:
+                import base64 as _b64
+                decoded = _b64.b64decode(self._get_updates_buf)
+                # Extract the token prefix (bot_id portion before the colon)
+                token_prefix = self._token.split(":")[0] if ":" in self._token else self._token
+                if token_prefix.encode() not in decoded:
+                    logger.info(
+                        "Clearing stale get_updates_buf (cursor token mismatch with current session)"
+                    )
+                    self._get_updates_buf = ""
+                    self._save_state()
+            except Exception:  # noqa: BLE001
+                # If decoding fails, clear cursor as a precaution
+                self._get_updates_buf = ""
 
         logger.info("WeChat channel starting with long-poll...")
 
@@ -538,7 +571,10 @@ class WeixinChannel(BaseChannel):
         if self._client:
             await self._client.aclose()
             self._client = None
-        self._save_state()
+        # Only persist state if we have a valid token — avoid overwriting
+        # a freshly-written state file from the binding service.
+        if self._token:
+            self._save_state()
     # ------------------------------------------------------------------
     # Polling  (matches monitor.ts monitorWeixinProvider)
     # ------------------------------------------------------------------
@@ -585,11 +621,37 @@ class WeixinChannel(BaseChannel):
 
         if is_error:
             if errcode == ERRCODE_SESSION_EXPIRED or ret == ERRCODE_SESSION_EXPIRED:
-                self._pause_session()
+                # Try to reload token from state file — binding service may
+                # have written a fresh token via QR login.
+                old_token = self._token
+                if self._load_state() and self._token and self._token != old_token:
+                    # Clear stale cursor — a new token requires a fresh session
+                    self._get_updates_buf = ""
+                    self._save_state()
+                    logger.info(
+                        "WeChat session expired but found new token in state file, resuming with fresh session."
+                    )
+                    self._session_pause_until = 0.0
+                    return
+
+                # No new token available — attempt interactive re-login
+                logger.warning(
+                    "WeChat session expired (errcode {}). Attempting re-login...",
+                    errcode,
+                )
+                self._token = ""
+                self._get_updates_buf = ""
+                success = await self._qr_login()
+                if success:
+                    logger.info("WeChat re-login successful, resuming long-poll.")
+                    self._session_pause_until = 0.0
+                    return
+
+                # Re-login failed — pause before next attempt
+                self._pause_session(SESSION_PAUSE_DURATION_S)
                 remaining = self._session_pause_remaining_s()
                 logger.warning(
-                    "WeChat session expired (errcode {}). Pausing {} min.",
-                    errcode,
+                    "WeChat re-login failed. Pausing {} min.",
                     max((remaining + 59) // 60, 1),
                 )
                 return

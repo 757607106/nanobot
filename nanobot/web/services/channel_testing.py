@@ -28,6 +28,7 @@ CHANNEL_REQUIRED_FIELDS: dict[str, list[str]] = {
     "dingtalk": ["clientId", "clientSecret"],
     "wecom": ["botId", "secret"],
     "mochat": ["clawToken", "agentUserId"],
+    "weixin": [],
     "email": [
         "consentGranted",
         "imapHost",
@@ -122,6 +123,7 @@ class WebChannelTestService:
             "mochat": self._probe_mochat,
             "qq": self._probe_qq,
             "wecom": self._probe_wecom,
+            "weixin": self._probe_weixin,
         }
 
         probe = probes.get(channel_name)
@@ -551,3 +553,53 @@ class WebChannelTestService:
             detail="已完成 sessions 列表接口探测。",
             checks=[self._check("sessions_list", "Sessions API", "pass", "列表接口可访问。")],
         )
+
+    async def _probe_weixin(self, channel_name: str, channel_payload: dict[str, Any]) -> dict[str, Any]:
+        """WeChat probe: check config token or state-file token."""
+        token = str(channel_payload.get("token") or "").strip()
+        checks: list[dict[str, str]] = []
+
+        # Check state file for stored token
+        state_file = self._weixin_state_file(channel_payload)
+        has_state_token = False
+        if state_file.exists():
+            try:
+                data = json.loads(state_file.read_text())
+                has_state_token = bool(str(data.get("token", "")).strip())
+            except Exception:  # noqa: BLE001
+                pass
+
+        if token:
+            checks.append(self._check("config_token", "配置 Token", "pass", "已在配置中填写 Bot Token。"))
+        elif has_state_token:
+            checks.append(self._check("state_token", "扫码认证", "pass", "已通过扫码获取认证凭据，无需手动填写 Token。"))
+        else:
+            return self._result(
+                channel_name=channel_name,
+                status="warning",
+                summary="WeChat 尚未完成认证。",
+                detail="请先通过扫码绑定或手动填写 Bot Token。",
+                binding_required=True,
+                checks=[
+                    self._check("auth", "认证状态", "warn", "未找到有效的 Token 或扫码认证数据。"),
+                ],
+            )
+
+        return self._result(
+            channel_name=channel_name,
+            status="passed",
+            summary="WeChat 认证凭据已就绪。",
+            detail="已检测到有效的认证数据，渠道可正常运行。",
+            checks=checks,
+        )
+
+    @staticmethod
+    def _weixin_state_file(channel_payload: dict[str, Any]) -> Path:
+        raw_state_dir = str(
+            channel_payload.get("state_dir")
+            or channel_payload.get("stateDir")
+            or "",
+        ).strip()
+        from nanobot.config.paths import get_runtime_subdir
+        state_dir = Path(raw_state_dir).expanduser() if raw_state_dir else get_runtime_subdir("weixin")
+        return state_dir / "account.json"

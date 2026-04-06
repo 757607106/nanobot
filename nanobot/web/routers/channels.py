@@ -128,6 +128,20 @@ def stop_whatsapp_bind(request: Request) -> JSONResponse:
 @router.get("/api/v1/channels/weixin/bind/status")
 def get_weixin_bind_status(request: Request) -> JSONResponse:
     data = request.app.state.weixin_binding.status(request.app.state.web.config)
+    # When binding just completed (authenticated + thread finished), restart
+    # channel runtime so the main WeChat channel picks up the new token.
+    if data.get("authenticated") and not data.get("running"):
+        binding_svc = request.app.state.weixin_binding
+        if not getattr(binding_svc, "_restart_triggered", False):
+            binding_svc._restart_triggered = True  # noqa: SLF001
+            try:
+                request.app.state.web.channel_runtime.restart()
+                logger.info("Channel runtime restarted after WeChat binding detected")
+            except Exception:  # noqa: BLE001
+                logger.warning("Failed to restart channel runtime after WeChat binding")
+    elif not data.get("authenticated"):
+        # Reset flag so next authentication triggers restart
+        request.app.state.weixin_binding._restart_triggered = False  # noqa: SLF001
     return _json_response(200, _ok(data))
 
 
@@ -138,6 +152,8 @@ def start_weixin_bind(
 ) -> JSONResponse:
     try:
         force = bool(payload.get("force", False))
+        # Reset restart flag when starting a new binding session
+        request.app.state.weixin_binding._restart_triggered = False  # noqa: SLF001
         data = request.app.state.weixin_binding.start(request.app.state.web.config, force=force)
     except Exception as exc:  # noqa: BLE001
         logger.exception("WeChat bind start failed")

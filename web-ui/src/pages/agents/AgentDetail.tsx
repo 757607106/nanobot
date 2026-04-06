@@ -1,5 +1,5 @@
-import { CopyOutlined, DeleteOutlined, EllipsisOutlined, MessageOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
-import { Alert, Button, Dropdown, Empty, Flex, Modal, Space, Spin, Tabs, Tag, Switch, Typography } from 'antd'
+import { CopyOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, MessageOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
+import { Alert, Button, Dropdown, Empty, Flex, Modal, Popover, Space, Spin, Tabs, Tag, Switch, Tooltip, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '../../components/console/PageHeader'
@@ -21,6 +21,7 @@ import CapabilitiesTab from './CapabilitiesTab'
 import MemoryTab from './MemoryTab'
 import type { AgentFormState, AgentTab } from './types'
 import { memoryScopeLabel } from './utils'
+import { getAgentAvatar, AVATAR_PRESETS, setAgentAvatarOverride, type AvatarPreset } from '../../avatarConfig'
 
 interface AgentDetailProps {
   isCreateRoute: boolean
@@ -105,6 +106,7 @@ export default function AgentDetail({
   const navigate = useNavigate()
   const [detailTab, setDetailTab] = useState<AgentTab>('basic')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const capabilityCount = form.toolAllowlist.length + form.skillIds.length + form.mcpServerIds.length + form.knowledgeBindingIds.length
   const pendingMemoryCount = agentMemoryCandidates.filter((item) => item.status === 'proposed').length
 
@@ -149,27 +151,61 @@ export default function AgentDetail({
     )
   }
 
-  const avatarColors = [
-    'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%)',
-    'linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)',
-    'linear-gradient(120deg, #d4fc79 0%, #96e6a1 100%)',
-    'linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)',
-    'linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)',
-    'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)',
-  ]
+  const agentId = currentAgent?.agentId || ''
+  const avatar = getAgentAvatar(
+    agentId,
+    form.name || detailTitle,
+    form.description,
+    form.tags,
+  )
 
-  const getGradientForId = (id: string | undefined) => {
-    if (!id) return avatarColors[0]
-    let hash = 0
-    for (let i = 0; i < id.length; i++) {
-      hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  function handleSelectAvatar(preset: AvatarPreset) {
+    if (agentId) {
+      setAgentAvatarOverride(agentId, preset.key)
     }
-    return avatarColors[Math.abs(hash) % avatarColors.length]
+    setAvatarPickerOpen(false)
   }
 
-  const getInitials = (name: string | undefined) => {
-    return (name || '').trim().substring(0, 2).toUpperCase() || 'A'
-  }
+  const avatarPickerContent = (
+    <div style={{ width: 340 }}>
+      <Typography.Text strong style={{ display: 'block', marginBottom: 12, fontSize: 14 }}>
+        选择数字员工形象
+      </Typography.Text>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: 10,
+      }}>
+        {AVATAR_PRESETS.map((preset) => (
+          <Tooltip key={preset.key} title={preset.label}>
+            <div
+              onClick={() => handleSelectAvatar(preset)}
+              style={{
+                cursor: 'pointer',
+                borderRadius: 14,
+                padding: 3,
+                background: avatar.key === preset.key ? preset.gradient : 'transparent',
+                border: avatar.key === preset.key ? `2px solid ${preset.color}` : '2px solid transparent',
+                transition: 'all 0.2s ease',
+                aspectRatio: '1',
+              }}
+            >
+              <img
+                src={preset.src}
+                alt={preset.label}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: 11,
+                  objectFit: 'cover',
+                }}
+              />
+            </div>
+          </Tooltip>
+        ))}
+      </div>
+    </div>
+  )
 
   return (
     <Flex vertical gap={24} style={{ padding: '32px max(24px, calc((100% - var(--nb-content-max-width)) / 2))', minHeight: '100vh', background: 'var(--nb-body-bg)' }}>
@@ -193,7 +229,7 @@ export default function AgentDetail({
           right: -100,
           width: 300,
           height: 300,
-          background: getGradientForId(currentAgent?.agentId),
+          background: avatar.gradient,
           filter: 'blur(80px)',
           opacity: 0.3,
           zIndex: 0,
@@ -202,22 +238,57 @@ export default function AgentDetail({
 
         <Flex justify="space-between" align="flex-start" style={{ position: 'relative', zIndex: 1 }}>
           <Flex gap={24} align="center">
-            <div style={{
-              width: 80,
-              height: 80,
-              borderRadius: 24,
-              background: getGradientForId(currentAgent?.agentId),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'rgba(0,0,0,0.6)',
-              fontWeight: 800,
-              fontSize: 28,
-              boxShadow: 'inset 0 4px 8px rgba(255,255,255,0.5), 0 10px 25px -5px rgba(0,0,0,0.1)',
-              flexShrink: 0
-            }}>
-              {getInitials(detailTitle)}
-            </div>
+            <Popover
+              content={avatarPickerContent}
+              trigger="click"
+              open={avatarPickerOpen}
+              onOpenChange={setAvatarPickerOpen}
+              placement="bottomLeft"
+            >
+              <div style={{
+                width: 80,
+                height: 80,
+                borderRadius: 24,
+                background: avatar.gradient,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: `0 10px 30px -5px ${avatar.color}33`,
+                flexShrink: 0,
+                padding: 4,
+                cursor: 'pointer',
+                position: 'relative',
+              }}>
+                <img
+                  src={avatar.src}
+                  alt={avatar.label}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: 20,
+                    objectFit: 'cover',
+                  }}
+                />
+                {/* 悬浮编辑提示 */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: -4,
+                  right: -4,
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  background: 'var(--nb-surface-strong)',
+                  border: '2px solid var(--nb-card-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 11,
+                  color: 'var(--nb-muted)',
+                }}>
+                  <EditOutlined />
+                </div>
+              </div>
+            </Popover>
             <Flex vertical gap={8}>
               <Typography.Title level={2} style={{ margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 12 }}>
                 {detailTitle}

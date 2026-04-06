@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
-import { Button, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography } from 'antd'
+import { useMemo, useState } from 'react'
+import { Button, Collapse, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography } from 'antd'
+import { SettingOutlined } from '@ant-design/icons'
 import SectionCard from '../../components/console/SectionCard'
 import FormField from '../../components/console/FormField'
 import DevOnly from '../../components/DevOnly'
@@ -84,14 +85,6 @@ export default function AgentEditor({
     [form.rulesText],
   )
 
-  const retentionSummary = form.artifactArchiveAfterDays.trim()
-    ? `${form.artifactArchiveAfterDays.trim()} 天后归档`
-    : '未设置归档'
-
-  const routeSummary = form.binding
-    ? form.binding
-    : [form.provider, form.model].filter(Boolean).join(' / ') || '自动推断'
-
   function updateProvider(value: string) {
     const nextProvider = value
     const currentModel = form.model.trim()
@@ -158,7 +151,7 @@ export default function AgentEditor({
               />
             </FormField>
 
-            <FormField label="模型引擎配置">
+            <FormField label="模型引擎">
               <Select
                 value={form.binding}
                 onChange={updateBinding}
@@ -181,86 +174,110 @@ export default function AgentEditor({
           </div>
         </SectionCard>
 
-        <SectionCard title="引擎高级参数">
-          <Flex vertical gap={16}>
-            <div
-              style={{
-                display: 'grid',
-                gap: 16,
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              }}
-            >
-              {!form.binding ? (
-                <>
-                  <FormField label="备用接口 (Provider)">
-                    <Select
-                      value={form.provider}
-                      onChange={updateProvider}
-                      options={[{ value: '', label: '自动推断' }, ...agentProviderOptions]}
-                      aria-label="备用供应商"
-                      style={{ width: '100%' }}
-                    />
-                  </FormField>
+        {/* 高级参数折叠面板 — 非必需配置 */}
+        <Collapse
+          ghost
+          items={[{
+            key: 'advanced',
+            label: (
+              <Flex align="center" gap={8}>
+                <SettingOutlined style={{ fontSize: 14, color: 'var(--nb-muted)' }} />
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                  高级参数
+                </Typography.Text>
+              </Flex>
+            ),
+            children: (
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 16,
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  padding: '4px 0',
+                }}
+              >
+                {!form.binding ? (
+                  <>
+                    <FormField label="接口 (Provider)">
+                      <Select
+                        value={form.provider}
+                        onChange={updateProvider}
+                        options={[{ value: '', label: '自动推断' }, ...agentProviderOptions]}
+                        aria-label="备用供应商"
+                        style={{ width: '100%' }}
+                      />
+                    </FormField>
 
-                  <FormField label="模型版本 (Model)">
-                    <Input
-                      value={form.model}
-                      onChange={(event) => onUpdateForm('model', event.target.value)}
-                      aria-label="备用模型"
-                      style={{ borderRadius: 12 }}
-                    />
-                  </FormField>
-                </>
-              ) : null}
+                    <FormField label="模型版本 (Model)">
+                      <Input
+                        value={form.model}
+                        onChange={(event) => onUpdateForm('model', event.target.value)}
+                        aria-label="备用模型"
+                        style={{ borderRadius: 12 }}
+                      />
+                    </FormField>
+                  </>
+                ) : null}
 
-              <FormField label="自动记忆提取">
-                <Select
-                  value={form.memoryScope}
-                  onChange={(value) => onUpdateForm('memoryScope', value)}
-                  options={memoryScopeOptions}
-                  aria-label="记忆范围"
-                  style={{ width: '100%' }}
-                />
-              </FormField>
+                <FormField label="自动记忆提取">
+                  <Select
+                    value={form.memoryScope}
+                    onChange={(value) => onUpdateForm('memoryScope', value)}
+                    options={memoryScopeOptions}
+                    aria-label="记忆范围"
+                    style={{ width: '100%' }}
+                  />
+                </FormField>
 
-              <FormField label="产物归档天数">
-                <Input
-                  value={form.artifactArchiveAfterDays}
-                  onChange={(event) => onUpdateForm('artifactArchiveAfterDays', event.target.value)}
-                  placeholder="永久保存"
-                  aria-label="产物归档天数"
-                  style={{ borderRadius: 12 }}
-                />
-              </FormField>
-              
-              <DevOnly>
-                <FormField label="运行后端">
+                <FormField label="产物归档天数">
                   <Input
-                    value={form.backend}
-                    onChange={(event) => onUpdateForm('backend', event.target.value)}
-                    placeholder="默认路由"
-                    aria-label="运行后端"
+                    value={form.artifactArchiveAfterDays}
+                    onChange={(event) => onUpdateForm('artifactArchiveAfterDays', event.target.value)}
+                    placeholder="永久保存"
+                    aria-label="产物归档天数"
                     style={{ borderRadius: 12 }}
                   />
                 </FormField>
-              </DevOnly>
-            </div>
+                
+                <DevOnly>
+                  <FormField label="运行后端">
+                    <Input
+                      value={form.backend}
+                      onChange={(event) => onUpdateForm('backend', event.target.value)}
+                      placeholder="默认路由"
+                      aria-label="运行后端"
+                      style={{ borderRadius: 12 }}
+                    />
+                  </FormField>
+                </DevOnly>
 
-            {modelSuggestions.length > 0 && !form.binding ? (
-              <Space wrap size={[8, 8]}>
-                {modelSuggestions.slice(0, 6).map((modelName) => (
-                  <Button key={modelName} size="small" onClick={() => onUpdateForm('model', modelName)} style={{ borderRadius: 12 }}>
-                    {modelName}
-                  </Button>
-                ))}
-              </Space>
-            ) : null}
-          </Flex>
-        </SectionCard>
+                {modelSuggestions.length > 0 && !form.binding ? (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                      快速选择模型
+                    </Typography.Text>
+                    <Space wrap size={[8, 8]}>
+                      {modelSuggestions.slice(0, 6).map((modelName) => (
+                        <Button key={modelName} size="small" onClick={() => onUpdateForm('model', modelName)} style={{ borderRadius: 12 }}>
+                          {modelName}
+                        </Button>
+                      ))}
+                    </Space>
+                  </div>
+                ) : null}
+              </div>
+            ),
+          }]}
+          style={{
+            background: 'var(--nb-surface-strong)',
+            borderRadius: 16,
+            border: '1px solid var(--nb-card-border)',
+          }}
+        />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <SectionCard title="核心逻辑指令 (System Prompts)">
+        <SectionCard title="核心逻辑指令">
           <Flex vertical gap={24}>
             <FormField label="System Directives (核心指令)">
               <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>

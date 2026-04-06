@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useState } from 'react'
 import { Alert, Button, Card, Space, Table, Tag, Typography, Select } from 'antd'
 import type { TableProps } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PageHeader from '../../components/console/PageHeader'
 import { formatDateTimeZh } from '../../locale'
@@ -18,6 +18,38 @@ interface RunsListProps {
   onRefresh: (filters?: { agentId?: string }) => void
 }
 
+/** 格式化耗时（秒 → 友好文本） */
+function formatDuration(createdAt: string, finishedAt?: string | null): string {
+  if (!finishedAt) return '-'
+  const start = new Date(createdAt).getTime()
+  const end = new Date(finishedAt).getTime()
+  const diffMs = end - start
+  if (diffMs < 0 || Number.isNaN(diffMs)) return '-'
+  const seconds = Math.floor(diffMs / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return `${hours}h ${remainingMinutes}m`
+}
+
+/** 状态图标 */
+function statusIcon(status: string) {
+  switch (status) {
+    case 'succeeded':
+      return <CheckCircleOutlined style={{ color: 'var(--ant-color-success)', marginRight: 4 }} />
+    case 'failed':
+      return <CloseCircleOutlined style={{ color: 'var(--ant-color-error)', marginRight: 4 }} />
+    case 'running':
+    case 'queued':
+      return <LoadingOutlined style={{ color: 'var(--ant-color-warning)', marginRight: 4 }} />
+    default:
+      return <ClockCircleOutlined style={{ color: 'var(--ant-color-text-quaternary)', marginRight: 4 }} />
+  }
+}
+
 export default function RunsList({ runs, loading, error, onRefresh }: RunsListProps) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -29,6 +61,15 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
   useEffect(() => {
     api.getAgents().then(setAgents).catch(() => {})
   }, [])
+
+  /** agentId → friendly name 映射 */
+  const agentNameMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const a of agents) {
+      map[a.agentId] = a.name
+    }
+    return map
+  }, [agents])
 
   const activeCount = useMemo(
     () => runs.filter((item) => ['queued', 'running', 'cancel_requested'].includes(item.status)).length,
@@ -53,24 +94,20 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
 
   const columns: TableProps<AgentRunSummary>['columns'] = [
     {
-      title: '任务名称/ID',
+      title: '任务名称',
       dataIndex: 'label',
       key: 'label',
-      render: (text, record) => (
-        <Space direction="vertical" size={0}>
-          <Text strong>{text}</Text>
-          <Text type="secondary" style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-            {record.runId}
-          </Text>
-        </Space>
+      render: (text) => (
+        <Text strong style={{ fontSize: 14 }}>{text}</Text>
       ),
     },
     {
       title: '状态',
       key: 'status',
-      width: 120,
+      width: 130,
       render: (_, record) => (
         <Tag color={statusBadgeStatus(record.status)} bordered={false}>
+          {statusIcon(record.status)}
           {statusLabel(record.status)}
         </Tag>
       ),
@@ -81,10 +118,22 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       width: 150,
       render: (_, record) =>
         record.agentId ? (
-          <Tag bordered={false}>{record.agentId}</Tag>
+          <Tag bordered={false} color="blue">
+            {agentNameMap[record.agentId] || record.agentId}
+          </Tag>
         ) : (
           <Text type="secondary">-</Text>
         ),
+    },
+    {
+      title: '耗时',
+      key: 'duration',
+      width: 100,
+      render: (_, record) => (
+        <Text type="secondary" style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+          {formatDuration(record.createdAt ?? '', record.finishedAt)}
+        </Text>
+      ),
     },
     {
       title: '创建时间',
@@ -92,23 +141,6 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       key: 'createdAt',
       width: 180,
       render: (text) => <Text type="secondary">{formatDateTimeZh(text)}</Text>,
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 100,
-      render: (_, record) => (
-        <Button
-          type="link"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation()
-            navigate(`/studio/runs/${record.runId}`)
-          }}
-        >
-          详情
-        </Button>
-      ),
     },
   ]
 

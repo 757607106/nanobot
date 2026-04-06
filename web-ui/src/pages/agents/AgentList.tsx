@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Flex, Input, Spin, Typography, theme } from 'antd'
+import { Alert, Button, Empty, Flex, Input, Spin, Tag, Typography, theme } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import PageHeader from '../../components/console/PageHeader'
 import type { AgentDefinition } from '../../types'
+import { getAgentAvatar } from '../../avatarConfig'
 
 interface AgentListProps {
   agents: AgentDefinition[]
@@ -38,27 +38,6 @@ export default function AgentList({
       return haystack.includes(query)
     })
   }, [agents, searchQuery])
-
-  const avatarColors = [
-    'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%)',
-    'linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)',
-    'linear-gradient(120deg, #d4fc79 0%, #96e6a1 100%)',
-    'linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)',
-    'linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)',
-    'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)',
-  ]
-
-  const getGradientForId = (id: string) => {
-    let hash = 0
-    for (let i = 0; i < id.length; i++) {
-      hash = id.charCodeAt(i) + ((hash << 5) - hash)
-    }
-    return avatarColors[Math.abs(hash) % avatarColors.length]
-  }
-
-  const getInitials = (name: string) => {
-    return name.trim().substring(0, 2).toUpperCase() || 'A'
-  }
 
   return (
     <Flex vertical gap={24} style={{ padding: '32px max(24px, calc((100% - var(--nb-content-max-width)) / 2))' }}>
@@ -119,6 +98,7 @@ export default function AgentList({
           gap: 24,
         }}>
           {filteredAgents.map((record, index) => {
+            const avatar = getAgentAvatar(record.agentId, record.name, record.description, record.tags)
             return (
               <motion.div
                 key={record.agentId}
@@ -132,76 +112,132 @@ export default function AgentList({
                   background: 'var(--nb-surface-panel-bg)',
                   backdropFilter: 'blur(16px) saturate(140%)',
                   borderRadius: 'var(--nb-radius-lg)',
-                  padding: 'var(--nb-spacing-md)',
                   boxShadow: 'inset 0 0 0 1px var(--nb-surface-panel-border), var(--nb-surface-panel-shadow)',
                   position: 'relative',
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 12
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                  <div style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 'var(--nb-radius-md)',
-                    background: getGradientForId(record.agentId),
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'rgba(0,0,0,0.6)',
-                    fontWeight: 800,
-                    fontSize: 18,
-                    boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.4)',
-                    flexShrink: 0
-                  }}>
-                    {getInitials(record.name)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
-                    <Typography.Text strong ellipsis style={{ fontSize: 'var(--nb-text-md)', display: 'block', color: 'var(--nb-ink)' }}>
-                      {record.name}
-                    </Typography.Text>
-                    <Typography.Text type="secondary" ellipsis style={{ fontSize: 13 }}>
-                      {record.model || '未设定引擎'}
-                    </Typography.Text>
-                  </div>
-                  <div style={{
-                     width: 10,
-                     height: 10,
-                     borderRadius: '50%',
-                     background: record.enabled ? token.colorSuccess : token.colorTextQuaternary,
-                     boxShadow: record.enabled ? `0 0 10px ${token.colorSuccess}` : 'none',
-                     flexShrink: 0,
-                     marginTop: 8
-                  }} />
-                </div>
-                
-                <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} style={{ margin: 0, fontSize: 13, lineHeight: 1.6, flex: 1 }}>
-                  {record.description || '一位神秘的 AI 员工，暂无背景介绍。'}
-                </Typography.Paragraph>
+                {/* ━━━ 顶部色带 ━━━ */}
+                <div style={{
+                  height: 6,
+                  background: avatar.gradient,
+                  borderRadius: 'var(--nb-radius-lg) var(--nb-radius-lg) 0 0',
+                }} />
 
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
-                  {(record.tags || []).slice(0, 3).map((tag, i) => (
-                    <div key={i} style={{
-                      borderRadius: 'var(--nb-radius-sm)',
-                      fontSize: 'var(--nb-text-2xs)',
-                      color: 'var(--nb-muted)'
-                    }}>
-                      {tag}
-                    </div>
-                  ))}
-                  {record.tags && record.tags.length > 3 && (
+                {/* ━━━ 卡片主体 ━━━ */}
+                <div style={{ padding: '20px 20px 16px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+                  {/* 头像 + 名称 + 状态灯 */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                    {/* 卡通头像 */}
                     <div style={{
-                      padding: '2px 10px',
-                      background: 'rgba(0,0,0,0.02)',
-                      borderRadius: 12,
-                      fontSize: 12,
-                      color: 'var(--nb-muted)'
+                      width: 56,
+                      height: 56,
+                      borderRadius: 16,
+                      background: `${avatar.gradient}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      boxShadow: `0 4px 14px -2px ${avatar.color}33`,
+                      padding: 3,
                     }}>
-                      +{record.tags.length - 3}
+                      <img
+                        src={avatar.src}
+                        alt={avatar.label}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: 13,
+                          objectFit: 'cover',
+                        }}
+                      />
                     </div>
-                  )}
+
+                    {/* 名称 + 职称 */}
+                    <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+                      <Typography.Text
+                        strong
+                        ellipsis
+                        style={{
+                          fontSize: 'var(--nb-text-md)',
+                          display: 'block',
+                          color: 'var(--nb-ink)',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {record.name}
+                      </Typography.Text>
+                      <Typography.Text
+                        style={{
+                          fontSize: 13,
+                          color: avatar.color,
+                          fontWeight: 500,
+                          display: 'block',
+                          marginTop: 2,
+                        }}
+                      >
+                        {avatar.label}
+                      </Typography.Text>
+                    </div>
+
+                    {/* 在线状态灯 */}
+                    <div style={{
+                       width: 10,
+                       height: 10,
+                       borderRadius: '50%',
+                       background: record.enabled ? token.colorSuccess : token.colorTextQuaternary,
+                       boxShadow: record.enabled ? `0 0 10px ${token.colorSuccess}` : 'none',
+                       flexShrink: 0,
+                       marginTop: 8
+                    }} />
+                  </div>
+                  
+                  {/* 一句话描述 */}
+                  <Typography.Paragraph
+                    type="secondary"
+                    ellipsis={{ rows: 2 }}
+                    style={{ margin: 0, fontSize: 13, lineHeight: 1.6, flex: 1 }}
+                  >
+                    {record.description || '一位神秘的 AI 员工，暂无背景介绍。'}
+                  </Typography.Paragraph>
+
+                  {/* 技能标签 pills */}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
+                    {(record.tags || []).slice(0, 3).map((tag, i) => (
+                      <Tag
+                        key={i}
+                        bordered={false}
+                        style={{
+                          borderRadius: 12,
+                          padding: '1px 10px',
+                          fontSize: 12,
+                          background: `${avatar.color}14`,
+                          color: avatar.color,
+                          fontWeight: 500,
+                          margin: 0,
+                        }}
+                      >
+                        {tag}
+                      </Tag>
+                    ))}
+                    {record.tags && record.tags.length > 3 && (
+                      <Tag
+                        bordered={false}
+                        style={{
+                          borderRadius: 12,
+                          padding: '1px 10px',
+                          fontSize: 12,
+                          background: 'rgba(0,0,0,0.04)',
+                          color: 'var(--nb-muted)',
+                          margin: 0,
+                        }}
+                      >
+                        +{record.tags.length - 3}
+                      </Tag>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             )

@@ -40,6 +40,7 @@ import {
   updateNestedValue,
 } from './shared'
 import { useToast } from '../../toast'
+import DevOnly from '../../components/DevOnly'
 
 type ChannelFieldSectionKey = 'credentials' | 'routing' | 'experience' | 'advanced'
 
@@ -188,12 +189,24 @@ export default function ChannelDetailPage() {
       setBindingLoading(true)
       const result = await api.getWeixinBindingStatus()
       setWeixinBinding(result)
+      if (result.authenticated) {
+        void loadChannel()
+      }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载 WeChat 绑定状态失败')
     } finally {
       setBindingLoading(false)
     }
   }
+
+  // Auto-poll weixin binding while running & not authenticated
+  useEffect(() => {
+    if (!isWeixin || !weixinBinding?.running || weixinBinding?.authenticated) return
+    const timer = setInterval(() => {
+      void loadWeixinBindingStatus()
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [isWeixin, weixinBinding?.running, weixinBinding?.authenticated])
 
   function updateField(path: string[], value: unknown) {
     setDraftConfig((current) => updateNestedValue(current, path, value))
@@ -257,7 +270,12 @@ export default function ChannelDetailPage() {
       setBindingStarting(true)
       const result = await api.startWeixinBinding({ force: true })
       setWeixinBinding(result)
-      message.success(result.authenticated ? 'WeChat 绑定已就绪' : '会话桥接已启动，请扫码')
+      if (result.authenticated) {
+        message.success('WeChat 绑定已就绪')
+        void loadChannel()
+      } else {
+        message.success('会话桥接已启动，请扫码')
+      }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '启动 WeChat 绑定失败')
     } finally {
@@ -401,30 +419,17 @@ export default function ChannelDetailPage() {
         )}
       />
 
-      <div className="resource-summary-strip">
-        <div className="resource-summary-tile">
-          <span className="resource-summary-label">渠道分类</span>
-          <span className="resource-summary-value" style={{ fontSize: 18 }}>
-            {channelCategoryLabels[meta.category]}
-          </span>
-        </div>
-        <div className="resource-summary-tile">
-          <span className="resource-summary-label">配置进度</span>
-          <span className="resource-summary-value">{completedFieldCount}/{meta.primaryFields.length}</span>
-        </div>
-        <div className="resource-summary-tile">
-          <span className="resource-summary-label">运行状态</span>
-          <span className="resource-summary-value" style={{ fontSize: 18 }}>
-            {detail.channel.statusLabel}
-          </span>
-        </div>
-        <div className="resource-summary-tile">
-          <span className="resource-summary-label">验证结果</span>
-          <span className="resource-summary-value" style={{ fontSize: 18 }}>
-            {probeResult ? probeResult.statusLabel : '未测试'}
-          </span>
-        </div>
-      </div>
+      <Flex align="center" gap={12} style={{ marginBottom: 8 }}>
+        <Tag color={getChannelStatusColor(detail.channel.status)} style={{ borderRadius: 8, fontSize: 13 }}>
+          {detail.channel.statusLabel}
+        </Tag>
+        <Switch
+          checked={Boolean(draftConfig.enabled)}
+          onChange={(checked) => updateField(['enabled'], checked)}
+          checkedChildren="启用"
+          unCheckedChildren="停用"
+        />
+      </Flex>
 
       {missingLabels.length > 0 && (
         <Alert
@@ -438,52 +443,37 @@ export default function ChannelDetailPage() {
         <Col xs={24} lg={14}>
           <Form form={form} layout="vertical" requiredMark={false} component={false}>
             <Flex vertical gap={16}>
-              {fieldSections.map((section) => (
-                <SectionCard
-                  key={section.key}
-                  title={section.title}
-                  action={<Tag>{section.fields.length} 项</Tag>}
-                >
-                  <Row gutter={[12, 0]}>
-                    {section.fields.map((field) => (
-                      <Col
-                        key={field.path.join('.')}
-                        xs={24}
-                        md={field.kind === 'textarea' || field.kind === 'list' ? 24 : 12}
-                      >
-                        {renderField(field)}
-                      </Col>
-                    ))}
-                  </Row>
-                </SectionCard>
-              ))}
+              {fieldSections.map((section) => {
+                const content = (
+                  <SectionCard
+                    key={section.key}
+                    title={section.title}
+                    action={<Tag>{section.fields.length} 项</Tag>}
+                  >
+                    <Row gutter={[12, 0]}>
+                      {section.fields.map((field) => (
+                        <Col
+                          key={field.path.join('.')}
+                          xs={24}
+                          md={field.kind === 'textarea' || field.kind === 'list' ? 24 : 12}
+                        >
+                          {renderField(field)}
+                        </Col>
+                      ))}
+                    </Row>
+                  </SectionCard>
+                )
+                if (section.key === 'advanced') {
+                  return <DevOnly key={section.key}>{content}</DevOnly>
+                }
+                return content
+              })}
             </Flex>
           </Form>
         </Col>
 
         <Col xs={24} lg={10}>
           <Flex vertical gap={16}>
-            <SectionCard
-              title="状态"
-              action={(
-                <Switch
-                  checked={Boolean(draftConfig.enabled)}
-                  onChange={(checked) => updateField(['enabled'], checked)}
-                />
-              )}
-            >
-              <div className="resource-summary-strip">
-                <div className="resource-summary-tile">
-                  <span className="resource-summary-label">当前状态</span>
-                  <span className="resource-summary-value" style={{ fontSize: 18 }}>{detail.channel.statusLabel}</span>
-                </div>
-                <div className="resource-summary-tile">
-                  <span className="resource-summary-label">缺失字段</span>
-                  <span className="resource-summary-value">{missingLabels.length}</span>
-                </div>
-              </div>
-            </SectionCard>
-
             <SectionCard
               title="检测"
               action={(

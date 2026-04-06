@@ -272,7 +272,7 @@ export const channelMetas: ChannelMeta[] = [
   },
   {
     name: 'weixin',
-    label: 'WeChat (微信 / Weixin)',
+    label: 'WeChat',
     category: 'Social',
     description: '个人微信协议接入，支持接收图文语音及上下文记忆。注意：若未填写 Token，需根据终端日志提示扫描二维码登录。',
     primaryFields: [

@@ -11,9 +11,10 @@ export const channelIcons: Record<string, string> = {
   matrix: '/channel-logos/matrix.png',
   feishu: '/channel-logos/feishu.png',
   dingtalk: '/channel-logos/dingtalk.jpeg',
-  wecom: '/channel-logos/wecom.jpeg',
+  wecom: '/channel-logos/wecom.png',
   mochat: '/channel-logos/mochat.jpeg',
   email: '/channel-logos/email.jpeg',
+  weixin: '/channel-logos/weixin.png',
 }
 
 export function getChannelStatusColor(status: ChannelStateItem['status']): string {
@@ -91,17 +92,46 @@ export function getAuditStatusLabel(status: string): string {
 export function ChannelAvatar({ channelName, label, size = 36 }: { channelName: string; label: string; size?: number }) {
   const { token } = theme.useToken()
   const src = channelIcons[channelName]
+  const radius = size >= 40 ? 12 : 8
+
+  if (src) {
+    return (
+      <div style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        background: '#fff',
+        border: '1px solid #f0f0f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        overflow: 'hidden',
+        padding: 3,
+      }}>
+        <img
+          src={src}
+          alt={label}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            borderRadius: radius - 2,
+          }}
+        />
+      </div>
+    )
+  }
 
   return (
     <Avatar
-      src={src || undefined}
       size={size}
       shape="square"
       style={{
         background: `${token.colorPrimary}16`,
         color: token.colorPrimary,
         flexShrink: 0,
-        borderRadius: size >= 40 ? 12 : 8,
+        borderRadius: radius,
       }}
     >
       {label.slice(0, 1)}

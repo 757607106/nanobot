@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
+  Alert,
   Button,
   Card,
+  Collapse,
   Drawer,
   Dropdown,
   Empty,
@@ -12,7 +14,7 @@ import {
   Input,
   InputNumber,
   Modal,
-  Progress,
+  QRCode,
   Select,
   Space,
   Switch,
@@ -24,9 +26,10 @@ import {
   CheckCircleOutlined,
   CloseOutlined,
   ExperimentOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   ReloadOutlined,
   SaveOutlined,
-  SearchOutlined,
   SettingOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
@@ -42,6 +45,7 @@ import type {
   ChannelListResponse,
   ChannelProbeResult,
   ChannelStateItem,
+  WeixinBindingStatus,
 } from '../../types'
 import {
   ChannelAvatar,
@@ -90,8 +94,13 @@ export default function ChannelsPage() {
 
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
+
+  // WeChat binding state
+  const [weixinBinding, setWeixinBinding] = useState<WeixinBindingStatus | null>(null)
+  const [weixinBindingLoading, setWeixinBindingLoading] = useState(false)
+  const [weixinBindingStarting, setWeixinBindingStarting] = useState(false)
+  const [weixinBindingStopping, setWeixinBindingStopping] = useState(false)
 
   useEffect(() => {
     void loadChannels()
@@ -100,6 +109,9 @@ export default function ChannelsPage() {
   useEffect(() => {
     if (selectedChannel) {
       void loadChannelDetail(selectedChannel)
+      if (selectedChannel === 'weixin') {
+        void loadWeixinBindingStatus()
+      }
     }
   }, [selectedChannel])
 
@@ -152,16 +164,7 @@ export default function ChannelsPage() {
     return [...known, ...extras]
   }, [data?.items])
 
-  const filteredChannels = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) return channels
-    return channels.filter(
-      (ch) =>
-        ch.label.toLowerCase().includes(query) ||
-        ch.name.toLowerCase().includes(query) ||
-        ch.description.toLowerCase().includes(query),
-    )
-  }, [channels, searchQuery])
+
 
   const activeChannel = selectedChannel ? channels.find((c) => c.name === selectedChannel) : null
   const activeDetail = selectedChannel ? detailMap[selectedChannel] : null
@@ -286,89 +289,156 @@ export default function ChannelsPage() {
     setDrawerOpen(true)
   }
 
+  // ── WeChat binding ──
+  async function loadWeixinBindingStatus() {
+    try {
+      setWeixinBindingLoading(true)
+      const result = await api.getWeixinBindingStatus()
+      setWeixinBinding(result)
+      // If authenticated, reload channel detail to refresh form
+      if (result.authenticated && selectedChannel === 'weixin') {
+        void loadChannelDetail('weixin')
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载 WeChat 绑定状态失败')
+    } finally {
+      setWeixinBindingLoading(false)
+    }
+  }
+
+  async function startWeixinBinding() {
+    try {
+      setWeixinBindingStarting(true)
+      const result = await api.startWeixinBinding({ force: true })
+      setWeixinBinding(result)
+      if (result.authenticated) {
+        message.success('WeChat 绑定已就绪')
+        // Reload channel detail to reflect new auth state
+        void loadChannelDetail('weixin')
+      } else {
+        message.success('会话桥接已启动，请扫码')
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '启动 WeChat 绑定失败')
+    } finally {
+      setWeixinBindingStarting(false)
+    }
+  }
+
+  async function stopWeixinBinding() {
+    try {
+      setWeixinBindingStopping(true)
+      const result = await api.stopWeixinBinding()
+      setWeixinBinding(result)
+      message.success('WeChat 会话桥接已停止')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '停止 WeChat 绑定失败')
+    } finally {
+      setWeixinBindingStopping(false)
+    }
+  }
+
+  // Auto-poll weixin binding status while running & not yet authenticated
+  useEffect(() => {
+    if (!weixinBinding?.running || weixinBinding?.authenticated) return
+    const timer = setInterval(() => {
+      void loadWeixinBindingStatus()
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [weixinBinding?.running, weixinBinding?.authenticated])
+
   function renderField(channelName: string, field: FieldMeta): ReactNode {
     const draft = draftMap[channelName] || {}
     const value = getFieldValue(draft, field.path)
     const key = field.path.join('.')
+    const isFullWidth = ['list', 'textarea', 'password'].includes(field.kind)
 
-    switch (field.kind) {
-      case 'switch':
-        return (
-          <Form.Item key={key} label={field.label} valuePropName="checked">
-            <Switch
-              checked={Boolean(value)}
-              onChange={(checked) => updateDraft(channelName, field.path, checked)}
-            />
-          </Form.Item>
-        )
-      case 'select':
-        return (
-          <Form.Item key={key} label={field.label}>
-            <Select
-              value={typeof value === 'string' ? value : undefined}
-              onChange={(val) => updateDraft(channelName, field.path, val)}
-              options={field.options}
-              placeholder={field.placeholder}
-              allowClear
-            />
-          </Form.Item>
-        )
-      case 'number':
-        return (
-          <Form.Item key={key} label={field.label}>
-            <InputNumber
-              value={typeof value === 'number' ? value : null}
-              onChange={(val) => updateDraft(channelName, field.path, val ?? 0)}
-              min={field.min}
-              max={field.max}
-              step={field.step}
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-        )
-      case 'list':
-        return (
-          <Form.Item key={key} label={field.label}>
-            <Input.TextArea
-              value={Array.isArray(value) ? value.join('\n') : ''}
-              onChange={(e) => updateDraft(channelName, field.path, parseListValue(e.target.value))}
-              placeholder={field.placeholder}
-              autoSize={{ minRows: 3, maxRows: 6 }}
-            />
-          </Form.Item>
-        )
-      case 'textarea':
-        return (
-          <Form.Item key={key} label={field.label}>
-            <Input.TextArea
-              value={String(value ?? '')}
-              onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
-              placeholder={field.placeholder}
-              autoSize={{ minRows: 3, maxRows: 6 }}
-            />
-          </Form.Item>
-        )
-      case 'password':
-        return (
-          <Form.Item key={key} label={field.label}>
-            <Input.Password
-              value={String(value ?? '')}
-              onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
-              placeholder={field.placeholder}
-            />
-          </Form.Item>
-        )
-      default:
-        return (
-          <Form.Item key={key} label={field.label}>
-            <Input
-              value={String(value ?? '')}
-              onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
-              placeholder={field.placeholder}
-            />
-          </Form.Item>
-        )
-    }
+    const fieldNode = (() => {
+      switch (field.kind) {
+        case 'switch':
+          return (
+            <Form.Item key={key} label={field.label} valuePropName="checked" extra={field.description} style={{ marginBottom: 14 }}>
+              <Switch
+                checked={Boolean(value)}
+                onChange={(checked) => updateDraft(channelName, field.path, checked)}
+              />
+            </Form.Item>
+          )
+        case 'select':
+          return (
+            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+              <Select
+                value={typeof value === 'string' ? value : undefined}
+                onChange={(val) => updateDraft(channelName, field.path, val)}
+                options={field.options}
+                placeholder={field.placeholder}
+                allowClear
+              />
+            </Form.Item>
+          )
+        case 'number':
+          return (
+            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+              <InputNumber
+                value={typeof value === 'number' ? value : null}
+                onChange={(val) => updateDraft(channelName, field.path, val ?? 0)}
+                min={field.min}
+                max={field.max}
+                step={field.step}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          )
+        case 'list':
+          return (
+            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+              <Input.TextArea
+                value={Array.isArray(value) ? value.join('\n') : ''}
+                onChange={(e) => updateDraft(channelName, field.path, parseListValue(e.target.value))}
+                placeholder={field.placeholder}
+                autoSize={{ minRows: 3, maxRows: 6 }}
+              />
+            </Form.Item>
+          )
+        case 'textarea':
+          return (
+            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+              <Input.TextArea
+                value={String(value ?? '')}
+                onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
+                placeholder={field.placeholder}
+                autoSize={{ minRows: 3, maxRows: 6 }}
+              />
+            </Form.Item>
+          )
+        case 'password':
+          return (
+            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+              <Input.Password
+                value={String(value ?? '')}
+                onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
+                placeholder={field.placeholder}
+              />
+            </Form.Item>
+          )
+        default:
+          return (
+            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+              <Input
+                value={String(value ?? '')}
+                onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
+                placeholder={field.placeholder}
+              />
+            </Form.Item>
+          )
+      }
+    })()
+
+    return (
+      <div key={key} style={isFullWidth ? { gridColumn: '1 / -1' } : undefined}>
+        {fieldNode}
+      </div>
+    )
   }
 
   // 投递设置下拉面板
@@ -457,20 +527,9 @@ export default function ChannelsPage() {
         />
       </div>
 
-      {/* 搜索栏 */}
-      <Input
-        size="large"
-        placeholder="搜索渠道名称或平台"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        prefix={<SearchOutlined />}
-        allowClear
-        style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)', border: 'none' }}
-      />
-
       {/* 渠道卡片网格 */}
       <SectionCard title="接入渠道">
-        {filteredChannels.length === 0 ? (
+        {channels.length === 0 ? (
           <Empty description="无匹配项" />
         ) : (
           <div
@@ -480,7 +539,7 @@ export default function ChannelsPage() {
               gap: SPACING.md,
             }}
           >
-            {filteredChannels.map((channel, index) => (
+            {channels.map((channel, index) => (
               <motion.div
                 key={channel.key}
                 initial={{ opacity: 0, y: 10 }}
@@ -501,7 +560,7 @@ export default function ChannelsPage() {
                   gap: 12,
                 }}
               >
-                {/* 图标 + 名称 + 状态 */}
+                {/* 图标 + 状态 */}
                 <Flex align="flex-start" justify="space-between">
                   <ChannelAvatar channelName={channel.name} label={channel.label} size={44} />
                   <Tag
@@ -514,53 +573,9 @@ export default function ChannelsPage() {
                 </Flex>
 
                 {/* 渠道名 */}
-                <div>
-                  <Typography.Text strong style={{ fontSize: 15, display: 'block' }}>
-                    {channel.label}
-                  </Typography.Text>
-                  <Typography.Text
-                    type="secondary"
-                    style={{ fontSize: 12, display: 'block', marginTop: 3 }}
-                    ellipsis
-                  >
-                    {channelCategoryLabels[channel.category]}
-                  </Typography.Text>
-                </div>
-
-                {/* 配置进度 */}
-                {activeRequiredCount > 0 && channel.name === selectedChannel ? null : (
-                  channel.meta.primaryFields.length > 0 && (
-                    <Progress
-                      percent={
-                        channel.meta.primaryFields.length > 0
-                          ? Math.round(
-                              ((channel.meta.primaryFields.length - channel.missingFields.length) /
-                                channel.meta.primaryFields.length) *
-                                100,
-                            )
-                          : 100
-                      }
-                      size="small"
-                      showInfo={false}
-                      strokeColor={channel.enabled ? token.colorSuccess : token.colorPrimary}
-                      trailColor="var(--nb-card-subtle-border)"
-                    />
-                  )
-                )}
-
-                {/* 配置按钮 */}
-                <Button
-                  size="small"
-                  type={channel.configured ? 'default' : 'primary'}
-                  block
-                  style={{ borderRadius: 8, marginTop: 'auto' }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openChannelDrawer(channel.name)
-                  }}
-                >
-                  {channel.configured ? '管理配置' : '开始配置'}
-                </Button>
+                <Typography.Text strong style={{ fontSize: 15 }}>
+                  {channel.label}
+                </Typography.Text>
               </motion.div>
             ))}
           </div>
@@ -632,67 +647,50 @@ export default function ChannelsPage() {
                   </Flex>
                 </Flex>
 
-                {/* 配置进度 */}
-                {activeChannel.meta.primaryFields.length > 0 && (
-                  <div style={{ marginTop: 14 }}>
-                    <Flex justify="space-between" align="center" style={{ marginBottom: 6 }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        配置进度
-                      </Typography.Text>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {activeCompletedCount}/{activeRequiredCount}
-                      </Typography.Text>
-                    </Flex>
-                    <Progress
-                      percent={configPercent}
-                      size="small"
-                      showInfo={false}
-                      strokeColor={configPercent === 100 ? token.colorSuccess : token.colorPrimary}
-                      trailColor="var(--nb-card-subtle-border)"
-                    />
-                  </div>
-                )}
+
               </div>
 
               {/* Drawer 内容 */}
               <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
-                {/* 缺失字段警告 */}
+                {/* 缺失字段提示 */}
                 {activeChannel.missingFields.length > 0 && (
-                  <Card
-                    size="small"
+                  <Flex
+                    align="center"
+                    gap={8}
                     style={{
+                      padding: '10px 14px',
                       background: `${token.colorWarning}10`,
-                      borderColor: token.colorWarning,
+                      borderRadius: 10,
                       marginBottom: SPACING.md,
+                      border: `1px solid ${token.colorWarning}30`,
                     }}
-                    styles={{ body: { padding: 'var(--nb-spacing-sm)' } }}
                   >
-                    <Flex align="center" gap={SPACING.xs}>
-                      <WarningOutlined style={{ color: token.colorWarning }} />
-                      <Typography.Text>
-                        缺少必填字段：{activeChannel.missingFields.join('、')}
-                      </Typography.Text>
-                    </Flex>
-                  </Card>
+                    <WarningOutlined style={{ color: token.colorWarning }} />
+                    <Typography.Text style={{ fontSize: 13 }}>
+                      还需填写 {activeChannel.missingFields.length} 个必填项
+                    </Typography.Text>
+                  </Flex>
                 )}
 
-                {/* 测试结果 */}
+                {/* 测试结果（折叠） */}
                 {activeProbe && (
-                  <Card
-                    size="small"
-                    title="连接测试结果"
-                    styles={{ body: { padding: 'var(--nb-spacing-md)' } }}
-                    style={{ marginBottom: SPACING.md }}
-                  >
-                    <Flex vertical gap={SPACING.xs}>
-                      <Space wrap>
-                        <Tag color={getProbeStatusColor(activeProbe.status)}>
-                          {activeProbe.statusLabel}
-                        </Tag>
-                        <Typography.Text type="secondary">{activeProbe.summary}</Typography.Text>
-                      </Space>
-                      {activeProbe.checks.length > 0 && (
-                        <Flex vertical gap={SPACING.xs} style={{ marginTop: SPACING.sm }}>
+                  <Collapse
+                    ghost
+                    defaultActiveKey={['probe']}
+                    items={[{
+                      key: 'probe',
+                      label: (
+                        <Flex align="center" gap={8}>
+                          <Tag color={getProbeStatusColor(activeProbe.status)} style={{ margin: 0 }}>
+                            {activeProbe.statusLabel}
+                          </Tag>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            {activeProbe.summary}
+                          </Typography.Text>
+                        </Flex>
+                      ),
+                      children: activeProbe.checks.length > 0 ? (
+                        <Flex vertical gap={SPACING.xs}>
                           {activeProbe.checks.map((check) => (
                             <Flex key={check.key} justify="space-between" align="center" gap={SPACING.xs}>
                               <Typography.Text type="secondary">{check.label}</Typography.Text>
@@ -702,9 +700,10 @@ export default function ChannelsPage() {
                             </Flex>
                           ))}
                         </Flex>
-                      )}
-                    </Flex>
-                  </Card>
+                      ) : null,
+                    }]}
+                    style={{ marginBottom: SPACING.md }}
+                  />
                 )}
 
                 {/* 配置表单 */}
@@ -721,6 +720,87 @@ export default function ChannelsPage() {
                     )}
                   </div>
                 </Form>
+
+                {/* WeChat 扫码绑定 */}
+                {activeChannel.name === 'weixin' && (
+                  <Card
+                    size="small"
+                    style={{
+                      marginTop: SPACING.md,
+                      borderRadius: 12,
+                      border: '1px solid var(--nb-card-subtle-border)',
+                    }}
+                    styles={{ body: { padding: 16 } }}
+                  >
+                    <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+                      <Typography.Text strong style={{ fontSize: 14 }}>
+                        扫码绑定
+                      </Typography.Text>
+                      <Space size={8}>
+                        <Button
+                          size="small"
+                          icon={<ReloadOutlined />}
+                          loading={weixinBindingLoading}
+                          onClick={() => void loadWeixinBindingStatus()}
+                        >
+                          刷新
+                        </Button>
+                        <Button
+                          size="small"
+                          type="primary"
+                          icon={<PlayCircleOutlined />}
+                          loading={weixinBindingStarting}
+                          onClick={() => void startWeixinBinding()}
+                        >
+                          获取二维码
+                        </Button>
+                        {weixinBinding?.running && (
+                          <Button
+                            size="small"
+                            danger
+                            icon={<PauseCircleOutlined />}
+                            loading={weixinBindingStopping}
+                            onClick={() => void stopWeixinBinding()}
+                          >
+                            停止
+                          </Button>
+                        )}
+                      </Space>
+                    </Flex>
+
+                    {weixinBinding ? (
+                      <Flex vertical gap={10}>
+                        <Space size={8}>
+                          <Tag color={weixinBinding.running ? 'processing' : 'default'}>
+                            {weixinBinding.running ? '运行中' : '未运行'}
+                          </Tag>
+                          <Tag color={weixinBinding.authenticated ? 'success' : 'warning'}>
+                            {weixinBinding.authenticated ? '已认证' : '未认证'}
+                          </Tag>
+                        </Space>
+                        {weixinBinding.qrCode ? (
+                          <Flex vertical align="center" gap={8} style={{ padding: '12px 0' }}>
+                            <QRCode value={weixinBinding.qrCode} size={180} />
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                              请用微信扫描上方二维码登录
+                            </Typography.Text>
+                          </Flex>
+                        ) : (
+                          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                            {weixinBinding.authenticated ? '已成功登录' : '点击“获取二维码”启动绑定流程'}
+                          </Typography.Text>
+                        )}
+                        {weixinBinding.lastError && (
+                          <Alert type="error" message={weixinBinding.lastError} showIcon style={{ borderRadius: 8 }} />
+                        )}
+                      </Flex>
+                    ) : (
+                      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                        点击“获取二维码”启动微信扫码绑定
+                      </Typography.Text>
+                    )}
+                  </Card>
+                )}
               </div>
 
               {/* Drawer 底部操作栏 */}

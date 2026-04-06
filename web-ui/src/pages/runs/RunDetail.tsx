@@ -10,6 +10,7 @@ import PageHeader from '../../components/console/PageHeader'
 import { formatDateTimeZh } from '../../locale'
 import type { AgentRunSummary } from '../../types'
 import { statusLabel, isCancelable } from './utils'
+import { useDevMode } from '../../devMode'
 
 const { Text, Title } = Typography
 
@@ -22,6 +23,23 @@ interface RunDetailProps {
   children: React.ReactNode
 }
 
+/** 格式化耗时 */
+function formatDuration(createdAt: string, finishedAt?: string | null): string {
+  if (!finishedAt) return '-'
+  const start = new Date(createdAt).getTime()
+  const end = new Date(finishedAt).getTime()
+  const diffMs = end - start
+  if (diffMs < 0 || Number.isNaN(diffMs)) return '-'
+  const seconds = Math.floor(diffMs / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return `${hours}h ${remainingMinutes}m`
+}
+
 export default function RunDetail({
   run,
   loading,
@@ -30,6 +48,8 @@ export default function RunDetail({
   onCancel,
   children,
 }: RunDetailProps) {
+  const { devMode } = useDevMode()
+
   const getStatusIcon = () => {
     switch (run.status) {
       case 'succeeded':
@@ -54,22 +74,24 @@ export default function RunDetail({
               icon={<ReloadOutlined />}
               shape="circle"
             />
-            <Button
-              icon={<PauseCircleOutlined />}
-              danger
-              onClick={onCancel}
-              loading={cancelling}
-              disabled={!isCancelable(run.status)}
-            >
-              停止任务
-            </Button>
+            {/* 停止按钮仅在运行中时可见 */}
+            {isCancelable(run.status) && (
+              <Button
+                icon={<PauseCircleOutlined />}
+                danger
+                onClick={onCancel}
+                loading={cancelling}
+              >
+                停止任务
+              </Button>
+            )}
           </Space>
         }
       />
 
       <div className="page-content-wrapper">
         <Space direction="vertical" size={24} style={{ width: '100%' }}>
-          {/* Result Card */}
+          {/* Result Card — Markdown 渲染 */}
           {run.resultSummary?.content ? (
             <Card title="执行结果" className="page-card" variant="borderless">
               <div
@@ -79,18 +101,17 @@ export default function RunDetail({
                   borderRadius: 8,
                 }}
               >
-                <pre
+                <div
                   style={{
-                    margin: 0,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 13,
-                    lineHeight: 1.6,
+                    fontSize: 14,
+                    lineHeight: 1.7,
                   }}
-                >
-                  {run.resultSummary.content}
-                </pre>
+                  dangerouslySetInnerHTML={{
+                    __html: simpleMarkdown(run.resultSummary.content),
+                  }}
+                />
               </div>
             </Card>
           ) : (
@@ -99,7 +120,7 @@ export default function RunDetail({
             </Card>
           )}
 
-          {/* Basic Info */}
+          {/* Basic Info — 精简版 */}
           <Row gutter={[24, 24]}>
             <Col span={24}>
               <Card
@@ -109,28 +130,11 @@ export default function RunDetail({
                 size="small"
               >
                 <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="middle">
-                  <Descriptions.Item label="Run ID">
-                    <Text copyable code>
-                      {run.runId}
-                    </Text>
-                  </Descriptions.Item>
                   <Descriptions.Item label="Agent">
                     {run.agentId ? (
                       <Tag color="blue" bordered={false}>
                         {run.agentId}
                       </Tag>
-                    ) : (
-                      '-'
-                    )}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="创建时间">
-                    {formatDateTimeZh(run.createdAt)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Thread ID">
-                    {run.threadId ? (
-                      <Text code copyable>
-                        {run.threadId}
-                      </Text>
                     ) : (
                       '-'
                     )}
@@ -151,11 +155,37 @@ export default function RunDetail({
                       {statusLabel(run.status)}
                     </Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="控制范围">
-                    <Tag bordered={false}>
-                      {run.controlScope === 'child' ? '子任务' : '顶层任务'}
-                    </Tag>
+                  <Descriptions.Item label="创建时间">
+                    {formatDateTimeZh(run.createdAt)}
                   </Descriptions.Item>
+                  <Descriptions.Item label="执行耗时">
+                    <Text style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                      {formatDuration(run.createdAt ?? '', run.finishedAt)}
+                    </Text>
+                  </Descriptions.Item>
+
+                  {/* ━━━ devMode 独有字段 ━━━ */}
+                  {devMode && (
+                    <Descriptions.Item label="Run ID">
+                      <Text copyable code>
+                        {run.runId}
+                      </Text>
+                    </Descriptions.Item>
+                  )}
+                  {devMode && run.threadId && (
+                    <Descriptions.Item label="Thread ID">
+                      <Text code copyable>
+                        {run.threadId}
+                      </Text>
+                    </Descriptions.Item>
+                  )}
+                  {devMode && (
+                    <Descriptions.Item label="控制范围">
+                      <Tag bordered={false}>
+                        {run.controlScope === 'child' ? '子任务' : '顶层任务'}
+                      </Tag>
+                    </Descriptions.Item>
+                  )}
                 </Descriptions>
               </Card>
             </Col>
@@ -167,4 +197,18 @@ export default function RunDetail({
       </div>
     </div>
   )
+}
+
+/**
+ * 极简 Markdown → HTML：处理 **bold**, `code`, 换行
+ * 仅用于执行结果的基本排版，不引入完整 Markdown 库
+ */
+function simpleMarkdown(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.06);padding:2px 6px;border-radius:4px;font-size:13px">$1</code>')
+    .replace(/\n/g, '<br />')
 }
