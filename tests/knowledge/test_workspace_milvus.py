@@ -109,7 +109,7 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
     index_job = _wait_for_job(service, kb_id, index_result["job"]["jobId"])
     assert index_job["status"] == "succeeded"
     indexed_file = next(item for item in service.list_files(kb_id)["items"] if item["fileId"] == file_id)
-    assert indexed_file["processingParams"]["indexBackend"] == "lightrag-milvus"
+    assert indexed_file["processingParams"]["indexBackend"] == "lightrag"
     vector_dir = instance.runtime_dir("knowledge-vectors") / kb_id
     assert (vector_dir / "chunk-manifest.json").exists()
     assert not (vector_dir / "milvus.db").exists()

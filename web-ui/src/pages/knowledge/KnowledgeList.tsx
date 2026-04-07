@@ -44,7 +44,7 @@ export default function KnowledgeList({
 
           {loading ? (
             <Flex justify="center" align="center" className="knowledge-list-loading">
-              <Spin tip="正在加载知识库目录..." />
+              <Spin tip="正在加载知识库目录..."><div /></Spin>
             </Flex>
           ) : visibleKnowledgeBases.length === 0 ? (
             <Empty

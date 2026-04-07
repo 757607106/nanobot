@@ -165,8 +165,6 @@ class KnowledgeBaseService:
         with self._rag_engine_lock:
             previous = self.rag_engine
             self.rag_engine = rag_engine
-            if rag_engine is not None and hasattr(rag_engine, "set_kb_runtime_resolver"):
-                rag_engine.set_kb_runtime_resolver(self._resolve_kb_runtime_overrides)
             if previous is not None and previous is not rag_engine:
                 self._retired_rag_engines.append(previous)
 
@@ -198,7 +196,6 @@ class KnowledgeBaseService:
         if self.config is None:
             return {}
 
-        from nanobot.platform.knowledge.rag_engine import _infer_embedding_dim
         from nanobot.providers.registry import find_by_name
 
         requested_binding_name = str(binding_name or "").strip()
@@ -245,7 +242,7 @@ class KnowledgeBaseService:
         if not resolved_model_name:
             return {}
 
-        payload: dict[str, Any] = {
+        return {
             "binding_name": matched_binding_name or requested_binding_name or None,
             "provider_name": provider_name or None,
             "model": resolved_model_name,
@@ -253,9 +250,6 @@ class KnowledgeBaseService:
             "api_base": api_base,
             "extra_headers": extra_headers,
         }
-        if capability_type == "embedding":
-            payload["embedding_dim"] = _infer_embedding_dim(resolved_model_name, provider_name)
-        return payload
 
     def _resolve_kb_runtime_overrides(self, kb_id: str) -> dict[str, Any]:
         kb = self.store.get_kb(kb_id)
@@ -271,6 +265,22 @@ class KnowledgeBaseService:
             binding_name=self._knowledge_model_value(kb.embed_info, "bindingName", "binding_name"),
             model_name=self._knowledge_model_value(kb.embed_info, "modelName", "model_name", "model"),
             capability_type="embedding",
+        )
+
+        # Vision binding stored in additional_params.visionInfo (set by frontend shared.ts)
+        vision_info = kb.additional_params.get("visionInfo") or {}
+        vision_runtime = self._resolve_binding_runtime(
+            binding_name=self._knowledge_model_value(vision_info, "bindingName", "binding_name"),
+            model_name=self._knowledge_model_value(vision_info, "modelName", "model_name", "model"),
+            capability_type="multimodal",
+        )
+
+        # Rerank binding stored in additional_params.rerankInfo (set by frontend shared.ts)
+        rerank_info = kb.additional_params.get("rerankInfo") or {}
+        rerank_runtime = self._resolve_binding_runtime(
+            binding_name=self._knowledge_model_value(rerank_info, "bindingName", "binding_name"),
+            model_name=self._knowledge_model_value(rerank_info, "modelName", "model_name", "model"),
+            capability_type="rerank",
         )
 
         overrides: dict[str, Any] = {}
@@ -290,6 +300,22 @@ class KnowledgeBaseService:
                 "embedding_api_base": embedding_runtime["api_base"],
                 "embedding_extra_headers": embedding_runtime["extra_headers"],
                 "embedding_dim": embedding_runtime["embedding_dim"],
+            })
+        if vision_runtime:
+            overrides.update({
+                "vision_model": vision_runtime["model"],
+                "vision_provider_name": vision_runtime["provider_name"],
+                "vision_api_key": vision_runtime["api_key"],
+                "vision_api_base": vision_runtime["api_base"],
+                "vision_extra_headers": vision_runtime["extra_headers"],
+            })
+        if rerank_runtime:
+            overrides.update({
+                "rerank_model": rerank_runtime["model"],
+                "rerank_provider_name": rerank_runtime["provider_name"],
+                "rerank_api_key": rerank_runtime["api_key"],
+                "rerank_api_base": rerank_runtime["api_base"],
+                "rerank_extra_headers": rerank_runtime["extra_headers"],
             })
         return overrides
 
@@ -587,6 +613,27 @@ class KnowledgeBaseService:
             raise RuntimeError(f"Failed to finish knowledge job {job.job_id}")
         return persisted
 
+    def list_available_models(self) -> dict[str, list[dict[str, Any]]]:
+        if not self.config:
+            return {}
+        bindings = getattr(self.config, "model_bindings", {})
+        result: dict[str, list[dict[str, Any]]] = {
+            "text_chat": [],
+            "embedding": [],
+            "multimodal": [],
+            "rerank": []
+        }
+        for binding_name, binding in bindings.items():
+            cap = str(getattr(binding, "capability_type", "text_chat") or "text_chat").strip()
+            if cap in result:
+                result[cap].append({
+                    "binding_name": binding_name,
+                    "model": getattr(binding, "model", None),
+                    "label": getattr(binding, "label", None) or binding_name,
+                    "provider": getattr(binding, "provider", None)
+                })
+        return result
+
     def list_knowledge_bases(self, enabled: bool | None = None) -> list[dict[str, Any]]:
         return [self._serialize_kb(item) for item in self.store.list_kbs(
             tenant_id=self.tenant_id,
@@ -726,6 +773,7 @@ class KnowledgeBaseService:
 
     def delete_knowledge_base(self, kb_id: str) -> bool:
         self.require_kb(kb_id)
+        # Delete data from LightRAG Server
         if self.rag_engine is not None:
             try:
                 self._run_async(self.rag_engine.delete_kb(kb_id))
@@ -1141,12 +1189,13 @@ class KnowledgeBaseService:
             if (
                 not file.is_folder
                 and file.status == KnowledgeDocumentStatus.INDEXED
-                and self.rag_engine is not None
             ):
-                try:
-                    self._run_async(self.rag_engine.delete_document(kb_id, file.file_id))
-                except Exception:
-                    logger.exception("Failed to delete indexed knowledge file {}", file.file_id)
+                # Delete from LightRAG Server
+                if self.rag_engine is not None:
+                    try:
+                        self._run_async(self.rag_engine.delete_document(kb_id, file.file_id))
+                    except Exception:
+                        logger.exception("Failed to delete indexed knowledge file {}", file.file_id)
             if not file.is_folder:
                 self.artifacts.remove_chunk_entries_for_file(kb_id, file.file_id)
             for candidate in (file.raw_path, file.markdown_file):
@@ -1431,55 +1480,44 @@ class KnowledgeBaseService:
         )
         text = parsed_path.read_text(encoding="utf-8")
 
-        self._ensure_lightrag(kb, feature="Knowledge indexing")
-        chunk_texts = self._build_chunk_texts(kb, current, text)
-        prepare_document_ingest = getattr(self.rag_engine, "prepare_document_ingest", None)
-        if callable(prepare_document_ingest):
-            try:
-                self._run_async(prepare_document_ingest(current.kb_id, current.file_id))
-            except Exception:
-                logger.warning("Failed to prepare LightRAG ingest for {}", current.file_id)
-        elif current.processing_params.get("chunksCount"):
-            try:
-                self._run_async(self.rag_engine.delete_document(current.kb_id, current.file_id))
-            except Exception:
-                logger.warning("Failed to delete old index for {}", current.file_id)
-        insert_chunks = getattr(self.rag_engine, "insert_chunks", None)
-        uses_pre_split_chunks = callable(insert_chunks)
-        if callable(insert_chunks):
-            result = self._run_async(
-                insert_chunks(
-                    current.kb_id,
-                    chunk_texts,
-                    doc_id=current.file_id,
-                    file_path=current.raw_path or current.filename,
-                )
-            )
-        else:
-            result = self._run_async(
-                self.rag_engine.insert_text(
-                    current.kb_id,
-                    "\n\n".join(chunk_texts),
-                    doc_id=current.file_id,
-                    file_path=current.raw_path or current.filename,
-                )
-            )
-        if not result.success:
-            raise KnowledgeBaseValidationError(result.error or f"Failed to index knowledge file {current.file_id}")
+        # Ensure RAG engine is available
+        self._ensure_lightrag(kb, feature="Document indexing")
 
+        # Index via LightRAG Core
+        # LightRAG handles: chunking → embedding → entity extraction → graph construction → Milvus + Neo4j
+        index_result = self._run_async(
+            self.rag_engine.insert_text(
+                current.kb_id,
+                text,
+                doc_id=current.file_id,
+                file_path=current.raw_path or current.filename,
+            )
+        )
+        if not index_result.success:
+            raise KnowledgeBaseValidationError(
+                index_result.error or f"Failed to index knowledge file {current.file_id}"
+            )
+
+        # Build chunk manifest for local tracking
+        from nanobot.platform.knowledge.chunking.dispatcher import build_chunks
+        chunk_texts = build_chunks(
+            text,
+            kb_params=kb.additional_params,
+            file_params=current.processing_params,
+            faq_items=(current.processing_params or {}).get("faqItems"),
+        )
         self.artifacts.replace_chunk_entries_for_file(
             current.kb_id,
             current.file_id,
             self.artifacts.build_chunk_manifest_entries(current, chunk_texts),
         )
         processing_params = dict(current.processing_params)
-        processing_params["chunksCount"] = (
-            len(chunk_texts)
-            if uses_pre_split_chunks
-            else int(result.metadata.get("chunks_count") or len(chunk_texts))
-        )
+        processing_params["chunksCount"] = len(chunk_texts)
         processing_params["indexedAt"] = now_iso()
-        processing_params["indexBackend"] = "lightrag-milvus"
+        processing_params["indexBackend"] = "lightrag"
+        processing_params["graphExtraction"] = True
+        if index_result.track_id:
+            processing_params["trackId"] = index_result.track_id
         return self._update_file(
             replace(
                 current,
@@ -2097,8 +2135,12 @@ class KnowledgeBaseService:
             },
             defaults=default_query_params_payload(),
         )
+
+        # Ensure RAG engine is available
         self._ensure_lightrag(kb, feature="Knowledge query")
-        raw = self._run_async(
+
+        # Query via LightRAG Core (single path: vector + graph + rerank)
+        lightrag_result = self._run_async(
             self.rag_engine.query_structured(
                 kb_id,
                 query_text,
@@ -2112,16 +2154,30 @@ class KnowledgeBaseService:
             ),
             timeout=query_timeout,
         )
+
+        # Extract structured data
+        lr_data = lightrag_result.get("data") or {}
+        chunks = list(lr_data.get("chunks") or [])
+        references_map: dict[str, dict[str, Any]] = {}
+        for ref in lr_data.get("references") or []:
+            ref_id = str(ref.get("reference_id") or "")
+            if ref_id:
+                references_map[ref_id] = ref
+
+        # Enrich and filter
         tokens = self._matching_file_tokens(kb_id, file_ids=file_ids or None, file_name=file_name)
+        raw = {
+            "data": {
+                "chunks": chunks,
+                "references": list(references_map.values()),
+            },
+            "message": str(lightrag_result.get("message") or ""),
+        }
         filtered = self._filter_query_result(raw, tokens=tokens)
         data = dict(filtered.get("data") or {})
         enriched_chunks = self._enrich_query_chunks(kb_id, list(data.get("chunks") or []))
         data["chunks"] = enriched_chunks
-        references_map: dict[str, dict[str, Any]] = {
-            str(item.get("reference_id") or ""): dict(item)
-            for item in (data.get("references") or [])
-            if str(item.get("reference_id") or "").strip()
-        }
+        # Re-build references from enriched chunks
         for chunk in enriched_chunks:
             reference_id = str(chunk.get("reference_id") or chunk.get("file_id") or chunk.get("chunk_id") or "").strip()
             if not reference_id:
@@ -2144,6 +2200,9 @@ class KnowledgeBaseService:
             filtered["message"] = self._synthesize_answer_from_chunks(kb, query_text, enriched_chunks)
         metadata = dict(filtered.get("metadata") or {})
         metadata["kbType"] = KNOWLEDGE_ARCHITECTURE_TYPE
+        metadata["backend"] = "lightrag"
+        metadata["mode"] = params.mode
+        metadata["graphEnhanced"] = True
         filtered["metadata"] = metadata
         filtered["query"] = query_text
         filtered["queryParams"] = params.to_dict()

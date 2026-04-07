@@ -196,12 +196,15 @@ export default function KnowledgePage() {
     return String(modelBindings[bindingName]?.model || '').trim()
   }
 
-  function buildKnowledgeBindingOptions(capability: 'embedding' | 'llm') {
+  function buildKnowledgeBindingOptions(capability: 'embedding' | 'llm' | 'rerank') {
     return Object.entries(modelBindings)
       .filter(([, binding]) => {
         const resolved = resolveBindingCapabilityType(binding)
         if (capability === 'embedding') {
           return resolved === 'embedding'
+        }
+        if (capability === 'rerank') {
+          return resolved === 'rerank'
         }
         return resolved === 'text_chat' || resolved === 'multimodal'
       })
@@ -220,6 +223,23 @@ export default function KnowledgePage() {
     () => buildKnowledgeBindingOptions('llm'),
     [modelBindings],
   )
+  const rerankBindingOptions = useMemo(
+    () => buildKnowledgeBindingOptions('rerank'),
+    [modelBindings],
+  )
+  const multimodalBindingOptions = useMemo(
+    () => Object.entries(modelBindings)
+      .filter(([, binding]) => {
+        const resolved = resolveBindingCapabilityType(binding)
+        return resolved === 'multimodal'
+      })
+      .map(([bindingName, binding]) => ({
+        value: bindingName,
+        label: String(binding.model || bindingName).trim() || bindingName,
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label)),
+    [modelBindings],
+  )
   const defaultEmbeddingBindingName = useMemo(
     () => String(modelConfig?.rag?.embeddingBinding || '').trim() || embeddingBindingOptions[0]?.value || '',
     [modelConfig, embeddingBindingOptions],
@@ -227,6 +247,10 @@ export default function KnowledgePage() {
   const defaultLlmBindingName = useMemo(
     () => String(modelConfig?.rag?.llmBinding || '').trim() || llmBindingOptions[0]?.value || '',
     [modelConfig, llmBindingOptions],
+  )
+  const defaultRerankBindingName = useMemo(
+    () => String(modelConfig?.rag?.rerankBinding || '').trim() || '',
+    [modelConfig],
   )
 
   function findBindingNameByModel(modelName: string, capability: 'embedding' | 'text_chat' | 'multimodal') {
@@ -247,6 +271,8 @@ export default function KnowledgePage() {
       embedModelName: getBindingModel(defaultEmbeddingBindingName),
       llmBindingName: defaultLlmBindingName,
       llmModelName: getBindingModel(defaultLlmBindingName),
+      rerankBindingName: defaultRerankBindingName,
+      rerankModelName: getBindingModel(defaultRerankBindingName),
     })
   }
 
@@ -1155,6 +1181,8 @@ export default function KnowledgePage() {
             indexConfig,
             embeddingBindingOptions,
             llmBindingOptions,
+            rerankBindingOptions,
+            multimodalBindingOptions,
             onFormStateChange: setFormState,
             onIndexConfigChange: setIndexConfig,
             onActiveTabChange: setActiveTab,
@@ -1214,10 +1242,6 @@ export default function KnowledgePage() {
         confirmLoading={loading.creating}
       >
         <div className="knowledge-settings-grid">
-          <div className="studio-form-field">
-            <Typography.Text type="secondary">知识库架构</Typography.Text>
-            <Input value={KNOWLEDGE_ARCHITECTURE_LABEL} disabled />
-          </div>
           <div className="studio-form-field studio-form-field-span-2">
             <Typography.Text type="secondary">名称</Typography.Text>
             <Input
@@ -1239,7 +1263,7 @@ export default function KnowledgePage() {
               </Button>
             </Flex>
             <Input.TextArea
-              rows={4}
+              rows={3}
               value={formState.description}
               onChange={(e) => setFormState((prev) => ({ ...prev, description: e.target.value }))}
               placeholder="知识库描述"
@@ -1255,6 +1279,20 @@ export default function KnowledgePage() {
               showSearch
               optionFilterProp="label"
               style={{ width: '100%' }}
+              notFoundContent={
+                <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                    暂无可用的 Embedding 模型
+                  </Typography.Text>
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => navigate('/models')}
+                  >
+                    前往模型页面配置 →
+                  </Button>
+                </Flex>
+              }
             />
           </div>
           <div className="studio-form-field">
@@ -1276,30 +1314,6 @@ export default function KnowledgePage() {
               onChange={(value) => setFormState((prev) => ({ ...prev, language: value }))}
               options={LANGUAGE_OPTIONS}
               style={{ width: '100%' }}
-            />
-          </div>
-          <div className="studio-form-field">
-            <Typography.Text type="secondary">分块策略</Typography.Text>
-            <Select
-              value={formState.chunkPresetId}
-              onChange={(value) => setFormState((prev) => ({ ...prev, chunkPresetId: value }))}
-              options={CHUNK_PRESET_OPTIONS}
-              style={{ width: '100%' }}
-            />
-          </div>
-          <div className="studio-form-field">
-            <Typography.Text type="secondary">自动生成问题</Typography.Text>
-            <Switch
-              checked={formState.autoGenerateQuestions}
-              onChange={(checked) => setFormState((prev) => ({ ...prev, autoGenerateQuestions: checked }))}
-            />
-          </div>
-          <div className="studio-form-field studio-form-field-span-2">
-            <Typography.Text type="secondary">QA 分隔符</Typography.Text>
-            <Input
-              placeholder="QA 分隔符"
-              value={formState.qaSeparator}
-              onChange={(e) => setFormState((prev) => ({ ...prev, qaSeparator: e.target.value }))}
             />
           </div>
         </div>

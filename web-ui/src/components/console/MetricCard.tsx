@@ -43,7 +43,7 @@ export default function MetricCard({
   return (
     <Card
       className={`metric-card metric-card-${tone}`}
-      bordered={false}
+      variant="borderless"
       style={{
         position: 'relative',
         height: '100%',

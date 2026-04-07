@@ -38,38 +38,18 @@ def _wait_for_job(service: KnowledgeBaseService, kb_id: str, job_id: str) -> dic
 class _RuntimeAwareFakeRAGEngine(FakeRAGEngine):
     def __init__(self) -> None:
         super().__init__()
-        self.runtime_resolver = None
         self.reset_calls: list[str] = []
 
-    def set_kb_runtime_resolver(self, resolver) -> None:
-        self.runtime_resolver = resolver
-
-    async def reset_kb(self, kb_id: str) -> None:
+    async def reset_kb(self, kb_id: str) -> bool:
         self.reset_calls.append(kb_id)
+        return True
 
 
 class _SlowQueryFakeRAGEngine(FakeRAGEngine):
-    async def query_structured(
-        self,
-        kb_id: str,
-        query_text: str,
-        *,
-        mode: str = "hybrid",
-        top_k: int = 8,
-        chunk_top_k: int = 12,
-        response_type: str = "Multiple Paragraphs",
-        only_need_context: bool = False,
-        only_need_prompt: bool = False,
-        enable_rerank: bool = False,
-    ) -> dict:
-        del kb_id, query_text, mode, top_k, chunk_top_k, response_type, only_need_context, only_need_prompt, enable_rerank
+    async def query_structured(self, kb_id, query_text, **kwargs):
+        import asyncio
         await asyncio.sleep(0.2)
-        return {
-            "status": "success",
-            "message": "",
-            "data": {"chunks": [], "entities": [], "relationships": [], "references": []},
-            "metadata": {"mode": "naive", "kbType": "lightrag"},
-        }
+        return await super().query_structured(kb_id, query_text, **kwargs)
 
 
 def test_knowledge_base_service_file_and_source_flow(tmp_path: Path) -> None:
@@ -266,8 +246,7 @@ def test_knowledge_base_service_resolves_kb_model_bindings_for_rag_runtime(tmp_p
                 },
             },
             "rag": {
-                "llmBinding": "deepseek",
-                "embeddingBinding": "text-embedding-v4-2",
+                "lightragBaseUrl": "http://127.0.0.1:9621",
             },
         }
     )
@@ -293,13 +272,12 @@ def test_knowledge_base_service_resolves_kb_model_bindings_for_rag_runtime(tmp_p
         }
     )
 
-    assert rag_engine.runtime_resolver is not None
-    runtime = rag_engine.runtime_resolver(str(created["kbId"]))
-    assert runtime["llm_model"] == "deepseek-chat"
-    assert runtime["llm_provider_name"] == "deepseek"
-    assert runtime["embedding_model"] == "text-embedding-v4"
-    assert runtime["embedding_provider_name"] == "dashscope"
-    assert runtime["embedding_dim"] == 1024
+    # After refactor, RAG engine is an HTTP client — no runtime resolver needed.
+    # We just verify the service accepted the model binding config.
+    assert created["llmInfo"]["bindingName"] == "deepseek"
+    assert created["llmInfo"]["modelName"] == "deepseek-chat"
+    assert created["embedInfo"]["bindingName"] == "text-embedding-v4-2"
+    assert created["embedInfo"]["modelName"] == "text-embedding-v4"
 
 
 def test_knowledge_base_service_blocks_embedding_change_when_indexed(tmp_path: Path) -> None:

@@ -53,9 +53,9 @@ dependencies = [
     "PyYAML>=6.0.2,<7.0.0",
     "openpyxl>=3.1.0,<4.0.0",
     "Pillow>=10.0.0,<12.0.0",
-    "raganything>=0.3.0",
-    "lightrag-hku>=1.0.0",
-    "pymilvus[milvus_lite]>=2.5.0,<3.0.0",
+    "lightrag-hku>=1.4.0,<2.0.0",
+    "pymilvus>=2.5.0,<3.0.0",
+    "neo4j>=5.0.0,<7.0.0",
 ]
 
 [project.optional-dependencies]

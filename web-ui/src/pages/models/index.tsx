@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { Button, Drawer, Empty, Flex, Input, Space, Tag, Typography, Progress, theme } from 'antd'
+import { Button, Drawer, Empty, Flex, Input, Segmented, Space, Tag, Typography, Progress, theme } from 'antd'
 import {
   CheckCircleOutlined,
   CloseOutlined,
@@ -10,6 +10,7 @@ import {
   SearchOutlined,
 } from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
+
 
 import PageHeader from '../../components/console/PageHeader'
 import MetricCard from '../../components/console/MetricCard'
@@ -31,6 +32,7 @@ import type { ConfigData, ConfigMeta, ModelBindingTestResult } from '../../types
 
 import ProviderConfig from './ProviderConfig'
 import ModelBindings from './ModelBindings'
+import ModelTable from './ModelTable'
 import ProviderAvatar from './ProviderAvatar'
 import {
   AddModelDialog,
@@ -60,6 +62,7 @@ export default function ModelsPage() {
   
   const [searchQuery, setSearchQuery] = useState('')
   const deferredQuery = useDeferredValue(searchQuery)
+  const [viewMode, setViewMode] = useState<'models' | 'providers'>('models')
   const [activeProviderName, setActiveProviderName] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -385,6 +388,28 @@ export default function ModelsPage() {
     [addModelDraft.modelId, bindings],
   )
 
+  /** All bindings as rows with capability type resolved (for ModelTable) */
+  const allBindingRows = useMemo<BindingRow[]>(() => {
+    return Object.entries(bindings)
+      .map(([bindingName, binding]) => ({
+        bindingName,
+        ...binding,
+        capabilityType: resolveBindingCapabilityType(binding),
+      }))
+      .sort((a, b) => (a.model || a.bindingName).localeCompare(b.model || b.bindingName))
+  }, [bindings])
+
+  /** Provider name → label mapping for ModelTable */
+  const providerLabels = useMemo(() => {
+    const labels: Record<string, string> = {}
+    if (configMeta) {
+      for (const p of configMeta.providers) {
+        labels[p.name] = p.label
+      }
+    }
+    return labels
+  }, [configMeta])
+
   if (loading && !config) {
     return (
       <Flex vertical gap={18} className="page-stack">
@@ -420,116 +445,177 @@ export default function ModelsPage() {
         )}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: SPACING.md }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: SPACING.md }}>
         <MetricCard
-          label="已配置供应商"
-          value={configuredProviderCount}
-          icon={<CheckCircleOutlined style={{ fontSize: 16 }} />}
-          tone="success"
-        />
-        <MetricCard
-          label="活跃路由"
+          label="已注册模型"
           value={totalBindingCount}
           icon={<LinkOutlined style={{ fontSize: 16 }} />}
           tone="primary"
         />
+        <MetricCard
+          label="可用供应商"
+          value={`${configuredProviderCount}/${providers.length}`}
+          icon={<CheckCircleOutlined style={{ fontSize: 16 }} />}
+          tone="success"
+        />
+        <MetricCard
+          label="默认模型"
+          value={bindings[defaultBindingName]?.model || bindings[defaultBindingName]?.label || '未设置'}
+          icon={<DatabaseOutlined style={{ fontSize: 16 }} />}
+          tone="neutral"
+        />
       </div>
 
-      <Input
-        size="large"
-        placeholder="搜索供应商或网关名称"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        prefix={<SearchOutlined />}
-        allowClear
-        style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)', border: 'none' }}
-      />
+      <Flex align="center" justify="space-between" gap={12} wrap="wrap">
+        <Segmented
+          value={viewMode}
+          onChange={(value) => setViewMode(value as 'models' | 'providers')}
+          options={[
+            { label: '模型总览', value: 'models' },
+            { label: '供应商管理', value: 'providers' },
+          ]}
+          style={{ borderRadius: 10 }}
+        />
+        <Input
+          size="large"
+          placeholder={viewMode === 'models' ? '搜索模型 ID、名称或供应商' : '搜索供应商名称'}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          prefix={<SearchOutlined />}
+          allowClear
+          style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)', border: 'none', maxWidth: 400 }}
+        />
+      </Flex>
 
-      <SectionCard title="接入模型供应商">
-        {providerCards.length === 0 ? (
-          <Empty description="无匹配项" />
-        ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: SPACING.md,
+      {viewMode === 'models' ? (
+        <SectionCard
+          title="模型总览"
+          description="所有已注册的模型，按能力类型分类。"
+          action={
+            totalBindingCount > 0 ? undefined : (
+              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                请先在供应商管理中添加模型
+              </Typography.Text>
+            )
+          }
+        >
+          <ModelTable
+            bindings={allBindingRows}
+            defaultBindingName={defaultBindingName}
+            providerLabels={providerLabels}
+            searchQuery={deferredQuery}
+            onTest={(_bindingName, model) => {
+              const binding = bindings[_bindingName]
+              if (binding?.provider) {
+                setActiveProviderName(binding.provider)
+              }
+              openTestDialog({ model })
             }}
-          >
-            {providerCards.map((provider, index) => (
-              <motion.div
-                key={provider.name}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.04, duration: 0.2 }}
-                whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(99,102,241,0.1)' }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => openProviderDrawer(provider.name)}
-                style={{
-                  background: 'var(--nb-card-subtle-bg)',
-                  border: `1px solid ${activeProviderName === provider.name ? token.colorPrimary : 'var(--nb-card-subtle-border)'}`,
-                  borderRadius: 16,
-                  padding: '20px 20px 16px',
-                  cursor: 'pointer',
-                  transition: 'border-color 200ms ease',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                }}
-              >
-                {/* 头部：Logo 和状态 */}
-                <Flex align="flex-start" justify="space-between">
-                  <ProviderAvatar providerName={provider.name} label={provider.label} size={44} />
-                  <Space size={6} wrap align="center">
-                    {provider.defaultProvider ? (
-                      <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 11 }}>
-                        默认
-                      </Tag>
-                    ) : null}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <div
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          background: provider.configured ? token.colorSuccess : token.colorWarning,
-                        }}
-                      />
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {provider.configured ? '已配置' : '待预置'}
-                      </Typography.Text>
-                    </div>
-                  </Space>
-                </Flex>
+            onSetDefault={setAsDefaultBinding}
+            onDelete={requestDeleteBinding}
+            onCapabilityChange={(bindingName, capabilityType) => {
+              updateConfig((current) => {
+                const currentBindings = configMeta ? getAllModelBindings(current, configMeta) : {}
+                const binding = currentBindings[bindingName]
+                if (!binding) return current
+                return updateBindingValue(
+                  current,
+                  bindingName,
+                  getProviderMeta(configMeta, binding.provider),
+                  { ...binding, capabilityType },
+                )
+              })
+            }}
+            onOpenProviderDrawer={openProviderDrawer}
+          />
+        </SectionCard>
+      ) : (
+        <SectionCard title="接入模型供应商">
+          {providerCards.length === 0 ? (
+            <Empty description="无匹配项" />
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                gap: SPACING.md,
+              }}
+            >
+              {providerCards.map((provider, index) => (
+                <motion.div
+                  key={provider.name}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.04, duration: 0.2 }}
+                  whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(99,102,241,0.1)' }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => openProviderDrawer(provider.name)}
+                  style={{
+                    background: 'var(--nb-card-subtle-bg)',
+                    border: `1px solid ${activeProviderName === provider.name ? token.colorPrimary : 'var(--nb-card-subtle-border)'}`,
+                    borderRadius: 16,
+                    padding: '20px 20px 16px',
+                    cursor: 'pointer',
+                    transition: 'border-color 200ms ease',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                  }}
+                >
+                  {/* 头部：Logo 和状态 */}
+                  <Flex align="flex-start" justify="space-between">
+                    <ProviderAvatar providerName={provider.name} label={provider.label} size={44} />
+                    <Space size={6} wrap align="center">
+                      {provider.defaultProvider ? (
+                        <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 11 }}>
+                          默认
+                        </Tag>
+                      ) : null}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            background: provider.configured ? token.colorSuccess : token.colorWarning,
+                          }}
+                        />
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {provider.configured ? '已配置' : '待预置'}
+                        </Typography.Text>
+                      </div>
+                    </Space>
+                  </Flex>
 
-                {/* 名称和分类 */}
-                <div style={{ marginTop: 2 }}>
-                  <Typography.Text strong style={{ fontSize: 16, display: 'block' }}>
-                    {provider.label}
-                  </Typography.Text>
-                  <Typography.Text
-                    type="secondary"
-                    style={{ fontSize: 13, display: 'block', marginTop: 3 }}
-                    ellipsis
-                  >
-                    {provider.categoryLabel}
-                  </Typography.Text>
-                </div>
+                  {/* 名称和分类 */}
+                  <div style={{ marginTop: 2 }}>
+                    <Typography.Text strong style={{ fontSize: 16, display: 'block' }}>
+                      {provider.label}
+                    </Typography.Text>
+                    <Typography.Text
+                      type="secondary"
+                      style={{ fontSize: 13, display: 'block', marginTop: 3 }}
+                      ellipsis
+                    >
+                      {provider.categoryLabel}
+                    </Typography.Text>
+                  </div>
 
-                {/* 模型数量统计 */}
-                <Flex align="center" justify="space-between" style={{ marginTop: 'auto', paddingTop: 8 }}>
-                  <Typography.Text type={provider.bindingsCount > 0 ? undefined : 'secondary'} style={{ fontSize: 13 }}>
-                    <span style={{ fontWeight: provider.bindingsCount > 0 ? 600 : 400 }}>{provider.bindingsCount}</span> 个模型路由
-                  </Typography.Text>
-                  <Button size="small" type={provider.configured ? 'default' : 'primary'} style={{ borderRadius: 6 }}>
-                    {provider.configured ? '管理路由' : '填入凭据'}
-                  </Button>
-                </Flex>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+                  {/* 模型数量统计 */}
+                  <Flex align="center" justify="space-between" style={{ marginTop: 'auto', paddingTop: 8 }}>
+                    <Typography.Text type={provider.bindingsCount > 0 ? undefined : 'secondary'} style={{ fontSize: 13 }}>
+                      <span style={{ fontWeight: provider.bindingsCount > 0 ? 600 : 400 }}>{provider.bindingsCount}</span> 个模型
+                    </Typography.Text>
+                    <Button size="small" type={provider.configured ? 'default' : 'primary'} style={{ borderRadius: 6 }}>
+                      {provider.configured ? '管理模型' : '填入凭据'}
+                    </Button>
+                  </Flex>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       <Drawer
         title={null}
@@ -614,6 +700,19 @@ export default function ModelsPage() {
                     onSetDefault={setAsDefaultBinding}
                     onDelete={requestDeleteBinding}
                     onAddModel={openAddModelDialog}
+                    onCapabilityChange={(bindingName, capabilityType) => {
+                      updateConfig((current) => {
+                        const currentBindings = configMeta ? getAllModelBindings(current, configMeta) : {}
+                        const binding = currentBindings[bindingName]
+                        if (!binding) return current
+                        return updateBindingValue(
+                          current,
+                          bindingName,
+                          getProviderMeta(configMeta, binding.provider),
+                          { ...binding, capabilityType },
+                        )
+                      })
+                    }}
                   />
                 </Flex>
               </div>

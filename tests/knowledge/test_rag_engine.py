@@ -1,893 +1,363 @@
+"""Tests for the RAGEngine (LightRAG Core embedded adapter)."""
+
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, call
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import numpy as np
 import pytest
 
-from nanobot.config.schema import Config
 from nanobot.platform.knowledge.rag_engine import (
     RAGEngine,
-    _infer_embedding_dim,
+    IndexResult,
+    RetrievalHit,
     create_rag_engine_from_config,
+    _infer_embedding_dim,
+    _has_structured_evidence,
 )
 
 
-class _FakeDocStatusStore:
-    def __init__(
-        self,
-        *,
-        by_id: dict[str, dict] | None = None,
-        by_file_path: dict[str, dict] | None = None,
-    ) -> None:
-        self.by_id = dict(by_id or {})
-        self.by_file_path = dict(by_file_path or {})
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    async def get_by_id(self, doc_id: str):
-        return self.by_id.get(doc_id)
 
-    async def get_doc_by_file_path(self, file_path: str):
-        return self.by_file_path.get(file_path)
+def _make_engine(tmp_path: Path, **overrides: Any) -> RAGEngine:
+    defaults = {
+        "storage_root": tmp_path / "lightrag",
+        "default_model": "gpt-4o-mini",
+        "provider_name": "openai",
+        "api_key": "test-key",
+        "api_base": "https://api.openai.com/v1",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dim": 3072,
+    }
+    defaults.update(overrides)
+    return RAGEngine(**defaults)
 
 
-class _FakeLightRAG:
-    def __init__(
-        self,
-        *,
-        doc_status: _FakeDocStatusStore,
-        query_error: Exception | None = None,
-        ready: bool = True,
-    ) -> None:
-        self.doc_status = doc_status
-        self._query_error = query_error
-        self._storages_status = SimpleNamespace(name="INITIALIZED" if ready else "CREATED")
-        self.chunk_entity_relation_graph = SimpleNamespace(
-            _storage_lock=(object() if ready else None),
-            storage_updated=(object() if ready else None),
-        )
+# ---------------------------------------------------------------------------
+# Tests: Workspace naming
+# ---------------------------------------------------------------------------
 
-    async def aquery_data(self, query_text: str, query_param):
-        if self._query_error is not None:
-            raise self._query_error
-        return {"data": {"references": [], "chunks": []}}
 
+def test_sanitize_workspace_id_basic() -> None:
+    assert RAGEngine._sanitize_workspace_id("abc-123") == "abc_123"
 
-class _FakeRag:
-    def __init__(
-        self,
-        *,
-        status_by_id: dict[str, dict] | None = None,
-        status_by_file_path: dict[str, dict] | None = None,
-        query_error: Exception | None = None,
-        process_result: bool = True,
-        ready: bool = False,
-    ) -> None:
-        self._status_by_id = dict(status_by_id or {})
-        self._status_by_file_path = dict(status_by_file_path or {})
-        self._query_error = query_error
-        self._process_result = process_result
-        self.insert_calls: list[tuple[tuple, dict]] = []
-        self.process_calls: list[tuple[tuple, dict]] = []
-        self.init_calls = 0
-        self.parse_cache = None
-        self.lightrag = None
-        if ready:
-            self.lightrag = self._make_lightrag()
-            self.parse_cache = object()
 
-    def _make_lightrag(self, *, ready: bool = True) -> _FakeLightRAG:
-        return _FakeLightRAG(
-            doc_status=_FakeDocStatusStore(
-                by_id=self._status_by_id,
-                by_file_path=self._status_by_file_path,
-            ),
-            query_error=self._query_error,
-            ready=ready,
-        )
+def test_sanitize_workspace_id_special_chars() -> None:
+    assert RAGEngine._sanitize_workspace_id("my kb!@#") == "my_kb"
 
-    async def _ensure_lightrag_initialized(self):
-        self.init_calls += 1
-        self.lightrag = self._make_lightrag()
-        self.parse_cache = object()
-        return {"success": True}
 
-    async def insert_content_list(self, *args, **kwargs):
-        self.insert_calls.append((args, kwargs))
-        return None
+def test_sanitize_workspace_id_empty() -> None:
+    assert RAGEngine._sanitize_workspace_id("") == "knowledge"
 
-    async def process_document_complete(self, *args, **kwargs):
-        self.process_calls.append((args, kwargs))
-        return self._process_result
 
-    async def finalize_storages(self):
-        return None
+def test_kb_storage_workspace(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+    assert engine._kb_storage_workspace("test-kb") == "kb_test_kb"
 
-    def _get_file_reference(self, file_path: str) -> str:
-        return Path(file_path).name
 
+# ---------------------------------------------------------------------------
+# Tests: Query mode normalization
+# ---------------------------------------------------------------------------
 
-class _FailingInitRag:
-    def __init__(self, error: str) -> None:
-        self.error = error
-        self.init_calls = 0
-        self.lightrag = None
-        self.parse_cache = None
 
-    async def _ensure_lightrag_initialized(self):
-        self.init_calls += 1
-        return {"success": False, "error": self.error}
+def test_normalize_query_mode_aliases() -> None:
+    assert RAGEngine._normalize_query_mode("keyword") == "naive"
+    assert RAGEngine._normalize_query_mode("semantic") == "local"
+    assert RAGEngine._normalize_query_mode("hybrid") == "hybrid"
+    assert RAGEngine._normalize_query_mode("mix") == "mix"
+    assert RAGEngine._normalize_query_mode("GLOBAL") == "global"
+    assert RAGEngine._normalize_query_mode("") == "hybrid"
+    assert RAGEngine._normalize_query_mode(None) == "hybrid"
+    assert RAGEngine._normalize_query_mode("unknown") == "hybrid"
 
-    async def finalize_storages(self):
-        return None
 
+# ---------------------------------------------------------------------------
+# Tests: Timeout detection
+# ---------------------------------------------------------------------------
 
-class _FakeDropStorage:
-    def __init__(self) -> None:
-        self.drop_calls = 0
 
-    async def drop(self):
-        self.drop_calls += 1
-        return {"status": "success", "message": "data dropped"}
+def test_is_timeout_like_error() -> None:
+    assert RAGEngine._is_timeout_like_error(TimeoutError("timed out"))
+    assert RAGEngine._is_timeout_like_error(asyncio.TimeoutError())
+    assert RAGEngine._is_timeout_like_error(Exception("connection timeout occurred"))
+    assert not RAGEngine._is_timeout_like_error(ValueError("bad value"))
 
 
-class _FakeMilvusClient:
-    def __init__(self, collections: set[str] | None = None) -> None:
-        self.collections = set(collections or set())
-        self.drop_calls: list[str] = []
+# ---------------------------------------------------------------------------
+# Tests: Embedding dimension inference
+# ---------------------------------------------------------------------------
 
-    def has_collection(self, name: str) -> bool:
-        return name in self.collections
 
-    def drop_collection(self, name: str) -> None:
-        self.drop_calls.append(name)
-        self.collections.discard(name)
+def test_infer_embedding_dim_defaults() -> None:
+    assert _infer_embedding_dim("text-embedding-3-large") == 3072
+    assert _infer_embedding_dim("text-embedding-3-small") == 1536
+    assert _infer_embedding_dim("text-embedding-ada-002") == 1536
 
 
-class _FakeVectorStorage(_FakeDropStorage):
-    def __init__(self, namespace: str) -> None:
-        super().__init__()
-        self.final_namespace = namespace
-        self._client = _FakeMilvusClient({namespace})
-
-
-class _FakeDropLightRAG:
-    def __init__(self) -> None:
-        self.full_docs = _FakeDropStorage()
-        self.text_chunks = _FakeDropStorage()
-        self.full_entities = _FakeDropStorage()
-        self.full_relations = _FakeDropStorage()
-        self.entity_chunks = _FakeDropStorage()
-        self.relation_chunks = _FakeDropStorage()
-        self.chunk_entity_relation_graph = _FakeDropStorage()
-        self.llm_response_cache = _FakeDropStorage()
-        self.doc_status = _FakeDropStorage()
-        self.entities_vdb = _FakeVectorStorage("kb_drop_entities")
-        self.relationships_vdb = _FakeVectorStorage("kb_drop_relationships")
-        self.chunks_vdb = _FakeVectorStorage("kb_drop_chunks")
-
-
-class _FakeDropRag:
-    def __init__(self) -> None:
-        self.lightrag = _FakeDropLightRAG()
-        self.finalize_calls = 0
-
-    async def finalize_storages(self):
-        self.finalize_calls += 1
-
-
-class _RecordingUpsertStore:
-    def __init__(self) -> None:
-        self.payloads: list[dict] = []
-
-    async def upsert(self, payload: dict) -> None:
-        self.payloads.append(payload)
-
-
-class _RecordingDocStatusStore(_RecordingUpsertStore):
-    async def get_by_id(self, doc_id: str):
-        for payload in reversed(self.payloads):
-            if doc_id in payload:
-                return payload[doc_id]
-        return None
-
-
-class _FallbackTokenizer:
-    @staticmethod
-    def encode(text: str) -> list[int]:
-        return list(range(len(text)))
-
-
-class _FallbackLightRAG:
-    def __init__(self) -> None:
-        self.chunks_vdb = _RecordingUpsertStore()
-        self.full_docs = _RecordingUpsertStore()
-        self.text_chunks = _RecordingUpsertStore()
-        self.doc_status = _RecordingDocStatusStore()
-        self.tokenizer = _FallbackTokenizer()
-        self.deleted_doc_ids: list[str] = []
-        self.insert_done_calls = 0
-
-    async def adelete_by_doc_id(self, doc_id: str) -> None:
-        self.deleted_doc_ids.append(doc_id)
-
-    async def _insert_done(self) -> None:
-        self.insert_done_calls += 1
-
-
-class _FallbackInsertRag:
-    def __init__(self) -> None:
-        self.lightrag = _FallbackLightRAG()
-
-    async def insert_content_list(self, *args, **kwargs):
-        raise TimeoutError("LLM func: Worker execution timeout after 120s")
-
-
-class _QueryFallbackLightRAG:
-    def __init__(self) -> None:
-        self.modes: list[str] = []
-
-    async def aquery_data(self, query_text: str, query_param):
-        self.modes.append(str(query_param.mode))
-        if str(query_param.mode) != "naive":
-            raise TimeoutError("LLM func: Worker execution timeout after 120s")
-        return {
-            "data": {
-                "chunks": [
-                    {
-                        "content": "fallback hit",
-                        "chunk_id": "chunk-1",
-                        "reference_id": "ref-1",
-                        "file_path": "ops-faq.md",
-                    }
-                ],
-                "references": [
-                    {
-                        "reference_id": "ref-1",
-                        "file_path": "ops-faq.md",
-                    }
-                ],
-            }
-        }
-
-
-class _QueryFallbackRag:
-    def __init__(self) -> None:
-        self.lightrag = _QueryFallbackLightRAG()
-
-
-class _PrepareDocStatusStore:
-    def __init__(self, docs: dict[str, dict]) -> None:
-        self.docs = dict(docs)
-
-    async def get_docs_by_status(self, status) -> dict[str, dict]:
-        wanted = str(getattr(status, "value", status))
-        return {
-            doc_id: payload
-            for doc_id, payload in self.docs.items()
-            if str(payload.get("status")) == wanted
-        }
-
-
-class _PrepareLightRAG:
-    def __init__(self, docs: dict[str, dict]) -> None:
-        self.doc_status = _PrepareDocStatusStore(docs)
-
-
-class _PrepareRag:
-    def __init__(self, docs: dict[str, dict]) -> None:
-        self.lightrag = _PrepareLightRAG(docs)
-
-
-class _HardFailInsertRag:
-    def __init__(self) -> None:
-        self.lightrag = _FallbackLightRAG()
-
-    async def insert_content_list(self, *args, **kwargs):
-        raise RuntimeError("boom")
-
-
-class _SlowInitRag(_FakeRag):
-    async def _ensure_lightrag_initialized(self):
-        self.init_calls += 1
-        await asyncio.sleep(0.01)
-        self.lightrag = self._make_lightrag()
-        self.parse_cache = object()
-        return {"success": True}
-
-
-class _BrokenReadyRag(_FakeRag):
-    def __init__(self) -> None:
-        super().__init__(ready=False)
-        self.lightrag = self._make_lightrag(ready=False)
-
-    async def _ensure_lightrag_initialized(self):
-        self.init_calls += 1
-        return {"success": True}
-
-
-@pytest.mark.asyncio
-async def test_rag_engine_ensure_instance_initializes_lightrag(monkeypatch) -> None:
-    engine = RAGEngine(storage_root=Path("/tmp/test-rag-engine-ready"), default_model="openai/gpt-4o-mini")
-    fake_rag = _FakeRag()
-
-    monkeypatch.setattr(engine, "_get_or_create_instance", AsyncMock(return_value=fake_rag))
-
-    rag = await engine.ensure_instance("kb-ready")
-
-    assert rag is fake_rag
-    assert rag.lightrag is not None
-    assert fake_rag.init_calls == 1
-
-
-@pytest.mark.asyncio
-async def test_rag_engine_ensure_instance_serializes_concurrent_initialization(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
-    fake_rag = _SlowInitRag()
-
-    monkeypatch.setattr(engine, "_get_or_create_instance", AsyncMock(return_value=fake_rag))
-
-    first, second = await asyncio.gather(
-        engine.ensure_instance("kb-concurrent"),
-        engine.ensure_instance("kb-concurrent"),
-    )
-
-    assert first is fake_rag
-    assert second is fake_rag
-    assert fake_rag.init_calls == 1
-
-
-@pytest.mark.asyncio
-async def test_rag_engine_ensure_instance_recreates_incomplete_lightrag(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
-    broken_rag = _BrokenReadyRag()
-    fresh_rag = _FakeRag(ready=True)
-
-    monkeypatch.setattr(
-        engine,
-        "_get_or_create_instance",
-        AsyncMock(side_effect=[broken_rag, fresh_rag]),
-    )
-    reset_mock = AsyncMock()
-    monkeypatch.setattr(engine, "reset_kb", reset_mock)
-
-    rag = await engine.ensure_instance("kb-recover")
-
-    assert rag is fresh_rag
-    assert broken_rag.init_calls == 1
-    reset_mock.assert_awaited_once_with("kb-recover")
-
-
-@pytest.mark.asyncio
-async def test_rag_engine_insert_text_returns_failure_when_doc_status_failed(monkeypatch) -> None:
-    engine = RAGEngine(storage_root=Path("/tmp/test-rag-engine-insert"), default_model="openai/gpt-4o-mini")
-    fake_rag = _FakeRag(
-        status_by_id={
-            "doc-1": {
-                "status": "failed",
-                "error_msg": "embedding auth missing",
-                "chunks_count": 0,
-                "multimodal_processed": True,
-            }
-        },
-        ready=True,
-    )
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-
-    result = await engine.insert_text("kb-insert", "hello world", doc_id="doc-1", file_path="faq.json")
-
-    assert result.success is False
-    assert result.parser_name == "text_insert"
-    assert "embedding auth missing" in str(result.error)
-
-
-@pytest.mark.asyncio
-async def test_insert_chunks_falls_back_to_chunk_only_on_timeout(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
-    fake_rag = _FallbackInsertRag()
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-
-    result = await engine.insert_chunks(
-        "kb-fallback",
-        ["First chunk", "Second chunk"],
-        doc_id="doc-fallback",
-        file_path="ops-faq.md",
-    )
-
-    assert result.success is True
-    assert result.parser_name == "chunk_insert_fallback"
-    assert result.metadata["fallback_mode"] == "chunk_only"
-    assert result.metadata["chunks_count"] == 2
-    assert fake_rag.lightrag.deleted_doc_ids == ["doc-fallback"]
-    assert fake_rag.lightrag.insert_done_calls == 1
-    stored_status = await fake_rag.lightrag.doc_status.get_by_id("doc-fallback")
-    assert stored_status["status"] == "processed"
-    assert stored_status["multimodal_processed"] is True
-
-
-@pytest.mark.asyncio
-async def test_insert_chunks_cleans_partial_doc_on_hard_failure(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
-    fake_rag = _HardFailInsertRag()
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-    delete_mock = AsyncMock(return_value=True)
-    monkeypatch.setattr(engine, "delete_document", delete_mock)
-
-    result = await engine.insert_chunks(
-        "kb-hard-fail",
-        ["Only chunk"],
-        doc_id="doc-hard-fail",
-        file_path="ops-faq.md",
-    )
-
-    assert result.success is False
-    assert "boom" in str(result.error)
-    delete_mock.assert_awaited_once_with("kb-hard-fail", "doc-hard-fail")
-
-
-@pytest.mark.asyncio
-async def test_prepare_document_ingest_prunes_retryable_docs(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
-    fake_rag = _PrepareRag(
-        {
-            "doc-keep": {"status": "processed"},
-            "doc-failed": {"status": "failed"},
-            "doc-pending": {"status": "pending"},
-            "doc-processing": {"status": "processing"},
-        }
-    )
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-    delete_mock = AsyncMock(side_effect=lambda kb_id, doc_id: doc_id != "doc-pending")
-    monkeypatch.setattr(engine, "delete_document", delete_mock)
-
-    result = await engine.prepare_document_ingest("kb-prepare", "doc-keep")
-
-    assert result["prunedDocIds"] == ["doc-failed", "doc-pending", "doc-processing"]
-    assert result["deletedDocIds"] == ["doc-keep", "doc-failed", "doc-processing"]
-    assert delete_mock.await_args_list == [
-        call("kb-prepare", "doc-keep"),
-        call("kb-prepare", "doc-failed"),
-        call("kb-prepare", "doc-pending"),
-        call("kb-prepare", "doc-processing"),
-    ]
-
-
-@pytest.mark.asyncio
-async def test_query_structured_falls_back_to_naive_on_timeout(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
-    fake_rag = _QueryFallbackRag()
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-
-    result = await engine.query_structured(
-        "kb-query-fallback",
-        "How do we clear the cache?",
-        mode="mix",
-        top_k=4,
-        chunk_top_k=6,
-        only_need_context=True,
-    )
-
-    assert fake_rag.lightrag.modes == ["mix", "naive"]
-    assert result["data"]["chunks"][0]["content"] == "fallback hit"
-
-
-@pytest.mark.asyncio
-async def test_query_falls_back_to_naive_on_timeout(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
-    fake_rag = _QueryFallbackRag()
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-
-    hits = await engine.query(
-        ["kb-query-fallback"],
-        "How do we restart nanobot?",
-        mode="mix",
-        top_k=4,
-    )
-
-    assert fake_rag.lightrag.modes == ["mix", "naive"]
-    assert hits[0].content == "fallback hit"
-
-
-@pytest.mark.asyncio
-async def test_rag_engine_query_raises_when_all_kbs_fail(monkeypatch) -> None:
-    engine = RAGEngine(storage_root=Path("/tmp/test-rag-engine-query"), default_model="openai/gpt-4o-mini")
-    fake_rag = _FakeRag(query_error=RuntimeError("boom"), ready=True)
-
-    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
-
-    with pytest.raises(RuntimeError, match="kb-a: boom"):
-        await engine.query(["kb-a"], "restart worker", mode="hybrid")
-
-
-@pytest.mark.asyncio
-async def test_rag_engine_delete_kb_drops_remote_milvus_collections_and_workspace(tmp_path: Path) -> None:
-    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
-    fake_rag = _FakeDropRag()
-    engine._instances["kb-drop"] = fake_rag
-    engine._locks["kb-drop"] = AsyncMock()
-
-    working_dir = engine._kb_working_dir("kb-drop")
-    working_dir.mkdir(parents=True, exist_ok=True)
-    (working_dir / "marker.txt").write_text("hello", encoding="utf-8")
-
-    deleted = await engine.delete_kb("kb-drop")
-
-    assert deleted is True
-    assert not working_dir.exists()
-    assert "kb-drop" not in engine._instances
-    assert "kb-drop" not in engine._locks
-    assert fake_rag.finalize_calls == 1
-    assert fake_rag.lightrag.full_docs.drop_calls == 1
-    assert fake_rag.lightrag.text_chunks.drop_calls == 1
-    assert fake_rag.lightrag.chunk_entity_relation_graph.drop_calls == 1
-    assert fake_rag.lightrag.entities_vdb.drop_calls == 0
-    assert fake_rag.lightrag.relationships_vdb.drop_calls == 0
-    assert fake_rag.lightrag.chunks_vdb.drop_calls == 0
-    assert fake_rag.lightrag.entities_vdb._client.drop_calls == ["kb_drop_entities"]
-    assert fake_rag.lightrag.relationships_vdb._client.drop_calls == ["kb_drop_relationships"]
-    assert fake_rag.lightrag.chunks_vdb._client.drop_calls == ["kb_drop_chunks"]
-
-
-def test_create_rag_engine_from_config_uses_rag_specific_bindings(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(
-        "nanobot.platform.knowledge.rag_engine._check_rag_anything",
-        lambda: True,
-    )
-    config = Config.model_validate(
-        {
-            "agents": {
-                "defaults": {
-                    "model": "deepseek/deepseek-chat",
-                    "binding": "chat-default",
-                    "provider": "deepseek",
-                }
-            },
-            "modelBindings": {
-                "chat-default": {
-                    "provider": "deepseek",
-                    "label": "DeepSeek",
-                    "model": "deepseek/deepseek-chat",
-                    "apiKey": "sk-chat",
-                    "apiBase": "https://api.deepseek.com",
-                },
-                "rag-llm": {
-                    "provider": "moonshot",
-                    "label": "Kimi",
-                    "model": "moonshot/kimi-k2.5",
-                    "apiKey": "sk-rag-llm",
-                    "apiBase": "https://api.moonshot.cn/v1",
-                },
-                "rag-embedding": {
-                    "provider": "openai",
-                    "label": "OpenAI Embedding",
-                    "model": "text-embedding-3-large",
-                    "capabilityType": "embedding",
-                    "apiKey": "sk-rag-embed",
-                    "apiBase": "https://api.openai.com/v1",
-                },
-            },
-            "rag": {
-                "llmBinding": "rag-llm",
-                "embeddingBinding": "rag-embedding",
-                "llmTimeout": 42,
-                "embeddingTimeout": 21,
-                "maxAsync": 3,
-                "maxParallelInsert": 1,
-                "embeddingFuncMaxAsync": 5,
-            },
-        }
-    )
-
-    engine = create_rag_engine_from_config(config, tmp_path)
-
-    assert engine is not None
-    assert engine._default_model == "moonshot/kimi-k2.5"
-    assert engine._api_key == "sk-rag-llm"
-    assert engine._api_base == "https://api.moonshot.cn/v1"
-    assert engine._embedding_api_key == "sk-rag-embed"
-    assert engine._embedding_api_base == "https://api.openai.com/v1"
-    assert engine._embedding_model == "text-embedding-3-large"
-    assert engine._llm_timeout == 42
-    assert engine._embedding_timeout == 21
-    assert engine._lightrag_base_kwargs["vector_storage"] == "MilvusVectorDBStorage"
-    assert engine._lightrag_base_kwargs["graph_storage"] == "NetworkXStorage"
-    assert engine._lightrag_base_kwargs["default_llm_timeout"] == 42
-    assert engine._lightrag_base_kwargs["default_embedding_timeout"] == 21
-    assert engine._lightrag_base_kwargs["llm_model_max_async"] == 3
-    assert engine._lightrag_base_kwargs["max_parallel_insert"] == 1
-    assert engine._lightrag_base_kwargs["embedding_func_max_async"] == 5
-    assert engine._storage_env["MILVUS_URI"] == "http://127.0.0.1:19530"
-    assert engine._storage_env["MILVUS_DB_NAME"] == "nanobot"
-    assert engine._storage_env["MILVUS_TOKEN"] == "root:Milvus"
-
-
-def test_config_rag_timeouts_default_to_graph_safe_values() -> None:
-    config = Config()
-
-    assert config.rag.llm_timeout == 180
-    assert config.rag.embedding_timeout == 60
-    assert config.rag.max_async == 4
-    assert config.rag.max_parallel_insert == 2
-    assert config.rag.embedding_func_max_async == 8
-
-
-def test_create_rag_engine_from_config_falls_back_to_provider_env_api_key(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(
-        "nanobot.platform.knowledge.rag_engine._check_rag_anything",
-        lambda: True,
-    )
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "env-dashscope-key")
-    config = Config.model_validate(
-        {
-            "modelBindings": {
-                "rag-llm": {
-                    "provider": "dashscope",
-                    "label": "Qwen",
-                    "model": "qwen3.5-plus",
-                },
-                "rag-embedding": {
-                    "provider": "dashscope",
-                    "label": "Embedding",
-                    "model": "text-embedding-v4",
-                    "capabilityType": "embedding",
-                },
-            },
-            "rag": {
-                "llmBinding": "rag-llm",
-                "embeddingBinding": "rag-embedding",
-            },
-        }
-    )
-
-    engine = create_rag_engine_from_config(config, tmp_path)
-
-    assert engine is not None
-    assert engine._api_key == "env-dashscope-key"
-    assert engine._embedding_api_key == "env-dashscope-key"
-    assert engine._embedding_dim == 1024
-
-
-def test_create_rag_engine_from_config_uses_neo4j_graph_storage_when_enabled(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(
-        "nanobot.platform.knowledge.rag_engine._check_rag_anything",
-        lambda: True,
-    )
-    config = Config.model_validate(
-        {
-            "rag": {
-                "milvus": {
-                    "uri": "http://127.0.0.1:19530",
-                    "dbName": "nanobot_knowledge",
-                    "token": "root:Milvus",
-                    "indexType": "HNSW",
-                    "metricType": "COSINE",
-                },
-                "graphStore": {
-                    "enabled": True,
-                    "provider": "neo4j",
-                    "uri": "bolt://127.0.0.1:7687",
-                    "username": "neo4j",
-                    "password": "secret",
-                    "database": "neo4j",
-                },
-            }
-        }
-    )
-
-    engine = create_rag_engine_from_config(config, tmp_path)
-
-    assert engine is not None
-    assert engine._lightrag_base_kwargs["vector_storage"] == "MilvusVectorDBStorage"
-    assert engine._lightrag_base_kwargs["graph_storage"] == "Neo4JStorage"
-    assert engine._lightrag_base_kwargs["vector_db_storage_cls_kwargs"]["index_type"] == "HNSW"
-    assert engine._storage_env["NEO4J_URI"] == "bolt://127.0.0.1:7687"
-    assert engine._storage_env["NEO4J_USERNAME"] == "neo4j"
-    assert engine._storage_env["NEO4J_PASSWORD"] == "secret"
-    assert engine._storage_env["NEO4J_DATABASE"] == "neo4j"
-
-
-def test_resolve_litellm_runtime_prefixes_dashscope_and_moonshot_models() -> None:
-    qwen_model, qwen_provider, qwen_api_base = RAGEngine._resolve_litellm_runtime(
-        model="qwen3.5-plus",
-        provider_name="dashscope",
-        api_key="",
-        api_base="",
-    )
-    kimi_model, kimi_provider, kimi_api_base = RAGEngine._resolve_litellm_runtime(
-        model="kimi-k2.5",
-        provider_name="moonshot",
-        api_key="",
-        api_base="https://api.moonshot.cn/v1",
-    )
-
-    assert qwen_model == "dashscope/qwen3.5-plus"
-    assert qwen_provider is None
-    assert qwen_api_base is None
-    assert kimi_model == "moonshot/kimi-k2.5"
-    assert kimi_provider is None
-    assert kimi_api_base == "https://api.moonshot.cn/v1"
-
-
-def test_resolve_litellm_runtime_routes_dashscope_embedding_via_openai_compatible_api() -> None:
-    embedding_model, custom_provider, embedding_api_base = RAGEngine._resolve_litellm_runtime(
-        model="text-embedding-v4",
-        provider_name="dashscope",
-        api_key="",
-        api_base="",
-        request_type="embedding",
-    )
-
-    assert embedding_model == "text-embedding-v4"
-    assert custom_provider == "openai"
-    assert embedding_api_base == "https://dashscope.aliyuncs.com/compatible-mode/v1"
-
-
-def test_infer_embedding_dim_for_dashscope_v4() -> None:
+def test_infer_embedding_dim_dashscope() -> None:
     assert _infer_embedding_dim("text-embedding-v4", "dashscope") == 1024
 
 
-@pytest.mark.asyncio
-async def test_build_embedding_func_returns_numpy_array(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(
-        storage_root=tmp_path / "storage",
-        default_model="qwen3.5-plus",
-        provider_name="dashscope",
-        embedding_provider_name="dashscope",
-        embedding_model="text-embedding-v4",
-        embedding_dim=1024,
-    )
-
-    class _Response:
-        data = [{"embedding": [0.1, 0.2, 0.3]}]
-
-    async def _fake_aembedding(**kwargs):
-        return _Response()
-
-    monkeypatch.setattr("litellm.aembedding", _fake_aembedding)
-
-    embedding_func = engine._build_embedding_func()
-    result = await embedding_func.func(["hello"])
-
-    assert isinstance(result, np.ndarray)
-    assert result.shape == (1, 3)
+def test_infer_embedding_dim_unknown() -> None:
+    assert _infer_embedding_dim("some-unknown-model") == 3072
 
 
-@pytest.mark.asyncio
-async def test_build_llm_func_times_out_slow_provider(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(
-        storage_root=tmp_path / "storage",
-        default_model="openai/gpt-4o-mini",
-        llm_timeout=0.01,
-    )
-
-    async def _fake_acompletion(**kwargs):
-        await asyncio.sleep(0.05)
-        raise AssertionError("timeout wrapper did not cancel slow request")
-
-    monkeypatch.setattr("litellm.acompletion", _fake_acompletion)
-
-    llm_func = engine._build_llm_func()
-
-    with pytest.raises(TimeoutError, match="LightRAG LLM request timed out"):
-        await llm_func("hello")
+# ---------------------------------------------------------------------------
+# Tests: has_structured_evidence
+# ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_build_embedding_func_times_out_slow_provider(monkeypatch, tmp_path) -> None:
-    engine = RAGEngine(
-        storage_root=tmp_path / "storage",
-        default_model="openai/gpt-4o-mini",
-        embedding_timeout=0.01,
-    )
-
-    async def _fake_aembedding(**kwargs):
-        await asyncio.sleep(0.05)
-        raise AssertionError("timeout wrapper did not cancel slow request")
-
-    monkeypatch.setattr("litellm.aembedding", _fake_aembedding)
-
-    embedding_func = engine._build_embedding_func()
-
-    with pytest.raises(TimeoutError, match="LightRAG embedding request timed out"):
-        await embedding_func.func(["hello"])
+def test_has_structured_evidence_with_chunks() -> None:
+    assert _has_structured_evidence({"data": {"chunks": [{"content": "x"}]}})
 
 
-def test_config_preserves_embedding_capability_type() -> None:
-    config = Config.model_validate(
-        {
-            "modelBindings": {
-                "embed-a": {
-                    "provider": "openai",
-                    "label": "Embedding A",
-                    "model": "text-embedding-3-large",
-                    "capabilityType": "embedding",
-                    "apiKey": "sk-embed",
-                    "apiBase": "https://api.openai.com/v1",
-                }
-            }
-        }
-    )
-
-    assert config.model_bindings["embed-a"].capability_type == "embedding"
+def test_has_structured_evidence_with_references() -> None:
+    assert _has_structured_evidence({"data": {"references": [{"ref_id": "1"}]}})
 
 
-def test_config_infers_embedding_capability_type_for_legacy_binding() -> None:
-    config = Config.model_validate(
-        {
-            "modelBindings": {
-                "legacy-embed": {
-                    "provider": "openai",
-                    "label": "Legacy Embedding",
-                    "model": "text-embedding-3-large",
-                    "apiKey": "sk-embed",
-                    "apiBase": "https://api.openai.com/v1",
-                }
-            }
-        }
-    )
-
-    assert config.model_bindings["legacy-embed"].capability_type == "embedding"
+def test_has_structured_evidence_empty() -> None:
+    assert not _has_structured_evidence({"data": {}})
+    assert not _has_structured_evidence({})
+    assert not _has_structured_evidence({"data": {"chunks": [], "references": []}})
 
 
-def test_rag_engine_runtime_config_applies_per_kb_overrides(tmp_path: Path) -> None:
-    engine = RAGEngine(
-        storage_root=tmp_path / "rag",
-        default_model="deepseek-chat",
-        provider_name="deepseek",
-        api_key="sk-default",
-        api_base="https://api.deepseek.com",
-        embedding_provider_name="dashscope",
-        embedding_api_key="sk-embed",
-        embedding_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        embedding_model="text-embedding-v4",
-        embedding_dim=1024,
-    )
-    engine.set_kb_runtime_resolver(
-        lambda kb_id: {
-            "llm_model": "qwen-max",
-            "llm_provider_name": "dashscope",
-            "embedding_model": "bge-m3",
-            "embedding_provider_name": "custom",
-            "embedding_dim": 2048,
-        } if kb_id == "kb-1" else {}
-    )
+# ---------------------------------------------------------------------------
+# Tests: IndexResult
+# ---------------------------------------------------------------------------
 
-    runtime = engine._kb_runtime_config("kb-1")
 
-    assert runtime["llm_model"] == "qwen-max"
-    assert runtime["llm_provider_name"] == "dashscope"
-    assert runtime["embedding_model"] == "bge-m3"
-    assert runtime["embedding_provider_name"] == "custom"
-    assert runtime["embedding_dim"] == 2048
+def test_index_result_success() -> None:
+    r = IndexResult(success=True, doc_id="d1", chunks_count=5)
+    assert r.success is True
+    assert r.doc_id == "d1"
+    assert r.chunks_count == 5
+    assert r.error is None
+
+
+def test_index_result_failure() -> None:
+    r = IndexResult(success=False, error="boom")
+    assert r.success is False
+    assert r.error == "boom"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Instance lifecycle
+# ---------------------------------------------------------------------------
+
+
+def test_get_lock_creates_lock(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+    lock1 = engine._get_lock("kb1")
+    lock2 = engine._get_lock("kb1")
+    assert lock1 is lock2
+
+
+def test_kb_working_dir(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+    wd = engine._kb_working_dir("my-kb")
+    assert wd == tmp_path / "lightrag" / "my-kb"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Storage env scope
+# ---------------------------------------------------------------------------
+
+
+def test_storage_env_scope_sets_and_restores(tmp_path: Path) -> None:
+    import os
+    engine = _make_engine(tmp_path, storage_env={"TEST_RAG_VAR": "hello"})
+    assert os.environ.get("TEST_RAG_VAR") is None
+    with engine._storage_env_scope():
+        assert os.environ.get("TEST_RAG_VAR") == "hello"
+    assert os.environ.get("TEST_RAG_VAR") is None
+
+
+def test_storage_env_scope_empty(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path, storage_env={})
+    # Should not raise
+    with engine._storage_env_scope():
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Tests: KB runtime resolver
+# ---------------------------------------------------------------------------
+
+
+def test_set_kb_runtime_resolver(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+    assert engine._resolve_kb_runtime("kb1") is None
+
+    engine.set_kb_runtime_resolver(lambda kb_id: {"llm_model": "custom-model"})
+    result = engine._resolve_kb_runtime("kb1")
+    assert result == {"llm_model": "custom-model"}
+
+
+def test_kb_runtime_resolver_error_returns_none(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+    engine.set_kb_runtime_resolver(lambda kb_id: 1 / 0)  # ZeroDivisionError
+    result = engine._resolve_kb_runtime("kb1")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Tests: shutdown_async
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_ensure_ready_skips_immediate_retry_and_enters_cooldown_for_backend_unavailable(tmp_path: Path) -> None:
-    engine = RAGEngine(
-        storage_root=tmp_path / "storage",
-        default_model="deepseek-chat",
-    )
-    failing_rag = _FailingInitRag(
-        "<MilvusException: (code=2, message=Fail connecting to server on 127.0.0.1:19530, illegal connection params or server unavailable)>"
-    )
-    engine._get_or_create_instance = AsyncMock(return_value=failing_rag)  # type: ignore[method-assign]
-    engine.reset_kb = AsyncMock()  # type: ignore[method-assign]
+async def test_shutdown_async_finalizes_instances(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+    mock_rag = MagicMock()
+    mock_rag.finalize_storages = AsyncMock()
+    engine._instances["kb1"] = mock_rag
+    engine._instances["kb2"] = mock_rag
 
-    with pytest.raises(RuntimeError, match="RAGAnything initialization failed"):
-        await engine._ensure_ready("kb-ops")
+    await engine.shutdown_async()
 
-    assert failing_rag.init_calls == 1
-    assert engine.reset_kb.await_count == 1
+    assert mock_rag.finalize_storages.call_count == 2
+    assert len(engine._instances) == 0
+    assert len(engine._locks) == 0
 
-    with pytest.raises(RuntimeError, match="temporarily paused"):
-        await engine._ensure_ready("kb-ops")
 
-    assert engine._get_or_create_instance.await_count == 1
+# ---------------------------------------------------------------------------
+# Tests: reset_kb
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reset_kb_finalizes_and_evicts(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+    mock_rag = MagicMock()
+    mock_rag.finalize_storages = AsyncMock()
+    engine._instances["kb1"] = mock_rag
+
+    await engine.reset_kb("kb1")
+
+    mock_rag.finalize_storages.assert_called_once()
+    assert "kb1" not in engine._instances
+
+
+@pytest.mark.asyncio
+async def test_reset_kb_missing_instance(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+    # Should not raise
+    await engine.reset_kb("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# Tests: normalize_graph
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_graph_empty() -> None:
+    result = RAGEngine._normalize_graph(MagicMock(nodes=[], edges=[], is_truncated=False), labels=[])
+    assert result == {"nodes": [], "edges": [], "labels": [], "isTruncated": False}
+
+
+def test_normalize_graph_with_data() -> None:
+    node1 = MagicMock(id="n1", labels=["Person"], properties={"entity_name": "Alice"})
+    node2 = MagicMock(id="n2", labels=["Org"], properties={"name": "Acme"})
+    edge = MagicMock(id="e1", type="works_at", source="n1", target="n2", properties={})
+    graph = MagicMock(nodes=[node1, node2], edges=[edge], is_truncated=True)
+
+    result = RAGEngine._normalize_graph(graph, labels=["Person", "Org"])
+
+    assert len(result["nodes"]) == 2
+    assert result["nodes"][0]["id"] == "n1"
+    assert result["nodes"][0]["title"] == "Alice"
+    assert result["nodes"][1]["title"] == "Acme"
+    assert len(result["edges"]) == 1
+    assert result["edges"][0]["source"] == "n1"
+    assert result["edges"][0]["target"] == "n2"
+    assert result["edges"][0]["type"] == "works_at"
+    assert result["isTruncated"] is True
+    assert result["labels"] == ["Person", "Org"]
+
+
+# ---------------------------------------------------------------------------
+# Tests: Factory (create_rag_engine_from_config)
+# ---------------------------------------------------------------------------
+
+
+def test_config_rag_defaults() -> None:
+    from nanobot.config.schema import Config
+
+    config = Config()
+    assert config.rag.llm_binding is None
+    assert config.rag.embedding_binding is None
+    assert config.rag.llm_timeout == 180
+    assert config.rag.embedding_timeout == 60
+    assert config.rag.max_async == 16
+    assert config.rag.max_parallel_insert == 4
+    assert config.rag.chunk_token_size == 2400
+    assert config.rag.embedding_batch_num == 32
+    assert config.rag.milvus.uri == "http://127.0.0.1:19530"
+    assert config.rag.graph_store.provider == "neo4j"
+    assert config.rag.graph_store.enabled is True
+
+
+@patch("nanobot.platform.knowledge.rag_engine._check_lightrag", return_value=False)
+def test_create_rag_engine_returns_none_without_lightrag(mock_check: Any, tmp_path: Path) -> None:
+    from nanobot.config.schema import Config
+
+    config = Config()
+    result = create_rag_engine_from_config(config, tmp_path)
+    assert result is None
+
+
+@patch("nanobot.platform.knowledge.rag_engine._check_lightrag", return_value=True)
+def test_create_rag_engine_from_config_creates_engine(mock_check: Any, tmp_path: Path) -> None:
+    from nanobot.config.schema import Config
+
+    config = Config.model_validate({
+        "rag": {
+            "llmTimeout": 200,
+            "embeddingTimeout": 45,
+            "maxAsync": 8,
+        },
+    })
+
+    engine = create_rag_engine_from_config(config, tmp_path)
+
+    assert engine is not None
+    assert isinstance(engine, RAGEngine)
+    assert engine._llm_timeout == 200.0
+    assert engine._embedding_timeout == 45.0
+
+
+@patch("nanobot.platform.knowledge.rag_engine._check_lightrag", return_value=True)
+def test_create_rag_engine_from_config_with_bindings(mock_check: Any, tmp_path: Path) -> None:
+    from nanobot.config.schema import Config
+
+    config = Config.model_validate({
+        "modelBindings": {
+            "rag-llm": {
+                "model": "deepseek-chat",
+                "provider": "deepseek",
+                "apiKey": "sk-test",
+            },
+            "rag-embed": {
+                "model": "text-embedding-v4",
+                "provider": "dashscope",
+                "apiKey": "dk-test",
+                "capabilityType": "embedding",
+            },
+        },
+        "rag": {
+            "llmBinding": "rag-llm",
+            "embeddingBinding": "rag-embed",
+        },
+    })
+
+    engine = create_rag_engine_from_config(config, tmp_path)
+
+    assert engine is not None
+    assert engine._default_model == "deepseek-chat"
+    assert engine._embedding_model == "text-embedding-v4"
+    assert engine._embedding_dim == 1024  # dashscope text-embedding-v4

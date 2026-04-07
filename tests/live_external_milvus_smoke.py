@@ -208,7 +208,7 @@ def main() -> int:
         instance, config = _prepare_runtime(config_path, runtime_root)
         rag_engine = create_rag_engine_from_config(config, instance.data_dir)
         if rag_engine is None:
-            raise RuntimeError("LightRAG / RAG-Anything is not installed in this environment.")
+            raise RuntimeError("LightRAG is not installed in this environment.")
 
         store = KnowledgeBaseStore(instance.knowledge_db_path())
         service = KnowledgeBaseService(

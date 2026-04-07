@@ -94,7 +94,7 @@ export default function ProviderList({
 
                     <Flex align="center" justify="space-between" gap={8} style={{ marginTop: 12 }}>
                       <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                        {item.bindingsCount} 个模型路由
+                        {item.bindingsCount} 个模型
                       </Typography.Text>
                       <div
                         style={{

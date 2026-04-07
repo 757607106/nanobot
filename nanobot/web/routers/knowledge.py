@@ -56,6 +56,11 @@ def _knowledge_service(request: Request):
     return get_tenant_knowledge_service(request)
 
 
+@router.get("/api/v1/knowledge-bases/available-models")
+def list_available_models(request: Request) -> JSONResponse:
+    return _json_response(200, _ok(_knowledge_service(request).list_available_models()))
+
+
 @router.get("/api/v1/knowledge-bases")
 def list_knowledge_bases(
     request: Request,

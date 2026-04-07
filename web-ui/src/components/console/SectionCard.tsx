@@ -20,7 +20,7 @@ export default function SectionCard({
     <Card
       className="section-card"
       loading={loading}
-      bordered={false}
+      variant="borderless"
       style={{
         height: '100%',
         background: 'transparent',

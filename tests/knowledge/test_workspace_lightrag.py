@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from nanobot.platform.knowledge.rag_engine import ParseResult
+from nanobot.platform.knowledge.rag_engine import IndexResult
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
 from tests.knowledge_test_utils import FakeRAGEngine
@@ -82,7 +82,7 @@ def test_lightrag_index_respects_chunk_params_and_file_id_aliases(tmp_path: Path
     file_payload = next(item for item in service.list_files(kb_id)["items"] if item["fileId"] == file_id)
     assert file_payload["processingParams"]["chunk_preset_id"] == "qa"
     assert file_payload["chunkCount"] == 2
-    assert service.rag_engine.prepare_calls == [(kb_id, file_id)]
+    assert file_payload["processingParams"]["indexBackend"] == "lightrag"
 
     query_result = service.query_database(
         kb_id,
@@ -92,11 +92,11 @@ def test_lightrag_index_respects_chunk_params_and_file_id_aliases(tmp_path: Path
         },
     )
     assert query_result["metadata"]["mode"] == "mix"
+    assert query_result["metadata"]["backend"] == "lightrag"
 
     retrieved = service.retrieve([kb_id], "How do we clear the cache?", limit=2)
     assert retrieved["hits"]
     assert retrieved["effectiveMode"] == "mix"
-    assert any(str(item.get("metadata", {}).get("mode") or "") == "mix" for item in retrieved["hits"])
 
 
 def test_lightrag_index_uses_kb_default_chunk_params_when_file_has_none(tmp_path: Path) -> None:
@@ -141,26 +141,24 @@ def test_lightrag_index_uses_kb_default_chunk_params_when_file_has_none(tmp_path
 
     file_payload = next(item for item in service.list_files(kb_id)["items"] if item["fileId"] == file_id)
     assert file_payload["chunkCount"] == 3
-    assert service.rag_engine.prepare_calls == [(kb_id, file_id)]
+    assert file_payload["processingParams"]["indexBackend"] == "lightrag"
 
 
 def test_lightrag_index_prefers_local_chunk_count_over_lightrag_status_metadata(tmp_path: Path) -> None:
-    class MisreportingChunkCountRAGEngine(FakeRAGEngine):
-        async def insert_chunks(
+    class MisreportingInsertRAGEngine(FakeRAGEngine):
+        async def insert_text(
             self,
             kb_id: str,
-            chunks: list[str],
+            text: str,
             *,
             doc_id: str | None = None,
             file_path: str | None = None,
-        ) -> ParseResult:
-            result = await super().insert_chunks(kb_id, chunks, doc_id=doc_id, file_path=file_path)
-            metadata = dict(result.metadata or {})
-            metadata["chunks_count"] = 1
-            return ParseResult(
+        ) -> IndexResult:
+            result = await super().insert_text(kb_id, text, doc_id=doc_id, file_path=file_path)
+            return IndexResult(
                 success=result.success,
-                parser_name=result.parser_name,
-                metadata=metadata,
+                doc_id=result.doc_id,
+                chunks_count=1,  # intentionally misreport
             )
 
     instance = _make_instance(tmp_path)
@@ -168,7 +166,7 @@ def test_lightrag_index_prefers_local_chunk_count_over_lightrag_status_metadata(
         KnowledgeBaseStore(instance.knowledge_db_path()),
         instance=instance,
         instance_id=instance.id,
-        rag_engine=MisreportingChunkCountRAGEngine(),
+        rag_engine=MisreportingInsertRAGEngine(),
         config=None,
     )
 

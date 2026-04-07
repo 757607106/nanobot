@@ -52,6 +52,11 @@ export interface KnowledgeFormState {
   embedModelName: string
   llmBindingName: string
   llmModelName: string
+  rerankBindingName: string
+  rerankModelName: string
+  visionBindingName: string
+  visionModelName: string
+  enableMultimodal: boolean
   language: string
   chunkPresetId: string
   autoGenerateQuestions: boolean
@@ -64,6 +69,10 @@ interface KnowledgeModelDefaults {
   embedModelName?: string
   llmBindingName?: string
   llmModelName?: string
+  rerankBindingName?: string
+  rerankModelName?: string
+  visionBindingName?: string
+  visionModelName?: string
 }
 
 function readKnowledgeModelValue(
@@ -121,6 +130,11 @@ export function createKnowledgeFormState(
     embedModelName: readKnowledgeModelValue(embedInfo, 'modelName', 'model_name', 'model') || String(defaults?.embedModelName || ''),
     llmBindingName: readKnowledgeModelValue(llmInfo, 'bindingName', 'binding_name') || String(defaults?.llmBindingName || ''),
     llmModelName: readKnowledgeModelValue(llmInfo, 'modelName', 'model_name', 'model') || String(defaults?.llmModelName || ''),
+    rerankBindingName: readKnowledgeModelValue(kb?.additionalParams?.rerankInfo as any, 'bindingName', 'binding_name') || String(defaults?.rerankBindingName || ''),
+    rerankModelName: readKnowledgeModelValue(kb?.additionalParams?.rerankInfo as any, 'modelName', 'model_name', 'model') || String(defaults?.rerankModelName || ''),
+    visionBindingName: readKnowledgeModelValue(kb?.additionalParams?.visionInfo as any, 'bindingName', 'binding_name') || String(defaults?.visionBindingName || ''),
+    visionModelName: readKnowledgeModelValue(kb?.additionalParams?.visionInfo as any, 'modelName', 'model_name', 'model') || String(defaults?.visionModelName || ''),
+    enableMultimodal: Boolean(kb?.additionalParams?.enable_multimodal || false),
     language: String(kb?.additionalParams?.language || 'Chinese'),
     chunkPresetId: String(kb?.additionalParams?.chunk_preset_id || 'general'),
     autoGenerateQuestions: Boolean(kb?.additionalParams?.auto_generate_questions || false),
@@ -155,7 +169,27 @@ export function buildKnowledgeAdditionalParams(
     chunk_size: chunkSize,
     chunk_overlap: chunkOverlap,
     auto_generate_questions: formState.autoGenerateQuestions,
+    enable_multimodal: formState.enableMultimodal,
   }
+
+  if (formState.rerankBindingName || formState.rerankModelName) {
+    next.rerankInfo = {
+      bindingName: formState.rerankBindingName,
+      modelName: formState.rerankModelName,
+    }
+  } else {
+    delete next.rerankInfo
+  }
+
+  if (formState.visionBindingName || formState.visionModelName) {
+    next.visionInfo = {
+      bindingName: formState.visionBindingName,
+      modelName: formState.visionModelName,
+    }
+  } else {
+    delete next.visionInfo
+  }
+
   const qaSeparator = formState.qaSeparator.trim()
   if (qaSeparator) {
     next.qa_separator = qaSeparator

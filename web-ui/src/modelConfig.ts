@@ -7,10 +7,13 @@ export function resolveBindingCapabilityType(binding: Pick<ModelBinding, 'capabi
   if (['embedding', 'embeddings', 'embed', 'bge', 'e5', 'gte', 'voyage'].some((token) => normalized.includes(token))) {
     return 'embedding' as const
   }
+  if (['rerank', 'reranker', 'bge-reranker', 'jina-reranker'].some((token) => normalized.includes(token))) {
+    return 'rerank' as const
+  }
   if (binding?.capabilityType === 'multimodal') {
     return 'multimodal' as const
   }
-  return (binding?.capabilityType ?? 'text_chat') as 'text_chat' | 'embedding' | 'multimodal'
+  return (binding?.capabilityType ?? 'text_chat') as 'text_chat' | 'embedding' | 'multimodal' | 'rerank'
 }
 
 export function providerCategoryOrder(meta: ProviderMeta) {

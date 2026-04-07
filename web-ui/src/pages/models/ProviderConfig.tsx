@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Button, Descriptions, Flex, Input, Space, Tag, Typography, theme } from 'antd'
+import { Button, Flex, Input, Space, Tag, Typography, theme } from 'antd'
 import { ExperimentOutlined, SyncOutlined } from '@ant-design/icons'
 import SectionCard from '../../components/console/SectionCard'
 import ProviderAvatar from './ProviderAvatar'
@@ -107,33 +107,6 @@ export default function ProviderConfig({
           </div>
         </div>
 
-        <Descriptions
-          size="small"
-          column={{ xs: 1, md: 3 }}
-          items={[
-            {
-              key: 'base',
-              label: '默认地址',
-              children: (
-                <span className="console-inline-code">
-                  {providerMeta.defaultApiBase || '未提供'}
-                </span>
-              ),
-            },
-            {
-              key: 'default',
-              label: '默认绑定',
-              children: bindings[defaultBindingName ?? '']?.provider === providerName
-                ? bindings[defaultBindingName ?? '']?.label || defaultBindingName
-                : '无',
-            },
-            {
-              key: 'oauth',
-              label: '接入方式',
-              children: providerMeta.isOauth ? 'OAuth' : '密钥直连',
-            },
-          ]}
-        />
 
         <div
           style={{

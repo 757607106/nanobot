@@ -47,13 +47,15 @@ export function AddModelDialog({
   onConfirm,
   onCancel,
 }: AddModelDialogProps) {
+  const canConfirm = Boolean(draft.modelId.trim())
   return (
     <Modal
       open={open}
       title="添加模型"
-      width={760}
+      width={560}
       okText="确认"
       cancelText="取消"
+      okButtonProps={{ disabled: !canConfirm }}
       destroyOnHidden
       centered
       onOk={onConfirm}
@@ -67,34 +69,33 @@ export function AddModelDialog({
             <span className="resource-summary-value" style={{ fontSize: 16 }}>{providerLabel || '未选择'}</span>
           </div>
           <div className="resource-summary-tile">
-            <span className="resource-summary-label">当前路由数</span>
+            <span className="resource-summary-label">已有模型</span>
             <span className="resource-summary-value">{existingBindingCount}</span>
           </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">路由 ID</span>
-            <span className="resource-summary-value" style={{ fontSize: 16 }}>{suggestedRouteId || '等待输入'}</span>
-          </div>
         </div>
 
-        <div className="console-modal-grid">
-          <FieldGroup label="模型 ID">
-            <Input
-              aria-label="模型 ID"
-              value={draft.modelId}
-              onChange={(e) => onDraftChange({ ...draft, modelId: e.target.value })}
-              placeholder="例如 deepseek/deepseek-chat"
-            />
-          </FieldGroup>
+        <FieldGroup label="模型 ID（必填）">
+          <Input
+            aria-label="模型 ID"
+            value={draft.modelId}
+            onChange={(e) => {
+              const nextId = e.target.value
+              const inferred = inferCapabilityType(nextId)
+              onDraftChange({ ...draft, modelId: nextId, capabilityType: inferred })
+            }}
+            placeholder="例如 text-embedding-v4、deepseek-chat"
+            status={draft.modelId.trim() ? undefined : undefined}
+          />
+        </FieldGroup>
 
-          <FieldGroup label="展示名称">
-            <Input
-              aria-label="展示名称"
-              value={draft.modelName}
-              onChange={(e) => onDraftChange({ ...draft, modelName: e.target.value })}
-              placeholder="例如 DeepSeek Chat"
-            />
-          </FieldGroup>
-        </div>
+        <FieldGroup label="展示名称">
+          <Input
+            aria-label="展示名称"
+            value={draft.modelName}
+            onChange={(e) => onDraftChange({ ...draft, modelName: e.target.value })}
+            placeholder={draft.modelId.trim() || '例如 DeepSeek Chat'}
+          />
+        </FieldGroup>
 
         <FieldGroup label="能力类型">
           <Segmented
@@ -162,7 +163,7 @@ export function RemoteModelsDialog({ open, models, error, onClose, onImport }: R
       acc[item.type] += 1
       return acc
     },
-    { text_chat: 0, embedding: 0, multimodal: 0 } satisfies Record<CapabilityType, number>,
+    { text_chat: 0, embedding: 0, multimodal: 0, rerank: 0 } satisfies Record<CapabilityType, number>,
   )
 
   return (

@@ -3,6 +3,7 @@ import {
   Alert,
   Badge,
   Button,
+  Collapse,
   Dropdown,
   Empty,
   Flex,
@@ -107,6 +108,8 @@ export default function KnowledgeWorkspace() {
     indexConfig,
     embeddingBindingOptions,
     llmBindingOptions,
+    rerankBindingOptions,
+    multimodalBindingOptions,
     onFormStateChange,
     onActiveTabChange,
     onFileSearchChange,
@@ -477,7 +480,7 @@ export default function KnowledgeWorkspace() {
       key: 'graph',
       label: '知识图谱',
       children: (
-        <Suspense fallback={<Flex justify="center" align="center" style={{ minHeight: 400 }}><Spin tip="正在加载知识图谱引擎..." /></Flex>}>
+        <Suspense fallback={<Flex justify="center" align="center" style={{ minHeight: 400 }}><Spin tip="正在加载知识图谱引擎..."><div /></Spin></Flex>}>
           <KnowledgeGraphTab
             graphLabel={graphConfig.label}
             graphDepth={graphConfig.depth}
@@ -539,117 +542,250 @@ export default function KnowledgeWorkspace() {
       key: 'settings',
       label: '设置',
       children: (
-        <SectionCard
-          title="知识库设置"
-          description="名称、模型与索引参数。"
-          action={(
-            <Space wrap size={[8, 8]}>
-              <Button
-                onClick={onGenerateDescription}
-                disabled={!formState.name.trim() || loading.generatingDescription}
-                loading={loading.generatingDescription}
-              >
-                AI 生成描述
-              </Button>
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                onClick={onSaveKnowledgeBase}
-                loading={loading.saving}
-              >
-                保存知识库设置
-              </Button>
-            </Space>
-          )}
-        >
-          <div className="knowledge-settings-grid">
-            <div className="studio-form-field">
-              <Typography.Text type="secondary">知识库名称</Typography.Text>
-              <Input
-                value={formState.name}
-                onChange={(e) => onFormStateChange({ ...formState, name: e.target.value })}
-                placeholder="名称"
-              />
+        <Flex vertical gap={20}>
+          {/* ━━━ 基础信息 ━━━ */}
+          <SectionCard
+            title="基础信息"
+            action={(
+              <Space wrap size={[8, 8]}>
+                <Button
+                  onClick={onGenerateDescription}
+                  disabled={!formState.name.trim() || loading.generatingDescription}
+                  loading={loading.generatingDescription}
+                >
+                  AI 生成描述
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  onClick={onSaveKnowledgeBase}
+                  loading={loading.saving}
+                >
+                  保存设置
+                </Button>
+              </Space>
+            )}
+          >
+            <div className="knowledge-settings-grid">
+              <div className="studio-form-field">
+                <Typography.Text type="secondary">知识库名称</Typography.Text>
+                <Input
+                  value={formState.name}
+                  onChange={(e) => onFormStateChange({ ...formState, name: e.target.value })}
+                  placeholder="名称"
+                />
+              </div>
+              <div className="studio-form-field">
+                <Typography.Text type="secondary">启用状态</Typography.Text>
+                <div style={{ marginTop: 6 }}>
+                  <Switch
+                    checked={formState.enabled}
+                    onChange={(checked) => onFormStateChange({ ...formState, enabled: checked })}
+                  />
+                </div>
+              </div>
+              <div className="studio-form-field studio-form-field-span-2">
+                <Typography.Text type="secondary">描述</Typography.Text>
+                <Input.TextArea
+                  rows={3}
+                  value={formState.description}
+                  onChange={(e) => onFormStateChange({ ...formState, description: e.target.value })}
+                  placeholder="知识库描述"
+                />
+              </div>
+              <div className="studio-form-field studio-form-field-span-2">
+                <Typography.Text type="secondary">标签</Typography.Text>
+                <Input
+                  value={formState.tagsText}
+                  onChange={(e) => onFormStateChange({ ...formState, tagsText: e.target.value })}
+                  placeholder="逗号分隔，例如: AI, 文档, FAQ"
+                />
+                <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                  多个标签用英文逗号分隔
+                </Typography.Text>
+              </div>
             </div>
-            <div className="studio-form-field">
-              <Typography.Text type="secondary">启用状态</Typography.Text>
-              <div style={{ marginTop: 6 }}>
-                <Switch
-                  checked={formState.enabled}
-                  onChange={(checked) => onFormStateChange({ ...formState, enabled: checked })}
+          </SectionCard>
+
+          {/* ━━━ 模型配置 ━━━ */}
+          <SectionCard title="模型配置" description="用于文档索引和检索的模型。">
+            <div className="knowledge-settings-grid">
+              <div className="studio-form-field">
+                <Typography.Text type="secondary">Embedding 模型</Typography.Text>
+                <Select
+                  value={formState.embedBindingName || undefined}
+                  onChange={(value) => onFormStateChange({ ...formState, embedBindingName: value })}
+                  options={embeddingBindingOptions}
+                  placeholder="选择 Embedding 模型"
+                  showSearch
+                  optionFilterProp="label"
+                  style={{ width: '100%' }}
+                  notFoundContent={
+                    <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                        暂无可用的 Embedding 模型
+                      </Typography.Text>
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => navigate('/models')}
+                      >
+                        前往模型页面配置 →
+                      </Button>
+                    </Flex>
+                  }
+                />
+                {embeddingBindingOptions.length === 0 && (
+                  <Typography.Text type="warning" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                    ⚠ 未配置 Embedding 模型，文档索引将无法工作。
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{ fontSize: 12, padding: '0 4px' }}
+                      onClick={() => navigate('/models')}
+                    >
+                      前往配置
+                    </Button>
+                  </Typography.Text>
+                )}
+              </div>
+              <div className="studio-form-field">
+                <Typography.Text type="secondary">LLM 模型</Typography.Text>
+                <Select
+                  value={formState.llmBindingName || undefined}
+                  onChange={(value) => onFormStateChange({ ...formState, llmBindingName: value })}
+                  options={llmBindingOptions}
+                  placeholder="选择 LLM 模型"
+                  showSearch
+                  optionFilterProp="label"
+                  style={{ width: '100%' }}
+                  notFoundContent={
+                    <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                        暂无可用的 LLM 模型
+                      </Typography.Text>
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => navigate('/models')}
+                      >
+                        前往模型页面配置 →
+                      </Button>
+                    </Flex>
+                  }
+                />
+              </div>
+              <div className="studio-form-field">
+                <Typography.Text type="secondary">语言</Typography.Text>
+                <Select
+                  value={formState.language}
+                  onChange={(value) => onFormStateChange({ ...formState, language: value })}
+                  options={LANGUAGE_OPTIONS}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="studio-form-field">
+                <Typography.Text type="secondary">分块策略</Typography.Text>
+                <Select
+                  value={formState.chunkPresetId}
+                  onChange={(value) => onFormStateChange({ ...formState, chunkPresetId: value })}
+                  options={CHUNK_PRESET_OPTIONS}
+                  style={{ width: '100%' }}
                 />
               </div>
             </div>
-            <div className="studio-form-field studio-form-field-span-2">
-              <Typography.Text type="secondary">描述</Typography.Text>
-              <Input.TextArea
-                rows={4}
-                value={formState.description}
-                onChange={(e) => onFormStateChange({ ...formState, description: e.target.value })}
-                placeholder="知识库描述"
-              />
-            </div>
-            <div className="studio-form-field">
-              <Typography.Text type="secondary">Embedding 模型</Typography.Text>
-              <Select
-                value={formState.embedBindingName || undefined}
-                onChange={(value) => onFormStateChange({ ...formState, embedBindingName: value })}
-                options={embeddingBindingOptions}
-                placeholder="选择 Embedding 模型"
-                showSearch
-                optionFilterProp="label"
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className="studio-form-field">
-              <Typography.Text type="secondary">LLM 模型</Typography.Text>
-              <Select
-                value={formState.llmBindingName || undefined}
-                onChange={(value) => onFormStateChange({ ...formState, llmBindingName: value })}
-                options={llmBindingOptions}
-                placeholder="选择 LLM 模型"
-                showSearch
-                optionFilterProp="label"
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className="studio-form-field">
-              <Typography.Text type="secondary">语言</Typography.Text>
-              <Select
-                value={formState.language}
-                onChange={(value) => onFormStateChange({ ...formState, language: value })}
-                options={LANGUAGE_OPTIONS}
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className="studio-form-field">
-              <Typography.Text type="secondary">分块策略</Typography.Text>
-              <Select
-                value={formState.chunkPresetId}
-                onChange={(value) => onFormStateChange({ ...formState, chunkPresetId: value })}
-                options={CHUNK_PRESET_OPTIONS}
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className="studio-form-field">
-              <Typography.Text type="secondary">自动生成问题</Typography.Text>
-              <div style={{ marginTop: 6 }}>
-                <Switch
-                  checked={formState.autoGenerateQuestions}
-                  onChange={(checked) => onFormStateChange({ ...formState, autoGenerateQuestions: checked })}
-                />
-              </div>
-            </div>
-            <div className="studio-form-field">
-              <Typography.Text type="secondary">QA 分隔符</Typography.Text>
-              <Input
-                placeholder="QA 分隔符"
-                value={formState.qaSeparator}
-                onChange={(e) => onFormStateChange({ ...formState, qaSeparator: e.target.value })}
-              />
-            </div>
-          </div>
-        </SectionCard>
+          </SectionCard>
+
+          {/* ━━━ 高级设置（折叠） ━━━ */}
+          <Collapse ghost defaultActiveKey={[]}>
+            <Collapse.Panel header="高级设置" key="advanced">
+              <Flex vertical gap={20}>
+                {/* — 多模态处理 — */}
+                <div>
+                  <Typography.Text strong style={{ fontSize: 13, display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                    多模态处理
+                  </Typography.Text>
+                  <div className="knowledge-settings-grid">
+                    <div className="studio-form-field">
+                      <Typography.Text type="secondary">Vision 模型</Typography.Text>
+                      <Select
+                        value={formState.visionBindingName || undefined}
+                        onChange={(value) => onFormStateChange({ ...formState, visionBindingName: value ?? '' })}
+                        options={[{ value: '', label: '无' }, ...multimodalBindingOptions]}
+                        placeholder="选择 Vision 模型（用于 PDF 图片理解）"
+                        showSearch
+                        optionFilterProp="label"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div className="studio-form-field">
+                      <Typography.Text type="secondary">启用多模态解析</Typography.Text>
+                      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Switch
+                          checked={formState.enableMultimodal}
+                          onChange={(checked) => onFormStateChange({ ...formState, enableMultimodal: checked })}
+                          disabled={!formState.visionBindingName}
+                        />
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {formState.visionBindingName ? 'PDF 图片将被 AI 理解并加入索引' : '请先选择 Vision 模型'}
+                        </Typography.Text>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* — 检索增强 — */}
+                <div>
+                  <Typography.Text strong style={{ fontSize: 13, display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                    检索增强
+                  </Typography.Text>
+                  <div className="knowledge-settings-grid">
+                    <div className="studio-form-field">
+                      <Typography.Text type="secondary">Rerank 模型</Typography.Text>
+                      <Select
+                        value={formState.rerankBindingName || undefined}
+                        onChange={(value) => onFormStateChange({ ...formState, rerankBindingName: value })}
+                        options={[{ value: '', label: '无 (使用向量检索默认机制)' }, ...rerankBindingOptions]}
+                        placeholder="选择 Rerank 模型"
+                        showSearch
+                        optionFilterProp="label"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* — 其他 — */}
+                <div>
+                  <Typography.Text strong style={{ fontSize: 13, display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                    其他
+                  </Typography.Text>
+                  <div className="knowledge-settings-grid">
+                    <div className="studio-form-field">
+                      <Typography.Text type="secondary">自动生成问题</Typography.Text>
+                      <div style={{ marginTop: 6 }}>
+                        <Switch
+                          checked={formState.autoGenerateQuestions}
+                          onChange={(checked) => onFormStateChange({ ...formState, autoGenerateQuestions: checked })}
+                        />
+                      </div>
+                    </div>
+                    {formState.chunkPresetId === 'qa' && (
+                      <div className="studio-form-field">
+                        <Typography.Text type="secondary">QA 分隔符</Typography.Text>
+                        <Input
+                          placeholder="QA 分隔符"
+                          value={formState.qaSeparator}
+                          onChange={(e) => onFormStateChange({ ...formState, qaSeparator: e.target.value })}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Flex>
+            </Collapse.Panel>
+          </Collapse>
+        </Flex>
       ),
     },
   ]
@@ -659,7 +795,7 @@ export default function KnowledgeWorkspace() {
       <div className="knowledge-workspace-container">
         <SectionCard title="知识库">
           <Flex justify="center" align="center" className="knowledge-workspace-loading">
-            <Spin tip="正在加载知识库详情..." />
+            <Spin tip="正在加载知识库详情..."><div /></Spin>
           </Flex>
         </SectionCard>
       </div>

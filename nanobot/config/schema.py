@@ -181,7 +181,7 @@ class ModelBindingConfig(ProviderConfig):
     provider: str = ""
     label: str = ""
     model: str | None = None
-    capability_type: Literal["text_chat", "embedding", "multimodal"] = "text_chat"
+    capability_type: Literal["text_chat", "embedding", "multimodal", "rerank"] = "text_chat"
 
 
 class ProvidersConfig(Base):
@@ -296,7 +296,7 @@ class ToolsConfig(Base):
 
 
 class RagMilvusConfig(Base):
-    """Milvus vector storage for the LightRAG workflow."""
+    """Milvus vector storage connection for the LightRAG workflow."""
 
     uri: str = "http://127.0.0.1:19530"
     db_name: str = "nanobot"
@@ -308,26 +308,43 @@ class RagMilvusConfig(Base):
 
 
 class RagGraphStoreConfig(Base):
-    """Optional graph storage backend for the LightRAG workflow."""
+    """Neo4j graph storage connection for the LightRAG workflow."""
 
-    enabled: bool = False
-    provider: Literal["networkx", "neo4j"] = "networkx"
-    uri: str = ""
-    username: str = ""
-    password: str = ""
+    enabled: bool = True
+    provider: Literal["networkx", "neo4j"] = "neo4j"
+    uri: str = "bolt://127.0.0.1:7687"
+    username: str = "neo4j"
+    password: str = "password"
     database: str = "neo4j"
 
 
 class RAGConfig(Base):
-    """RAG engine configuration for LightRAG / RAG-Anything."""
+    """RAG engine configuration — embeds LightRAG Core for GraphRAG.
 
-    llm_binding: str | None = None  # Named model binding for RAG LLM / VLM calls; None follows the default agent binding
-    embedding_binding: str | None = None  # Named model binding for embedding requests
-    llm_timeout: int = 180  # seconds for each LightRAG LLM / VLM request
-    embedding_timeout: int = 60  # seconds for each LightRAG embedding request
-    max_async: int = 4  # Official LightRAG MAX_ASYNC for LLM concurrency during query/index
-    max_parallel_insert: int = 2  # Official LightRAG MAX_PARALLEL_INSERT for document ingest workers
-    embedding_func_max_async: int = 8  # Official LightRAG EMBEDDING_FUNC_MAX_ASYNC for embedding concurrency
+    LLM and Embedding models are injected from nanobot's modelBindings.
+    Storage backends (Neo4j for graph, Milvus for vectors) run as Docker
+    services configured here.
+    """
+
+    # Model bindings (reference keys from Config.model_bindings)
+    llm_binding: str | None = None       # LLM for indexing + query; None = use default agent binding
+    embedding_binding: str | None = None  # Embedding model; None = auto-detect from bindings
+
+    # Timeouts
+    llm_timeout: int = 180       # seconds per LightRAG LLM/VLM request
+    embedding_timeout: int = 60  # seconds per LightRAG embedding request
+
+    # LightRAG concurrency tuning
+    max_async: int = 16                 # MAX_ASYNC — concurrent LLM requests during query/index
+    max_parallel_insert: int = 4        # MAX_PARALLEL_INSERT — parallel document ingest workers
+    embedding_func_max_async: int = 4   # EMBEDDING_FUNC_MAX_ASYNC — concurrent embedding requests (keep low to avoid provider rate limits)
+
+    # LightRAG chunking & batching
+    chunk_token_size: int = 2400        # Tokens per chunk — larger = fewer chunks = fewer LLM calls (default 1200 in LightRAG)
+    chunk_overlap_token_size: int = 100 # Overlap tokens between chunks for context preservation
+    embedding_batch_num: int = 32       # Texts per embedding API call — larger = fewer requests = less rate limiting
+
+    # Storage backends
     milvus: RagMilvusConfig = Field(default_factory=RagMilvusConfig)
     graph_store: RagGraphStoreConfig = Field(default_factory=RagGraphStoreConfig)
 
@@ -408,7 +425,7 @@ class Config(BaseSettings):
     def _infer_binding_capability_type(
         model: str | None,
         label: str | None = None,
-    ) -> Literal["text_chat", "embedding", "multimodal"]:
+    ) -> Literal["text_chat", "embedding", "multimodal", "rerank"]:
         haystack = " ".join(
             part.strip().lower()
             for part in (model or "", label or "")
@@ -416,6 +433,8 @@ class Config(BaseSettings):
         )
         if any(token in haystack for token in ("embedding", "embeddings", "embed", "bge", "e5", "gte", "voyage")):
             return "embedding"
+        if any(token in haystack for token in ("rerank", "reranker", "bge-reranker", "jina-reranker")):
+            return "rerank"
         return "text_chat"
 
     def _legacy_binding_for_provider(
@@ -697,10 +716,7 @@ class Config(BaseSettings):
 
         if self.agents.defaults.binding and self.agents.defaults.binding not in self.model_bindings:
             self.agents.defaults.binding = None
-        if self.rag.llm_binding and self.rag.llm_binding not in self.model_bindings:
-            self.rag.llm_binding = None
-        if self.rag.embedding_binding and self.rag.embedding_binding not in self.model_bindings:
-            self.rag.embedding_binding = None
+
 
         if not self.agents.defaults.binding:
             preferred_provider = str(self.agents.defaults.provider or "").strip()

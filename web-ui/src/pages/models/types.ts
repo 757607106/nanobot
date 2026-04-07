@@ -1,6 +1,6 @@
 import type { ModelBinding } from '../../types'
 
-export type CapabilityType = 'text_chat' | 'embedding' | 'multimodal'
+export type CapabilityType = 'text_chat' | 'embedding' | 'multimodal' | 'rerank'
 
 export type AddModelDraft = {
   modelId: string

@@ -87,6 +87,8 @@ export interface KnowledgeContextValue {
   indexConfig: KnowledgeIndexConfigState
   embeddingBindingOptions: { value: string; label: string }[]
   llmBindingOptions: { value: string; label: string }[]
+  rerankBindingOptions: { value: string; label: string }[]
+  multimodalBindingOptions: { value: string; label: string }[]
 
   // ─── Actions ───
   onFormStateChange: (state: KnowledgeFormState) => void

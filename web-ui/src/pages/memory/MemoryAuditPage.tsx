@@ -198,7 +198,7 @@ export default function MemoryAuditPage() {
   if (loadingWorkspace && agents.length === 0 && !selectedAgentId) {
     return (
       <Flex justify="center" align="center" style={{ minHeight: 320 }}>
-        <Spin size="large" tip="正在加载审计目录..." />
+        <Spin size="large" tip="正在加载审计目录..."><div /></Spin>
       </Flex>
     )
   }
@@ -273,7 +273,7 @@ export default function MemoryAuditPage() {
             <SectionCard title="工作台">
               {loadingDetail ? (
                 <Flex justify="center" align="center" style={{ minHeight: 220 }}>
-                  <Spin tip="正在加载员工审计详情..." />
+                  <Spin tip="正在加载员工审计详情..."><div /></Spin>
                 </Flex>
               ) : (
                 <Tabs

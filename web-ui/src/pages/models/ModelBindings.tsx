@@ -1,12 +1,19 @@
-import { Button, Empty, Flex, Space, Tag, Typography } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { Button, Empty, Flex, Segmented, Space, Tag, Tooltip, Typography } from 'antd'
+import { DeleteOutlined, PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import SectionCard from '../../components/console/SectionCard'
 import { capabilityLabel } from './utils'
 import type { BindingRow, CapabilityType } from './types'
 
+const CAPABILITY_OPTIONS = [
+  { label: '文本对话', value: 'text_chat' },
+  { label: '向量嵌入', value: 'embedding' },
+  { label: '多模态', value: 'multimodal' },
+]
+
 function capabilityColor(type: CapabilityType) {
   if (type === 'embedding') return 'gold'
+  if (type === 'rerank') return 'cyan'
   if (type === 'multimodal') return 'purple'
   return 'blue'
 }
@@ -18,6 +25,7 @@ interface ModelBindingsProps {
   onSetDefault: (bindingName: string) => void
   onDelete: (bindingName: string) => void
   onAddModel: () => void
+  onCapabilityChange?: (bindingName: string, capabilityType: CapabilityType) => void
 }
 
 export default function ModelBindings({
@@ -27,6 +35,7 @@ export default function ModelBindings({
   onSetDefault,
   onDelete,
   onAddModel,
+  onCapabilityChange,
 }: ModelBindingsProps) {
   return (
     <SectionCard
@@ -50,6 +59,7 @@ export default function ModelBindings({
         >
           {bindings.map((binding, index) => {
             const isDefault = binding.bindingName === defaultBindingName
+            const hasModel = Boolean(binding.model?.trim())
 
             return (
               <motion.div
@@ -70,13 +80,30 @@ export default function ModelBindings({
                 }}
                 whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0, 0, 0, 0.08)' }}
               >
+                {/* 头部：模型 ID 为标题 */}
                 <Flex justify="space-between" align="flex-start" gap={12}>
-                  <Flex vertical gap={6} style={{ minWidth: 0, flex: 1 }}>
-                    <Typography.Text strong style={{ fontSize: 17, letterSpacing: '-0.01em' }}>
+                  <Flex vertical gap={4} style={{ minWidth: 0, flex: 1 }}>
+                    <Flex align="center" gap={6}>
+                      {!hasModel && (
+                        <Tooltip title="模型 ID 未配置，无法使用">
+                          <WarningOutlined style={{ color: 'var(--ant-color-warning)', fontSize: 14 }} />
+                        </Tooltip>
+                      )}
+                      <Typography.Text
+                        strong
+                        ellipsis={{ tooltip: binding.model || '未配置模型 ID' }}
+                        style={{
+                          fontSize: 16,
+                          letterSpacing: '-0.01em',
+                          fontFamily: hasModel ? 'var(--font-mono, monospace)' : undefined,
+                          color: hasModel ? undefined : 'var(--ant-color-text-quaternary)',
+                        }}
+                      >
+                        {binding.model || '未配置模型 ID'}
+                      </Typography.Text>
+                    </Flex>
+                    <Typography.Text type="secondary" style={{ fontSize: 13, opacity: 0.8 }}>
                       {binding.label || binding.bindingName}
-                    </Typography.Text>
-                    <Typography.Text type="secondary" ellipsis style={{ fontSize: 13, opacity: 0.8 }}>
-                      路由 ID: {binding.bindingName}
                     </Typography.Text>
                   </Flex>
                   {isDefault && (
@@ -86,30 +113,29 @@ export default function ModelBindings({
                   )}
                 </Flex>
 
-                <div className="resource-summary-strip" style={{ marginTop: 14 }}>
-                  <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
-                    <span className="resource-summary-label">模型 ID</span>
-                    <Typography.Text
-                      ellipsis={{ tooltip: binding.model || '--' }}
-                      className="console-inline-code"
-                      style={{ display: 'inline-flex', marginTop: 4, maxWidth: '100%' }}
-                    >
-                      {binding.model || '--'}
-                    </Typography.Text>
-                  </div>
-                  <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
-                    <span className="resource-summary-label">能力类型</span>
+                {/* 能力类型：可切换 */}
+                <div style={{ marginTop: 14 }}>
+                  {onCapabilityChange ? (
+                    <Segmented
+                      size="small"
+                      block
+                      value={binding.capabilityType as CapabilityType}
+                      onChange={(value) => onCapabilityChange(binding.bindingName, value as CapabilityType)}
+                      options={CAPABILITY_OPTIONS}
+                    />
+                  ) : (
                     <Tag
                       color={capabilityColor(binding.capabilityType as CapabilityType)}
                       bordered={false}
-                      style={{ borderRadius: 6, fontSize: 11, padding: '0 8px', marginTop: 4 }}
+                      style={{ borderRadius: 6, fontSize: 11, padding: '0 8px' }}
                     >
                       {capabilityLabel(binding.capabilityType as CapabilityType).toUpperCase()}
                     </Tag>
-                  </div>
+                  )}
                 </div>
 
-                <Flex justify="space-between" align="center" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
+                {/* 底部操作 */}
+                <Flex justify="space-between" align="center" style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
                   <Space size={4}>
                     <Button type="text" size="small" onClick={() => onTest(binding.model || '')} style={{ opacity: 0.7 }}>
                       测试连接

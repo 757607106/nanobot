@@ -29,6 +29,9 @@ export function inferCapabilityType(modelId: string): CapabilityType {
   if (['embedding', 'embeddings', 'embed', 'bge', 'e5', 'gte', 'voyage'].some((token) => normalized.includes(token))) {
     return 'embedding'
   }
+  if (['rerank', 'reranker', 'bge-reranker', 'jina-reranker'].some((token) => normalized.includes(token))) {
+    return 'rerank'
+  }
   if (['vision', 'vl', 'omni', 'gpt-4o', 'qvq'].some((token) => normalized.includes(token))) {
     return 'multimodal'
   }
@@ -37,6 +40,7 @@ export function inferCapabilityType(modelId: string): CapabilityType {
 
 export function capabilityLabel(type: CapabilityType) {
   if (type === 'embedding') return '向量嵌入'
+  if (type === 'rerank') return '重排序'
   if (type === 'multimodal') return '多模态'
   return '文本对话'
 }

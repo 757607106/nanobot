@@ -128,7 +128,7 @@ export interface ModelBinding {
   provider: string
   label?: string | null
   model?: string | null
-  capabilityType?: 'text_chat' | 'embedding' | 'multimodal'
+  capabilityType?: 'text_chat' | 'embedding' | 'multimodal' | 'rerank'
   apiKey: string
   apiBase?: string | null
   extraHeaders?: Record<string, string> | null
@@ -179,6 +179,8 @@ export interface ConfigMeta {
 export interface RagConfigData {
   llmBinding?: string | null
   embeddingBinding?: string | null
+  visionBinding?: string | null
+  rerankBinding?: string | null
 }
 
 export interface ConfigData {

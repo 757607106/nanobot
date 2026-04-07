@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
-from nanobot.platform.knowledge.rag_engine import ParseResult, RetrievalHit
+from nanobot.platform.knowledge.rag_engine import IndexResult
 
 
 def _token_variants(token: str) -> set[str]:
@@ -26,27 +27,23 @@ def _tokenize(text: str) -> set[str]:
 
 
 class FakeRAGEngine:
-    """Small in-memory test double that mimics the RAGEngine contract."""
+    """In-memory test double that mimics the RAGEngine contract.
+
+    All indexing, querying, graph, and delete operations are handled in memory.
+    """
 
     def __init__(self) -> None:
-        self._docs: dict[str, dict[str, dict[str, str]]] = {}
+        # kb_id -> doc_id -> { content, file_path, doc_id, chunks }
+        self._docs: dict[str, dict[str, dict[str, str | list[str]]]] = {}
         self.prepare_calls: list[tuple[str, str]] = []
 
     async def shutdown_async(self) -> None:
         return None
 
-    async def reset_kb(self, kb_id: str) -> None:
-        self._docs.pop(kb_id, None)
+    async def health_check(self) -> bool:
+        return True
 
-    async def delete_kb(self, kb_id: str) -> None:
-        self._docs.pop(kb_id, None)
-
-    async def delete_document(self, kb_id: str, doc_id: str) -> None:
-        if kb_id in self._docs:
-            self._docs[kb_id].pop(doc_id, None)
-
-    async def prepare_document_ingest(self, kb_id: str, doc_id: str) -> None:
-        self.prepare_calls.append((kb_id, doc_id))
+    # -- indexing (matches new RAGEngine.insert_text) -------------------------
 
     async def insert_text(
         self,
@@ -55,10 +52,10 @@ class FakeRAGEngine:
         *,
         doc_id: str | None = None,
         file_path: str | None = None,
-    ) -> ParseResult:
+    ) -> IndexResult:
         content = str(text or "").strip()
         if not content:
-            return ParseResult(success=False, parser_name="text_insert", error="text is required.")
+            return IndexResult(success=False, doc_id=doc_id, error="text is required.")
 
         stored_doc_id = str(doc_id or f"doc-{len(self._docs.get(kb_id, {})) + 1}")
         self._docs.setdefault(kb_id, {})[stored_doc_id] = {
@@ -67,91 +64,21 @@ class FakeRAGEngine:
             "doc_id": stored_doc_id,
             "chunks": [content],
         }
-        return ParseResult(
+        return IndexResult(
             success=True,
-            parser_name="text_insert",
-            metadata={
-                "doc_id": stored_doc_id,
-                "file_path": str(file_path or f"{kb_id}.txt"),
-                "chunks_count": 1,
-            },
+            doc_id=stored_doc_id,
+            track_id=f"track-{stored_doc_id}",
+            chunks_count=1,
         )
 
-    async def insert_chunks(
-        self,
-        kb_id: str,
-        chunks: list[str],
-        *,
-        doc_id: str | None = None,
-        file_path: str | None = None,
-    ) -> ParseResult:
-        normalized_chunks = [str(item or "").strip() for item in chunks if str(item or "").strip()]
-        if not normalized_chunks:
-            return ParseResult(success=False, parser_name="chunk_insert", error="chunks are required.")
-
-        stored_doc_id = str(doc_id or f"doc-{len(self._docs.get(kb_id, {})) + 1}")
-        self._docs.setdefault(kb_id, {})[stored_doc_id] = {
-            "content": "\n\n".join(normalized_chunks),
-            "file_path": str(file_path or f"{kb_id}.txt"),
-            "doc_id": stored_doc_id,
-            "chunks": list(normalized_chunks),
-        }
-        return ParseResult(
-            success=True,
-            parser_name="chunk_insert",
-            metadata={
-                "doc_id": stored_doc_id,
-                "file_path": str(file_path or f"{kb_id}.txt"),
-                "chunks_count": len(normalized_chunks),
-            },
-        )
-
-    async def query(
-        self,
-        kb_ids: list[str],
-        query_text: str,
-        *,
-        mode: str = "hybrid",
-        top_k: int = 8,
-        vlm_enhanced: bool = False,
-    ) -> list[RetrievalHit]:
-        query_tokens = _tokenize(query_text)
-        results: list[RetrievalHit] = []
-
-        for kb_id in kb_ids:
-            for document in self._docs.get(kb_id, {}).values():
-                for index, content in enumerate(document.get("chunks") or [document["content"]], start=1):
-                    content_tokens = _tokenize(content)
-                    overlap = len(query_tokens & content_tokens)
-                    if overlap == 0 and query_text.strip().lower() not in content.lower():
-                        continue
-                    score = float(overlap or 1)
-                    results.append(
-                        RetrievalHit(
-                            content=content,
-                            score=score,
-                            source=kb_id,
-                            metadata={
-                                "mode": mode,
-                                "kb_id": kb_id,
-                                "file_path": document["file_path"],
-                                "doc_id": document["doc_id"],
-                                "chunk_id": f"{document['doc_id']}::chunk::{index:04d}",
-                                "chunk_index": index,
-                                "vlm_enhanced": bool(vlm_enhanced),
-                            },
-                        )
-                    )
-
-        results.sort(key=lambda item: item.score, reverse=True)
-        return results[: max(1, int(top_k))]
+    # -- querying (matches new RAGEngine.query_structured) --------------------
 
     async def query_structured(
         self,
         kb_id: str,
         query_text: str,
         *,
-        mode: str = "hybrid",
+        mode: str = "mix",
         top_k: int = 8,
         chunk_top_k: int = 12,
         response_type: str = "Multiple Paragraphs",
@@ -160,41 +87,51 @@ class FakeRAGEngine:
         enable_rerank: bool = False,
     ) -> dict:
         del chunk_top_k, response_type, only_need_context, only_need_prompt, enable_rerank
-        hits = await self.query([kb_id], query_text, mode=mode, top_k=top_k)
-        chunks = []
+        query_tokens = _tokenize(query_text)
+        results: list[dict] = []
+
+        for document in self._docs.get(kb_id, {}).values():
+            for index, content in enumerate(document.get("chunks") or [document["content"]], start=1):
+                content_str = str(content)
+                content_tokens = _tokenize(content_str)
+                overlap = len(query_tokens & content_tokens)
+                if overlap == 0 and query_text.strip().lower() not in content_str.lower():
+                    continue
+                reference_id = str(document["doc_id"])
+                file_path_val = str(document["file_path"])
+                results.append({
+                    "chunk_id": f"{reference_id}::chunk::{index:04d}",
+                    "content": content_str,
+                    "score": float(overlap or 1),
+                    "reference_id": reference_id,
+                    "file_path": file_path_val,
+                    "chunk_index": index,
+                    "metadata": {},
+                })
+
+        results.sort(key=lambda x: x["score"], reverse=True)
+        results = results[:max(1, int(top_k))]
+
         references = []
-        for index, hit in enumerate(hits, start=1):
-            reference_id = str(hit.metadata.get("doc_id") or f"ref-{index}")
-            file_path = str(hit.metadata.get("file_path") or "")
-            references.append(
-                {
-                    "reference_id": reference_id,
-                    "file_path": file_path,
-                }
-            )
-            chunks.append(
-                {
-                    "chunk_id": str(hit.metadata.get("chunk_id") or f"{reference_id}::chunk::{index:04d}"),
-                    "content": hit.content,
-                    "reference_id": reference_id,
-                    "file_path": file_path,
-                    "chunk_index": hit.metadata.get("chunk_index"),
-                }
-            )
+        seen_refs: set[str] = set()
+        for chunk in results:
+            ref_id = chunk["reference_id"]
+            if ref_id not in seen_refs:
+                seen_refs.add(ref_id)
+                references.append({
+                    "reference_id": ref_id,
+                    "file_path": chunk["file_path"],
+                })
+
         return {
-            "status": "success",
-            "message": hits[0].content if hits else None,
             "data": {
-                "entities": [],
-                "relationships": [],
-                "chunks": chunks,
+                "chunks": results,
                 "references": references,
             },
-            "metadata": {
-                "mode": mode,
-                "kbType": "lightrag",
-            },
+            "message": results[0]["content"] if results else "",
         }
+
+    # -- knowledge graph (matches new RAGEngine) ------------------------------
 
     async def get_graph_labels(self, kb_id: str) -> list[str]:
         if not self._docs.get(kb_id):
@@ -215,26 +152,20 @@ class FakeRAGEngine:
         edges = []
         for index, item in enumerate(documents, start=1):
             node_id = str(item["doc_id"])
-            nodes.append(
-                {
-                    "id": node_id,
-                    "labels": ["Document"],
-                    "properties": {
-                        "name": Path(str(item["file_path"])).name,
-                    },
-                    "title": Path(str(item["file_path"])).name,
-                }
-            )
+            nodes.append({
+                "id": node_id,
+                "label": "Document",
+                "description": Path(str(item["file_path"])).name,
+                "properties": {},
+            })
             if index > 1:
-                edges.append(
-                    {
-                        "id": f"edge-{index - 1}-{index}",
-                        "type": "RELATED",
-                        "source": str(documents[index - 2]["doc_id"]),
-                        "target": node_id,
-                        "properties": {},
-                    }
-                )
+                edges.append({
+                    "source": str(documents[index - 2]["doc_id"]),
+                    "target": node_id,
+                    "label": "RELATED",
+                    "weight": 1.0,
+                    "properties": {},
+                })
         return {
             "nodes": nodes,
             "edges": edges,
@@ -242,20 +173,15 @@ class FakeRAGEngine:
             "isTruncated": False,
         }
 
+    # -- document management --------------------------------------------------
+
     async def delete_document(self, kb_id: str, doc_id: str) -> bool:
         return self._docs.get(kb_id, {}).pop(doc_id, None) is not None
-
-    async def prepare_document_ingest(self, kb_id: str, doc_id: str) -> dict[str, list[str]]:
-        self.prepare_calls.append((kb_id, doc_id))
-        await self.delete_document(kb_id, doc_id)
-        return {
-            "deletedDocIds": [doc_id],
-            "prunedDocIds": [],
-        }
 
     async def delete_kb(self, kb_id: str) -> bool:
         self._docs.pop(kb_id, None)
         return True
 
-    async def shutdown_async(self) -> None:
-        return None
+    async def reset_kb(self, kb_id: str) -> bool:
+        self._docs.pop(kb_id, None)
+        return True
