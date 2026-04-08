@@ -159,10 +159,10 @@ export default function KnowledgeWorkspace() {
       key: 'name',
       width: 260,
       render: (_value, item) => (
-        <Flex gap={12} align="flex-start">
-          <Tag color={item.isFolder ? 'warning' : 'default'}>{item.isFolder ? 'DIR' : 'DOC'}</Tag>
-          <Flex vertical gap={4} style={{ minWidth: 0 }}>
-            <Typography.Text strong>{item.filename}</Typography.Text>
+        <Flex gap={12} align="center">
+          <Tag color={item.isFolder ? 'warning' : 'default'} bordered={false}>{item.isFolder ? 'DIR' : 'DOC'}</Tag>
+          <Flex vertical gap={4} style={{ minWidth: 0, justifyContent: 'center' }}>
+            <Typography.Text strong style={{ marginTop: 2 }}>{item.filename}</Typography.Text>
             <Typography.Text type="secondary">{item.title || item.originalFilename || '未命名条目'}</Typography.Text>
             {item.errorMessage || item.errorSummary ? (
               <Typography.Text type="danger">{item.errorSummary || item.errorMessage}</Typography.Text>
@@ -255,8 +255,8 @@ export default function KnowledgeWorkspace() {
 
   const renderFilesTab = () => (
     <Flex vertical gap={16}>
-      <SectionCard title="文件目录">
-        <Flex vertical gap={16}>
+      <div className="knowledge-tab-content-borderless"><Flex vertical gap={16}>
+          <div className="knowledge-section-header">文件列表</div>
           <div className="resource-summary-strip">
             <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
               <span className="resource-summary-label">当前选择</span>
@@ -364,7 +364,7 @@ export default function KnowledgeWorkspace() {
           </Flex>
 
           <Table
-            size="small"
+            size="middle"
             rowKey="fileId"
             columns={fileColumns}
             dataSource={visibleFiles}
@@ -403,7 +403,7 @@ export default function KnowledgeWorkspace() {
             }}
           />
         </Flex>
-      </SectionCard>
+      </div>
 
       <SectionCard
         title="最近任务"
@@ -825,11 +825,23 @@ export default function KnowledgeWorkspace() {
 
   return (
     <div className="knowledge-workspace-container">
-      <Flex vertical gap={16}>
-        <SectionCard
-          title={currentKb.name}
-          description={currentKb.description || '—'}
-          action={(
+      <Flex vertical gap={20}>
+        <div className="knowledge-page-header">
+          <Flex justify="space-between" align="flex-start" gap={16}>
+            <div>
+              <h1 className="knowledge-page-title">{currentKb.name}</h1>
+              <Typography.Text type="secondary">{currentKb.description || '暂无描述'}</Typography.Text>
+              <div style={{ marginTop: 12 }}>
+                <Space wrap size={[8, 8]}>
+                  <Tag color={currentKb.enabled ? 'success' : 'default'} bordered={false}>{currentKb.enabled ? '已启用' : '已停用'}</Tag>
+                  <Tag bordered={false}>{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
+                  {currentKb.tags.map((tag) => (
+                    <Tag key={tag} bordered={false}>{tag}</Tag>
+                  ))}
+                </Space>
+              </div>
+            </div>
+            
             <Space wrap size={[8, 8]}>
               <Button icon={<ReloadOutlined />} onClick={onRefreshDetail}>
                 刷新
@@ -839,25 +851,15 @@ export default function KnowledgeWorkspace() {
                 删除
               </Button>
             </Space>
-          )}
-        >
-          <Flex vertical gap={16}>
-            <Space wrap size={[8, 8]}>
-              <Tag color={currentKb.enabled ? 'success' : 'default'}>{currentKb.enabled ? '已启用' : '已停用'}</Tag>
-              <Tag>{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
-              {currentKb.tags.map((tag) => (
-                <Tag key={tag}>{tag}</Tag>
-              ))}
-            </Space>
-
-            <div className="knowledge-metrics-grid">
-              <MetricCard label="文件记录" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
-              <MetricCard label="已索引" value={filesState.stats.indexedCount} icon={<BranchesOutlined />} tone="success" />
-              <MetricCard label="待处理" value={pendingParseCount + pendingIndexCount} icon={<RetweetOutlined />} tone={pendingParseCount + pendingIndexCount > 0 ? 'warning' : 'neutral'} />
-              <MetricCard label="异常" value={filesState.stats.errorCount} icon={<FileSearchOutlined />} tone={filesState.stats.errorCount > 0 ? 'error' : 'neutral'} />
-            </div>
           </Flex>
-        </SectionCard>
+
+          <div className="knowledge-metrics-grid" style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
+            <MetricCard label="文件记录" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
+            <MetricCard label="已索引" value={filesState.stats.indexedCount} icon={<BranchesOutlined />} tone="success" />
+            <MetricCard label="待处理" value={pendingParseCount + pendingIndexCount} icon={<RetweetOutlined />} tone={pendingParseCount + pendingIndexCount > 0 ? 'warning' : 'neutral'} />
+            <MetricCard label="异常" value={filesState.stats.errorCount} icon={<FileSearchOutlined />} tone={filesState.stats.errorCount > 0 ? 'error' : 'neutral'} />
+          </div>
+        </div>
 
         {(pendingParseCount > 0 || pendingIndexCount > 0) && (
           <Alert
@@ -889,18 +891,19 @@ export default function KnowledgeWorkspace() {
           />
         )}
 
-        <SectionCard title="工作区">
+        <div className="knowledge-tab-container">
           <Tabs
             activeKey={activeTab}
             onChange={handleTabChange}
-            size="small"
-            tabBarGutter={18}
+            size="large"
+            tabBarGutter={24}
             items={workspaceTabItems.map(({ key, label }) => ({ key, label }))}
+            style={{ marginBottom: 0 }}
           />
-          <div className="knowledge-tab-content">
+          <div className="knowledge-tab-content-borderless" style={{ background: '#fff', borderRadius: '0 8px 8px 8px', padding: '16px' }}>
             {workspaceTabItems.find((item) => item.key === activeTab)?.children}
           </div>
-        </SectionCard>
+        </div>
       </Flex>
     </div>
   )

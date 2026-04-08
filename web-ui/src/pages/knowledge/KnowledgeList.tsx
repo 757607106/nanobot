@@ -52,7 +52,7 @@ export default function KnowledgeList({
               description="无匹配项"
             />
           ) : (
-            <div className="resource-rail-list">
+            <div className="knowledge-nav-list">
               {visibleKnowledgeBases.map((item, index) => {
                 const isSelected = item.kbId === selectedKbId
                 return (
@@ -62,9 +62,9 @@ export default function KnowledgeList({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.04 }}
                     onClick={() => startTransition(() => navigate(`/knowledge/${item.kbId}`))}
-                    className={`resource-rail-item ${isSelected ? 'is-selected' : ''}`}
+                    className={`knowledge-nav-item ${isSelected ? 'active' : ''}`}
                   >
-                    <div className="resource-rail-item-head" style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div className="knowledge-nav-item-head" style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                       <div
                         style={{
                           width: 40,
@@ -85,7 +85,7 @@ export default function KnowledgeList({
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <Typography.Text
                           strong
-                          className="resource-rail-item-title"
+                          className="knowledge-nav-item-title"
                           style={{ color: isSelected ? token.colorPrimary : undefined, fontSize: 14, display: 'block' }}
                         >
                           {item.name}

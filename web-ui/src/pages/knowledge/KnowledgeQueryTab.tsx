@@ -128,28 +128,7 @@ export function KnowledgeQueryTab({
           </Space>
         )}
       >
-          <div className="resource-summary-strip">
-            <div className="resource-summary-tile">
-              <span className="resource-summary-label">检索模式</span>
-              <span className="resource-summary-value" style={{ fontSize: 16 }}>
-                {String(queryParams.mode || 'mix').toUpperCase()}
-              </span>
-            </div>
-            <div className="resource-summary-tile">
-              <span className="resource-summary-label">TopK</span>
-              <span className="resource-summary-value">{queryParams.topK}</span>
-            </div>
-            <div className="resource-summary-tile">
-              <span className="resource-summary-label">ChunkK</span>
-              <span className="resource-summary-value">{queryParams.chunkTopK}</span>
-            </div>
-            <div className="resource-summary-tile">
-              <span className="resource-summary-label">重排</span>
-              <span className="resource-summary-value">{queryParams.enableRerank ? '开启' : '关闭'}</span>
-            </div>
-          </div>
-
-        <div className="knowledge-query-shell">
+          <div className="knowledge-query-shell">
           <div className="knowledge-query-topbar">
             <Space wrap size={[12, 12]}>
               <div style={{ minWidth: 120 }}>

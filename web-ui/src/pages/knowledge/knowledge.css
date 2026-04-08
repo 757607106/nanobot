@@ -658,3 +658,225 @@
     flex: 1;
   }
 }
+
+
+/* ── Knowledge List Navigation ── */
+.knowledge-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knowledge-nav-item {
+  padding: 12px 14px;
+  border-radius: var(--nb-radius-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+  border: 1px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.knowledge-nav-item:hover {
+  background: var(--nb-surface-strong, #f8f9fa);
+}
+
+.knowledge-nav-item.active {
+  background: rgba(22, 119, 255, 0.08); /* Primary color ultra light */
+  border-color: rgba(22, 119, 255, 0.2);
+}
+
+.knowledge-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 60%;
+  width: 3px;
+  background: #1677ff; /* token.colorPrimary equivalent */
+  border-radius: 0 4px 4px 0;
+}
+
+.knowledge-nav-item-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.knowledge-nav-item-title {
+  font-size: 15px !important;
+}
+
+
+/* ── Modern AI Query Compose ── */
+.ai-chat-compose {
+  position: relative;
+  border-radius: var(--nb-radius-lg);
+  border: 1px solid var(--nb-border);
+  background: var(--nb-surface);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+  padding: 8px 12px;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ai-chat-compose:focus-within {
+  border-color: var(--nb-primary);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15);
+}
+
+.ai-chat-input {
+  box-shadow: none !important;
+  padding: 8px 0 !important;
+  flex: 1;
+  font-size: 15px;
+  background: transparent !important;
+}
+
+.ai-chat-input::placeholder {
+  color: var(--nb-text-tertiary, #bfbfbf);
+  font-weight: 400;
+}
+
+.ai-chat-actions {
+  margin-bottom: 4px;
+}
+
+.ai-chat-send-btn {
+  background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%) !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.35) !important;
+  height: 36px !important;
+  font-weight: 500;
+}
+.ai-chat-send-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.45) !important;
+}
+
+
+/* ── Metric Card Enhancement ── */
+.knowledge-metrics-grid .metric-card {
+  background: var(--nb-surface) !important;
+  border-radius: var(--nb-radius-xl) !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.02), 0 2px 4px rgba(0,0,0,0.01) !important;
+  border: 1px solid rgba(0,0,0,0.03) !important;
+  transition: all 0.3s ease;
+}
+
+.knowledge-metrics-grid .metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.04), 0 4px 8px rgba(0,0,0,0.02) !important;
+  border-color: rgba(22, 119, 255, 0.1) !important;
+}
+
+/* ── Knowledge Workspace Layout Enhancements ── */
+.knowledge-workspace-container .ant-tabs-nav::before {
+  border-bottom: 1px solid rgba(0,0,0,0.04) !important;
+}
+
+.knowledge-workspace-container .ant-tabs-tab {
+  padding: 12px 16px !important;
+  transition: all 0.2s;
+}
+
+.knowledge-workspace-container .ant-tabs-tab:hover {
+  color: var(--nb-primary) !important;
+  background: var(--nb-primary-soft-bg, rgba(22, 119, 255, 0.04)) !important;
+  border-radius: 8px 8px 0 0;
+}
+
+/* ── Graph Toolbar Glassmorphism ── */
+.knowledge-graph-toolbar {
+  padding: 8px 16px !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  border-radius: 100px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  margin-bottom: 20px;
+  display: inline-flex !important;
+}
+
+/* ── Minimal Empty State Restyle ── */
+.minimal-empty {
+  padding: 32px 0 !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: var(--nb-surface-strong, #fafafa);
+  border-radius: var(--nb-radius-lg);
+  border: 1px dashed var(--nb-border);
+  margin: 16px 0;
+  min-height: 120px;
+}
+.minimal-empty .ant-empty-description {
+  color: var(--nb-text-secondary, #8c8c8c) !important;
+  font-size: 14px;
+}
+
+/* ── Sidebar Thin & Clean ── */
+.knowledge-nav-item {
+  padding: 8px 12px;
+  border-radius: 4px; /* Reduced from large radius */
+  margin-bottom: 2px;
+}
+.knowledge-nav-item.active {
+  background: transparent;
+  background-color: rgba(22, 119, 255, 0.04);
+}
+.knowledge-nav-item.active::before {
+  height: 100%;
+}
+
+/* ── Minimal Data Tiles ── */
+.resource-summary-tile {
+  background: #ffffff;
+  border: 1px solid var(--nb-border, #e5e7eb) !important;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  padding: 10px 14px;
+}
+.resource-summary-label {
+  font-size: 12px;
+  color: var(--nb-text-tertiary, #8c8c8c) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.resource-summary-value {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: var(--nb-text, #1f2937);
+  margin-top: 4px;
+  display: block;
+}
+
+/* ── Workspace Headers ── */
+.knowledge-page-header {
+  margin-bottom: 16px;
+}
+.knowledge-page-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: var(--nb-text);
+}
+
+.knowledge-tab-content-borderless {
+  background: transparent;
+  padding: 0 0;
+}
+
+/* ── Section Header Stripped ── */
+.knowledge-section-header {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
