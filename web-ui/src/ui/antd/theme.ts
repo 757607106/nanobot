@@ -76,7 +76,7 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       borderRadiusXS: BORDER_RADIUS.xs,
 
       // === 字体体系 ===
-      fontSize: 'var(--nb-text-sm)',
+      fontSize: 14,
       fontSizeSM: 12,
       fontSizeLG: 16,
       fontSizeXL: 24,
