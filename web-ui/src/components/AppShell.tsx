@@ -19,12 +19,13 @@ import type { MenuProps } from 'antd'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
-import { PLATFORM_BRAND_LOGO_SRC, PLATFORM_BRAND_NAME } from '../branding'
+import { PLATFORM_BRAND_NAME } from '../branding'
 import { useDevMode } from '../devMode'
 import { shellSpring } from '../motionTokens'
 import { testIds } from '../testIds'
 import { useThemeMode } from '../themeMode'
 import { LAYOUT } from '../ui/tokens'
+import { AnimatedLogo } from './AnimatedLogo'
 
 const DESKTOP_BREAKPOINT = '(min-width: 992px)'
 
@@ -191,14 +192,10 @@ export default function AppShell() {
     return (
       <Flex vertical style={{ height: '100%' }}>
         {/* Logo 区域 */}
-        <Flex align="center" gap={12} style={{ padding: '16px 20px' }}>
-          <Avatar
-            alt={PLATFORM_BRAND_NAME}
-            src={PLATFORM_BRAND_LOGO_SRC}
-            size={36}
-            shape="square"
-            style={{ flexShrink: 0 }}
-          />
+        <Flex align="center" gap={12} style={{ padding: '16px 20px', cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
+          <div style={{ flexShrink: 0 }}>
+             <AnimatedLogo size={36} />
+          </div>
           <div style={{ minWidth: 0 }}>
             <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-md)' }}>
               {PLATFORM_BRAND_NAME}
