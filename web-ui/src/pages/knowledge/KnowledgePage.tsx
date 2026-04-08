@@ -329,7 +329,8 @@ export default function KnowledgePage() {
     if (activeTab === 'mindmap' && currentKb && !mindmap && !loading.mindmap) {
       void loadMindmap(currentKb.kbId)
     }
-  }, [activeTab, currentKb, mindmap, loading.mindmap])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentKb])
 
   useEffect(() => {
     if (Object.keys(modelBindings).length === 0) {

@@ -16,6 +16,7 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
+import collections
 import os
 import re
 import shutil
@@ -101,6 +102,7 @@ class RAGEngine:
         embedding_timeout: float = 60.0,
         lightrag_base_kwargs: dict[str, Any] | None = None,
         storage_env: dict[str, str] | None = None,
+        max_cached_instances: int = 5,
     ) -> None:
         self._storage_root = storage_root
         self._storage_root.mkdir(parents=True, exist_ok=True)
@@ -131,9 +133,10 @@ class RAGEngine:
         self._storage_env = {k: v for k, v in dict(storage_env or {}).items() if str(v or "").strip()}
 
         # Per-KB instances (lazy loaded)
-        self._instances: dict[str, Any] = {}  # kb_id -> LightRAG
+        self._instances: collections.OrderedDict[str, Any] = collections.OrderedDict()  # kb_id -> LightRAG
         self._locks: dict[str, asyncio.Lock] = {}
         self._kb_runtime_resolver: Callable[[str], dict[str, Any] | None] | None = None
+        self._max_cached_instances = max(1, max_cached_instances)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -383,6 +386,10 @@ class RAGEngine:
         working_dir.mkdir(parents=True, exist_ok=True)
 
         runtime = self._resolve_kb_runtime(kb_id)
+        
+        rt = dict(runtime or {})
+        provider_name = str(rt.get("embedding_provider_name") or self._embedding_provider_name or "").strip()
+        
         kwargs = {
             **self._lightrag_base_kwargs,
             "working_dir": str(working_dir),
@@ -390,6 +397,10 @@ class RAGEngine:
             "llm_model_func": self._build_llm_func(runtime),
             "embedding_func": self._build_embedding_func(runtime),
         }
+        
+        # DashScope has a strict batch size limit for text embedding requests
+        if provider_name == "dashscope":
+            kwargs["embedding_batch_num"] = min(kwargs.get("embedding_batch_num", 10), 10)
 
         with self._storage_env_scope():
             rag = LightRAG(**kwargs)
@@ -412,11 +423,43 @@ class RAGEngine:
         lock = self._get_lock(kb_id)
         async with lock:
             if kb_id in self._instances:
+                self._instances.move_to_end(kb_id)
                 return self._instances[kb_id]
             logger.info("RAGEngine: initializing LightRAG for kb_id={}", kb_id)
             rag = await self._create_instance(kb_id)
             self._instances[kb_id] = rag
+            
+            if len(self._instances) > self._max_cached_instances:
+                await self._evict_lru_instance(exclude=kb_id)
+                
             return rag
+            
+    async def _evict_lru_instance(self, *, exclude: str | None = None) -> None:
+        """Evict the least recently used LightRAG instance to free up memory."""
+        evict_id = None
+        for kb_id in self._instances.keys():
+            if kb_id != exclude:
+                evict_id = kb_id
+                break
+                
+        if evict_id is None:
+            return
+            
+        rag = self._instances.pop(evict_id)
+        logger.info("RAGEngine: evicting LRU LightRAG instance for kb_id={}", evict_id)
+        try:
+            await rag.finalize_storages()
+        except Exception as exc:
+            logger.warning("RAGEngine: finalize failed during eviction for kb_id={}: {}", evict_id, exc)
+
+    async def health_check(self) -> dict[str, Any]:
+        """Return health status and basic stats of the RAG engine."""
+        return {
+            "status": "healthy" if _check_lightrag() else "degraded",
+            "active_instances": len(self._instances),
+            "max_instances": self._max_cached_instances,
+            "lightrag_available": _check_lightrag(),
+        }
 
     async def reset_kb(self, kb_id: str) -> None:
         """Finalize and evict a cached per-KB RAG instance."""

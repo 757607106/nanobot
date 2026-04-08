@@ -172,6 +172,51 @@
 }
 
 /* Graph Visualization Styles */
+
+/* ── Toolbar ── */
+.knowledge-graph-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.knowledge-graph-toolbar-compact {
+  gap: 8px;
+}
+
+.knowledge-graph-toolbar .ant-input-affix-wrapper {
+  max-width: 200px;
+}
+
+.knowledge-graph-toolbar .ant-input-number {
+  width: 70px;
+}
+
+.knowledge-graph-layout-select {
+  min-width: 100px;
+}
+
+/* ── Filter Alert ── */
+.knowledge-graph-filter-alert {
+  border-radius: var(--nb-radius-md);
+}
+
+/* ── Browser — Two-column layout: canvas + sidebar ── */
+.knowledge-graph-browser {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+  min-height: 560px;
+}
+
+.knowledge-graph-browser-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
 .knowledge-graph-browser-shell {
   min-height: 560px;
   background: radial-gradient(circle at center, var(--nb-surface-strong), var(--nb-surface));
@@ -185,11 +230,13 @@
   background: var(--nb-surface);
   overflow: hidden;
   min-height: 440px;
+  flex: 1;
 }
 
 .knowledge-graph-canvas {
   width: 100%;
   min-height: 440px;
+  height: 100%;
 }
 
 .knowledge-graph-floating-tools {
@@ -202,7 +249,37 @@
   gap: 8px;
 }
 
-/* Graph Inspector Panel */
+/* ── Stage Footer ── */
+.knowledge-graph-stage-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--nb-border);
+  border-top: none;
+  border-radius: 0 0 var(--nb-radius-lg) var(--nb-radius-lg);
+  background: var(--nb-surface-strong);
+}
+
+/* ── Sidebar ── */
+.knowledge-graph-browser-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-height: calc(100vh - 320px);
+  overflow-y: auto;
+}
+
+/* ── Inspector Shell ── */
+.knowledge-graph-inspector-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Inspector Header ── */
 .knowledge-graph-inspector-header {
   display: flex;
   align-items: flex-start;
@@ -215,6 +292,15 @@
   box-shadow: var(--nb-shadow-soft);
 }
 
+.knowledge-graph-inspector-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* ── Side Panel ── */
 .knowledge-graph-side-panel {
   display: flex;
   flex-direction: column;
@@ -231,13 +317,69 @@
   padding: 14px 16px;
 }
 
-/* Graph Property Block */
+/* ── Properties ── */
+.knowledge-graph-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Side List (key-value rows) ── */
+.knowledge-graph-side-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.knowledge-graph-side-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--nb-border);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.knowledge-graph-side-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.knowledge-graph-side-row > span {
+  color: var(--nb-muted);
+  flex-shrink: 0;
+  min-width: 48px;
+}
+
+.knowledge-graph-side-row > strong {
+  text-align: right;
+  font-weight: 500;
+}
+
+/* ── Compact Hint ── */
+.knowledge-graph-compact-hint {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ── Chip Row ── */
+.knowledge-graph-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── Property Block ── */
 .knowledge-graph-property-block {
   margin: 0;
   padding: 14px 16px;
   border-radius: var(--nb-radius-md);
   border: 1px solid var(--nb-border);
   background: var(--nb-surface);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .knowledge-graph-property-block-clamped {
@@ -247,7 +389,36 @@
   overflow: hidden;
 }
 
-/* Graph Relation Row - Interactive Card */
+/* ── Relations Panel ── */
+.knowledge-graph-relations-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.knowledge-graph-relations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--nb-border);
+  flex-shrink: 0;
+}
+
+.knowledge-graph-relations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  padding-top: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Relation Row — Interactive Card ── */
 .knowledge-graph-relation-row {
   display: flex;
   flex-direction: column;
@@ -284,6 +455,23 @@
   cursor: pointer;
 }
 
+.knowledge-graph-relation-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.knowledge-graph-relation-head strong {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .knowledge-graph-relation-toggle-icon {
   display: flex;
   align-items: center;
@@ -306,6 +494,18 @@
   gap: 8px;
   padding: 0 13px 12px;
   border-top: 1px solid var(--nb-border);
+}
+
+.knowledge-graph-relation-summary {
+  font-size: 12px;
+  line-height: 1.6;
+  padding-top: 10px;
+}
+
+.knowledge-graph-relation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 /* Mindmap Canvas */
@@ -411,6 +611,14 @@
   .knowledge-file-detail-chunks {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .knowledge-graph-browser {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-graph-browser-sidebar {
+    max-height: 400px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -438,5 +646,15 @@
   .knowledge-query-topbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .knowledge-graph-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .knowledge-graph-toolbar .ant-input-affix-wrapper {
+    max-width: none;
+    flex: 1;
   }
 }

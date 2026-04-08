@@ -468,14 +468,19 @@ export function KnowledgeGraphTab({
           },
         }
       }),
-      edges: displayGraph.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        data: {
-          selected: edge.id === selectedEdgeId,
-        },
-      })),
+      edges: displayGraph.edges.map((edge) => {
+        const keywords = getEdgeKeywords(edge)
+        const edgeLabel = displayGraph.focusActive ? (keywords[0] || getEdgeTitle(edge)) : ''
+        return {
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          data: {
+            selected: edge.id === selectedEdgeId,
+            label: truncateText(edgeLabel, 12),
+          },
+        }
+      }),
     }
   }, [displayGraph, graphColors, labelNodeIds, relationCountByNode, selectedEdgeId, selectedNodeId, visibleNodeIds])
 
@@ -490,6 +495,9 @@ export function KnowledgeGraphTab({
 
   useEffect(() => {
     let disposed = false
+
+    let retryCount = 0
+    const MAX_RETRIES = 5
 
     async function renderGraph() {
       if (!containerRef.current || graphPayload.nodes.length === 0) {
@@ -507,6 +515,16 @@ export function KnowledgeGraphTab({
 
         const width = Math.max(containerRef.current.clientWidth, 540)
         const height = Math.max(containerRef.current.clientHeight, 520)
+
+        // Zero-dimension retry (inspired by Yuxi GraphCanvas)
+        if (width <= 0 || height <= 0) {
+          if (retryCount < MAX_RETRIES) {
+            retryCount++
+            setTimeout(() => { if (!disposed) void renderGraph() }, 200)
+          }
+          return
+        }
+        retryCount = 0
 
         if (graphRef.current) {
           graphRef.current.destroy()
@@ -542,13 +560,19 @@ export function KnowledgeGraphTab({
             },
           },
           edge: {
-            type: 'line',
+            type: 'quadratic',
             style: {
               stroke: (datum: any) => (datum.data?.selected ? token.colorWarning : token.colorBorderSecondary),
               opacity: displayGraph.focusActive ? 0.85 : 0.42,
               lineWidth: (datum: any) => (datum.data?.selected ? 3 : displayGraph.focusActive ? 1.9 : 1.2),
               endArrow: true,
-              labelText: '',
+              labelText: (datum: any) => datum.data?.label || '',
+              labelFill: token.colorTextSecondary,
+              labelFontSize: 10,
+              labelBackground: true,
+              labelBackgroundFill: token.colorBgContainer,
+              labelBackgroundOpacity: 0.85,
+              labelBackgroundRadius: 3,
             },
           },
           behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas', 'hover-activate'],

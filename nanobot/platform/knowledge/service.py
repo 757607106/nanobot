@@ -3,36 +3,22 @@
 from __future__ import annotations
 
 import asyncio
-import csv
-import hashlib
-import io
 import json
-import math
-import mimetypes
-import os
 import re
 import shutil
 import textwrap
-import uuid
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import replace
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlparse
 
-import chardet
-import httpx
 from loguru import logger
-from lxml import html as lxml_html
-from openpyxl import load_workbook
-from readability import Document as ReadabilityDocument
 
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge.artifacts import KnowledgeArtifactStore
 from nanobot.platform.knowledge.models import (
     KnowledgeBaseDefinition,
-    KnowledgeDocumentStatus,
     KnowledgeFile,
     KnowledgeIngestJob,
     KnowledgeJobStatus,
@@ -66,19 +52,20 @@ class KnowledgeSourceNotFoundError(KeyError):
     """Raised when a knowledge file or folder does not exist."""
 
 
-def _slugify(value: str) -> str:
-    normalized = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
-    return normalized or "knowledge-base"
-
-
-def _short_id(prefix: str) -> str:
-    return f"{prefix}_{uuid.uuid4().hex[:12]}"
-
-
-DEFAULT_KNOWLEDGE_CHUNK_SIZE = 500
-DEFAULT_KNOWLEDGE_CHUNK_OVERLAP = 80
-_BEST_EFFORT_QUERY_TIMEOUT_KEY = "__best_effort_timeout_seconds__"
-DEFAULT_BEST_EFFORT_RETRIEVE_TIMEOUT_SECONDS = 2.0
+from nanobot.platform.knowledge.llm_helpers import KnowledgeLLMHelper
+from nanobot.platform.knowledge.utils import (
+    DEFAULT_KNOWLEDGE_CHUNK_SIZE,
+    DEFAULT_KNOWLEDGE_CHUNK_OVERLAP,
+    DEFAULT_BEST_EFFORT_RETRIEVE_TIMEOUT_SECONDS,
+    slugify as _slugify,
+    short_id as _short_id,
+    get_value as _get_value_fn,
+    normalize_text as _normalize_text_fn,
+    normalize_string_list as _normalize_string_list_fn,
+    normalize_object as _normalize_object_fn,
+    knowledge_model_value as _knowledge_model_value_fn,
+    split_large_block as _split_large_block_fn,
+)
 
 
 class KnowledgeBaseService:
@@ -115,6 +102,77 @@ class KnowledgeBaseService:
         self.artifacts = KnowledgeArtifactStore(
             vector_dir_factory=self._kb_vector_dir,
             evaluation_dir_factory=self._kb_eval_dir,
+        )
+        self.llm_helper = KnowledgeLLMHelper(config, self._run_async)
+        
+        from nanobot.platform.knowledge.file_manager import KnowledgeFileManager
+        from nanobot.platform.knowledge.document_pipeline import DocumentPipeline
+
+        self.doc_pipeline = DocumentPipeline(
+            store=self.store,
+            artifacts=self.artifacts,
+            rag_engine=self.rag_engine,
+            run_async_fn=self._run_async,
+            file_storage_paths_fn=self._file_storage_paths,
+            require_kb_fn=self.require_kb,
+            require_file_fn=self._require_file,
+            update_file_fn=self._update_file,
+            create_job_fn=self._create_job,
+            start_job_fn=self._start_job,
+            finish_job_fn=self._finish_job,
+            submit_job_fn=self._submit_background_job,
+            serialize_file_fn=self._serialize_file,
+            serialize_job_fn=self._serialize_job,
+            store_job_options_fn=self._store_job_options,
+            consume_job_options_fn=self._consume_job_options,
+            move_file_fn=self.move_file,
+            generate_questions_fn=self.generate_sample_questions,
+        )
+
+        self.file_manager = KnowledgeFileManager(
+            store=self.store,
+            instance=self.instance,
+            tenant_id=self.tenant_id,
+            instance_id=self.instance_id,
+            artifacts=self.artifacts,
+            rag_engine=self.rag_engine,
+            run_async_fn=self._run_async,
+            raw_dir_fn=self._kb_raw_dir,
+            parsed_dir_fn=self._kb_parsed_dir,
+            create_job_fn=self._create_job,
+            start_job_fn=self._start_job,
+            submit_job_fn=self._submit_background_job,
+            parse_job_fn=self.doc_pipeline.run_parse_job,
+            require_kb_fn=self.require_kb,
+            ingest_files_fn=self.ingest_files,
+        )
+
+        from nanobot.platform.knowledge.query_service import KnowledgeQueryService
+        self.query_service = KnowledgeQueryService(
+            store=self.store,
+            artifacts=self.artifacts,
+            rag_engine=self.rag_engine,
+            run_async_fn=self._run_async,
+            require_kb_fn=self.require_kb,
+            resolve_bound_kbs_fn=self.resolve_bound_kbs,
+            extract_requested_file_ids_fn=self._extract_requested_file_ids,
+            generate_with_llm_fn=self._generate_with_llm,
+            best_effort_timeout=self._best_effort_retrieve_timeout_seconds,
+        )
+
+        from nanobot.platform.knowledge.evaluation_service import KnowledgeEvaluationService
+        self.eval_service = KnowledgeEvaluationService(
+            store=self.store,
+            artifacts=self.artifacts,
+            rag_engine=self.rag_engine,
+            run_async_fn=self._run_async,
+            require_kb_fn=self.require_kb,
+            submit_job_fn=self._submit_background_job,
+            generate_with_llm_fn=self._generate_with_llm,
+            extract_json_fn=self._extract_json_text,
+            query_database_fn=lambda kb_id, payload: self.query_database(kb_id, payload),
+            normalize_text_fn=self._normalize_text,
+            normalize_string_list_fn=self._normalize_string_list,
         )
 
         import threading
@@ -165,11 +223,16 @@ class KnowledgeBaseService:
         with self._rag_engine_lock:
             previous = self.rag_engine
             self.rag_engine = rag_engine
+            self.file_manager.rag_engine = rag_engine
+            self.doc_pipeline.rag_engine = rag_engine
+            self.query_service.rag_engine = rag_engine
+            self.eval_service.rag_engine = rag_engine
             if previous is not None and previous is not rag_engine:
                 self._retired_rag_engines.append(previous)
 
     def set_config(self, config: Config | None) -> None:
         self.config = config
+        self.llm_helper.config = config
 
     def with_tenant(self, tenant_id: str | None) -> KnowledgeBaseService:
         """Return a lightweight tenant-scoped view over the shared service runtime."""
@@ -180,11 +243,7 @@ class KnowledgeBaseService:
 
     @staticmethod
     def _knowledge_model_value(info: dict[str, Any] | None, *keys: str) -> str:
-        for key in keys:
-            value = str((info or {}).get(key) or "").strip()
-            if value:
-                return value
-        return ""
+        return _knowledge_model_value_fn(info, *keys)
 
     def _resolve_binding_runtime(
         self,
@@ -193,63 +252,11 @@ class KnowledgeBaseService:
         model_name: str | None,
         capability_type: str,
     ) -> dict[str, Any]:
-        if self.config is None:
-            return {}
-
-        from nanobot.providers.registry import find_by_name
-
-        requested_binding_name = str(binding_name or "").strip()
-        requested_model_name = str(model_name or "").strip()
-        binding = None
-        matched_binding_name: str | None = None
-
-        if requested_binding_name:
-            binding = self.config.model_bindings.get(requested_binding_name)
-            if binding is not None:
-                matched_binding_name = requested_binding_name
-
-        if binding is None and requested_model_name:
-            binding = self.config.get_binding(requested_model_name)
-            matched_binding_name = self.config.get_binding_name(requested_model_name)
-
-        if binding is None:
-            return {}
-
-        provider_name = str(getattr(binding, "provider", "") or "").strip()
-        provider_cfg = getattr(self.config.providers, provider_name, None) if provider_name else None
-        provider_spec = find_by_name(provider_name) if provider_name else None
-        api_key = str(
-            getattr(binding, "api_key", None)
-            or getattr(provider_cfg, "api_key", None)
-            or (os.getenv(provider_spec.env_key) if provider_spec and provider_spec.env_key else None)
-            or ""
+        return self.llm_helper.resolve_binding_runtime(
+            binding_name=binding_name,
+            model_name=model_name,
+            capability_type=capability_type,
         )
-        api_base = str(
-            getattr(binding, "api_base", None)
-            or getattr(provider_cfg, "api_base", None)
-            or ""
-        )
-        extra_headers = dict(
-            getattr(binding, "extra_headers", None)
-            or getattr(provider_cfg, "extra_headers", None)
-            or {}
-        )
-        resolved_model_name = str(
-            requested_model_name
-            or getattr(binding, "model", None)
-            or ""
-        ).strip()
-        if not resolved_model_name:
-            return {}
-
-        return {
-            "binding_name": matched_binding_name or requested_binding_name or None,
-            "provider_name": provider_name or None,
-            "model": resolved_model_name,
-            "api_key": api_key,
-            "api_base": api_base,
-            "extra_headers": extra_headers,
-        }
 
     def _resolve_kb_runtime_overrides(self, kb_id: str) -> dict[str, Any]:
         kb = self.store.get_kb(kb_id)
@@ -391,41 +398,19 @@ class KnowledgeBaseService:
 
     @staticmethod
     def _get_value(payload: dict[str, Any], *keys: str) -> Any:
-        for key in keys:
-            if key in payload:
-                return payload[key]
-        return None
+        return _get_value_fn(payload, *keys)
 
     @staticmethod
     def _normalize_text(value: Any, *, required: bool = False, field_name: str = "value") -> str:
-        text = str(value or "").strip()
-        if required and not text:
-            raise KnowledgeBaseValidationError(f"{field_name} is required.")
-        return text
+        return _normalize_text_fn(value, required=required, field_name=field_name)
 
     @staticmethod
     def _normalize_string_list(value: Any, *, field_name: str) -> list[str]:
-        if value is None:
-            return []
-        if not isinstance(value, list):
-            raise KnowledgeBaseValidationError(f"{field_name} must be a list of strings.")
-        result: list[str] = []
-        seen: set[str] = set()
-        for item in value:
-            text = str(item or "").strip()
-            if not text or text in seen:
-                continue
-            seen.add(text)
-            result.append(text)
-        return result
+        return _normalize_string_list_fn(value, field_name=field_name)
 
     @staticmethod
     def _normalize_object(value: Any, *, field_name: str) -> dict[str, Any]:
-        if value is None:
-            return {}
-        if not isinstance(value, dict):
-            raise KnowledgeBaseValidationError(f"{field_name} must be an object.")
-        return dict(value)
+        return _normalize_object_fn(value, field_name=field_name)
 
     @staticmethod
     def _normalize_kb_type(value: Any) -> str:
@@ -503,79 +488,14 @@ class KnowledgeBaseService:
     def _ensure_evaluation_supported(self, kb: KnowledgeBaseDefinition) -> None:
         self._ensure_lightrag(kb, feature="Evaluation")
 
-    def _list_descendant_ids(self, kb_id: str, root_file_id: str) -> list[str]:
-        files = self.store.list_files(kb_id)
-        by_parent: dict[str | None, list[KnowledgeFile]] = {}
-        for item in files:
-            by_parent.setdefault(item.parent_id, []).append(item)
-        result: list[str] = []
-        stack = [root_file_id]
-        while stack:
-            current = stack.pop()
-            result.append(current)
-            for child in by_parent.get(current, []):
-                stack.append(child.file_id)
-        return result
 
     def _require_file(self, kb_id: str, file_id: str) -> KnowledgeFile:
-        file = self.store.get_file(file_id)
-        if file is None or file.kb_id != kb_id:
-            raise KnowledgeSourceNotFoundError(file_id)
-        return file
+        return self.file_manager._require_file(kb_id, file_id)
 
-    def _ensure_parent_folder(self, kb_id: str, parent_id: str | None) -> KnowledgeFile | None:
-        if not parent_id:
-            return None
-        parent = self._require_file(kb_id, parent_id)
-        if not parent.is_folder:
-            raise KnowledgeBaseValidationError("parentId must reference a folder.")
-        return parent
-
-    def _logical_path(self, parent: KnowledgeFile | None, filename: str) -> str:
-        clean_name = filename.strip()
-        if not clean_name:
-            raise KnowledgeBaseValidationError("filename is required.")
-        if parent is None:
-            return f"/{clean_name}"
-        return f"{parent.path.rstrip('/')}/{clean_name}"
-
-    def _dedupe_filename(
-        self,
-        kb_id: str,
-        parent_id: str | None,
-        filename: str,
-        *,
-        exclude_file_id: str | None = None,
-    ) -> str:
-        files = self.store.list_files(kb_id)
-        sibling_names = {
-            item.filename.lower()
-            for item in files
-            if item.parent_id == parent_id and item.file_id != exclude_file_id
-        }
-        if filename.lower() not in sibling_names:
-            return filename
-        stem = Path(filename).stem
-        suffix = Path(filename).suffix
-        counter = 2
-        while True:
-            candidate = f"{stem}-{counter}{suffix}"
-            if candidate.lower() not in sibling_names:
-                return candidate
-            counter += 1
 
     def _update_file(self, file: KnowledgeFile) -> KnowledgeFile:
-        updated = self.store.update_file(file)
-        if updated is None:
-            raise KnowledgeSourceNotFoundError(file.file_id)
-        return updated
+        return self.file_manager._update_file(file)
 
-    def _update_file_path_recursive(self, kb_id: str, file: KnowledgeFile, *, parent: KnowledgeFile | None) -> None:
-        next_path = self._logical_path(parent, file.filename)
-        updated = self._update_file(replace(file, path=next_path, updated_at=now_iso()))
-        children = [item for item in self.store.list_files(kb_id) if item.parent_id == file.file_id]
-        for child in children:
-            self._update_file_path_recursive(kb_id, child, parent=updated)
 
     def _create_job(self, kb_id: str, job_kind: str, target_file_ids: list[str]) -> KnowledgeIngestJob:
         now = now_iso()
@@ -805,1045 +725,69 @@ class KnowledgeBaseService:
         return result
 
     def list_files(self, kb_id: str) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        files = self.store.list_files(kb_id)
-        return {
-            "items": [self._serialize_file(item) for item in files],
-            "stats": self.store.get_kb_stats(kb_id),
-        }
+        return self.file_manager.list_files(kb_id)
 
     def create_folder(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        parent = self._ensure_parent_folder(kb_id, self._normalize_text(payload.get("parentId"), field_name="parentId") or None)
-        name = self._normalize_text(self._get_value(payload, "name", "filename"), required=True, field_name="name")
-        filename = self._dedupe_filename(kb_id, parent.file_id if parent else None, name)
-        now = now_iso()
-        folder = self.store.insert_file(
-            KnowledgeFile(
-                file_id=_short_id("file"),
-                kb_id=kb_id,
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                parent_id=parent.file_id if parent else None,
-                filename=filename,
-                original_filename=filename,
-                file_type="folder",
-                path=self._logical_path(parent, filename),
-                raw_path=None,
-                markdown_file=None,
-                status=KnowledgeDocumentStatus.FOLDER,
-                is_folder=True,
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        return self._serialize_file(folder)
+        return self.file_manager.create_folder(kb_id, payload)
 
     def upload_files(self, kb_id: str, files: list[dict[str, Any]], *, parent_id: str | None = None) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        parent = self._ensure_parent_folder(kb_id, parent_id)
-        created: list[dict[str, Any]] = []
-        for item in files:
-            content = item.get("content")
-            if not isinstance(content, (bytes, bytearray)) or not content:
-                raise KnowledgeBaseValidationError("Uploaded knowledge file content is required.")
-            file_name = self._normalize_text(item.get("file_name"), required=True, field_name="file_name")
-            mime_type = self._normalize_text(item.get("mime_type"), field_name="mime_type") or None
-            filename = self._dedupe_filename(kb_id, parent.file_id if parent else None, file_name)
-            file_id = _short_id("file")
-            raw_path, parsed_path = self._file_storage_paths(kb_id, file_id, filename)
-            raw_path.write_bytes(bytes(content))
-            now = now_iso()
-            record = self.store.insert_file(
-                KnowledgeFile(
-                    file_id=file_id,
-                    kb_id=kb_id,
-                    tenant_id=self.tenant_id,
-                    instance_id=self.instance_id,
-                    parent_id=parent.file_id if parent else None,
-                    filename=filename,
-                    original_filename=file_name,
-                    file_type=(Path(filename).suffix.lower().lstrip(".") or "file"),
-                    path=self._logical_path(parent, filename),
-                    raw_path=str(raw_path),
-                    markdown_file=str(parsed_path),
-                    status=KnowledgeDocumentStatus.UPLOADED,
-                    content_hash=hashlib.sha256(bytes(content)).hexdigest(),
-                    file_size=len(content),
-                    content_type=mime_type,
-                    processing_params={"sourceType": "upload"},
-                    is_folder=False,
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
-            created.append(self._serialize_file(record))
-        return {"items": created}
+        return self.file_manager.upload_files(kb_id, files, parent_id=parent_id)
 
     def fetch_url_file(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        url = self._normalize_text(self._get_value(payload, "url"), required=True, field_name="url")
-        parent = self._ensure_parent_folder(kb_id, self._normalize_text(payload.get("parentId"), field_name="parentId") or None)
-
-        response = httpx.get(url, timeout=20.0, follow_redirects=True)
-        response.raise_for_status()
-        content_type = str(response.headers.get("content-type") or "").split(";")[0].strip() or None
-        suffix = Path(urlparse(url).path).suffix
-        if not suffix and content_type:
-            suffix = mimetypes.guess_extension(content_type) or ".html"
-        base_name = Path(urlparse(url).path).name or "web-source"
-        filename = base_name if Path(base_name).suffix else f"{base_name}{suffix or '.html'}"
-        filename = self._dedupe_filename(kb_id, parent.file_id if parent else None, safe_filename(filename))
-        file_id = _short_id("file")
-        raw_path, parsed_path = self._file_storage_paths(kb_id, file_id, filename)
-        raw_path.write_bytes(response.content)
-        now = now_iso()
-        record = self.store.insert_file(
-            KnowledgeFile(
-                file_id=file_id,
-                kb_id=kb_id,
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                parent_id=parent.file_id if parent else None,
-                filename=filename,
-                original_filename=filename,
-                file_type="web_url",
-                path=self._logical_path(parent, filename),
-                raw_path=str(raw_path),
-                markdown_file=str(parsed_path),
-                status=KnowledgeDocumentStatus.UPLOADED,
-                content_hash=hashlib.sha256(response.content).hexdigest(),
-                file_size=len(response.content),
-                content_type=content_type,
-                processing_params={
-                    "sourceType": "web_url",
-                    "sourceUrl": url,
-                    "sourceTitle": base_name,
-                    "sourceEnabled": True,
-                    "syncCount": 1,
-                },
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        return self._serialize_file(record)
-
-    def _normalize_faq_items(self, items: Any) -> list[dict[str, str]]:
-        if not isinstance(items, list) or not items:
-            raise KnowledgeBaseValidationError("FAQ table source requires a non-empty items list.")
-        normalized_items: list[dict[str, str]] = []
-        for index, item in enumerate(items, start=1):
-            if not isinstance(item, dict):
-                raise KnowledgeBaseValidationError(f"FAQ item {index} must be an object.")
-            question = self._normalize_text(item.get("question"), required=True, field_name=f"items[{index}].question")
-            answer = self._normalize_text(item.get("answer"), required=True, field_name=f"items[{index}].answer")
-            normalized_items.append({"question": question, "answer": answer})
-        return normalized_items
+        return self.file_manager.fetch_url_file(kb_id, payload)
 
     def add_source_file(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        source_type = self._normalize_text(payload.get("sourceType"), required=True, field_name="sourceType")
-        if source_type == "web_url":
-            return self.fetch_url_file(kb_id, payload)
-        if source_type != "faq_table":
-            raise KnowledgeBaseValidationError(f"Unsupported knowledge source type: {source_type}")
-
-        self.require_kb(kb_id)
-        normalized_items = self._normalize_faq_items(payload.get("items"))
-
-        parent = self._ensure_parent_folder(kb_id, self._normalize_text(payload.get("parentId"), field_name="parentId") or None)
-        title = self._normalize_text(payload.get("title"), field_name="title") or "faq-table"
-        filename = self._dedupe_filename(kb_id, parent.file_id if parent else None, safe_filename(f"{title}.json"))
-        file_id = _short_id("file")
-        raw_path, parsed_path = self._file_storage_paths(kb_id, file_id, filename)
-        raw_bytes = json.dumps(normalized_items, ensure_ascii=False, indent=2).encode("utf-8")
-        raw_path.write_bytes(raw_bytes)
-        now = now_iso()
-        record = self.store.insert_file(
-            KnowledgeFile(
-                file_id=file_id,
-                kb_id=kb_id,
-                tenant_id=self.tenant_id,
-                instance_id=self.instance_id,
-                parent_id=parent.file_id if parent else None,
-                filename=filename,
-                original_filename=filename,
-                file_type="faq_table",
-                path=self._logical_path(parent, filename),
-                raw_path=str(raw_path),
-                markdown_file=str(parsed_path),
-                status=KnowledgeDocumentStatus.UPLOADED,
-                content_hash=hashlib.sha256(raw_bytes).hexdigest(),
-                file_size=len(raw_bytes),
-                content_type="application/json",
-                processing_params={
-                    "sourceType": "faq_table",
-                    "faqItems": normalized_items,
-                    "sourceTitle": title,
-                    "sourceEnabled": True,
-                    "syncCount": 1,
-                },
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        return self._serialize_file(record)
-
-    @staticmethod
-    def _is_source_type_supported(source_type: str) -> bool:
-        return source_type in {"faq_table", "web_url"}
-
-    def _is_source_file(self, file: KnowledgeFile) -> bool:
-        source_type = str(file.processing_params.get("sourceType") or "").strip()
-        return not file.is_folder and self._is_source_type_supported(source_type)
-
-    def _source_title(self, file: KnowledgeFile) -> str:
-        return (
-            self._normalize_text(file.processing_params.get("sourceTitle"), field_name="sourceTitle")
-            or Path(file.filename).stem
-            or file.filename
-        )
-
-    def _serialize_source(self, file: KnowledgeFile) -> dict[str, Any]:
-        source_type = str(file.processing_params.get("sourceType") or file.file_type or "").strip()
-        return {
-            "sourceId": file.file_id,
-            "kbId": file.kb_id,
-            "sourceType": source_type,
-            "title": self._source_title(file),
-            "enabled": bool(file.processing_params.get("sourceEnabled", True)),
-            "syncSupported": self._is_source_type_supported(source_type),
-            "syncCount": int(file.processing_params.get("syncCount") or 1),
-            "docCount": 1,
-            "latestDocument": self._serialize_file(file),
-            "config": {
-                "title": self._source_title(file),
-                "items": list(file.processing_params.get("faqItems") or []),
-                "url": self._normalize_text(file.processing_params.get("sourceUrl"), field_name="sourceUrl") or None,
-            },
-            "createdAt": file.created_at,
-            "updatedAt": file.updated_at,
-        }
+        return self.file_manager.add_source_file(kb_id, payload)
 
     def list_sources(self, kb_id: str) -> list[dict[str, Any]]:
-        self.require_kb(kb_id)
-        files = [item for item in self.store.list_files(kb_id) if self._is_source_file(item)]
-        files.sort(key=lambda item: item.updated_at, reverse=True)
-        return [self._serialize_source(item) for item in files]
+        return self.file_manager.list_sources(kb_id)
 
     def update_source(self, kb_id: str, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        source = self._require_file(kb_id, source_id)
-        if not self._is_source_file(source):
-            raise KnowledgeSourceNotFoundError(source_id)
-
-        source_type = str(source.processing_params.get("sourceType") or "").strip()
-        processing_params = dict(source.processing_params)
-        title = self._normalize_text(payload.get("title"), field_name="title") or self._source_title(source)
-        enabled = (
-            bool(payload.get("enabled"))
-            if "enabled" in payload
-            else bool(processing_params.get("sourceEnabled", True))
-        )
-
-        content_hash = source.content_hash
-        file_size = source.file_size
-        content_type = source.content_type
-
-        if source_type == "faq_table":
-            items = payload.get("items") if "items" in payload else processing_params.get("faqItems")
-            normalized_items = self._normalize_faq_items(items)
-            raw_bytes = json.dumps(normalized_items, ensure_ascii=False, indent=2).encode("utf-8")
-            raw_path = Path(source.raw_path or self._file_storage_paths(kb_id, source.file_id, source.filename)[0])
-            raw_path.parent.mkdir(parents=True, exist_ok=True)
-            raw_path.write_bytes(raw_bytes)
-            processing_params["faqItems"] = normalized_items
-            content_hash = hashlib.sha256(raw_bytes).hexdigest()
-            file_size = len(raw_bytes)
-            content_type = "application/json"
-        elif source_type == "web_url":
-            url_value = (
-                self._normalize_text(payload.get("url"), field_name="url")
-                or self._normalize_text(payload.get("sourceUrl"), field_name="sourceUrl")
-                or self._normalize_text(processing_params.get("sourceUrl"), field_name="sourceUrl")
-            )
-            if not url_value:
-                raise KnowledgeBaseValidationError("Web source requires a non-empty url.")
-            processing_params["sourceUrl"] = url_value
-
-        processing_params["sourceTitle"] = title
-        processing_params["sourceEnabled"] = enabled
-        updated = self._update_file(
-            replace(
-                source,
-                content_hash=content_hash,
-                file_size=file_size,
-                content_type=content_type,
-                processing_params=processing_params,
-                updated_at=now_iso(),
-            )
-        )
-        return self._serialize_source(updated)
+        return self.file_manager.update_source(kb_id, source_id, payload)
 
     def sync_source(self, kb_id: str, source_id: str) -> dict[str, Any]:
-        source = self._require_file(kb_id, source_id)
-        if not self._is_source_file(source):
-            raise KnowledgeSourceNotFoundError(source_id)
-
-        source_type = str(source.processing_params.get("sourceType") or "").strip()
-        processing_params = dict(source.processing_params)
-        updated_source = source
-
-        if source_type == "faq_table":
-            raw_bytes = json.dumps(
-                self._normalize_faq_items(processing_params.get("faqItems")),
-                ensure_ascii=False,
-                indent=2,
-            ).encode("utf-8")
-            raw_path = Path(source.raw_path or self._file_storage_paths(kb_id, source.file_id, source.filename)[0])
-            raw_path.parent.mkdir(parents=True, exist_ok=True)
-            raw_path.write_bytes(raw_bytes)
-            processing_params["syncCount"] = int(processing_params.get("syncCount") or 1) + 1
-            updated_source = self._update_file(
-                replace(
-                    source,
-                    status=KnowledgeDocumentStatus.UPLOADED,
-                    content_hash=hashlib.sha256(raw_bytes).hexdigest(),
-                    file_size=len(raw_bytes),
-                    content_type="application/json",
-                    processing_params=processing_params,
-                    error_message=None,
-                    updated_at=now_iso(),
-                )
-            )
-        elif source_type == "web_url":
-            url = self._normalize_text(processing_params.get("sourceUrl"), required=True, field_name="sourceUrl")
-            response = httpx.get(url, timeout=20.0, follow_redirects=True)
-            response.raise_for_status()
-            raw_path = Path(source.raw_path or self._file_storage_paths(kb_id, source.file_id, source.filename)[0])
-            raw_path.parent.mkdir(parents=True, exist_ok=True)
-            raw_path.write_bytes(response.content)
-            processing_params["syncCount"] = int(processing_params.get("syncCount") or 1) + 1
-            updated_source = self._update_file(
-                replace(
-                    source,
-                    status=KnowledgeDocumentStatus.UPLOADED,
-                    content_hash=hashlib.sha256(response.content).hexdigest(),
-                    file_size=len(response.content),
-                    content_type=str(response.headers.get("content-type") or "").split(";")[0].strip() or None,
-                    processing_params=processing_params,
-                    error_message=None,
-                    updated_at=now_iso(),
-                )
-            )
-
-        ingest = self.ingest_files(
-            kb_id,
-            {
-                "fileIds": [updated_source.file_id],
-                "params": {"autoIndex": True},
-            },
-        )
-        refreshed = self._require_file(kb_id, updated_source.file_id)
-        return {
-            "source": self._serialize_source(refreshed),
-            "document": self._serialize_file(refreshed),
-            "job": dict(ingest.get("job") or {}),
-        }
+        return self.file_manager.sync_source(kb_id, source_id)
 
     def move_file(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        file_id = self._normalize_text(payload.get("fileId"), required=True, field_name="fileId")
-        target_parent_id = self._normalize_text(payload.get("targetParentId"), field_name="targetParentId") or None
-        rename_to = self._normalize_text(payload.get("filename"), field_name="filename") or None
-
-        file = self._require_file(kb_id, file_id)
-        parent = self._ensure_parent_folder(kb_id, target_parent_id)
-        if file.is_folder and parent is not None:
-            descendants = set(self._list_descendant_ids(kb_id, file.file_id))
-            if parent.file_id in descendants:
-                raise KnowledgeBaseValidationError("Cannot move a folder into its own descendant.")
-
-        filename = self._dedupe_filename(
-            kb_id,
-            parent.file_id if parent else None,
-            rename_to or file.filename,
-            exclude_file_id=file.file_id,
-        )
-        updated = self._update_file(
-            replace(
-                file,
-                parent_id=parent.file_id if parent else None,
-                filename=filename,
-                path=self._logical_path(parent, filename),
-                updated_at=now_iso(),
-            )
-        )
-        for child in [item for item in self.store.list_files(kb_id) if item.parent_id == updated.file_id]:
-            self._update_file_path_recursive(kb_id, child, parent=updated)
-        return self._serialize_file(updated)
+        return self.file_manager.move_file(kb_id, payload)
 
     def delete_file(self, kb_id: str, file_id: str) -> bool:
-        self.require_kb(kb_id)
-        descendants = list(reversed(self._list_descendant_ids(kb_id, file_id)))
-        for target_id in descendants:
-            file = self._require_file(kb_id, target_id)
-            if (
-                not file.is_folder
-                and file.status == KnowledgeDocumentStatus.INDEXED
-            ):
-                # Delete from LightRAG Server
-                if self.rag_engine is not None:
-                    try:
-                        self._run_async(self.rag_engine.delete_document(kb_id, file.file_id))
-                    except Exception:
-                        logger.exception("Failed to delete indexed knowledge file {}", file.file_id)
-            if not file.is_folder:
-                self.artifacts.remove_chunk_entries_for_file(kb_id, file.file_id)
-            for candidate in (file.raw_path, file.markdown_file):
-                if candidate:
-                    path = Path(candidate)
-                    if path.exists():
-                        try:
-                            path.unlink()
-                        except OSError:
-                            logger.warning("Failed to remove knowledge artifact {}", candidate)
-            self.store.delete_file(target_id)
-        return True
+        return self.file_manager.delete_file(kb_id, file_id)
 
     def delete_files(self, kb_id: str, file_ids: list[str]) -> dict[str, Any]:
-        deleted: list[str] = []
-        for file_id in self._normalize_string_list(file_ids, field_name="fileIds"):
-            if self.delete_file(kb_id, file_id):
-                deleted.append(file_id)
-        return {"deletedCount": len(deleted), "fileIds": deleted}
+        return self.file_manager.delete_files(kb_id, file_ids)
 
     def list_jobs(self, kb_id: str) -> list[dict[str, Any]]:
         self.require_kb(kb_id)
         return [self._serialize_job(job) for job in self.store.list_jobs(kb_id)]
 
-    def _select_target_files(self, kb_id: str, file_ids: list[str] | None = None) -> list[KnowledgeFile]:
-        self.require_kb(kb_id)
-        files = self.store.list_files(kb_id)
-        if file_ids:
-            wanted = set(self._normalize_string_list(file_ids, field_name="fileIds"))
-            selected = [item for item in files if item.file_id in wanted and not item.is_folder]
-        else:
-            selected = [item for item in files if not item.is_folder]
-        if not selected:
-            raise KnowledgeBaseValidationError("No knowledge files matched the requested operation.")
-        return selected
-
-    def _resolve_existing_files(
-        self,
-        kb_id: str,
-        candidates: list[str],
-    ) -> tuple[list[KnowledgeFile], list[str]]:
-        self.require_kb(kb_id)
-        files = self.store.list_files(kb_id)
-        resolved: list[KnowledgeFile] = []
-        seen: set[str] = set()
-        missing: list[str] = []
-        for raw_candidate in candidates:
-            candidate = str(raw_candidate or "").strip()
-            if not candidate:
-                continue
-            matched: KnowledgeFile | None = None
-            for item in files:
-                tokens = {
-                    item.file_id,
-                    item.filename,
-                    item.path,
-                    item.raw_path or "",
-                    Path(item.raw_path).name if item.raw_path else "",
-                }
-                if candidate in tokens:
-                    matched = item
-                    break
-            if matched is None:
-                missing.append(candidate)
-                continue
-            if matched.file_id in seen or matched.is_folder:
-                continue
-            seen.add(matched.file_id)
-            resolved.append(matched)
-        return resolved, missing
 
     def _extract_requested_file_ids(self, payload: dict[str, Any] | None) -> list[str] | None:
-        if not isinstance(payload, dict):
-            return None
-        for key in ("fileIds", "file_ids", "docIds", "doc_ids"):
-            value = payload.get(key)
-            if isinstance(value, list):
-                return self._normalize_string_list(value, field_name=key)
-        return None
+        return self.doc_pipeline._extract_requested_file_ids(payload)
 
-    @staticmethod
-    def _merge_query_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
-        merged = dict(payload or {})
-        meta = merged.pop("meta", None)
-        if isinstance(meta, dict):
-            return {
-                **meta,
-                **merged,
-            }
-        return merged
-
-    @staticmethod
-    def _detect_encoding(content: bytes) -> str:
-        detection = chardet.detect(content)
-        return str(detection.get("encoding") or "utf-8")
 
     def _decode_text(self, content: bytes) -> str:
-        try:
-            return content.decode("utf-8")
-        except UnicodeDecodeError:
-            return content.decode(self._detect_encoding(content), errors="ignore")
+        return self.doc_pipeline._decode_text(content)
 
-    @staticmethod
-    def _normalize_whitespace(text: str) -> str:
-        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-        normalized = re.sub(r"[ \t]+\n", "\n", normalized)
-        normalized = re.sub(r"\n{3,}", "\n\n", normalized)
-        return normalized.strip()
 
-    def _html_to_text(self, raw_html: str) -> tuple[str, str | None]:
-        doc = ReadabilityDocument(raw_html)
-        title = doc.short_title() or None
-        summary_html = doc.summary(html_partial=True)
-        text = lxml_html.fromstring(summary_html).text_content()
-        return self._normalize_whitespace(text), title
-
-    def _json_to_text(self, raw_json: str) -> tuple[str, list[dict[str, Any]] | None]:
-        payload = json.loads(raw_json)
-        if isinstance(payload, list) and payload and all(isinstance(item, dict) for item in payload):
-            faq_items = []
-            for item in payload:
-                question = str(item.get("question") or item.get("q") or "").strip()
-                answer = str(item.get("answer") or item.get("a") or "").strip()
-                if question and answer:
-                    faq_items.append({"question": question, "answer": answer})
-            if faq_items:
-                return "\n\n".join(f"Q: {item['question']}\nA: {item['answer']}" for item in faq_items), faq_items
-        return json.dumps(payload, ensure_ascii=False, indent=2), None
-
-    def _csv_to_text(self, raw_csv: str) -> tuple[str, list[dict[str, Any]] | None]:
-        reader = csv.DictReader(io.StringIO(raw_csv))
-        rows = list(reader)
-        faq_items = []
-        lines: list[str] = []
-        for row in rows:
-            question = str(row.get("question") or row.get("q") or "").strip()
-            answer = str(row.get("answer") or row.get("a") or "").strip()
-            if question and answer:
-                faq_items.append({"question": question, "answer": answer})
-            if row:
-                lines.append(" | ".join(f"{key}: {value}" for key, value in row.items()))
-        if faq_items:
-            return "\n\n".join(f"Q: {item['question']}\nA: {item['answer']}" for item in faq_items), faq_items
-        return "\n".join(lines), None
-
-    def _xlsx_to_text(self, content: bytes) -> str:
-        workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        sections: list[str] = []
-        for sheet in workbook.worksheets:
-            rows = list(sheet.iter_rows(values_only=True))
-            if not rows:
-                continue
-            header = [str(cell or "").strip() for cell in rows[0]]
-            sections.append(f"# Sheet: {sheet.title}")
-            for row in rows[1:]:
-                line = " | ".join(
-                    f"{header[index] or f'column_{index + 1}'}: {str(value or '').strip()}"
-                    for index, value in enumerate(row)
-                    if str(value or "").strip()
-                )
-                if line:
-                    sections.append(line)
-        return "\n".join(sections).strip()
-
-    def _extract_pdf_text(self, content: bytes) -> str:
-        try:
-            from pypdf import PdfReader
-        except ImportError as exc:
-            raise KnowledgeBaseValidationError("PDF parsing requires optional dependency 'pypdf'.") from exc
-        reader = PdfReader(io.BytesIO(content))
-        return self._normalize_whitespace("\n\n".join(page.extract_text() or "" for page in reader.pages))
-
-    def _extract_docx_text(self, content: bytes) -> str:
-        try:
-            from docx import Document
-        except ImportError as exc:
-            raise KnowledgeBaseValidationError("DOCX parsing requires optional dependency 'python-docx'.") from exc
-        document = Document(io.BytesIO(content))
-        return self._normalize_whitespace("\n".join(paragraph.text for paragraph in document.paragraphs))
-
-    def _parse_file_content(
-        self,
-        *,
-        title: str,
-        file_name: str,
-        mime_type: str | None,
-        content: bytes,
-    ) -> tuple[str, str, dict[str, Any], list[dict[str, Any]] | None]:
-        suffix = Path(file_name).suffix.lower()
-        parser_name = suffix.lstrip(".") or "text"
-        metadata: dict[str, Any] = {}
-        faq_items: list[dict[str, Any]] | None = None
-
-        if suffix in {".txt", ".md"}:
-            text = self._decode_text(content)
-        elif suffix in {".html", ".htm"}:
-            text, detected_title = self._html_to_text(self._decode_text(content))
-            if detected_title and detected_title != title:
-                metadata["detectedTitle"] = detected_title
-        elif suffix == ".json":
-            text, faq_items = self._json_to_text(self._decode_text(content))
-        elif suffix == ".csv":
-            text, faq_items = self._csv_to_text(self._decode_text(content))
-        elif suffix == ".xlsx":
-            text = self._xlsx_to_text(content)
-        elif suffix == ".pdf":
-            text = self._extract_pdf_text(content)
-        elif suffix == ".docx":
-            text = self._extract_docx_text(content)
-        else:
-            if mime_type and mime_type.startswith("text/"):
-                text = self._decode_text(content)
-            else:
-                raise KnowledgeBaseValidationError(
-                    f"Unsupported knowledge file type: {suffix or mime_type or file_name}"
-                )
-
-        normalized = self._normalize_whitespace(text)
-        if not normalized:
-            raise KnowledgeBaseValidationError("Parsed knowledge document is empty.")
-        return normalized, parser_name, metadata, faq_items
-
-    def _parse_single_file(self, file: KnowledgeFile) -> KnowledgeFile:
-        current = self._require_file(file.kb_id, file.file_id)
-        if current.is_folder:
-            return current
-        if not current.raw_path:
-            raise KnowledgeBaseValidationError(f"Knowledge file {current.file_id} has no source file.")
-        source_path = Path(current.raw_path)
-        if not source_path.exists():
-            raise KnowledgeBaseValidationError(f"Knowledge source file is missing: {source_path}")
-
-        current = self._update_file(
-            replace(current, status=KnowledgeDocumentStatus.PARSING, error_message=None, updated_at=now_iso())
-        )
-        content = source_path.read_bytes()
-        text, parser_name, metadata, faq_items = self._parse_file_content(
-            title=current.filename,
-            file_name=current.original_filename or current.filename,
-            mime_type=current.content_type,
-            content=content,
-        )
-        parsed_path = Path(current.markdown_file or self._file_storage_paths(current.kb_id, current.file_id, current.filename)[1])
-        parsed_path.parent.mkdir(parents=True, exist_ok=True)
-        parsed_path.write_text(text, encoding="utf-8")
-
-        processing_params = dict(current.processing_params)
-        processing_params.update(metadata)
-        processing_params["parserName"] = parser_name
-        processing_params["parsedAt"] = now_iso()
-        if faq_items:
-            processing_params["faqItems"] = faq_items
-        return self._update_file(
-            replace(
-                current,
-                markdown_file=str(parsed_path),
-                status=KnowledgeDocumentStatus.PARSED,
-                processing_params=processing_params,
-                error_message=None,
-                updated_at=now_iso(),
-            )
-        )
-
-    def _index_single_file(self, file: KnowledgeFile) -> KnowledgeFile:
-        current = self._require_file(file.kb_id, file.file_id)
-        kb = self.require_kb(current.kb_id)
-        if current.is_folder:
-            return current
-        if current.status not in {KnowledgeDocumentStatus.PARSED, KnowledgeDocumentStatus.INDEXED}:
-            raise KnowledgeBaseValidationError(
-                f"Knowledge file {current.file_id} must be parsed before indexing."
-            )
-        if not current.markdown_file:
-            raise KnowledgeBaseValidationError(f"Knowledge file {current.file_id} has not been parsed.")
-
-        parsed_path = Path(current.markdown_file)
-        if not parsed_path.exists():
-            raise KnowledgeBaseValidationError(f"Parsed knowledge file is missing: {parsed_path}")
-
-        current = self._update_file(
-            replace(current, status=KnowledgeDocumentStatus.INDEXING, error_message=None, updated_at=now_iso())
-        )
-        text = parsed_path.read_text(encoding="utf-8")
-
-        # Ensure RAG engine is available
-        self._ensure_lightrag(kb, feature="Document indexing")
-
-        # Index via LightRAG Core
-        # LightRAG handles: chunking → embedding → entity extraction → graph construction → Milvus + Neo4j
-        index_result = self._run_async(
-            self.rag_engine.insert_text(
-                current.kb_id,
-                text,
-                doc_id=current.file_id,
-                file_path=current.raw_path or current.filename,
-            )
-        )
-        if not index_result.success:
-            raise KnowledgeBaseValidationError(
-                index_result.error or f"Failed to index knowledge file {current.file_id}"
-            )
-
-        # Build chunk manifest for local tracking
-        from nanobot.platform.knowledge.chunking.dispatcher import build_chunks
-        chunk_texts = build_chunks(
-            text,
-            kb_params=kb.additional_params,
-            file_params=current.processing_params,
-            faq_items=(current.processing_params or {}).get("faqItems"),
-        )
-        self.artifacts.replace_chunk_entries_for_file(
-            current.kb_id,
-            current.file_id,
-            self.artifacts.build_chunk_manifest_entries(current, chunk_texts),
-        )
-        processing_params = dict(current.processing_params)
-        processing_params["chunksCount"] = len(chunk_texts)
-        processing_params["indexedAt"] = now_iso()
-        processing_params["indexBackend"] = "lightrag"
-        processing_params["graphExtraction"] = True
-        if index_result.track_id:
-            processing_params["trackId"] = index_result.track_id
-        return self._update_file(
-            replace(
-                current,
-                status=KnowledgeDocumentStatus.INDEXED,
-                processing_params=processing_params,
-                error_message=None,
-                updated_at=now_iso(),
-            )
-        )
-
-    def _run_parse_job(self, job_id: str) -> None:
-        job = self.store.get_job(job_id)
-        if job is None:
-            return
-        job = self._start_job(job)
-        errors: list[str] = []
-        for file_id in job.target_file_ids:
-            try:
-                self._parse_single_file(self._require_file(job.kb_id, file_id))
-            except Exception as exc:
-                errors.append(f"{file_id}: {exc}")
-                try:
-                    file = self._require_file(job.kb_id, file_id)
-                    self._update_file(
-                        replace(
-                            file,
-                            status=KnowledgeDocumentStatus.ERROR_PARSING,
-                            error_message=str(exc),
-                            updated_at=now_iso(),
-                        )
-                    )
-                except Exception:
-                    logger.exception("Failed to update parse error state for {}", file_id)
-        self._finish_job(job, error_summary="; ".join(errors) if errors else None)
-
-    def _run_index_job(self, job_id: str) -> None:
-        job = self.store.get_job(job_id)
-        if job is None:
-            return
-        job = self._start_job(job)
-        errors: list[str] = []
-        for file_id in job.target_file_ids:
-            try:
-                self._index_single_file(self._require_file(job.kb_id, file_id))
-            except Exception as exc:
-                errors.append(f"{file_id}: {exc}")
-                try:
-                    file = self._require_file(job.kb_id, file_id)
-                    self._update_file(
-                        replace(
-                            file,
-                            status=KnowledgeDocumentStatus.ERROR_INDEXING,
-                            error_message=str(exc),
-                            updated_at=now_iso(),
-                        )
-                    )
-                except Exception:
-                    logger.exception("Failed to update index error state for {}", file_id)
-        finished_job = self._finish_job(job, error_summary="; ".join(errors) if errors else None)
-        if finished_job.status == KnowledgeJobStatus.SUCCEEDED:
-            try:
-                kb = self.require_kb(job.kb_id)
-                if bool((kb.additional_params or {}).get("auto_generate_questions")):
-                    self.generate_sample_questions(job.kb_id, count=10)
-            except Exception:
-                logger.exception("Failed to auto-generate sample questions for {}", job.kb_id)
-
-    def _run_ingest_job(self, job_id: str) -> None:
-        job = self.store.get_job(job_id)
-        if job is None:
-            return
-        job = self._start_job(job)
-        options = self._consume_job_options(job_id)
-        auto_index = bool(options.get("auto_index"))
-        index_params = self._normalize_index_params(options.get("index_params"))
-        errors: list[str] = []
-        for file_id in job.target_file_ids:
-            try:
-                parsed = self._parse_single_file(self._require_file(job.kb_id, file_id))
-                if not auto_index:
-                    continue
-                indexed_input = parsed
-                if index_params:
-                    indexed_input = self._update_file(
-                        replace(
-                            parsed,
-                            processing_params={
-                                **(parsed.processing_params or {}),
-                                **index_params,
-                            },
-                            updated_at=now_iso(),
-                        )
-                    )
-                self._index_single_file(indexed_input)
-            except Exception as exc:
-                errors.append(f"{file_id}: {exc}")
-                try:
-                    file = self._require_file(job.kb_id, file_id)
-                    self._update_file(
-                        replace(
-                            file,
-                            status=KnowledgeDocumentStatus.ERROR_INDEXING if auto_index else KnowledgeDocumentStatus.ERROR_PARSING,
-                            error_message=str(exc),
-                            updated_at=now_iso(),
-                        )
-                    )
-                except Exception:
-                    logger.exception("Failed to update ingest error state for {}", file_id)
-        finished_job = self._finish_job(job, error_summary="; ".join(errors) if errors else None)
-        if auto_index and finished_job.status == KnowledgeJobStatus.SUCCEEDED:
-            try:
-                kb = self.require_kb(job.kb_id)
-                if bool((kb.additional_params or {}).get("auto_generate_questions")):
-                    self.generate_sample_questions(job.kb_id, count=10)
-            except Exception:
-                logger.exception("Failed to auto-generate sample questions for {}", job.kb_id)
 
     def parse_files(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        requested_file_ids = self._extract_requested_file_ids(payload)
-        if not requested_file_ids:
-            raise KnowledgeBaseValidationError("fileIds is required for parse operations.")
-        selected = self._select_target_files(kb_id, requested_file_ids)
-        job = self._create_job(kb_id, "parse", [item.file_id for item in selected])
-        self._submit_background_job(self._run_parse_job, job.job_id)
-        return {
-            "job": self._serialize_job(job),
-            "items": [self._serialize_file(item) for item in selected],
-        }
+        return self.doc_pipeline.parse_files(kb_id, payload)
 
     def index_files(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        requested_file_ids = self._extract_requested_file_ids(payload)
-        if not requested_file_ids:
-            raise KnowledgeBaseValidationError("fileIds is required for index operations.")
-        selected = self._select_target_files(kb_id, requested_file_ids)
-        index_params = self._normalize_index_params(payload.get("params"))
-        if index_params:
-            refreshed_selected: list[KnowledgeFile] = []
-            for item in selected:
-                if item.is_folder:
-                    refreshed_selected.append(item)
-                    continue
-                persisted = self._update_file(
-                    replace(
-                        item,
-                        processing_params={
-                            **(item.processing_params or {}),
-                            **index_params,
-                        },
-                        updated_at=now_iso(),
-                    )
-                )
-                refreshed_selected.append(persisted)
-            selected = refreshed_selected
-        job = self._create_job(kb_id, "index", [item.file_id for item in selected])
-        self._submit_background_job(self._run_index_job, job.job_id)
-        return {
-            "job": self._serialize_job(job),
-            "items": [self._serialize_file(item) for item in selected],
-        }
+        return self.doc_pipeline.index_files(kb_id, payload)
 
     def ingest_files(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        params = self._normalize_object(payload.get("params"), field_name="params")
-        requested_file_ids = self._extract_requested_file_ids(payload)
-        if requested_file_ids:
-            selected = self._select_target_files(kb_id, requested_file_ids)
-        else:
-            items = self._normalize_string_list(payload.get("items"), field_name="items")
-            if not items:
-                raise KnowledgeBaseValidationError("items is required for ingest operations.")
-            selected, missing = self._resolve_existing_files(kb_id, items)
-            if missing:
-                raise KnowledgeBaseValidationError(f"Unknown uploaded items: {', '.join(missing)}.")
-            if not selected:
-                raise KnowledgeBaseValidationError("No uploaded items matched the requested ingest payload.")
-
-        parent_id = (
-            self._normalize_text(params.get("parentId"), field_name="parentId")
-            or self._normalize_text(params.get("parent_id"), field_name="parent_id")
-            or None
-        )
-        if parent_id:
-            refreshed: list[KnowledgeFile] = []
-            for item in selected:
-                moved = self.move_file(
-                    kb_id,
-                    {
-                        "fileId": item.file_id,
-                        "parentId": parent_id,
-                    },
-                )
-                refreshed.append(self._require_file(kb_id, str(moved.get("fileId") or item.file_id)))
-            selected = refreshed
-
-        job = self._create_job(kb_id, "ingest", [item.file_id for item in selected])
-        self._store_job_options(
-            job.job_id,
-            {
-                "auto_index": bool(params.get("auto_index") or params.get("autoIndex")),
-                "index_params": params,
-            },
-        )
-        self._submit_background_job(self._run_ingest_job, job.job_id)
-        return {
-            "job": self._serialize_job(job),
-            "items": [self._serialize_file(item) for item in selected],
-        }
+        return self.doc_pipeline.ingest_files(kb_id, payload)
 
     def get_query_params(self, kb_id: str) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        return kb.query_params.to_dict()
+        return self.query_service.get_query_params(kb_id)
 
     def get_query_param_schema(self, kb_id: str) -> dict[str, Any]:
-        self.require_kb(kb_id)
-        return {
-            "type": "lightrag",
-            "options": [
-                {
-                    "key": "mode",
-                    "label": "检索模式",
-                    "type": "select",
-                    "default": "mix",
-                    "options": [
-                        {"value": "local", "label": "Local"},
-                        {"value": "global", "label": "Global"},
-                        {"value": "hybrid", "label": "Hybrid"},
-                        {"value": "naive", "label": "Naive"},
-                        {"value": "mix", "label": "Mix"},
-                    ],
-                },
-                {
-                    "key": "topK",
-                    "label": "TopK",
-                    "type": "number",
-                    "default": 10,
-                    "min": 1,
-                    "max": 100,
-                },
-                {
-                    "key": "chunkTopK",
-                    "label": "Chunk TopK",
-                    "type": "number",
-                    "default": 12,
-                    "min": 1,
-                    "max": 100,
-                },
-                {
-                    "key": "responseType",
-                    "label": "回答格式",
-                    "type": "select",
-                    "default": "Multiple Paragraphs",
-                    "options": [
-                        {"value": "Single Paragraph", "label": "Single Paragraph"},
-                        {"value": "Multiple Paragraphs", "label": "Multiple Paragraphs"},
-                        {"value": "Bullet Points", "label": "Bullet Points"},
-                    ],
-                },
-                {
-                    "key": "onlyNeedContext",
-                    "label": "只返回上下文",
-                    "type": "boolean",
-                    "default": True,
-                },
-                {
-                    "key": "onlyNeedPrompt",
-                    "label": "只返回提示词",
-                    "type": "boolean",
-                    "default": False,
-                },
-                {
-                    "key": "enableRerank",
-                    "label": "启用重排",
-                    "type": "boolean",
-                    "default": False,
-                },
-            ],
-        }
+        return self.query_service.get_query_param_schema(kb_id)
 
     def update_query_params(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        existing = kb.query_params.to_dict()
-        merged_options = dict(kb.query_params.options)
-        merged_payload: dict[str, Any] = {**existing, "options": merged_options}
-
-        for key, value in dict(payload or {}).items():
-            if key == "options" and isinstance(value, dict):
-                merged_options.update(value)
-                continue
-            if value is None:
-                continue
-            if key in {
-                "mode",
-                "topK",
-                "top_k",
-                "chunkTopK",
-                "chunk_top_k",
-                "responseType",
-                "response_type",
-                "onlyNeedContext",
-                "only_need_context",
-                "onlyNeedPrompt",
-                "only_need_prompt",
-                "enableRerank",
-                "enable_rerank",
-                "rerankModel",
-                "rerank_model",
-            }:
-                merged_payload[key] = value
-                continue
-            merged_options[key] = value
-
-        updated = self.store.update_kb(
-            replace(
-                kb,
-                query_params=KnowledgeQueryParams.from_dict(
-                    merged_payload,
-                    defaults=default_query_params_payload(),
-                ),
-                updated_at=now_iso(),
-            )
-        )
-        if updated is None:
-            raise KnowledgeBaseNotFoundError(kb_id)
-        return updated.query_params.to_dict()
+        return self.query_service.update_query_params(kb_id, payload)
 
     def generate_description(self, payload: dict[str, Any]) -> dict[str, Any]:
         name = self._normalize_text(payload.get("name"), required=True, field_name="name")
@@ -1902,311 +846,23 @@ class KnowledgeBaseService:
             summary = f"{name}知识库，适合用于回答与{name}相关的文档检索、流程说明和事实问答。"
         return {"description": summary}
 
-    def _normalize_index_params(self, payload: Any) -> dict[str, Any]:
-        if not isinstance(payload, dict):
-            return {}
-        normalized: dict[str, Any] = {}
-        raw_chunk_size = payload.get("chunk_size") if "chunk_size" in payload else payload.get("chunkSize")
-        if raw_chunk_size is not None:
-            normalized["chunk_size"] = max(200, int(raw_chunk_size))
-        raw_chunk_overlap = payload.get("chunk_overlap") if "chunk_overlap" in payload else payload.get("chunkOverlap")
-        if raw_chunk_overlap is not None:
-            overlap = max(0, int(raw_chunk_overlap))
-            chunk_size = int(
-                normalized.get("chunk_size")
-                or payload.get("chunk_size")
-                or payload.get("chunkSize")
-                or DEFAULT_KNOWLEDGE_CHUNK_SIZE
-            )
-            normalized["chunk_overlap"] = min(overlap, max(0, chunk_size - 1))
-        chunk_preset = self._normalize_text(
-            payload.get("chunk_preset_id") if "chunk_preset_id" in payload else payload.get("chunkPresetId"),
-            field_name="chunkPresetId",
-        )
-        if chunk_preset:
-            normalized["chunk_preset_id"] = chunk_preset
-        qa_separator = self._normalize_text(
-            payload.get("qa_separator") if "qa_separator" in payload else payload.get("qaSeparator"),
-            field_name="qaSeparator",
-        )
-        if qa_separator:
-            normalized["qa_separator"] = qa_separator
-        return normalized
-
-    def _matching_file_tokens(self, kb_id: str, file_ids: list[str] | None = None, file_name: str | None = None) -> set[str]:
-        tokens: set[str] = set()
-        files = self.store.list_files(kb_id)
-        for file in files:
-            if file_ids and file.file_id not in set(file_ids):
-                continue
-            if file_name and file_name.lower() not in file.filename.lower():
-                continue
-            tokens.add(file.file_id)
-            tokens.add(file.filename)
-            if file.raw_path:
-                tokens.add(file.raw_path)
-                tokens.add(Path(file.raw_path).name)
-        return {token for token in tokens if token}
 
     @staticmethod
-    def _filter_query_result(raw: dict[str, Any], *, tokens: set[str]) -> dict[str, Any]:
-        if not tokens:
-            return raw
-        result = json.loads(json.dumps(raw, ensure_ascii=False))
-        data = result.get("data") or {}
-        references = list(data.get("references") or [])
-        filtered_references = [
-            item for item in references
-            if any(token in str(item.get("file_path") or "") or token == str(item.get("reference_id") or "") for token in tokens)
-        ]
-        reference_ids = {str(item.get("reference_id") or "") for item in filtered_references}
-        filtered_chunks = [
-            item for item in (data.get("chunks") or [])
-            if str(item.get("reference_id") or "") in reference_ids
-            or any(token in str(item.get("file_path") or "") for token in tokens)
-        ]
-        filtered_entities = [
-            item for item in (data.get("entities") or [])
-            if any(token in str(item.get("file_path") or "") for token in tokens)
-            or any(token in str(item.get("source_id") or "") for token in tokens)
-        ]
-        filtered_relationships = [
-            item for item in (data.get("relationships") or [])
-            if any(token in str(item.get("file_path") or "") for token in tokens)
-            or any(token in str(item.get("source_id") or "") for token in tokens)
-        ]
-        data["references"] = filtered_references
-        data["chunks"] = filtered_chunks
-        data["entities"] = filtered_entities
-        data["relationships"] = filtered_relationships
-        result["data"] = data
-        result.setdefault("metadata", {})
-        result["metadata"]["fileFilterApplied"] = True
-        result["metadata"]["filteredReferenceCount"] = len(filtered_references)
-        return result
+    def _extract_json_text(raw: str) -> str | None:
+        return KnowledgeLLMHelper.extract_json(raw)
+
+    def _generate_with_llm(self, *, system_prompt: str, user_prompt: str) -> str | None:
+        return self.llm_helper.generate(system_prompt=system_prompt, user_prompt=user_prompt)
 
     @staticmethod
-    def _normalize_chunk_match_text(text: Any) -> str:
-        return re.sub(r"\s+", " ", str(text or "").strip())
+    def _split_large_block(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
+        return _split_large_block_fn(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-    @staticmethod
-    def _has_meaningful_query_message(value: Any) -> bool:
-        message = str(value or "").strip()
-        if not message:
-            return False
-        normalized = re.sub(r"\s+", " ", message).strip().lower()
-        if any(
-            marker in normalized
-            for marker in (
-                "error calling llm",
-                "llm error",
-                "litellm.",
-                "authentication fails",
-                "invalid api key",
-                "invalid_request_error",
-                "deepseekexception",
-                "openaierror",
-                "badrequesterror",
-            )
-        ):
-            return False
-        return normalized not in {
-            "query processed successfully",
-            "query completed successfully",
-            "retrieval completed successfully",
-            "success",
-            "ok",
-        }
 
-    def _match_chunk_entry(
-        self,
-        chunk: dict[str, Any],
-        entries: list[dict[str, Any]],
-        *,
-        used_chunk_ids: set[str],
-    ) -> dict[str, Any] | None:
-        explicit_chunk_id = str(chunk.get("chunk_id") or chunk.get("chunkId") or "").strip()
-        reference_tokens = {
-            str(chunk.get("reference_id") or "").strip(),
-            str(chunk.get("file_id") or chunk.get("fileId") or "").strip(),
-            str(chunk.get("filename") or "").strip(),
-            str(chunk.get("file_path") or "").strip(),
-        }
-        file_path = str(chunk.get("file_path") or "").strip()
-        if file_path:
-            reference_tokens.add(Path(file_path).name)
-        reference_tokens = {item for item in reference_tokens if item}
 
-        candidates = entries
-        if reference_tokens:
-            scoped = []
-            for item in entries:
-                item_tokens = {
-                    str(item.get("chunkId") or "").strip(),
-                    str(item.get("fileId") or "").strip(),
-                    str(item.get("filename") or "").strip(),
-                    str(item.get("path") or "").strip(),
-                    str(item.get("filePath") or "").strip(),
-                }
-                item_path = str(item.get("filePath") or "").strip()
-                if item_path:
-                    item_tokens.add(Path(item_path).name)
-                if any(token and any(token == candidate or token in candidate for candidate in item_tokens) for token in reference_tokens):
-                    scoped.append(item)
-            if scoped:
-                candidates = scoped
-
-        if explicit_chunk_id:
-            for item in candidates:
-                if str(item.get("chunkId") or "") == explicit_chunk_id:
-                    return item
-
-        query_text = self._normalize_chunk_match_text(chunk.get("content"))
-        if not query_text:
-            return candidates[0] if candidates else None
-        query_terms = set(query_text.lower().split())
-
-        best_item: dict[str, Any] | None = None
-        best_score = -1
-        for item in candidates:
-            chunk_id = str(item.get("chunkId") or "")
-            if chunk_id and chunk_id in used_chunk_ids:
-                continue
-            candidate_text = self._normalize_chunk_match_text(item.get("content"))
-            score = 0
-            if candidate_text == query_text:
-                score += 1000
-            elif query_text in candidate_text or candidate_text in query_text:
-                score += 600 - abs(len(candidate_text) - len(query_text))
-            score += len(query_terms & set(candidate_text.lower().split()))
-            if score > best_score:
-                best_score = score
-                best_item = item
-        return best_item
-
-    def _enrich_query_chunks(self, kb_id: str, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        entries = self.artifacts.load_chunk_entries(kb_id)
-        if not entries:
-            return chunks
-        used_chunk_ids: set[str] = set()
-        enriched: list[dict[str, Any]] = []
-        for chunk in chunks:
-            payload = dict(chunk)
-            match = self._match_chunk_entry(payload, entries, used_chunk_ids=used_chunk_ids)
-            if match is not None:
-                matched_chunk_id = str(match.get("chunkId") or "")
-                if matched_chunk_id:
-                    used_chunk_ids.add(matched_chunk_id)
-                file_id = str(match.get("fileId") or "")
-                payload["chunk_id"] = matched_chunk_id
-                payload["chunkId"] = matched_chunk_id
-                payload["chunk_index"] = match.get("chunkIndex")
-                payload["chunkIndex"] = match.get("chunkIndex")
-                payload["file_id"] = file_id
-                payload["fileId"] = file_id
-                payload["filename"] = match.get("filename")
-                payload["file_path"] = match.get("path") or match.get("filePath")
-                payload["reference_id"] = file_id or str(payload.get("reference_id") or "")
-                metadata = dict(payload.get("metadata") or {})
-                metadata["chunk_id"] = matched_chunk_id
-                metadata["file_id"] = file_id
-                metadata["source"] = match.get("path") or match.get("filePath")
-                payload["metadata"] = metadata
-            enriched.append(payload)
-        return enriched
 
     def query_database(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        merged_payload = self._merge_query_payload(payload)
-        raw_timeout = merged_payload.pop(_BEST_EFFORT_QUERY_TIMEOUT_KEY, None)
-        query_timeout: float | None = None
-        if raw_timeout is not None:
-            try:
-                query_timeout = max(0.001, float(raw_timeout))
-            except (TypeError, ValueError):
-                query_timeout = None
-        query_text = self._normalize_text(self._get_value(merged_payload, "query", "queryText"), required=True, field_name="query")
-        file_ids = self._extract_requested_file_ids(merged_payload) or []
-        file_name = self._normalize_text(self._get_value(merged_payload, "fileName", "file_name"), field_name="fileName") or None
-        params = KnowledgeQueryParams.from_dict(
-            {
-                **kb.query_params.to_dict(),
-                **merged_payload,
-            },
-            defaults=default_query_params_payload(),
-        )
-
-        # Ensure RAG engine is available
-        self._ensure_lightrag(kb, feature="Knowledge query")
-
-        # Query via LightRAG Core (single path: vector + graph + rerank)
-        lightrag_result = self._run_async(
-            self.rag_engine.query_structured(
-                kb_id,
-                query_text,
-                mode=params.mode,
-                top_k=params.top_k,
-                chunk_top_k=params.chunk_top_k,
-                response_type=params.response_type,
-                only_need_context=params.only_need_context,
-                only_need_prompt=params.only_need_prompt,
-                enable_rerank=params.enable_rerank,
-            ),
-            timeout=query_timeout,
-        )
-
-        # Extract structured data
-        lr_data = lightrag_result.get("data") or {}
-        chunks = list(lr_data.get("chunks") or [])
-        references_map: dict[str, dict[str, Any]] = {}
-        for ref in lr_data.get("references") or []:
-            ref_id = str(ref.get("reference_id") or "")
-            if ref_id:
-                references_map[ref_id] = ref
-
-        # Enrich and filter
-        tokens = self._matching_file_tokens(kb_id, file_ids=file_ids or None, file_name=file_name)
-        raw = {
-            "data": {
-                "chunks": chunks,
-                "references": list(references_map.values()),
-            },
-            "message": str(lightrag_result.get("message") or ""),
-        }
-        filtered = self._filter_query_result(raw, tokens=tokens)
-        data = dict(filtered.get("data") or {})
-        enriched_chunks = self._enrich_query_chunks(kb_id, list(data.get("chunks") or []))
-        data["chunks"] = enriched_chunks
-        # Re-build references from enriched chunks
-        for chunk in enriched_chunks:
-            reference_id = str(chunk.get("reference_id") or chunk.get("file_id") or chunk.get("chunk_id") or "").strip()
-            if not reference_id:
-                continue
-            references_map.setdefault(
-                reference_id,
-                {
-                    "reference_id": reference_id,
-                    "file_path": chunk.get("file_path"),
-                    "file_name": chunk.get("filename"),
-                },
-            )
-        data["references"] = list(references_map.values())
-        filtered["data"] = data
-        if (
-            not self._has_meaningful_query_message(filtered.get("message"))
-            and not params.only_need_context
-            and not params.only_need_prompt
-        ):
-            filtered["message"] = self._synthesize_answer_from_chunks(kb, query_text, enriched_chunks)
-        metadata = dict(filtered.get("metadata") or {})
-        metadata["kbType"] = KNOWLEDGE_ARCHITECTURE_TYPE
-        metadata["backend"] = "lightrag"
-        metadata["mode"] = params.mode
-        metadata["graphEnhanced"] = True
-        filtered["metadata"] = metadata
-        filtered["query"] = query_text
-        filtered["queryParams"] = params.to_dict()
-        return filtered
+        return self.query_service.query_database(kb_id, payload)
 
     def retrieve(
         self,
@@ -2217,990 +873,79 @@ class KnowledgeBaseService:
         filters: dict[str, Any] | None = None,
         requested_mode: str | None = None,
     ) -> dict[str, Any]:
-        resolved = self.resolve_bound_kbs(kb_ids)
-        if not query.strip():
-            raise KnowledgeBaseValidationError("query is required.")
-        files_by_kb = {
-            item.kb_id: self.store.list_files(item.kb_id)
-            for item in resolved
-        }
-
-        def _match_file(kb_id: str, file_path: str | None) -> KnowledgeFile | None:
-            candidate = str(file_path or "")
-            if not candidate:
-                return None
-            for item in files_by_kb.get(kb_id, []):
-                if item.raw_path and candidate in {item.raw_path, Path(item.raw_path).name}:
-                    return item
-                if item.file_id in candidate or item.filename in candidate:
-                    return item
-            return None
-
-        items: list[dict[str, Any]] = []
-        effective_modes: list[str] = []
-        for kb in resolved:
-            resolved_mode = str(requested_mode or kb.query_params.mode or "mix").strip() or "mix"
-            effective_modes.append(resolved_mode)
-            try:
-                query_result = self.query_database(
-                    kb.kb_id,
-                    {
-                        "query": query,
-                        "mode": resolved_mode,
-                        "topK": max(1, int(limit or 8)),
-                        "onlyNeedContext": True,
-                        _BEST_EFFORT_QUERY_TIMEOUT_KEY: self._best_effort_retrieve_timeout_seconds,
-                    },
-                )
-            except Exception as exc:
-                logger.warning("Knowledge retrieve skipped for {}: {}", kb.kb_id, exc)
-                continue
-            for chunk in list((query_result.get("data") or {}).get("chunks") or [])[: max(1, int(limit or 8))]:
-                file = _match_file(kb.kb_id, str(chunk.get("file_path") or ""))
-                content = str(chunk.get("content") or "")
-                items.append(
-                    {
-                        "kbId": kb.kb_id,
-                        "kbName": kb.name,
-                        "docId": file.file_id if file is not None else None,
-                        "title": file.filename if file is not None else kb.name,
-                        "content": content,
-                        "preview": content[:280],
-                        "score": float(chunk.get("score") or 0.0),
-                        "metadata": {
-                            "mode": query_result.get("metadata", {}).get("mode"),
-                            "kb_id": kb.kb_id,
-                            "file_path": chunk.get("file_path"),
-                            "chunk_id": chunk.get("chunk_id"),
-                        },
-                        "citation": {
-                            "kbId": kb.kb_id,
-                            "kbName": kb.name,
-                            "docId": file.file_id if file is not None else None,
-                            "title": file.filename if file is not None else kb.name,
-                            "sourceType": file.file_type if file is not None else "knowledge",
-                            "sourceUri": (file.processing_params or {}).get("sourceUrl") if file is not None else None,
-                            "fileName": file.filename if file is not None else None,
-                            "mimeType": file.content_type if file is not None else None,
-                            "chunkOrdinal": chunk.get("chunk_index") or chunk.get("chunkIndex"),
-                        },
-                    }
-                )
-
-        items.sort(key=lambda item: float(item.get("score") or 0.0), reverse=True)
-        if limit:
-            items = items[: max(1, int(limit))]
-
-        return {
-            "hits": items,
-            "requestedMode": requested_mode or "auto",
-            "effectiveMode": (
-                effective_modes[0]
-                if effective_modes and len(set(effective_modes)) == 1
-                else (requested_mode or "mixed")
-            ),
-            "filters": dict(filters or {}),
-        }
-
+        return self.query_service.retrieve(kb_ids, query, limit=limit, filters=filters, requested_mode=requested_mode)
     @staticmethod
     def _extract_headings(text: str, *, limit: int = 6) -> list[str]:
-        headings: list[str] = []
-        for line in text.splitlines():
-            stripped = line.strip().lstrip("#").strip()
-            if not stripped:
-                continue
-            if len(stripped) > 100:
-                stripped = stripped[:100].rstrip()
-            if stripped not in headings:
-                headings.append(stripped)
-            if len(headings) >= limit:
-                break
-        return headings
+        from nanobot.platform.knowledge.evaluation_service import KnowledgeEvaluationService
+        return KnowledgeEvaluationService._extract_headings(text, limit=limit)
 
-    def _load_outline(self, file: KnowledgeFile) -> dict[str, Any]:
-        text = ""
-        if file.markdown_file and Path(file.markdown_file).exists():
-            try:
-                text = Path(file.markdown_file).read_text(encoding="utf-8")
-            except OSError:
-                text = ""
-        headings = self._extract_headings(text, limit=5)
-        return {
-            "fileId": file.file_id,
-            "filename": file.filename,
-            "path": file.path,
-            "headings": headings,
-            "excerpt": text[:1200].strip(),
-        }
 
-    def _provider_from_config(self):
-        if self.config is None:
-            return None
-        from nanobot.providers.base import GenerationSettings
-        from nanobot.providers.custom_provider import CustomProvider
-        from nanobot.providers.litellm_provider import LiteLLMProvider
-        from nanobot.providers.openai_codex_provider import OpenAICodexProvider
-
-        model = self.config.agents.defaults.model
-        provider_name = self.config.get_provider_name(model)
-        provider_cfg = self.config.get_provider(model)
-
-        if provider_name == "openai_codex" or model.startswith("openai-codex/"):
-            provider = OpenAICodexProvider(default_model=model)
-        elif provider_name == "custom":
-            provider = CustomProvider(
-                api_key=(provider_cfg.api_key if provider_cfg and provider_cfg.api_key else "no-key"),
-                api_base=self.config.get_api_base(model) or "http://localhost:8000/v1",
-                default_model=model,
-            )
-        elif provider_name == "azure_openai":
-            if provider_cfg and provider_cfg.api_key and provider_cfg.api_base:
-                from nanobot.providers.azure_openai_provider import AzureOpenAIProvider
-
-                provider = AzureOpenAIProvider(
-                    api_key=provider_cfg.api_key,
-                    api_base=provider_cfg.api_base,
-                    default_model=model,
-                )
-            else:
-                provider = LiteLLMProvider(
-                    api_key=None,
-                    api_base=None,
-                    default_model=model,
-                    provider_name=provider_name,
-                )
-        else:
-            provider = LiteLLMProvider(
-                api_key=provider_cfg.api_key if provider_cfg and provider_cfg.api_key else None,
-                api_base=self.config.get_api_base(model),
-                default_model=model,
-                extra_headers=provider_cfg.extra_headers if provider_cfg else None,
-                provider_name=provider_name,
-            )
-
-        defaults = self.config.agents.defaults
-        provider.generation = GenerationSettings(
-            temperature=0.2,
-            max_tokens=min(defaults.max_tokens, 2000),
-            reasoning_effort=defaults.reasoning_effort,
-        )
-        return provider
-
-    @staticmethod
-    def _extract_json_text(raw: str) -> str | None:
-        text = str(raw or "").strip()
-        if not text:
-            return None
-        if text.startswith("{") or text.startswith("["):
-            return text
-        match = re.search(r"```(?:json)?\s*([\s\S]+?)```", text)
-        if match:
-            return match.group(1).strip()
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            return text[start:end + 1]
-        return None
-
-    def _generate_with_llm(self, *, system_prompt: str, user_prompt: str) -> str | None:
-        try:
-            provider = self._provider_from_config()
-            if provider is None:
-                return None
-            response = self._run_async(
-                provider.chat_with_retry(
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    model=self.config.agents.defaults.model if self.config is not None else None,
-                )
-            )
-            content = str(response.content or "").strip()
-            return content or None
-        except Exception:
-            logger.exception("Knowledge LLM generation failed")
-            return None
-
-    @staticmethod
-    def _split_large_block(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
-        if len(text) <= chunk_size:
-            return [text]
-        result: list[str] = []
-        start = 0
-        step = max(1, chunk_size - max(0, chunk_overlap))
-        while start < len(text):
-            result.append(text[start : start + chunk_size].strip())
-            start += step
-        return [item for item in result if item]
-
-    def _chunk_plain_text(self, text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
-        paragraphs = [item.strip() for item in re.split(r"\n{2,}", text) if item.strip()]
-        if not paragraphs:
-            paragraphs = [text.strip()]
-        chunks: list[str] = []
-        current = ""
-        for paragraph in paragraphs:
-            if len(paragraph) > chunk_size:
-                if current.strip():
-                    chunks.append(current.strip())
-                    current = ""
-                chunks.extend(self._split_large_block(paragraph, chunk_size=chunk_size, chunk_overlap=chunk_overlap))
-                continue
-            candidate = paragraph if not current else f"{current}\n\n{paragraph}"
-            if len(candidate) <= chunk_size:
-                current = candidate
-                continue
-            if current.strip():
-                chunks.append(current.strip())
-            if chunk_overlap > 0 and chunks:
-                overlap = chunks[-1][-chunk_overlap:].strip()
-                current = f"{overlap}\n\n{paragraph}".strip() if overlap else paragraph
-            else:
-                current = paragraph
-        if current.strip():
-            chunks.append(current.strip())
-        return chunks
-
-    @staticmethod
-    def _chunk_by_headings(text: str) -> list[str]:
-        sections: list[str] = []
-        current: list[str] = []
-        for line in text.splitlines():
-            stripped = line.strip()
-            if re.match(r"^(#{1,6}\s+|chapter\s+\d+|section\s+\d+|第.+[章节篇])", stripped, re.IGNORECASE):
-                if current:
-                    sections.append("\n".join(current).strip())
-                    current = []
-            if stripped:
-                current.append(line)
-        if current:
-            sections.append("\n".join(current).strip())
-        return [item for item in sections if item]
-
-    @staticmethod
-    def _chunk_qa_text(text: str) -> list[str]:
-        normalized = text.replace("\r\n", "\n")
-        pattern = re.compile(
-            r"(?:^|\n)(?:Q[:：]\s*(?P<q>.+?)\nA[:：]\s*(?P<a>.+?))(?=\nQ[:：]|\Z)",
-            re.DOTALL | re.IGNORECASE,
-        )
-        result = []
-        for match in pattern.finditer(normalized):
-            question = str(match.group("q") or "").strip()
-            answer = str(match.group("a") or "").strip()
-            if question and answer:
-                result.append(f"Q: {question}\nA: {answer}")
-        return result
-
-    @staticmethod
-    def _chunk_law_text(text: str) -> list[str]:
-        parts = re.split(r"(?=第[\d一二三四五六七八九十百千]+条)", text)
-        result = [item.strip() for item in parts if item.strip()]
-        return result
-
-    def _build_chunk_texts(
-        self,
-        kb: KnowledgeBaseDefinition,
-        file: KnowledgeFile,
-        text: str,
-    ) -> list[str]:
-        params = {**(kb.additional_params or {}), **(file.processing_params or {})}
-        chunk_size = max(200, int(params.get("chunk_size") or params.get("chunkSize") or DEFAULT_KNOWLEDGE_CHUNK_SIZE))
-        chunk_overlap = max(0, int(params.get("chunk_overlap") or params.get("chunkOverlap") or DEFAULT_KNOWLEDGE_CHUNK_OVERLAP))
-        qa_separator = str(params.get("qa_separator") or params.get("qaSeparator") or "").strip()
-        chunk_preset_id = str(params.get("chunk_preset_id") or params.get("chunkPresetId") or "general").strip().lower()
-        faq_items = file.processing_params.get("faqItems")
-
-        chunk_texts: list[str] = []
-        if isinstance(faq_items, list) and faq_items:
-            for item in faq_items:
-                if not isinstance(item, dict):
-                    continue
-                question = str(item.get("question") or "").strip()
-                answer = str(item.get("answer") or "").strip()
-                if question and answer:
-                    chunk_texts.append(f"Q: {question}\nA: {answer}")
-        elif chunk_preset_id == "qa":
-            chunk_texts = self._chunk_qa_text(text)
-        elif qa_separator and qa_separator in text:
-            chunk_texts = [item.strip() for item in text.split(qa_separator) if item.strip()]
-        elif chunk_preset_id == "book":
-            chunk_texts = self._chunk_by_headings(text)
-        elif chunk_preset_id == "laws":
-            chunk_texts = self._chunk_law_text(text)
-        else:
-            chunk_texts = self._chunk_plain_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-
-        if not chunk_texts:
-            raise KnowledgeBaseValidationError("No chunks were produced for the selected knowledge file.")
-        return chunk_texts
-
-    def _synthesize_answer_from_chunks(
-        self,
-        kb: KnowledgeBaseDefinition,
-        query_text: str,
-        chunks: list[dict[str, Any]],
-    ) -> str | None:
-        if not chunks:
-            return None
-        excerpts = [
-            {
-                "chunkId": item.get("chunk_id") or item.get("chunkId"),
-                "file": item.get("file_path") or item.get("filename") or item.get("filePath"),
-                "content": str(item.get("content") or "").strip()[:1600],
-            }
-            for item in chunks[:6]
-        ]
-        llm_answer = self._generate_with_llm(
-            system_prompt=(
-                "你是知识库问答助手。只能依据提供的检索片段回答。"
-                "如果片段不足以支持结论，要明确说信息不足。"
-            ),
-            user_prompt=json.dumps(
-                {
-                    "knowledgeBase": kb.name,
-                    "query": query_text,
-                    "chunks": excerpts,
-                },
-                ensure_ascii=False,
-            ),
-        )
-        if llm_answer:
-            return llm_answer
-        fallback = "\n\n".join(str(item.get("content") or "").strip() for item in chunks[:2]).strip()
-        return fallback[:1600] if fallback else None
-
-    def _build_mindmap_fallback(self, kb: KnowledgeBaseDefinition, files: list[KnowledgeFile]) -> dict[str, Any]:
-        by_parent: dict[str | None, list[KnowledgeFile]] = {}
-        for item in files:
-            by_parent.setdefault(item.parent_id, []).append(item)
-
-        def _node_for(file: KnowledgeFile) -> dict[str, Any]:
-            if file.is_folder:
-                return {
-                    "content": file.filename,
-                    "children": [_node_for(child) for child in by_parent.get(file.file_id, [])],
-                }
-            outline = self._load_outline(file)
-            children = [{"content": heading, "children": []} for heading in outline["headings"][:4]]
-            return {"content": file.filename, "children": children}
-
-        root_children = [_node_for(item) for item in by_parent.get(None, [])]
-        return {"content": kb.name, "children": root_children}
+    def _build_chunk_texts(self, kb, file, text):
+        return self.eval_service._build_chunk_texts(kb, file, text)
 
     def generate_mindmap(self, kb_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        payload = payload or {}
-        file_ids = self._normalize_string_list(payload.get("fileIds"), field_name="fileIds") if isinstance(payload.get("fileIds"), list) else []
-        files = [item for item in self.store.list_files(kb_id) if not file_ids or item.file_id in set(file_ids)]
-        fallback = self._build_mindmap_fallback(kb, files)
-        outlines = [self._load_outline(item) for item in files if not item.is_folder][:12]
-        llm_raw = self._generate_with_llm(
-            system_prompt="你是知识架构整理助手。只返回 JSON，结构必须是 {\"content\": string, \"children\": []}。",
-            user_prompt=json.dumps(
-                {
-                    "knowledgeBase": kb.name,
-                    "description": kb.description,
-                    "files": outlines,
-                },
-                ensure_ascii=False,
-            ),
-        )
-        generated = fallback
-        if llm_raw:
-            json_text = self._extract_json_text(llm_raw)
-            if json_text:
-                try:
-                    candidate = json.loads(json_text)
-                    if isinstance(candidate, dict) and candidate.get("content"):
-                        generated = candidate
-                except json.JSONDecodeError:
-                    logger.warning("Mindmap JSON decode failed, using fallback")
-
-        updated = self.store.update_kb(replace(kb, mindmap=generated, updated_at=now_iso()))
-        if updated is None:
-            raise KnowledgeBaseNotFoundError(kb_id)
-        return {"mindmap": generated}
+        return self.eval_service.generate_mindmap(kb_id, payload)
 
     def get_mindmap(self, kb_id: str) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        if kb.mindmap is None:
-            raise KnowledgeBaseValidationError("Knowledge mindmap has not been generated yet.")
-        return {"mindmap": kb.mindmap}
-
-    def _build_sample_question_fallback(self, kb: KnowledgeBaseDefinition, files: list[KnowledgeFile], count: int) -> list[str]:
-        questions: list[str] = []
-        for file in files:
-            if file.is_folder:
-                continue
-            outline = self._load_outline(file)
-            title = outline["filename"]
-            if title:
-                questions.append(f"知识库里《{title}》的核心内容是什么？")
-                questions.append(f"如果我需要用到《{title}》，最关键的步骤有哪些？")
-            for heading in outline["headings"][:3]:
-                questions.append(f"请解释一下“{heading}”在当前知识库中的含义和作用。")
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for item in questions:
-            if item not in seen:
-                seen.add(item)
-                deduped.append(item)
-            if len(deduped) >= count:
-                break
-        if not deduped:
-            deduped = [
-                f"{kb.name} 主要覆盖了哪些主题？",
-                f"使用 {kb.name} 中的信息时，应该先关注哪些内容？",
-            ]
-        return deduped[:count]
+        return self.eval_service.get_mindmap(kb_id)
 
     def generate_sample_questions(self, kb_id: str, count: int = 10) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        files = [item for item in self.store.list_files(kb_id) if not item.is_folder]
-        fallback = self._build_sample_question_fallback(kb, files, max(1, count))
-        outlines = [self._load_outline(item) for item in files[:12]]
-        llm_raw = self._generate_with_llm(
-            system_prompt="你是知识库测试问题生成助手。只返回 JSON，格式必须是 {\"questions\": [string]}。",
-            user_prompt=json.dumps(
-                {
-                    "knowledgeBase": kb.name,
-                    "description": kb.description,
-                    "count": count,
-                    "files": outlines,
-                },
-                ensure_ascii=False,
-            ),
-        )
-        questions = fallback
-        if llm_raw:
-            json_text = self._extract_json_text(llm_raw)
-            if json_text:
-                try:
-                    candidate = json.loads(json_text)
-                    values = candidate.get("questions") if isinstance(candidate, dict) else None
-                    if isinstance(values, list):
-                        normalized = [str(item).strip() for item in values if str(item).strip()]
-                        if normalized:
-                            questions = normalized[:count]
-                except json.JSONDecodeError:
-                    logger.warning("Sample question JSON decode failed, using fallback")
-
-        updated = self.store.update_kb(replace(kb, sample_questions=questions, updated_at=now_iso()))
-        if updated is None:
-            raise KnowledgeBaseNotFoundError(kb_id)
-        return {"questions": questions}
+        return self.eval_service.generate_sample_questions(kb_id, count)
 
     def get_sample_questions(self, kb_id: str) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        return {"questions": list(kb.sample_questions)}
+        return self.eval_service.get_sample_questions(kb_id)
 
     def get_graph_labels(self, kb_id: str) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        if self.rag_engine is None:
-            return {"labels": []}
-        try:
-            labels = self._run_async(self.rag_engine.get_graph_labels(kb_id))
-        except Exception:
-            logger.debug("Failed to fetch graph labels for kb_id={}", kb_id)
-            return {"labels": []}
-        return {"labels": labels}
-
-    _EMPTY_GRAPH: dict[str, Any] = {"nodes": [], "edges": [], "labels": [], "isTruncated": False}
+        return self.eval_service.get_graph_labels(kb_id)
 
     def get_graph(self, kb_id: str, *, node_label: str = "*", max_depth: int = 2, max_nodes: int = 50) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        if self.rag_engine is None:
-            return dict(self._EMPTY_GRAPH)
-        try:
-            graph = self._run_async(
-                self.rag_engine.get_knowledge_graph(
-                    kb_id,
-                    label=node_label or "*",
-                    max_depth=max(1, int(max_depth)),
-                    max_nodes=max(10, int(max_nodes)),
-                )
-            )
-        except Exception:
-            logger.debug("Failed to fetch knowledge graph for kb_id={}", kb_id)
-            return dict(self._EMPTY_GRAPH)
-        return graph
+        return self.eval_service.get_graph(kb_id, node_label=node_label, max_depth=max_depth, max_nodes=max_nodes)
 
     def get_graph_stats(self, kb_id: str) -> dict[str, Any]:
-        graph = self.get_graph(kb_id, node_label="*", max_depth=2, max_nodes=200)
-        return {
-            "nodeCount": len(graph.get("nodes") or []),
-            "edgeCount": len(graph.get("edges") or []),
-            "labels": list(graph.get("labels") or []),
-            "isTruncated": bool(graph.get("isTruncated")),
-        }
+        return self.eval_service.get_graph_stats(kb_id)
 
-    def _load_benchmark_meta(self, kb_id: str, benchmark_id: str) -> dict[str, Any]:
-        try:
-            return self.artifacts.load_benchmark_meta(kb_id, benchmark_id)
-        except ValueError as exc:
-            raise KnowledgeBaseValidationError(str(exc)) from exc
-
-    def _save_benchmark(
-        self,
-        kb_id: str,
-        benchmark_id: str,
-        *,
-        name: str,
-        description: str,
-        questions: list[dict[str, Any]],
-        created_by: str | None = None,
-    ) -> dict[str, Any]:
-        return self.artifacts.save_benchmark(
-            kb_id,
-            benchmark_id,
-            name=name,
-            description=description,
-            questions=questions,
-            created_by=created_by,
-        )
-
-    def _load_benchmark_questions(self, kb_id: str, benchmark_id: str) -> list[dict[str, Any]]:
-        try:
-            return self.artifacts.load_benchmark_questions(kb_id, benchmark_id)
-        except ValueError as exc:
-            raise KnowledgeBaseValidationError(str(exc)) from exc
+    def _save_benchmark(self, kb_id: str, benchmark_id: str, *, name: str, description: str, questions: list[dict[str, Any]], created_by: str | None = None) -> dict[str, Any]:
+        return self.artifacts.save_benchmark(kb_id, benchmark_id, name=name, description=description, questions=questions, created_by=created_by)
 
     def list_benchmarks(self, kb_id: str) -> list[dict[str, Any]]:
-        kb = self.require_kb(kb_id)
-        self._ensure_evaluation_supported(kb)
-        return self.artifacts.list_benchmark_metas(kb_id)
+        return self.eval_service.list_benchmarks(kb_id)
 
-    def upload_benchmark(
-        self,
-        kb_id: str,
-        *,
-        file_content: bytes,
-        filename: str,
-        name: str,
-        description: str,
-        created_by: str | None = None,
-    ) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        self._ensure_evaluation_supported(kb)
-        if not filename.lower().endswith(".jsonl"):
-            raise KnowledgeBaseValidationError("Benchmark upload only supports JSONL files.")
-        try:
-            content = file_content.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise KnowledgeBaseValidationError("Benchmark file must be UTF-8 encoded JSONL.") from exc
+    def upload_benchmark(self, kb_id: str, *, file_content: bytes, filename: str, name: str, description: str, created_by: str | None = None) -> dict[str, Any]:
+        return self.eval_service.upload_benchmark(kb_id, file_content=file_content, filename=filename, name=name, description=description, created_by=created_by)
 
-        questions: list[dict[str, Any]] = []
-        for line_no, line in enumerate(content.splitlines(), start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                payload = json.loads(stripped)
-            except json.JSONDecodeError as exc:
-                raise KnowledgeBaseValidationError(f"Benchmark JSONL line {line_no} is invalid: {exc}") from exc
-            if not isinstance(payload, dict) or not str(payload.get("query") or "").strip():
-                raise KnowledgeBaseValidationError(f"Benchmark JSONL line {line_no} is missing the 'query' field.")
-            questions.append(payload)
-        if not questions:
-            raise KnowledgeBaseValidationError("Benchmark file does not contain any valid questions.")
-
-        benchmark_id = _short_id("benchmark")
-        return self.artifacts.save_benchmark(
-            kb_id,
-            benchmark_id,
-            name=name.strip() or Path(filename).stem or benchmark_id,
-            description=description.strip(),
-            questions=questions,
-            created_by=created_by,
-        )
-
-    def get_benchmark_detail(
-        self,
-        kb_id: str,
-        benchmark_id: str,
-        *,
-        page: int = 1,
-        page_size: int = 10,
-    ) -> dict[str, Any]:
-        meta = self._load_benchmark_meta(kb_id, benchmark_id)
-        questions = self._load_benchmark_questions(kb_id, benchmark_id)
-        page = max(1, int(page))
-        page_size = max(1, min(int(page_size), 100))
-        start = (page - 1) * page_size
-        end = start + page_size
-        total = len(questions)
-        total_pages = max(1, math.ceil(total / page_size))
-        return {
-            **meta,
-            "questions": questions[start:end],
-            "pagination": {
-                "currentPage": page,
-                "current_page": page,
-                "pageSize": page_size,
-                "page_size": page_size,
-                "totalQuestions": total,
-                "total_questions": total,
-                "totalPages": total_pages,
-                "total_pages": total_pages,
-                "hasNext": page < total_pages,
-                "hasPrev": page > 1,
-            },
-        }
+    def get_benchmark_detail(self, kb_id: str, benchmark_id: str, *, page: int = 1, page_size: int = 10) -> dict[str, Any]:
+        return self.eval_service.get_benchmark_detail(kb_id, benchmark_id, page=page, page_size=page_size)
 
     def delete_benchmark(self, kb_id: str, benchmark_id: str) -> bool:
-        self._load_benchmark_meta(kb_id, benchmark_id)
-        self.artifacts.delete_benchmark(kb_id, benchmark_id)
-        return True
+        return self.eval_service.delete_benchmark(kb_id, benchmark_id)
 
     def get_benchmark_download_path(self, kb_id: str, benchmark_id: str) -> Path:
-        self._load_benchmark_meta(kb_id, benchmark_id)
-        path = self.artifacts.benchmark_data_path(kb_id, benchmark_id)
-        if not path.exists():
-            raise KnowledgeBaseValidationError("Benchmark file is missing from disk.")
-        return path
+        return self.eval_service.get_benchmark_download_path(kb_id, benchmark_id)
 
     def generate_benchmark(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        self._ensure_evaluation_supported(kb)
-        count = max(1, min(int(payload.get("count") or 10), 50))
-        name = self._normalize_text(payload.get("name"), field_name="name") or "自动生成评估基准"
-        description = self._normalize_text(payload.get("description"), field_name="description")
-        entries = self.artifacts.load_chunk_entries(kb_id)
-        if not entries:
-            raise KnowledgeBaseValidationError("Generate benchmark requires indexed knowledge chunks.")
-
-        selected_entries = entries[: min(len(entries), count)]
-        questions: list[dict[str, Any]] = []
-        for item in selected_entries:
-            chunk_id = str(item.get("chunkId") or "")
-            content = str(item.get("content") or "").strip()
-            prompt = self._generate_with_llm(
-                system_prompt=(
-                    "你是 RAG 评测基准生成助手。请基于给定片段生成一个可由片段直接回答的问题。"
-                    "只返回 JSON，格式为 {\"query\": string, \"gold_answer\": string}。"
-                ),
-                user_prompt=json.dumps(
-                    {
-                        "knowledgeBase": kb.name,
-                        "chunk": {
-                            "chunkId": chunk_id,
-                            "file": item.get("filename"),
-                            "content": content[:2000],
-                        },
-                    },
-                    ensure_ascii=False,
-                ),
-            )
-            query_text = ""
-            gold_answer = ""
-            json_text = self._extract_json_text(prompt or "")
-            if json_text:
-                try:
-                    candidate = json.loads(json_text)
-                    if isinstance(candidate, dict):
-                        query_text = str(candidate.get("query") or "").strip()
-                        gold_answer = str(candidate.get("gold_answer") or "").strip()
-                except json.JSONDecodeError:
-                    logger.warning("Benchmark generation JSON decode failed for {}", chunk_id)
-            if not query_text:
-                first_line = next((line.strip() for line in content.splitlines() if line.strip()), kb.name)
-                query_text = f"请根据知识库内容解释：{first_line[:40]}"
-            if not gold_answer:
-                gold_answer = content[:400]
-            questions.append(
-                {
-                    "query": query_text,
-                    "gold_answer": gold_answer,
-                    "gold_chunk_ids": [chunk_id] if chunk_id else [],
-                }
-            )
-            if len(questions) >= count:
-                break
-
-        benchmark_id = _short_id("benchmark")
-        return self.artifacts.save_benchmark(
-            kb_id,
-            benchmark_id,
-            name=name,
-            description=description,
-            questions=questions,
-        )
-
-    @staticmethod
-    def _retrieval_metrics(retrieved_chunks: list[dict[str, Any]], gold_chunk_ids: list[str]) -> dict[str, float]:
-        if not retrieved_chunks or not gold_chunk_ids:
-            return {}
-        retrieved_ids = [str(item.get("chunk_id") or item.get("chunkId") or "") for item in retrieved_chunks]
-        relevant = {str(item) for item in gold_chunk_ids if str(item).strip()}
-        if not relevant:
-            return {}
-        metrics: dict[str, float] = {}
-        for k in (1, 3, 5, 10):
-            top_k = retrieved_ids[:k]
-            if not top_k:
-                metrics[f"precision@{k}"] = 0.0
-                metrics[f"recall@{k}"] = 0.0
-                metrics[f"f1@{k}"] = 0.0
-                continue
-            hit_count = len(set(top_k) & relevant)
-            precision = hit_count / k
-            recall = hit_count / len(relevant)
-            f1 = 0.0 if precision + recall == 0 else (2 * precision * recall / (precision + recall))
-            metrics[f"precision@{k}"] = precision
-            metrics[f"recall@{k}"] = recall
-            metrics[f"f1@{k}"] = f1
-        return metrics
-
-    @staticmethod
-    def _normalize_eval_text(text: str) -> str:
-        lowered = str(text or "").strip().lower()
-        return re.sub(r"\s+", " ", re.sub(r"[^\w\u4e00-\u9fff]+", " ", lowered)).strip()
-
-    def _answer_metrics(self, query: str, generated_answer: str, gold_answer: str) -> dict[str, Any]:
-        if not gold_answer.strip():
-            return {}
-        if not generated_answer.strip():
-            return {"score": 0.0, "reasoning": "未生成答案"}
-
-        llm_raw = self._generate_with_llm(
-            system_prompt=(
-                "你是 RAG 评测裁判。只返回 JSON，格式为 "
-                "{\"score\": 0 或 1, \"reasoning\": string}。"
-            ),
-            user_prompt=json.dumps(
-                {
-                    "query": query,
-                    "goldAnswer": gold_answer,
-                    "generatedAnswer": generated_answer,
-                },
-                ensure_ascii=False,
-            ),
-        )
-        json_text = self._extract_json_text(llm_raw or "")
-        if json_text:
-            try:
-                payload = json.loads(json_text)
-                if isinstance(payload, dict):
-                    return {
-                        "score": float(payload.get("score") or 0.0),
-                        "reasoning": str(payload.get("reasoning") or "").strip(),
-                    }
-            except json.JSONDecodeError:
-                logger.warning("Answer metric JSON decode failed, falling back to heuristic scoring")
-
-        normalized_generated = self._normalize_eval_text(generated_answer)
-        normalized_gold = self._normalize_eval_text(gold_answer)
-        score = 1.0 if normalized_gold and normalized_gold in normalized_generated else 0.0
-        return {
-            "score": score,
-            "reasoning": "使用启发式匹配完成评分",
-        }
+        return self.eval_service.generate_benchmark(kb_id, payload)
 
     def _load_evaluation_result(self, kb_id: str, task_id: str) -> dict[str, Any]:
-        try:
-            return self.artifacts.load_evaluation_result(kb_id, task_id)
-        except ValueError as exc:
-            raise KnowledgeBaseValidationError(str(exc)) from exc
+        return self.eval_service._load_evaluation_result(kb_id, task_id)
 
     def _save_evaluation_result(self, kb_id: str, task_id: str, payload: dict[str, Any]) -> None:
-        self.artifacts.save_evaluation_result(kb_id, task_id, payload)
+        self.eval_service._save_evaluation_result(kb_id, task_id, payload)
 
     def run_evaluation(self, kb_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        self._ensure_evaluation_supported(kb)
-        benchmark_id = self._normalize_text(
-            payload.get("benchmarkId") or payload.get("benchmark_id"),
-            required=True,
-            field_name="benchmarkId",
-        )
-        self._load_benchmark_meta(kb_id, benchmark_id)
-        task_id = _short_id("eval")
-        retrieval_config = {
-            **kb.query_params.to_dict(),
-            "onlyNeedContext": False,
-            "onlyNeedPrompt": False,
-        }
-        result = {
-            "taskId": task_id,
-            "task_id": task_id,
-            "kbId": kb_id,
-            "dbId": kb_id,
-            "benchmarkId": benchmark_id,
-            "benchmark_id": benchmark_id,
-            "status": "queued",
-            "overallScore": None,
-            "overall_score": None,
-            "totalQuestions": 0,
-            "total_questions": 0,
-            "completedQuestions": 0,
-            "completed_questions": 0,
-            "retrievalConfig": retrieval_config,
-            "retrieval_config": retrieval_config,
-            "modelConfig": dict(payload.get("modelConfig") or payload.get("model_config") or {}),
-            "model_config": dict(payload.get("modelConfig") or payload.get("model_config") or {}),
-            "details": [],
-            "metrics": {},
-            "createdAt": now_iso(),
-            "created_at": now_iso(),
-            "updatedAt": now_iso(),
-            "updated_at": now_iso(),
-        }
-        self._save_evaluation_result(kb_id, task_id, result)
-        self._submit_background_job(self._run_evaluation_task, kb_id, task_id)
-        return {"taskId": task_id, "task_id": task_id}
+        return self.eval_service.run_evaluation(kb_id, payload)
 
     def _run_evaluation_task(self, kb_id: str, task_id: str) -> None:
-        result = self._load_evaluation_result(kb_id, task_id)
-        benchmark_id = str(result.get("benchmarkId") or result.get("benchmark_id") or "")
-        questions = self._load_benchmark_questions(kb_id, benchmark_id)
-        result["status"] = "running"
-        result["startedAt"] = now_iso()
-        result["started_at"] = result["startedAt"]
-        result["totalQuestions"] = len(questions)
-        result["total_questions"] = len(questions)
-        self._save_evaluation_result(kb_id, task_id, result)
-
-        retrieval_metric_list: list[dict[str, float]] = []
-        answer_metric_list: list[dict[str, Any]] = []
-        detail_items: list[dict[str, Any]] = []
-
-        try:
-            retrieval_config = dict(result.get("retrievalConfig") or result.get("retrieval_config") or {})
-            for index, question in enumerate(questions, start=1):
-                query_text = str(question.get("query") or "").strip()
-                gold_answer = str(question.get("gold_answer") or "").strip()
-                gold_chunk_ids = [str(item) for item in question.get("gold_chunk_ids") or [] if str(item).strip()]
-
-                query_result = self.query_database(
-                    kb_id,
-                    {
-                        **retrieval_config,
-                        "query": query_text,
-                    },
-                )
-                chunks = list((query_result.get("data") or {}).get("chunks") or [])
-                generated_answer = str(query_result.get("message") or "").strip()
-                retrieval_metrics = self._retrieval_metrics(chunks, gold_chunk_ids)
-                answer_metrics = self._answer_metrics(query_text, generated_answer, gold_answer) if gold_answer else {}
-
-                retrieval_metric_list.append(retrieval_metrics)
-                if answer_metrics:
-                    answer_metric_list.append(answer_metrics)
-
-                detail_items.append(
-                    {
-                        "rowId": f"{task_id}-{index}",
-                        "row_id": f"{task_id}-{index}",
-                        "query": query_text,
-                        "goldAnswer": gold_answer,
-                        "gold_answer": gold_answer,
-                        "goldChunkIds": gold_chunk_ids,
-                        "gold_chunk_ids": gold_chunk_ids,
-                        "generatedAnswer": generated_answer,
-                        "generated_answer": generated_answer,
-                        "retrievedChunks": chunks,
-                        "retrieved_chunks": chunks,
-                        "metrics": {**retrieval_metrics, **answer_metrics},
-                        "errorMessage": None,
-                        "error_message": None,
-                    }
-                )
-                result["details"] = detail_items
-                result["completedQuestions"] = index
-                result["completed_questions"] = index
-                result["updatedAt"] = now_iso()
-                result["updated_at"] = result["updatedAt"]
-                self._save_evaluation_result(kb_id, task_id, result)
-
-            aggregate_metrics: dict[str, float] = {}
-            metric_keys = sorted({key for item in retrieval_metric_list for key in item.keys()})
-            for key in metric_keys:
-                values = [item[key] for item in retrieval_metric_list if key in item]
-                if values:
-                    aggregate_metrics[key] = sum(values) / len(values)
-            if answer_metric_list:
-                aggregate_metrics["answer_accuracy"] = sum(
-                    float(item.get("score") or 0.0) for item in answer_metric_list
-                ) / len(answer_metric_list)
-
-            overall_components: list[float] = []
-            for item in retrieval_metric_list:
-                if item:
-                    overall_components.append(sum(item.values()) / len(item))
-            overall_components.extend(float(item.get("score") or 0.0) for item in answer_metric_list)
-            overall_score = sum(overall_components) / len(overall_components) if overall_components else 0.0
-
-            result["status"] = "completed"
-            result["overallScore"] = overall_score
-            result["overall_score"] = overall_score
-            result["metrics"] = aggregate_metrics
-            result["finishedAt"] = now_iso()
-            result["finished_at"] = result["finishedAt"]
-            result["updatedAt"] = result["finishedAt"]
-            result["updated_at"] = result["finished_at"]
-            self._save_evaluation_result(kb_id, task_id, result)
-        except Exception as exc:
-            logger.exception("Evaluation task {} failed", task_id)
-            result["status"] = "failed"
-            result["errorSummary"] = str(exc)
-            result["error_summary"] = str(exc)
-            result["finishedAt"] = now_iso()
-            result["finished_at"] = result["finishedAt"]
-            result["updatedAt"] = result["finishedAt"]
-            result["updated_at"] = result["finished_at"]
-            self._save_evaluation_result(kb_id, task_id, result)
+        return self.eval_service._run_evaluation_task(kb_id, task_id)
 
     def get_evaluation_history(self, kb_id: str) -> list[dict[str, Any]]:
-        kb = self.require_kb(kb_id)
-        self._ensure_evaluation_supported(kb)
-        return self.artifacts.list_evaluation_summaries(kb_id)
+        return self.eval_service.get_evaluation_history(kb_id)
 
-    def get_evaluation_result(
-        self,
-        kb_id: str,
-        task_id: str,
-        *,
-        page: int = 1,
-        page_size: int = 20,
-        error_only: bool = False,
-    ) -> dict[str, Any]:
-        result = self._load_evaluation_result(kb_id, task_id)
-        details = list(result.get("details") or [])
-        if error_only:
-            details = [
-                item
-                for item in details
-                if str(item.get("errorMessage") or item.get("error_message") or "").strip()
-                or float((item.get("metrics") or {}).get("score") or 1.0) < 1.0
-                or float((item.get("metrics") or {}).get("recall@1") or 1.0) < 1.0
-            ]
-        page = max(1, int(page))
-        page_size = max(1, min(int(page_size), 100))
-        start = (page - 1) * page_size
-        end = start + page_size
-        total = len(details)
-        total_pages = max(1, math.ceil(total / page_size))
-        return {
-            **{key: value for key, value in result.items() if key != "details"},
-            "details": details[start:end],
-            "pagination": {
-                "currentPage": page,
-                "current_page": page,
-                "pageSize": page_size,
-                "page_size": page_size,
-                "total": total,
-                "total_pages": total_pages,
-                "hasNext": page < total_pages,
-                "hasPrev": page > 1,
-            },
-        }
+    def get_evaluation_result(self, kb_id: str, task_id: str, *, page: int = 1, page_size: int = 20, error_only: bool = False) -> dict[str, Any]:
+        return self.eval_service.get_evaluation_result(kb_id, task_id, page=page, page_size=page_size, error_only=error_only)
 
     def delete_evaluation_result(self, kb_id: str, task_id: str) -> bool:
-        if not self.artifacts.delete_evaluation_result(kb_id, task_id):
-            raise KnowledgeBaseValidationError("Evaluation result not found.")
-        return True
+        return self.eval_service.delete_evaluation_result(kb_id, task_id)
+
 
     def get_download_path(self, kb_id: str, file_id: str, *, variant: str = "raw") -> Path:
         self.require_kb(kb_id)
@@ -3268,34 +1013,7 @@ class KnowledgeBaseService:
         file_name: str | None = None,
         limit: int = 6,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "query": query_text,
-            "topK": limit,
-            "chunkTopK": max(12, limit),
-            "mode": "naive",
-            "onlyNeedContext": True,
-        }
-        if file_name:
-            payload["fileName"] = file_name
-        return self.query_database(kb_id, payload)
+        return self.query_service.query_kb_for_agent(kb_id, query_text, file_name=file_name, limit=limit)
 
     def get_mindmap_text(self, kb_id: str) -> str:
-        kb = self.require_kb(kb_id)
-        if kb.mindmap is None:
-            kb_map = self.generate_mindmap(kb_id)["mindmap"]
-        else:
-            kb_map = kb.mindmap
-
-        lines: list[str] = []
-
-        def _walk(node: dict[str, Any], level: int) -> None:
-            content = str(node.get("content") or "").strip()
-            if content:
-                lines.append(f"{'  ' * level}- {content}")
-            for child in node.get("children") or []:
-                if isinstance(child, dict):
-                    _walk(child, level + 1)
-
-        if isinstance(kb_map, dict):
-            _walk(kb_map, 0)
-        return "\n".join(lines).strip()
+        return self.eval_service.get_mindmap_text(kb_id)

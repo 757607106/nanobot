@@ -95,20 +95,28 @@ export function KnowledgeMindmapTab({ mindmapLoading, mindmap, onRegenerate }: K
         </Space>
       </div>
 
-      {mindmapLoading || rendering ? (
-        <div className="knowledge-loading-panel"><Spin /></div>
-      ) : mindmap ? (
-        <div className="knowledge-mindmap-shell">
-          <div className="knowledge-mindmap-canvas">
-            <svg ref={svgRef} className="knowledge-mindmap-svg" />
+      <div style={{ position: 'relative', width: '100%' }}>
+        {mindmapLoading || rendering ? (
+          <div className="knowledge-loading-panel" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, background: 'rgba(var(--ant-color-bg-base), 0.7)' }}>
+            <Spin />
           </div>
-          <Text type="secondary">支持缩放和适应视图，方便快速浏览知识结构。</Text>
+        ) : null}
+
+        <div style={{ visibility: (mindmap && !mindmapLoading) ? 'visible' : 'hidden' }}>
+          <div className="knowledge-mindmap-shell">
+            <div className="knowledge-mindmap-canvas">
+              <svg ref={svgRef} className="knowledge-mindmap-svg" />
+            </div>
+            <Text type="secondary">支持缩放和适应视图，方便快速浏览知识结构。</Text>
+          </div>
         </div>
-      ) : (
-        <div className="knowledge-loading-panel">
-          <Empty description="暂无知识导图" image={false} className="minimal-empty" />
-        </div>
-      )}
+
+        {!mindmap && !mindmapLoading && !rendering && (
+          <div className="knowledge-loading-panel">
+            <Empty description="暂无知识导图" image={false} className="minimal-empty" />
+          </div>
+        )}
+      </div>
 
       {renderError ? <Text type="danger">{renderError}</Text> : null}
     </div>
