@@ -91,7 +91,7 @@ class LocalShellSandboxExecutor:
         path_append: str,
     ) -> str:
         _ = runtime_cwd
-        env = tool._build_env(path_append=path_append, include_host_env=True)
+        env = tool._build_env(path_append=path_append, include_host_env=False)
         return await _run_shell_subprocess(command, cwd=host_cwd, timeout=timeout, env=env)
 
 
@@ -283,7 +283,7 @@ class ExecTool(Tool):
             return f"Error executing command: {str(e)}"
 
     def _build_env(self, *, path_append: str, include_host_env: bool) -> dict[str, str]:
-        env = os.environ.copy() if include_host_env else {}
+        env = os.environ.copy() if include_host_env else {"PATH": os.environ.get("PATH", "")}
         env.update({key: value for key, value in self.env.items() if str(key or "").strip()})
         if path_append:
             env["PATH"] = env.get("PATH", "") + os.pathsep + path_append

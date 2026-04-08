@@ -137,22 +137,30 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
     const events = getStreamEvents(info.chunks)
     const doneEvent = [...events].reverse().find((event) => event.type === 'done')
 
-    if (doneEvent?.assistantMessage) {
+    if (doneEvent?.message) {
       return normalizeChatMessage({
-        ...doneEvent.assistantMessage,
+        ...doneEvent.message,
         progressSteps: collectProgressSteps(events, info.originMessage),
       })
     }
 
+    const baseMessage = normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() })
+    
+    const chunkEvents = events.filter((event) => event.type === 'chunk')
+    if (chunkEvents.length > 0) {
+      baseMessage.content = chunkEvents.map((event) => 'content' in event ? event.content : '').join('')
+    }
+
     const progressEvents = events.filter((event) => event.type === 'progress')
     if (progressEvents.length > 0) {
+      baseMessage.progressSteps = []
       return progressEvents.reduce(
-        (message, event) => appendProgressStep(message, event.content, Boolean(event.toolHint)),
-        normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() }),
+        (message, event) => appendProgressStep(message, 'content' in event ? event.content : '', Boolean('toolHint' in event ? event.toolHint : false)),
+        baseMessage,
       )
     }
 
-    return normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() })
+    return baseMessage
   }
 }
 

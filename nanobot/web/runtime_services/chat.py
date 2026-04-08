@@ -129,6 +129,7 @@ class WebChatRuntimeService:
         session_id: str,
         content: str,
         on_progress,
+        on_stream=None,
         run_context: dict[str, Any] | None = None,
     ) -> str:
         agent = self.state.agent
@@ -138,6 +139,7 @@ class WebChatRuntimeService:
                 InboundMessage(channel="web", sender_id="user", chat_id=session_id, content=content),
                 session_key=session_key,
                 on_progress=on_progress,
+                on_stream=on_stream,
                 run_context=run_context,
             )
             return extract_outbound_content(response)
@@ -148,6 +150,7 @@ class WebChatRuntimeService:
             channel="web",
             chat_id=session_id,
             on_progress=on_progress,
+            on_stream=on_stream,
         )
         return extract_outbound_content(response)
 
@@ -566,6 +569,7 @@ class WebChatRuntimeService:
         *,
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        on_stream=None,
     ) -> dict[str, Any]:
         key = self.session_key(session_id)
         session = self.state.sessions.get_or_create(key)
@@ -580,6 +584,7 @@ class WebChatRuntimeService:
             session_id=session_id,
             content=content,
             on_progress=on_progress,
+            on_stream=on_stream,
             run_context={
                 "chat_message": {
                     "display_content": display_content or content,

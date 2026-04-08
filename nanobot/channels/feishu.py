@@ -416,13 +416,16 @@ class FeishuChannel(BaseChannel):
 
     def _fetch_bot_open_id(self) -> str | None:
         """Fetch the bot's own open_id via GET /open-apis/bot/v3/info."""
-        from lark_oapi.api.bot.v3 import GetBotInfoRequest
         try:
+            from lark_oapi.api.bot.v3 import GetBotInfoRequest
             request = GetBotInfoRequest.builder().build()
             response = self._client.bot.v3.bot_info.get(request)
             if response.success() and response.data and response.data.bot:
                 return getattr(response.data.bot, "open_id", None)
             logger.warning("Failed to get bot info: code={}, msg={}", response.code, response.msg)
+            return None
+        except ImportError:
+            logger.warning("lark_oapi.api.bot not found. Using bot @mention heuristic fallback.")
             return None
         except Exception as e:
             logger.warning("Error fetching bot info: {}", e)

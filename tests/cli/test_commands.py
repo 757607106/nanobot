@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from nanobot.cli.commands import _make_provider, app
 from nanobot.config.schema import Config
+from nanobot.bus.events import OutboundMessage
 from nanobot.cron.types import CronJob, CronPayload
 from nanobot.providers.openai_codex_provider import _strip_model_prefix
 from nanobot.providers.registry import find_by_model, find_by_name

@@ -54,7 +54,7 @@ class ContextBuilder:
 
         memory_parts: list[str] = []
         if include_workspace_memory:
-            workspace_memory = self.memory.read_long_term().strip()
+            workspace_memory = self.memory.read_memory().strip()
             if workspace_memory:
                 memory_parts.append(f"## Workspace Shared Memory\n\n{workspace_memory}")
         for heading, content in memory_sections or []:

@@ -715,3 +715,121 @@ def delete_knowledge_evaluation_result(request: Request, kb_id: str, task_id: st
 @router.delete("/api/v1/knowledge-bases/{kb_id}/results/{task_id}")
 def delete_knowledge_evaluation_result_alias(request: Request, kb_id: str, task_id: str) -> JSONResponse:
     return delete_knowledge_evaluation_result(request, kb_id, task_id)
+
+# --- Legacy Routing Aliases ---
+
+@router.post("/api/knowledge/databases")
+@_kb_error_handler
+def legacy_create_knowledge_base(
+    request: Request,
+    payload: dict[str, Any] = Body(default_factory=dict),
+) -> JSONResponse:
+    return create_knowledge_base(request, payload=payload)
+
+
+@router.post("/api/knowledge/files/upload")
+@_kb_error_handler
+async def legacy_upload_knowledge_files(request: Request, db_id: str) -> JSONResponse:
+    response = await create_knowledge_documents_alias(request, kb_id=db_id)
+    # Re-wrap the body to match classic shape: {"file_path": ..., "content_hash": ...}
+    data = __import__("json").loads(response.body.decode("utf-8"))["data"]
+    doc = data["documents"][0]
+    return _json_response(201, _ok({"file_path": doc["fileId"], "content_hash": doc.get("contentHash") or "00"}))
+
+
+@router.post("/api/knowledge/databases/{kb_id}/documents")
+@_kb_error_handler
+def legacy_ingest_documents(
+    request: Request, kb_id: str, payload: dict[str, Any] = Body(default_factory=dict)
+) -> JSONResponse:
+    data = _knowledge_service(request).ingest_files(
+        kb_id, 
+        {"fileIds": payload.get("items") or [], "params": payload.get("params")}
+    )
+    job = data.get("job") or {}
+    return _json_response(202, _ok({"task_id": job.get("jobId")}))
+
+
+@router.get("/api/knowledge/databases/{kb_id}/documents/{doc_id}")
+@_kb_error_handler
+def legacy_get_document_detail(request: Request, kb_id: str, doc_id: str) -> JSONResponse:
+    return get_knowledge_file_detail(request, kb_id, doc_id)
+
+
+@router.get("/api/knowledge/databases/{kb_id}/documents/{doc_id}/basic")
+@_kb_error_handler
+def legacy_get_document_basic(request: Request, kb_id: str, doc_id: str) -> JSONResponse:
+    data = _knowledge_service(request).file_manager.get_file_detail(kb_id, doc_id)
+    return _json_response(200, _ok(data))
+
+
+@router.get("/api/knowledge/databases/{kb_id}/documents/{doc_id}/content")
+@_kb_error_handler
+def legacy_get_document_content(request: Request, kb_id: str, doc_id: str) -> JSONResponse:
+    return get_knowledge_file_detail(request, kb_id, doc_id)
+
+
+@router.put("/api/knowledge/databases/{kb_id}/query-params")
+@_kb_error_handler
+def legacy_update_query_params(request: Request, kb_id: str, payload: dict[str, Any] = Body(default_factory=dict)) -> JSONResponse:
+    return update_knowledge_query_params(request, kb_id, payload=payload)
+
+
+@router.get("/api/knowledge/databases/{kb_id}/query-params")
+@_kb_error_handler
+def legacy_get_query_params(request: Request, kb_id: str) -> JSONResponse:
+    response = get_knowledge_query_params(request, kb_id)
+    # The new get_knowledge_query_params might return a slightly different shape
+    data = __import__("json").loads(response.body.decode("utf-8"))["data"]
+    # Provide expected schema wrapping if it's missing
+    if "params" not in data:
+        schema = _knowledge_service(request).get_query_param_schema(kb_id)
+        for opt in schema.get("options", []):
+            if opt["key"] in data:
+                opt["default"] = data[opt["key"]]
+        data = {"mode": data.get("mode"), "params": {"options": schema.get("options", [])}}
+    return _json_response(200, _ok(data))
+
+
+@router.post("/api/knowledge/databases/{kb_id}/query-test")
+@_kb_error_handler
+def legacy_query_test(request: Request, kb_id: str, payload: dict[str, Any] = Body(default_factory=dict)) -> JSONResponse:
+    # Meta was the legacy wrapper parameter
+    if "meta" in payload:
+        payload.update(payload.pop("meta"))
+    return query_knowledge_base_alias(request, kb_id, payload=payload)
+
+
+@router.get("/api/graph/list")
+@_kb_error_handler
+def legacy_graph_list(request: Request) -> JSONResponse:
+    graphs = []
+    for kb in _knowledge_service(request).list_knowledge_bases(enabled=None):
+        graphs.append({
+            "id": kb["kbId"],
+            "name": kb["name"],
+            "type": kb["kbType"],
+            "timestamp": kb["updatedAt"]
+        })
+    return _json_response(200, _ok(graphs))
+
+
+@router.get("/api/graph/labels")
+@_kb_error_handler
+def legacy_graph_labels(request: Request, db_id: str) -> JSONResponse:
+    return get_knowledge_graph_labels(request, db_id)
+
+
+@router.get("/api/graph/subgraph")
+@_kb_error_handler
+def legacy_graph_subgraph(
+    request: Request, db_id: str, node_label: str = Query(default=""), max_depth: int = Query(default=2), max_nodes: int = Query(default=50)
+) -> JSONResponse:
+    return get_knowledge_graph(request, db_id, node_label=node_label, max_depth=max_depth, max_nodes=max_nodes)
+
+
+@router.get("/api/graph/stats")
+@_kb_error_handler
+def legacy_graph_stats(request: Request, db_id: str) -> JSONResponse:
+    return get_knowledge_graph_stats(request, db_id)
+

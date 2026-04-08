@@ -495,7 +495,7 @@ class KnowledgeFileManager:
                 )
             )
 
-        ingest = self.store.ingest_files(
+        ingest = self.ingest_files(
             kb_id,
             {
                 "fileIds": [updated_source.file_id],

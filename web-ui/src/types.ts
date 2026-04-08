@@ -115,7 +115,8 @@ export interface ChatWorkspaceData {
 export type StreamEvent =
   | { type: 'start'; sessionId: string }
   | { type: 'progress'; content: string; toolHint?: boolean }
-  | { type: 'done'; content: string; assistantMessage: ChatMessage | null }
+  | { type: 'chunk'; content: string }
+  | { type: 'done'; content: string; message: ChatMessage | null }
   | { type: 'error'; message: string }
 
 export interface ProviderConfig {

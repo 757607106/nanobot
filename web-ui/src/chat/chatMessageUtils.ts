@@ -161,5 +161,5 @@ export function collectProgressSteps(events: StreamEvent[], originMessage?: Chat
         createdAt: originMessage?.createdAt || new Date().toISOString(),
       },
     ]
-  }, normalizeChatMessage(originMessage ?? { role: 'assistant', content: '' }).progressSteps ?? [])
+  }, [])
 }

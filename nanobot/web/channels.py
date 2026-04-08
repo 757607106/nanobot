@@ -6,7 +6,7 @@ from typing import Any
 
 from nanobot.config.schema import ChannelsConfig, Config
 
-GLOBAL_CHANNEL_KEYS = {"sendProgress", "sendToolHints", "sendMaxRetries"}
+GLOBAL_CHANNEL_KEYS = {"sendProgress", "sendToolHints", "sendMaxRetries", "transcriptionProvider"}
 DEFAULT_CHANNELS_PAYLOAD = ChannelsConfig().model_dump(mode="json", by_alias=True)
 CHANNEL_NAMES = [name for name in DEFAULT_CHANNELS_PAYLOAD if name not in GLOBAL_CHANNEL_KEYS]
 

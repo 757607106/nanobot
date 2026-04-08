@@ -201,6 +201,15 @@ async def create_chat_message(
                     }
                 )
 
+            async def on_stream(chunk_content: str) -> None:
+                if chunk_content:
+                    await queue.put(
+                        {
+                            "type": "chunk",
+                            "content": chunk_content,
+                        }
+                    )
+
             async def run_chat() -> None:
                 try:
                     await queue.put({"type": "start", "sessionId": session_id})
@@ -210,6 +219,7 @@ async def create_chat_message(
                         on_progress,
                         display_content=display_content,
                         attachments=attachments,
+                        on_stream=on_stream,
                     )
                     await queue.put({"type": "done", **data})
                 except KeyError:

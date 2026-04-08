@@ -298,6 +298,7 @@ class WebAgentChatRuntimeService:
         tenant_id: str | None = None,
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        on_stream=None,
     ) -> dict[str, Any]:
         agent = self._require_agent(agent_id, tenant_id=tenant_id)
         key = self.session_key(agent_id, session_id)
@@ -331,6 +332,7 @@ class WebAgentChatRuntimeService:
             workspace_binding=environment.workspace,
             sandbox_binding=environment.sandbox,
             on_progress=on_progress,
+            on_stream=on_stream,
             display_content=display_content,
             attachments=attachments,
         )

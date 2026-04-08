@@ -328,6 +328,7 @@ class WebAppState:
         *,
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        on_stream=None,
     ) -> dict[str, Any]:
         return await self.chat_runtime.chat(
             session_id,
@@ -335,6 +336,7 @@ class WebAppState:
             on_progress,
             display_content=display_content,
             attachments=attachments,
+            on_stream=on_stream,
         )
 
     async def chat_with_agent(
@@ -347,6 +349,7 @@ class WebAppState:
         tenant_id: str | None = None,
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        on_stream=None,
     ) -> dict[str, Any]:
         return await self.agent_chat_runtime.chat(
             agent_id,
@@ -356,6 +359,7 @@ class WebAppState:
             tenant_id=tenant_id,
             display_content=display_content,
             attachments=attachments,
+            on_stream=on_stream,
         )
 
     def get_config(self) -> dict[str, Any]:

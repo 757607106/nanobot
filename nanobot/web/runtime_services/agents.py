@@ -619,6 +619,7 @@ class WebAgentRuntimeService:
         task: str,
         execution_context: ExecutionContext,
         on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
+        on_stream: Callable[[str], Awaitable[None]] | None = None,
         on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
         chat_message: dict[str, Any] | None = None,
     ) -> str:
@@ -638,6 +639,7 @@ class WebAgentRuntimeService:
                 ),
                 session_key=execution_context.session_key,
                 on_progress=on_progress,
+                on_stream=on_stream,
                 run_context=run_context,
             )
             return extract_outbound_content(response)
@@ -771,6 +773,7 @@ class WebAgentRuntimeService:
         sandbox_binding: SandboxBinding | None = None,
         prepared: PreparedAgentExecution | None = None,
         on_progress: Callable[[str], Awaitable[None]] | Callable[..., Awaitable[None]] | None = None,
+        on_stream: Callable[[str], Awaitable[None]] | None = None,
         on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
@@ -953,6 +956,7 @@ class WebAgentRuntimeService:
                 task=task,
                 execution_context=execution_context,
                 on_progress=_on_progress,
+                on_stream=on_stream,
                 on_run_event=on_run_event,
                 chat_message=chat_message,
             )
