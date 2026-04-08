@@ -1,7 +1,7 @@
 import type { Conversation } from '@ant-design/x'
 import { Conversations } from '@ant-design/x'
 import { DeleteOutlined, EditOutlined, MessageOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
-import { App, Button, Card, Empty, Flex, Input, Spin, Typography, theme } from 'antd'
+import { App, Button, Empty, Flex, Spin, Typography, theme } from 'antd'
 import { startTransition } from 'react'
 import { getDisplaySessionTitle } from './chatPresentation'
 import { formatRelativeTimeZh } from '../locale'
@@ -85,54 +85,43 @@ export function ChatSidebar({
   }))
 
   return (
-    <Card
-      title={
-        <Flex vertical gap={4}>
-          <Text
-            type="secondary"
-            style={{
-              fontSize: 'var(--nb-text-2xs)',
-              fontWeight: 'var(--nb-font-weight-title)',
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-            }}
-          >
-            历史会话
-          </Text>
-        </Flex>
-      }
-      extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={onNewSession}
-          data-testid={testIds.chat.newSession}
-        >
-          新建
-        </Button>
-      }
-      styles={{
-        body: {
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-          minHeight: 0,
-          height: '100%',
-        },
-      }}
-      style={{
-        height: '100%',
-        borderRadius: surfaceRadius,
-      }}
-    >
-      <Input
-        allowClear
-        prefix={<SearchOutlined />}
-        placeholder="搜索会话"
-        value={sessionQuery}
-        onChange={(event) => onSessionQueryChange(event.target.value)}
-        data-testid={testIds.chat.sessionSearch}
-      />
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      padding: '16px 8px 16px 12px',
+      borderRadius: surfaceRadius,
+    }}>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={onNewSession}
+        data-testid={testIds.chat.newSession}
+        block
+        style={{
+          height: 40,
+          borderRadius: 8,
+          justifyContent: 'center',
+          marginBottom: 20,
+          fontWeight: 500,
+        }}
+      >
+        全新对话
+      </Button>
+
+      <Text
+        type="secondary"
+        style={{
+          fontSize: 'var(--nb-text-2xs)',
+          fontWeight: 'var(--nb-font-weight-title)',
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          paddingLeft: 8,
+          marginBottom: 8,
+        }}
+      >
+        历史会话
+      </Text>
 
       <div style={{ flex: 1, minHeight: isDesktopLayout ? 0 : 280, overflow: 'auto' }}>
         {loading ? (
@@ -181,6 +170,6 @@ export function ChatSidebar({
           />
         )}
       </div>
-    </Card>
+    </div>
   )
 }

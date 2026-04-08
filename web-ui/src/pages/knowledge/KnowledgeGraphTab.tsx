@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Empty, Input, InputNumber, Segmented, Select, Space, Spin, Statistic, Tag, Typography, theme } from 'antd'
-import { AimOutlined, ReloadOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
+import { AimOutlined, ReloadOutlined, RightOutlined, SearchOutlined, ApartmentOutlined, ShareAltOutlined, DesktopOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
+import MetricCard from '../../components/console/MetricCard'
 import type { KnowledgeGraphData, KnowledgeGraphEdge, KnowledgeGraphNode, KnowledgeGraphStats } from '../../types'
 
 const { Paragraph, Text } = Typography
@@ -758,11 +759,31 @@ export function KnowledgeGraphTab({
         </Button>
       </div>
 
-      <div className="knowledge-stat-grid is-graph">
-        <Statistic title="实体" value={baseGraphPayload.nodes.length || graphStats?.nodeCount || 0} />
-        <Statistic title="关系" value={baseGraphPayload.edges.length || graphStats?.edgeCount || 0} />
-        <Statistic title="渲染" value={focusState.active ? `${getGraphLayoutLabel(layoutMode)} · 焦点` : getGraphLayoutLabel(layoutMode)} />
-        <Statistic title={focusState.active ? '邻接关系' : '隐藏噪音'} value={focusState.active ? selectedTypeCount || '0' : (viewMode === 'core' ? filteredGraphData.hiddenNodeCount : 0)} />
+      <div className="knowledge-metrics-grid" style={{ marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+        <MetricCard
+          label="实体"
+          value={baseGraphPayload.nodes.length || graphStats?.nodeCount || 0}
+          icon={<ApartmentOutlined />}
+          tone="neutral"
+        />
+        <MetricCard
+          label="关系"
+          value={baseGraphPayload.edges.length || graphStats?.edgeCount || 0}
+          icon={<ShareAltOutlined />}
+          tone="neutral"
+        />
+        <MetricCard
+          label="渲染模式"
+          value={focusState.active ? `${getGraphLayoutLabel(layoutMode)} · 焦点` : getGraphLayoutLabel(layoutMode)}
+          icon={<DesktopOutlined />}
+          tone="primary"
+        />
+        <MetricCard
+          label={focusState.active ? '邻接关系' : '隐藏噪音'}
+          value={focusState.active ? selectedTypeCount || '0' : (viewMode === 'core' ? filteredGraphData.hiddenNodeCount : 0)}
+          icon={<EyeInvisibleOutlined />}
+          tone={focusState.active ? 'primary' : 'neutral'}
+        />
       </div>
 
       {!graphLoading && hasGraph && viewMode === 'core' && !focusState.active && (filteredGraphData.hiddenNodeCount > 0 || filteredGraphData.hiddenEdgeCount > 0) ? (

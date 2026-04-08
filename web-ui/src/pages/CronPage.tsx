@@ -393,7 +393,7 @@ export default function CronPage() {
           </Space>
         }
       >
-        <Flex vertical gap={16}>
+        <Flex vertical gap={16} style={{ minWidth: 0 }}>
           <Flex gap={12} wrap="wrap" align="center">
             <Input
               allowClear
@@ -589,7 +589,7 @@ export default function CronPage() {
               }
 
               return (
-                <Flex vertical gap={16}>
+                <Flex vertical gap={16} style={{ minWidth: 0 }}>
                   <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(5, 1fr)' }}>
                     <Form.Item
                       label="分钟"

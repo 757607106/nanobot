@@ -69,7 +69,7 @@ function ValidationQueue({
                 key={item.key}
                 className="p-[var(--nb-spacing-md)]"
                 style={{
-                  borderRadius: 'var(--nb-radius-sm)',
+                  borderRadius: 'var(--nb-radius-md)',
                   border: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorBgLayout,
                 }}
@@ -199,7 +199,7 @@ export default function ValidationPage() {
         description={summary.description}
       />
 
-      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+      <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
         <MetricCard
           label="当前状态"
           value={summary.label}
@@ -242,7 +242,7 @@ export default function ValidationPage() {
         />
       </div>
 
-      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">
+      <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">
         <ValidationQueue
           title="核心检查"
           description=""

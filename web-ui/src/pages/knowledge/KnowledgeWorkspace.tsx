@@ -1,4 +1,5 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   Alert,
   Badge,
@@ -21,6 +22,7 @@ import {
 import {
   BranchesOutlined,
   DeleteOutlined,
+  CheckSquareOutlined,
   FileSearchOutlined,
   FileTextOutlined,
   FolderAddOutlined,
@@ -207,12 +209,12 @@ export default function KnowledgeWorkspace() {
     {
       title: '操作',
       key: 'actions',
-      width: 240,
+      width: 280,
       align: 'right',
       render: (_value, item) => {
         const selectable = item.isFolder || canDeleteKnowledgeFile(item.status)
         return (
-          <Space wrap size={[8, 8]} style={{ justifyContent: 'flex-end' }}>
+          <Space size={[8, 8]} style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
             {!item.isFolder ? (
               <>
                 <Button size="small" onClick={() => void onOpenFileDetail(item)}>
@@ -254,26 +256,15 @@ export default function KnowledgeWorkspace() {
   }
 
   const renderFilesTab = () => (
-    <Flex vertical gap={16}>
-      <div className="knowledge-tab-content-borderless"><Flex vertical gap={16}>
-          <div className="knowledge-section-header">文件列表</div>
-          <div className="resource-summary-strip">
-            <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
-              <span className="resource-summary-label">当前选择</span>
-              <span className="resource-summary-value">{selectedFileIds.length}</span>
-            </div>
-            <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
-              <span className="resource-summary-label">待解析</span>
-              <span className="resource-summary-value">{pendingParseCount}</span>
-            </div>
-            <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
-              <span className="resource-summary-label">待索引</span>
-              <span className="resource-summary-value">{pendingIndexCount}</span>
-            </div>
-            <div className="resource-summary-tile" style={{ padding: '12px 14px' }}>
-              <span className="resource-summary-label">最近任务</span>
-              <span className="resource-summary-value">{jobs.length}</span>
-            </div>
+    <Flex vertical gap={16} style={{ minWidth: 0 }}>
+      <div className="knowledge-tab-content-borderless" style={{ minWidth: 0 }}>
+        <Flex vertical gap={24} style={{ minWidth: 0 }}>
+          <div className="knowledge-metrics-grid" style={{ marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+            <MetricCard label="文件记录" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
+            <MetricCard label="已索引" value={filesState.stats.indexedCount} icon={<BranchesOutlined />} tone="success" />
+            <MetricCard label="待处理" value={pendingParseCount + pendingIndexCount} icon={<RetweetOutlined />} tone={pendingParseCount + pendingIndexCount > 0 ? 'warning' : 'neutral'} />
+            <MetricCard label="异常" value={filesState.stats.errorCount} icon={<FileSearchOutlined />} tone={filesState.stats.errorCount > 0 ? 'error' : 'neutral'} />
+            <MetricCard label="当前选择" value={selectedFileIds.length} icon={<CheckSquareOutlined />} tone={selectedFileIds.length > 0 ? 'primary' : 'neutral'} />
           </div>
 
           <Flex justify="space-between" align="center" gap={12} wrap="wrap">
@@ -288,78 +279,33 @@ export default function KnowledgeWorkspace() {
               />
             </div>
 
-            <Flex gap={8} wrap="wrap" align="center">
-              {/* 主操作按钮 */}
-              <Space size={8}>
-                <Button
-                  type="primary"
-                  icon={<UploadOutlined />}
-                  onClick={() => {
-                    onSetUrlParentId(hasSingleSelection && selectedFiles[0].isFolder ? selectedFiles[0].fileId : null)
-                    onOpenModal('url')
-                  }}
-                >
-                  添加文件
-                </Button>
-                <Button
-                  icon={<BranchesOutlined />}
-                  disabled={!canIndexSelectedDocuments}
-                  onClick={() => onIndexSelected()}
-                  loading={loading.indexing}
-                >
-                  建索引
-                </Button>
-              </Space>
-
-              {/* 分隔线 */}
-              <div className="knowledge-toolbar-divider" />
-
-              {/* 次操作 Dropdown */}
-              <Dropdown
-                menu={{
-                  items: [
-                    {
-                      key: 'folder',
-                      icon: <FolderAddOutlined />,
-                      label: '新建文件夹',
-                      onClick: () => onOpenModal('folder'),
-                    },
-                    {
-                      key: 'parse',
-                      icon: <RetweetOutlined />,
-                      label: '解析选中文件',
-                      disabled: !canParseSelectedDocuments,
-                      onClick: () => onParseSelected(),
-                    },
-                    {
-                      key: 'indexConfig',
-                      icon: <SaveOutlined />,
-                      label: '索引配置',
-                      onClick: () => onOpenModal('indexConfig'),
-                    },
-                    {
-                      type: 'divider',
-                    },
-                    {
-                      key: 'move',
-                      icon: <FolderOpenOutlined />,
-                      label: '移动',
-                      disabled: !hasSingleSelection,
-                      onClick: onOpenMoveModal,
-                    },
-                    {
-                      key: 'delete',
-                      icon: <DeleteOutlined />,
-                      label: '删除',
-                      disabled: !hasSelectedFiles,
-                      danger: true,
-                      onClick: () => onDeleteSelectedFiles(),
-                    },
-                  ],
-                }}
+            <Flex gap={12} wrap="wrap" align="center">
+              <Button
+                icon={<SaveOutlined />}
+                color="default"
+                variant="filled"
+                onClick={() => onOpenModal('indexConfig')}
               >
-                <Button icon={<MoreOutlined />}>更多</Button>
-              </Dropdown>
+                索引配置
+              </Button>
+              <Button
+                icon={<FolderAddOutlined />}
+                type="default"
+                onClick={() => onOpenModal('folder')}
+              >
+                新建文件夹
+              </Button>
+              <Button
+                type="primary"
+                icon={<UploadOutlined />}
+                onClick={() => {
+                  onSetUrlParentId(hasSingleSelection && selectedFiles[0].isFolder ? selectedFiles[0].fileId : null)
+                  onOpenModal('url')
+                }}
+                style={{ boxShadow: '0 8px 24px rgba(22, 119, 255, 0.4)' }}
+              >
+                添加文件
+              </Button>
             </Flex>
           </Flex>
 
@@ -416,9 +362,9 @@ export default function KnowledgeWorkspace() {
             {jobs.slice(0, 6).map((item) => (
               <div
                 key={item.jobId}
-                className="knowledge-job-item"
+                className={`knowledge-job-item ${['pending', 'processing', 'parsing', 'indexing'].includes(item.status) ? 'is-processing' : ''}`}
               >
-                <Flex justify="space-between" align="center" gap={12} wrap="wrap">
+                <Flex justify="space-between" align="center" gap={12} wrap="wrap" style={{ position: 'relative', zIndex: 1 }}>
                   <Space wrap size={[8, 8]}>
                     <Tag color={statusColor(item.status)}>{statusLabel(item.status)}</Tag>
                     <Typography.Text strong>{item.jobKind}</Typography.Text>
@@ -433,6 +379,73 @@ export default function KnowledgeWorkspace() {
           </Flex>
         )}
       </SectionCard>
+
+      <AnimatePresence>
+        {hasSelectedFiles && (
+          <motion.div
+            initial={{ y: 50, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 50, opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            style={{
+              position: 'fixed',
+              bottom: 40,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1000,
+              background: 'var(--nb-surface-strong)',
+              backdropFilter: 'blur(32px) saturate(150%)',
+              boxShadow: 'var(--nb-shadow-hover)',
+              border: '1px solid var(--nb-border)',
+              padding: '12px 24px',
+              borderRadius: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 20
+            }}
+          >
+            <div style={{ color: 'var(--nb-ink)', fontSize: 'var(--nb-text-sm)', fontWeight: 600, marginRight: 8 }}>
+              已选择 {selectedFileIds.length} 项
+            </div>
+            
+            <Flex gap={8}>
+              <Button 
+                type="primary" 
+                icon={<BranchesOutlined />}
+                disabled={!canIndexSelectedDocuments}
+                onClick={() => onIndexSelected()}
+                loading={loading.indexing}
+              >
+                建索引
+              </Button>
+              <Button 
+                type="default"
+                icon={<RetweetOutlined />}
+                disabled={!canParseSelectedDocuments}
+                onClick={() => onParseSelected()}
+              >
+                重新解析
+              </Button>
+              <Button 
+                type="default"
+                icon={<FolderOpenOutlined />}
+                disabled={!hasSingleSelection}
+                onClick={onOpenMoveModal}
+              >
+                移动
+              </Button>
+              <Button 
+                danger 
+                type="primary"
+                icon={<DeleteOutlined />}
+                onClick={() => onDeleteSelectedFiles()}
+              >
+                删除
+              </Button>
+            </Flex>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Flex>
   )
 
@@ -785,6 +798,18 @@ export default function KnowledgeWorkspace() {
               </Flex>
             </Collapse.Panel>
           </Collapse>
+
+          {/* ━━━ 危险操作区 ━━━ */}
+          <SectionCard
+            title="危险操作"
+            description="删除知识库将永久销毁其所有的文档和索引数据，且无法恢复。"
+          >
+            <Flex justify="flex-end">
+              <Button danger icon={<DeleteOutlined />} onClick={onDeleteKnowledgeBase}>
+                永久删除此知识库
+              </Button>
+            </Flex>
+          </SectionCard>
         </Flex>
       ),
     },
@@ -829,9 +854,9 @@ export default function KnowledgeWorkspace() {
         <div className="knowledge-page-header">
           <Flex justify="space-between" align="flex-start" gap={16}>
             <div>
-              <h1 className="knowledge-page-title">{currentKb.name}</h1>
-              <Typography.Text type="secondary">{currentKb.description || '暂无描述'}</Typography.Text>
-              <div style={{ marginTop: 12 }}>
+              <h1 className="knowledge-page-title" style={{ marginBottom: 8 }}>{currentKb.name}</h1>
+              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{currentKb.description || '暂无描述'}</Typography.Text>
+              <div>
                 <Space wrap size={[8, 8]}>
                   <Tag color={currentKb.enabled ? 'success' : 'default'} bordered={false}>{currentKb.enabled ? '已启用' : '已停用'}</Tag>
                   <Tag bordered={false}>{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
@@ -841,24 +866,7 @@ export default function KnowledgeWorkspace() {
                 </Space>
               </div>
             </div>
-            
-            <Space wrap size={[8, 8]}>
-              <Button icon={<ReloadOutlined />} onClick={onRefreshDetail}>
-                刷新
-              </Button>
-              <Button onClick={() => handleTabChange('settings')}>设置</Button>
-              <Button danger icon={<DeleteOutlined />} onClick={onDeleteKnowledgeBase}>
-                删除
-              </Button>
-            </Space>
           </Flex>
-
-          <div className="knowledge-metrics-grid" style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
-            <MetricCard label="文件记录" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
-            <MetricCard label="已索引" value={filesState.stats.indexedCount} icon={<BranchesOutlined />} tone="success" />
-            <MetricCard label="待处理" value={pendingParseCount + pendingIndexCount} icon={<RetweetOutlined />} tone={pendingParseCount + pendingIndexCount > 0 ? 'warning' : 'neutral'} />
-            <MetricCard label="异常" value={filesState.stats.errorCount} icon={<FileSearchOutlined />} tone={filesState.stats.errorCount > 0 ? 'error' : 'neutral'} />
-          </div>
         </div>
 
         {(pendingParseCount > 0 || pendingIndexCount > 0) && (

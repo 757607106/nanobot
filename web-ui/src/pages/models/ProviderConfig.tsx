@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { Button, Flex, Input, Space, Tag, Typography, theme } from 'antd'
-import { ExperimentOutlined, SyncOutlined } from '@ant-design/icons'
+import { ExperimentOutlined, SyncOutlined, SafetyCertificateOutlined, LinkOutlined, AppstoreOutlined } from '@ant-design/icons'
 import SectionCard from '../../components/console/SectionCard'
+import MetricCard from '../../components/console/MetricCard'
 import ProviderAvatar from './ProviderAvatar'
 import { hasCredentialMaterial } from './utils'
 import type { ConfigData, ConfigMeta, ModelBinding } from '../../types'
@@ -84,27 +85,27 @@ export default function ProviderConfig({
           </Space>
         </Flex>
 
-        <div className="resource-summary-strip">
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">接入方式</span>
-            <span className="resource-summary-value" style={{ fontSize: 18 }}>
-              {providerMeta.isOauth ? 'OAuth' : 'API Key'}
-            </span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">默认地址</span>
-            <span className="resource-summary-value" style={{ fontSize: 16 }}>
-              {providerMeta.defaultApiBase ? '已提供' : '自定义'}
-            </span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">当前默认绑定</span>
-            <span className="resource-summary-value" style={{ fontSize: 16 }}>
-              {bindings[defaultBindingName ?? '']?.provider === providerName
+        <div className="console-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <MetricCard
+            label="接入方式"
+            value={providerMeta.isOauth ? 'OAuth' : 'API Key'}
+            icon={<SafetyCertificateOutlined />}
+            tone="neutral"
+          />
+          <MetricCard
+            label="默认地址"
+            value={providerMeta.defaultApiBase ? '已提供' : '自定义'}
+            icon={<LinkOutlined />}
+            tone="neutral"
+          />
+          <MetricCard
+            label="当前默认绑定"
+            value={bindings[defaultBindingName ?? '']?.provider === providerName
                 ? bindings[defaultBindingName ?? '']?.label || defaultBindingName
                 : '未占用'}
-            </span>
-          </div>
+            icon={<AppstoreOutlined />}
+            tone={bindings[defaultBindingName ?? '']?.provider === providerName ? 'primary' : 'neutral'}
+          />
         </div>
 
 

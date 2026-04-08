@@ -85,8 +85,8 @@ export const TRANSITIONS = {
 // ==================== 布局常量 ====================
 // 对应 CSS 变量: --nb-content-max-width, --nb-layout-gutter 等
 export const LAYOUT = {
-  /** 侧边栏宽度 - 288px */
-  siderWidth: 288,
+  /** 侧边栏宽度 - 240px */
+  siderWidth: 240,
   /** 头部高度 - 56px */
   headerHeight: 56,
   /** 内容最大宽度 - 1600px */

@@ -23,12 +23,17 @@ import {
   ReloadOutlined,
   SaveOutlined,
   SearchOutlined,
+  DashboardOutlined,
+  SafetyCertificateOutlined,
+  AppstoreOutlined,
+  LinkOutlined
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import { channelCategoryLabels, channelMetas, type FieldMeta } from '../../configMeta'
 import PageHeader from '../../components/console/PageHeader'
 import SectionCard from '../../components/console/SectionCard'
+import MetricCard from '../../components/console/MetricCard'
 import { testIds } from '../../testIds'
 import type { ChannelDetailResponse, ChannelProbeResult, WhatsAppBindingStatus, WeixinBindingStatus } from '../../types'
 import {
@@ -490,17 +495,19 @@ export default function ChannelDetailPage() {
             >
               {probeResult ? (
                 <Flex vertical gap={12}>
-                  <div className="resource-summary-strip">
-                    <div className="resource-summary-tile">
-                      <span className="resource-summary-label">检测结论</span>
-                      <span className="resource-summary-value" style={{ fontSize: 18 }}>{probeResult.statusLabel}</span>
-                    </div>
-                    <div className="resource-summary-tile">
-                      <span className="resource-summary-label">绑定状态</span>
-                      <span className="resource-summary-value" style={{ fontSize: 18 }}>
-                        {probeResult.bindingRequired ? '仍需绑定' : '已就绪'}
-                      </span>
-                    </div>
+                  <div className="console-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                    <MetricCard
+                      label="检测结论"
+                      value={probeResult.statusLabel}
+                      icon={<DashboardOutlined />}
+                      tone={probeResult.status === 'failed' ? 'error' : probeResult.status === 'warning' ? 'warning' : 'success'}
+                    />
+                    <MetricCard
+                      label="绑定状态"
+                      value={probeResult.bindingRequired ? '仍需绑定' : '已就绪'}
+                      icon={<LinkOutlined />}
+                      tone={probeResult.bindingRequired ? 'warning' : 'success'}
+                    />
                   </div>
 
                   {probeResult.checks.length > 0 && (
@@ -569,19 +576,19 @@ export default function ChannelDetailPage() {
               >
                 {whatsappBinding ? (
                   <Flex vertical gap={12}>
-                    <div className="resource-summary-strip">
-                      <div className="resource-summary-tile">
-                        <span className="resource-summary-label">桥接进程</span>
-                        <span className="resource-summary-value" style={{ fontSize: 18 }}>
-                          {whatsappBinding.running ? '运行中' : '未运行'}
-                        </span>
-                      </div>
-                      <div className="resource-summary-tile">
-                        <span className="resource-summary-label">认证状态</span>
-                        <span className="resource-summary-value" style={{ fontSize: 18 }}>
-                          {whatsappBinding.authPresent ? '已认证' : '未认证'}
-                        </span>
-                      </div>
+                    <div className="console-metrics-grid" style={{ marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                      <MetricCard
+                        label="桥接进程"
+                        value={whatsappBinding.running ? '运行中' : '未运行'}
+                        icon={<AppstoreOutlined />}
+                        tone={whatsappBinding.running ? 'success' : 'neutral'}
+                      />
+                      <MetricCard
+                        label="认证状态"
+                        value={whatsappBinding.authPresent ? '已认证' : '未认证'}
+                        icon={<SafetyCertificateOutlined />}
+                        tone={whatsappBinding.authPresent ? 'success' : 'warning'}
+                      />
                     </div>
                     <Space wrap>
                       <Tag color={whatsappBinding.running ? 'success' : 'default'}>
@@ -647,19 +654,19 @@ export default function ChannelDetailPage() {
               >
                 {weixinBinding ? (
                   <Flex vertical gap={12}>
-                    <div className="resource-summary-strip">
-                      <div className="resource-summary-tile">
-                        <span className="resource-summary-label">桥接进程</span>
-                        <span className="resource-summary-value" style={{ fontSize: 18 }}>
-                          {weixinBinding.running ? '运行中' : '未运行'}
-                        </span>
-                      </div>
-                      <div className="resource-summary-tile">
-                        <span className="resource-summary-label">认证状态</span>
-                        <span className="resource-summary-value" style={{ fontSize: 18 }}>
-                          {weixinBinding.authenticated ? '已认证' : '未认证'}
-                        </span>
-                      </div>
+                    <div className="console-metrics-grid" style={{ marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                      <MetricCard
+                        label="桥接进程"
+                        value={weixinBinding.running ? '运行中' : '未运行'}
+                        icon={<AppstoreOutlined />}
+                        tone={weixinBinding.running ? 'success' : 'neutral'}
+                      />
+                      <MetricCard
+                        label="认证状态"
+                        value={weixinBinding.authenticated ? '已认证' : '未认证'}
+                        icon={<SafetyCertificateOutlined />}
+                        tone={weixinBinding.authenticated ? 'success' : 'warning'}
+                      />
                     </div>
                     <Space wrap>
                       <Tag color={weixinBinding.running ? 'processing' : 'default'}>

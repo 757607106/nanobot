@@ -1,7 +1,8 @@
 import { Button, Empty, Space, Table } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { ReloadOutlined, DatabaseOutlined, ProfileOutlined, CheckSquareOutlined, AimOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import SectionCard from '../../components/console/SectionCard'
+import MetricCard from '../../components/console/MetricCard'
 import type { KnowledgeBenchmark } from '../../types'
 
 interface KnowledgeBenchmarksTabProps {
@@ -42,23 +43,31 @@ export function KnowledgeBenchmarksTab({
           </Space>
         )}
       >
-        <div className="resource-summary-strip">
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">基准数量</span>
-            <span className="resource-summary-value">{benchmarks.length}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">题目总数</span>
-            <span className="resource-summary-value">{totalQuestions}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">标准答案</span>
-            <span className="resource-summary-value">{goldAnswerCount}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">标准命中块</span>
-            <span className="resource-summary-value">{goldChunkCount}</span>
-          </div>
+        <div className="knowledge-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+          <MetricCard
+            label="基准数量"
+            value={benchmarks.length}
+            icon={<DatabaseOutlined />}
+            tone="neutral"
+          />
+          <MetricCard
+            label="题目总数"
+            value={totalQuestions}
+            icon={<ProfileOutlined />}
+            tone="neutral"
+          />
+          <MetricCard
+            label="标准答案"
+            value={goldAnswerCount}
+            icon={<CheckSquareOutlined />}
+            tone="success"
+          />
+          <MetricCard
+            label="标准命中块"
+            value={goldChunkCount}
+            icon={<AimOutlined />}
+            tone="success"
+          />
         </div>
 
         <Table

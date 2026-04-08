@@ -69,22 +69,6 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
           }}
           autoSize={{ minRows: 1, maxRows: 5 }}
           placeholder={`给 ${assistantLabel} 发送消息`}
-          style={{
-            borderRadius: surfaceRadius,
-            border: `1px solid ${token.colorBorderSecondary}`,
-            background: token.colorBgContainer,
-            boxShadow: token.boxShadowTertiary,
-          }}
-          styles={{
-            content: {
-              gap: 12,
-              padding: 12,
-              alignItems: 'flex-end',
-            },
-            footer: {
-              padding: '0 12px 12px',
-            },
-          }}
           header={
             showSenderHeader ? (
               <Sender.Header open title="本轮上下文" closable={false}>
@@ -119,41 +103,26 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
             ) : null
           }
           prefix={
-            <Space size={8}>
-              <span data-testid={testIds.chat.fileInput}>
-                <Attachments
-                  items={pendingAttachments}
-                  multiple
-                  disabled={uploadingFiles}
-                  beforeUpload={() => false}
-                  onChange={({ fileList }) => onPendingAttachmentsChange(fileList as ComposerAttachment[])}
-                  getDropContainer={() => dropContainerRef.current}
-                  placeholder={{
-                    icon: <CloudUploadOutlined />,
-                    title: '拖拽文件到这里',
-                    description: '发送时自动上传。',
-                  }}
-                >
-                  <Button
-                    type="text"
-                    icon={<LinkOutlined />}
-                    disabled={uploadingFiles}
-                    data-testid={testIds.chat.uploadFile}
-                  />
-                </Attachments>
-              </span>
-            </Space>
-          }
-          footer={
-            <Flex justify="space-between" align="center" gap={8} wrap="wrap">
-              <Text type="secondary">
-                {uploadingFiles
-                  ? '附件上传中...'
-                  : pendingAttachments.length
-                    ? `按 Enter 发送，${pendingAttachments.length} 个附件会随消息一并上传。`
-                    : 'Enter 发送，Shift + Enter 换行。'}
-              </Text>
-            </Flex>
+            <Attachments
+              items={pendingAttachments}
+              multiple
+              disabled={uploadingFiles}
+              beforeUpload={() => false}
+              onChange={({ fileList }) => onPendingAttachmentsChange(fileList as ComposerAttachment[])}
+              getDropContainer={() => dropContainerRef.current}
+              placeholder={{
+                icon: <CloudUploadOutlined />,
+                title: '拖拽文件到这里',
+                description: '发送时自动上传',
+              }}
+            >
+              <Button
+                type="text"
+                icon={<LinkOutlined />}
+                disabled={uploadingFiles}
+                data-testid={testIds.chat.uploadFile}
+              />
+            </Attachments>
           }
         />
       </div>

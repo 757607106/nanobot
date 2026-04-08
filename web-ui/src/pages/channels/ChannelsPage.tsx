@@ -489,7 +489,7 @@ export default function ChannelsPage() {
         title="渠道接入"
         actions={
           <Space>
-            <Dropdown dropdownRender={() => deliverySettingsMenu} trigger={['click']} placement="bottomRight">
+            <Dropdown popupRender={() => deliverySettingsMenu} trigger={['click']} placement="bottomRight">
               <Button icon={<SettingOutlined />}>
                 投递设置
               </Button>

@@ -2,16 +2,16 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ApiOutlined,
-  AppstoreOutlined,
-  BookOutlined,
-  ClusterOutlined,
-  DashboardOutlined,
-  ExperimentOutlined,
+  BlockOutlined,
+  ControlOutlined,
+  DatabaseOutlined,
+  FundProjectionScreenOutlined,
   LogoutOutlined,
   MenuOutlined,
   MessageOutlined,
-  RobotOutlined,
-  SettingOutlined,
+  PartitionOutlined,
+  SendOutlined,
+  ThunderboltOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { Avatar, Button, Drawer, Flex, Menu, Typography, theme } from 'antd'
@@ -45,76 +45,76 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
   return [
     {
       key: 'overview',
-      label: '总览',
+      label: '控制平面',
       routes: [
         {
           key: '/dashboard',
-          icon: <DashboardOutlined />,
-          label: '总览',
+          icon: <FundProjectionScreenOutlined />,
+          label: '数据看板',
           testId: testIds.app.navDashboard,
         },
       ],
     },
     {
       key: 'workspace',
-      label: '工作台',
+      label: '工作空间',
       routes: [
         {
           key: '/chat',
           icon: <MessageOutlined />,
-          label: '对话',
+          label: '智能助手',
           testId: testIds.app.navChat,
         },
         {
           key: '/studio',
-          icon: <RobotOutlined />,
-          label: 'Agent Studio',
+          icon: <PartitionOutlined />,
+          label: 'Agent 工坊',
           testId: testIds.app.navStudio,
         },
         {
           key: '/channels',
-          icon: <ClusterOutlined />,
-          label: '渠道',
+          icon: <SendOutlined />,
+          label: '分发渠道',
           testId: testIds.app.navChannels,
         },
         {
           key: '/knowledge',
-          icon: <BookOutlined />,
-          label: '知识库',
+          icon: <DatabaseOutlined />,
+          label: '知识引擎',
           testId: testIds.app.navKnowledge,
         },
       ],
     },
     {
       key: 'build',
-      label: '配置',
+      label: '基础设施',
       routes: [
         {
           key: '/models',
-          icon: <ExperimentOutlined />,
-          label: '模型',
+          icon: <BlockOutlined />,
+          label: '模型托管',
         },
         {
           key: '/skills',
-          icon: <AppstoreOutlined />,
-          label: '技能',
+          icon: <ThunderboltOutlined />,
+          label: '扩展技能',
         },
         {
           key: '/mcp',
           icon: <ApiOutlined />,
-          label: devMode ? 'MCP' : '连接',
+          label: devMode ? 'MCP 协议' : '服务集成',
           testId: testIds.app.navMcp,
         },
       ],
     },
     {
       key: 'system',
-      label: '系统',
+      label: '管理后台',
       routes: [
         {
           key: '/system',
-          icon: <SettingOutlined />,
-          label: '设置',
+          icon: <ControlOutlined />,
+          label: '系统偏好',
         },
       ],
     },
@@ -191,11 +191,11 @@ export default function AppShell() {
     return (
       <Flex vertical style={{ height: '100%' }}>
         {/* Logo 区域 */}
-        <Flex align="center" gap={12} style={{ padding: '16px 24px' }}>
+        <Flex align="center" gap={12} style={{ padding: '16px 20px' }}>
           <Avatar
             alt={PLATFORM_BRAND_NAME}
             src={PLATFORM_BRAND_LOGO_SRC}
-            size={40}
+            size={36}
             shape="square"
             style={{ flexShrink: 0 }}
           />
@@ -272,7 +272,7 @@ export default function AppShell() {
               </Typography.Text>
               <Typography.Text
                 strong
-                style={{ display: 'block', maxWidth: 180 }}
+                style={{ display: 'block', maxWidth: 140 }}
                 ellipsis
               >
                 {authStatus?.username || '—'}
@@ -304,13 +304,17 @@ export default function AppShell() {
         <aside
           style={{
             position: 'sticky',
-            top: 0,
-            height: '100vh',
+            top: 16,
+            height: 'calc(100vh - 32px)',
+            marginLeft: 16,
+            borderRadius: 24,
             overflow: 'auto',
             width: LAYOUT.siderWidth,
             background: 'var(--nb-sider-bg)',
-            borderRight: '1px solid var(--nb-sider-border)',
+            border: '1px solid var(--nb-sider-border)',
             boxShadow: 'var(--nb-sider-shadow)',
+            backdropFilter: 'blur(32px) saturate(140%)',
+            zIndex: 100,
           }}
         >
           {renderNavigation()}
@@ -334,81 +338,65 @@ export default function AppShell() {
       )}
 
       <div className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''}`} style={{ display: 'flex', flex: 1, flexDirection: 'column', minWidth: 0 }}>
-        <header
-          style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            height: LAYOUT.headerHeight,
-            paddingInline: isDesktop ? 24 : 16,
-            background: token.colorBgContainer,
-            borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          }}
-        >
-          <Flex align="center" gap={12} style={{ minWidth: 0, flex: 1 }}>
-            {!isDesktop ? (
+        {!isDesktop && (
+          <header
+            style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 20,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              height: LAYOUT.headerHeight,
+              paddingInline: 16,
+              background: 'color-mix(in srgb, var(--nb-body-bg) 70%, transparent)',
+              backdropFilter: 'blur(20px)',
+              borderBottom: `1px solid color-mix(in srgb, var(--nb-border) 60%, transparent)`,
+            }}
+          >
+            <Flex align="center" gap={12} style={{ minWidth: 0, flex: 1 }}>
               <Button
                 type="text"
                 icon={<MenuOutlined />}
                 onClick={() => setMobileNavOpen(true)}
                 aria-label="打开导航"
               />
-            ) : null}
 
-            <div style={{ minWidth: 0 }}>
-              <Typography.Text
-                type="secondary"
-                style={{
-                  display: 'block',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {activeSection.label}
-              </Typography.Text>
-              <Typography.Text
-                strong
-                style={{
-                  display: 'block',
-                  marginTop: 2,
-                  fontSize: 14,
-                  lineHeight: 1.2,
-                }}
-              >
-                {activeRoute.label}
-              </Typography.Text>
-            </div>
-          </Flex>
-
-          {isDesktop ? (
-            <Flex align="center" gap={16} style={{ minWidth: 0 }}>
-              <Avatar
-                icon={<UserOutlined />}
-                onClick={() => navigate('/system/admin')}
-                style={{
-                  backgroundColor: token.colorPrimaryBg,
-                  color: token.colorPrimary,
-                  cursor: 'pointer',
-                  border: `1px solid ${token.colorBorderSecondary}`
-                }}
-              >
-                {authStatus?.username?.slice(0, 1).toUpperCase()}
-              </Avatar>
+              <div style={{ minWidth: 0 }}>
+                <Typography.Text
+                  type="secondary"
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {activeSection.label}
+                </Typography.Text>
+                <Typography.Text
+                  strong
+                  style={{
+                    display: 'block',
+                    marginTop: 2,
+                    fontSize: 14,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {activeRoute.label}
+                </Typography.Text>
+              </div>
             </Flex>
-          ) : null}
-        </header>
+          </header>
+        )}
 
         <main
           className={`app-content ${isChatRoute ? 'app-content-chat' : ''}`}
           style={{
             flex: 1,
             minWidth: 0,
-            padding: isChatRoute ? '16px 18px 22px' : '22px 22px 28px',
+            padding: isChatRoute ? '12px 16px 16px' : '16px 20px 24px',
           }}
         >
           <AnimatePresence initial={false} mode="wait">

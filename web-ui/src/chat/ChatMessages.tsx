@@ -1,7 +1,7 @@
 import type { ComponentProps, ComponentRef } from 'react'
 import { useRef } from 'react'
 import type { MessageInfo } from '@ant-design/x-sdk'
-import { Bubble } from '@ant-design/x'
+import { Bubble, Welcome } from '@ant-design/x'
 import { Button, Card, Empty, Flex, Space, Spin, Typography, theme } from 'antd'
 import { ReloadOutlined, RobotOutlined, ToolOutlined, UserOutlined } from '@ant-design/icons'
 import { ChatMessageBody, getChatMessageTitle } from './chatPresentation'
@@ -59,23 +59,23 @@ export function ChatMessages({
     const isTool = item.role === 'tool'
     const canReload = isAssistant && !isRequesting
 
-    let background = token.colorBgElevated
-    let borderColor = token.colorBorderSecondary
+    let background = 'var(--nb-surface-panel-bg)'
+    let borderColor = 'var(--nb-surface-panel-border)'
     let color = token.colorText
 
     if (isUser) {
-      background = `linear-gradient(135deg, ${token.colorPrimary}, ${token.colorInfo})`
-      borderColor = token.colorPrimaryBorder
-      color = token.colorWhite
+      background = `linear-gradient(135deg, var(--nb-accent) 0%, var(--nb-accent-2) 100%)`
+      borderColor = 'transparent'
+      color = 'var(--nb-ink)'
     } else if (isTool) {
-      background = token.colorFillTertiary
-      borderColor = token.colorBorder
+      background = 'var(--nb-card-subtle-bg)'
+      borderColor = 'var(--nb-card-subtle-border)'
     }
 
     if (info.status === 'error') {
-      borderColor = token.colorErrorBorder
+      borderColor = 'var(--nb-error)'
     } else if (info.status === 'abort') {
-      borderColor = token.colorWarningBorder
+      borderColor = 'var(--nb-warning)'
     }
 
     return {
@@ -88,12 +88,13 @@ export function ChatMessages({
       avatar: {
         icon: isUser ? <UserOutlined /> : isTool ? <ToolOutlined /> : <RobotOutlined />,
         style: {
-          background: isUser ? token.colorPrimary : isTool ? token.colorWarning : token.colorInfo,
-          color: token.colorWhite,
+          background: isUser ? 'var(--nb-accent)' : isTool ? 'var(--nb-warning)' : 'var(--nb-surface-panel-bg)',
+          color: isUser ? 'var(--nb-ink)' : token.colorText,
+          boxShadow: 'var(--nb-shadow-soft)',
         },
       },
-      variant: isUser ? 'filled' : isTool ? 'outlined' : 'shadow',
-      shape: 'corner',
+      variant: 'borderless', // custom defined via styles
+      shape: 'round',
       classNames: {
         content: [
           'chat-bubble-content',
@@ -106,12 +107,13 @@ export function ChatMessages({
       },
       styles: {
         content: {
-          borderRadius: surfaceRadius,
-          padding: isDesktopLayout ? '16px 18px' : '14px 16px',
+          borderRadius: 20,
+          padding: isDesktopLayout ? '16px 20px' : '14px 18px',
           background,
           border: `1px solid ${borderColor}`,
           color,
-          boxShadow: isUser ? token.boxShadowSecondary : token.boxShadowTertiary,
+          boxShadow: isUser ? '0 12px 24px rgba(36, 88, 198, 0.12)' : 'var(--nb-surface-soft-shadow)',
+          backdropFilter: isUser ? 'none' : 'blur(28px) saturate(140%)',
         },
         header: {
           marginBottom: 8,
@@ -163,25 +165,11 @@ export function ChatMessages({
         </Flex>
       ) : messageInfos.length === 0 ? (
         <Flex vertical align="center" justify="center" gap={16} style={{ minHeight: '100%', padding: 24 }}>
-          <Empty
-            description={
-              currentSessionId
-                ? '开始对话'
-                : '新建会话以开始'
-            }
+          <Welcome
+            variant="borderless"
+            title={assistantLabel}
+            description="有什么想聊的或者需要帮忙的吗？"
           />
-          {quickPrompts?.length ? (
-            <Space wrap>
-              {quickPrompts.slice(0, 4).map((prompt) => (
-                <Button
-                  key={prompt}
-                  onClick={() => onQuickPromptClick(prompt)}
-                >
-                  {prompt}
-                </Button>
-              ))}
-            </Space>
-          ) : null}
         </Flex>
       ) : (
         <div data-testid={testIds.chat.bubbleList}>

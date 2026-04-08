@@ -48,15 +48,42 @@ export default function MetricCard({
         position: 'relative',
         height: '100%',
         overflow: 'hidden',
-        background: 'transparent',
+        background: 'var(--nb-surface-panel-bg)',
+        border: '1px solid var(--nb-surface-panel-border)',
+        borderRadius: 24,
+        boxShadow: 'var(--nb-surface-panel-shadow)',
+        backdropFilter: 'blur(32px) saturate(140%)',
+        transition: 'all 220ms ease',
+        cursor: 'default',
       }}
+      hoverable
       styles={{
         body: {
           padding: 'var(--nb-spacing-md) var(--nb-spacing-lg)',
+          position: 'static',
         },
       }}
     >
-      <Flex vertical gap={6}>
+      {icon ? (
+        <div style={{
+          position: 'absolute',
+          bottom: -20,
+          right: -10,
+          fontSize: 90,
+          opacity: 0.06,
+          color: toneColor,
+          zIndex: 0,
+          pointerEvents: 'none',
+          transform: 'rotate(-10deg)',
+          transition: 'all 300ms ease',
+        }}
+        className="metric-card-watermark"
+        >
+          {icon}
+        </div>
+      ) : null}
+      
+      <Flex vertical gap={6} style={{ position: 'relative', zIndex: 1 }}>
         <Flex justify="space-between" align="center" gap={8} className="metric-card-head">
           <Typography.Text
             className="metric-card-label"

@@ -40,7 +40,7 @@ export default function AgentList({
   }, [agents, searchQuery])
 
   return (
-    <Flex vertical gap={24} style={{ padding: '32px max(24px, calc((100% - var(--nb-content-max-width)) / 2))' }}>
+    <Flex vertical gap={24}>
       <Flex align="center" justify="space-between" wrap="wrap" gap={16}>
         <div>
           <Typography.Title level={3} style={{ margin: 0, fontWeight: 700 }}>

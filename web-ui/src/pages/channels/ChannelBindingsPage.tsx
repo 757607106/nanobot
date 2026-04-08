@@ -22,6 +22,10 @@ import {
   ReloadOutlined,
   SaveOutlined,
   SearchOutlined,
+  ShareAltOutlined,
+  MessageOutlined,
+  UserOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api'
@@ -389,25 +393,31 @@ export default function ChannelBindingsPage() {
             title={currentBinding ? '规则详情' : '新建规则'}
             action={currentBinding ? <Tag color="purple">{currentBinding.bindingId}</Tag> : null}
           >
-            <div className="resource-summary-strip">
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">来源渠道</span>
-                <span className="resource-summary-value" style={{ fontSize: 'var(--nb-text-lg)' }}>{formState.channelName || '待选择'}</span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">命中会话</span>
-                <span className="resource-summary-value" style={{ fontSize: 'var(--nb-text-lg)' }}>
-                  {formState.channelChatId?.trim() ? formState.channelChatId : '*'}
-                </span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">派发目标</span>
-                <span className="resource-summary-value" style={{ fontSize: 'var(--nb-text-lg)' }}>{selectedTargetLabel}</span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">规则状态</span>
-                <span className="resource-summary-value" style={{ fontSize: 'var(--nb-text-lg)' }}>{formState.enabled ? '启用' : '禁用'}</span>
-              </div>
+            <div className="console-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              <MetricCard
+                label="来源渠道"
+                value={formState.channelName || '待选择'}
+                icon={<ShareAltOutlined />}
+                tone={formState.channelName ? 'primary' : 'neutral'}
+              />
+              <MetricCard
+                label="命中会话"
+                value={formState.channelChatId?.trim() ? formState.channelChatId : '*'}
+                icon={<MessageOutlined />}
+                tone="neutral"
+              />
+              <MetricCard
+                label="派发目标"
+                value={selectedTargetLabel}
+                icon={<UserOutlined />}
+                tone={formState.targetId ? 'success' : 'neutral'}
+              />
+              <MetricCard
+                label="规则状态"
+                value={formState.enabled ? '启用' : '禁用'}
+                icon={<CheckCircleOutlined />}
+                tone={formState.enabled ? 'success' : 'neutral'}
+              />
             </div>
 
             {currentBindingMissingTarget ? <Alert type="warning" showIcon message="目标员工不存在" /> : null}

@@ -14,8 +14,9 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { SaveOutlined, SearchOutlined } from '@ant-design/icons'
+import { SaveOutlined, SearchOutlined, MessageOutlined, FileTextOutlined, ApartmentOutlined, LinkOutlined } from '@ant-design/icons'
 import SectionCard from '../../components/console/SectionCard'
+import MetricCard from '../../components/console/MetricCard'
 import type { KnowledgeQueryChunk, KnowledgeQueryParams, KnowledgeRetrieveResult } from '../../types'
 
 const { Paragraph, Text } = Typography
@@ -211,25 +212,31 @@ export function KnowledgeQueryTab({
       >
         {queryResult ? (
           <>
-            <div className="resource-summary-strip">
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">回答状态</span>
-                <span className="resource-summary-value" style={{ fontSize: 16 }}>
-                  {answerMessage ? '已返回回答' : '无直接回答'}
-                </span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">文档片段</span>
-                <span className="resource-summary-value">{resultStats.chunkCount}</span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">实体与关系</span>
-                <span className="resource-summary-value">{resultStats.entityCount + resultStats.relationshipCount}</span>
-              </div>
-              <div className="resource-summary-tile">
-                <span className="resource-summary-label">引用</span>
-                <span className="resource-summary-value">{resultStats.referenceCount}</span>
-              </div>
+            <div className="knowledge-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              <MetricCard
+                label="回答状态"
+                value={answerMessage ? '已返回回答' : '无直接回答'}
+                icon={<MessageOutlined />}
+                tone={answerMessage ? 'success' : 'neutral'}
+              />
+              <MetricCard
+                label="文档片段"
+                value={resultStats.chunkCount}
+                icon={<FileTextOutlined />}
+                tone="neutral"
+              />
+              <MetricCard
+                label="实体与关系"
+                value={resultStats.entityCount + resultStats.relationshipCount}
+                icon={<ApartmentOutlined />}
+                tone="neutral"
+              />
+              <MetricCard
+                label="引用"
+                value={resultStats.referenceCount}
+                icon={<LinkOutlined />}
+                tone="neutral"
+              />
             </div>
 
             {resultView === 'raw' ? (

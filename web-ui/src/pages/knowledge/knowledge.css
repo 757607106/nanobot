@@ -1,23 +1,5 @@
 /* Knowledge Module Styles - Optimized for Tailwind + Design Tokens */
 
-/* Stat Grid - Keep for Ant Design Statistic integration */
-.knowledge-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.knowledge-stat-grid.is-graph {
-  margin-bottom: 12px;
-}
-
-.knowledge-stat-grid .ant-statistic {
-  padding: 14px;
-  border: 1px solid var(--nb-border);
-  border-radius: var(--nb-radius-lg);
-  background: var(--nb-surface);
-}
-
 /* Tab Panel Layout */
 .knowledge-tab-panel {
   display: flex;
@@ -131,7 +113,7 @@
 
 .knowledge-file-detail-chunks {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 12px;
   max-height: 60vh;
   overflow: auto;
@@ -153,22 +135,29 @@
   background: linear-gradient(180deg, var(--nb-surface-strong), var(--nb-surface));
 }
 
+@keyframes upload-pulse-glow {
+  0% { box-shadow: 0 0 0 0 rgba(36, 88, 198, 0.25); }
+  70% { box-shadow: 0 0 0 10px rgba(36, 88, 198, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(36, 88, 198, 0); }
+}
+
 .knowledge-upload-dropzone {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 16px;
   padding: 18px;
-  border-radius: var(--nb-radius-lg);
+  border-radius: 20px;
   border: 1px dashed var(--nb-border-strong);
-  background: var(--nb-surface);
+  background: linear-gradient(180deg, var(--nb-surface), var(--nb-card-subtle-bg));
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .knowledge-upload-dropzone:hover {
-  border-color: var(--nb-accent-soft);
-  box-shadow: var(--nb-shadow-soft);
+  border-color: var(--nb-accent);
+  background: linear-gradient(180deg, rgba(36, 88, 198, 0.03), rgba(36, 88, 198, 0.08));
+  animation: upload-pulse-glow 2s infinite;
 }
 
 /* Graph Visualization Styles */
@@ -386,6 +375,7 @@
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
 }
 
@@ -583,17 +573,45 @@
 }
 
 .knowledge-job-item {
+  position: relative;
   padding: var(--nb-spacing-md);
-  border-radius: var(--nb-radius-lg);
+  border-radius: 16px;
   border: 1px solid var(--nb-border);
   background: var(--nb-surface);
+  overflow: hidden;
+  transition: all 0.22s ease;
+}
+
+@keyframes stripe-flow {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+.knowledge-job-item.is-processing::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    45deg,
+    rgba(36, 88, 198, 0.04) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(36, 88, 198, 0.04) 50%,
+    rgba(36, 88, 198, 0.04) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 40px 40px;
+  animation: stripe-flow 1.5s linear infinite;
+  pointer-events: none;
 }
 
 /* Settings Grid */
 .knowledge-settings-grid {
   display: grid;
-  gap: var(--nb-spacing-md);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nb-spacing-lg);
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  align-items: start;
 }
 
 @media (max-width: 768px) {
@@ -604,13 +622,6 @@
 
 /* Responsive Breakpoints */
 @media (max-width: 1200px) {
-  .knowledge-stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .knowledge-file-detail-chunks {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .knowledge-graph-browser {
     grid-template-columns: 1fr;
@@ -871,7 +882,7 @@
 
 .knowledge-tab-content-borderless {
   background: transparent;
-  padding: 0 0;
+  padding: 16px 0 0 0;
 }
 
 /* ── Section Header Stripped ── */

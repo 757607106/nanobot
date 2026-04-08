@@ -2,7 +2,7 @@ import type { ComponentProps, ComponentRef } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button, Flex, Grid, Input, Layout, Modal, Select, Space, Tag, Typography, theme } from 'antd'
-import { ReloadOutlined, RobotOutlined, SearchOutlined, SwapOutlined } from '@ant-design/icons'
+import { MenuFoldOutlined, MenuUnfoldOutlined, ReloadOutlined, RobotOutlined, SearchOutlined, SwapOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { PLATFORM_ASSISTANT_NAME } from '../branding'
@@ -23,7 +23,6 @@ import { useChatSession } from '../chat/useChatSession'
 const { Title, Text } = Typography
 const { Content, Sider } = Layout
 
-const SESSION_RAIL_WIDTH = 352
 
 export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const { modal } = App.useApp()
@@ -42,6 +41,35 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const [composerValue, setComposerValue] = useState('')
   const [agents, setAgents] = useState<AgentDefinition[]>([])
   const [loadingAgents, setLoadingAgents] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [siderWidth, setSiderWidth] = useState(260)
+  const isDragging = useRef(false)
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return
+      setSiderWidth((w) => Math.max(180, Math.min(800, w + e.movementX)))
+    }
+    const handleMouseUp = () => {
+      if (isDragging.current) {
+        isDragging.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
+
+  const handleMouseDown = () => {
+    isDragging.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
 
   const chatPanelRef = useRef<HTMLDivElement | null>(null)
   const senderRef = useRef<ComponentRef<typeof ChatInput> | null>(null)
@@ -220,30 +248,23 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
 
   const workspacePanel = (
     <div ref={chatPanelRef} style={{ height: '100%' }}>
-      <div
-        style={{
-          height: '100%',
-          minHeight: isDesktopLayout ? 0 : 680,
-          borderRadius: token.borderRadiusLG + 8,
-          background: token.colorBgContainer,
-          border: `1px solid ${token.colorBorderSecondary}`,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="chat-workspace-panel">
         {/* ── Header bar ── */}
         <Flex
           justify="space-between"
           align="center"
           gap={12}
-          style={{
-            padding: isDesktopLayout ? '14px 20px' : '12px 16px',
-            borderBottom: `1px solid ${token.colorBorderSecondary}`,
-            flexShrink: 0,
-          }}
+          className="chat-workspace-header"
         >
           <Flex align="center" gap={12} style={{ flex: 1, minWidth: 0 }}>
+            {isDesktopLayout && (
+              <Button
+                type="text"
+                icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                aria-label="展开/收起历史对话"
+              />
+            )}
             <Flex vertical gap={2} style={{ minWidth: 0 }}>
               <Title level={5} style={{ margin: 0, fontSize: 15 }} ellipsis>
                 {selectedSessionTitle}
@@ -263,7 +284,8 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
               options={agentSelectOptions}
               suffixIcon={<SwapOutlined />}
               popupMatchSelectWidth={false}
-              style={{ minWidth: 140, maxWidth: 220 }}
+              variant="filled"
+              className="chat-agent-select"
               size="middle"
               data-testid={testIds.chat.switchAgent}
               optionRender={(option) => (
@@ -330,16 +352,38 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
     <ErrorBoundary>
     <Layout className="page-stack" style={{ minHeight: 0, height: '100%', background: 'transparent' }}>
       {isDesktopLayout ? (
-        <Layout hasSider style={{ flex: 1, minHeight: 0, gap: 16, background: 'transparent' }}>
+        <Layout hasSider style={{ flex: 1, minHeight: 0, gap: 0, background: 'transparent' }}>
           <Sider
-            width={SESSION_RAIL_WIDTH}
+            width={sidebarCollapsed ? 0 : siderWidth}
             theme="light"
+            collapsible
+            collapsed={sidebarCollapsed}
+            onCollapse={(c) => setSidebarCollapsed(c)}
+            collapsedWidth={0}
+            trigger={null}
             style={{
               background: 'transparent',
             }}
           >
             {sessionRail}
           </Sider>
+          {!sidebarCollapsed && isDesktopLayout && (
+            <div
+              onMouseDown={handleMouseDown}
+              style={{
+                width: 8,
+                cursor: 'col-resize',
+                backgroundColor: 'transparent',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 10,
+              }}
+              title="拖拽调整侧边栏宽度"
+            >
+              <div style={{ width: 3, height: 24, borderRadius: 2, backgroundColor: 'color-mix(in srgb, var(--nb-border) 40%, transparent)' }} />
+            </div>
+          )}
           <Content style={{ minWidth: 0, background: 'transparent' }}>
             {workspacePanel}
           </Content>

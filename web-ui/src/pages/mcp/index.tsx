@@ -123,7 +123,7 @@ export default function McpPage() {
 
   if (loading && !data) {
     return (
-      <div className="page-stack" style={{ maxWidth: 1600, marginInline: 'auto', paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
+      <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
         <PageHeader title="MCP 扩展" />
         <SectionCard title="服务器清单">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3" style={{ gap: 'var(--nb-spacing-md)' }}>
@@ -145,7 +145,7 @@ export default function McpPage() {
   }
 
   return (
-    <div className="page-stack" style={{ maxWidth: 1600, marginInline: 'auto', paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
+    <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
       <PageHeader
         title="MCP 扩展"
         actions={

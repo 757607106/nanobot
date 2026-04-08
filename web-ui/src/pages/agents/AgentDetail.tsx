@@ -208,7 +208,7 @@ export default function AgentDetail({
   )
 
   return (
-    <Flex vertical gap={24} style={{ padding: '32px max(24px, calc((100% - var(--nb-content-max-width)) / 2))', minHeight: '100vh', background: 'var(--nb-body-bg)' }}>
+    <Flex vertical gap={24} style={{ minHeight: '100vh', background: 'var(--nb-body-bg)' }}>
       
       <div style={{
         background: 'var(--nb-surface-strong)',

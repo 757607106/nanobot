@@ -279,7 +279,7 @@ export default function ChannelAuditPage() {
           <Typography.Text type="secondary">最近 {data.limit} 条</Typography.Text>
         </Flex>
 
-        <Table
+        <Flex style={{ minWidth: 0 }}><Table
           dataSource={filteredItems}
           columns={allColumns}
           rowKey="auditId"
@@ -318,6 +318,7 @@ export default function ChannelAuditPage() {
           }}
           style={{ marginTop: 18 }}
         />
+        </Flex>
       </SectionCard>
     </div>
   )

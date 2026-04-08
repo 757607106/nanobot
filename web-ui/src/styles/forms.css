@@ -22,13 +22,13 @@
 
 .studio-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 24px;
 }
 
 .studio-form-field {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .studio-form-field > .ant-typography {

@@ -137,18 +137,26 @@ export default function ServerCard({ entry, loading, onToggle, onDelete }: Serve
         ) : null}
       </div>
 
-      <div className="resource-summary-strip" style={{ marginBottom: 'var(--nb-spacing-sm)' }}>
-        <div className="resource-summary-tile" style={{ padding: '10px 12px' }}>
-          <span className="resource-summary-label">验证状态</span>
-          <span className="resource-summary-helper" style={{ marginTop: 0 }}>
-            {entry.lastProbeStatus || statusInfo.label}
-          </span>
+      <div 
+        style={{ 
+          display: 'grid', 
+          gridTemplateColumns: '1fr 1fr', 
+          gap: 8, 
+          marginBottom: 'var(--nb-spacing-sm)',
+          background: token.colorBgContainerDisabled,
+          padding: 8,
+          borderRadius: 'var(--nb-radius-md)'
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 2 }}>验证状态</div>
+          <div style={{ fontSize: 13, fontWeight: 500 }}>{entry.lastProbeStatus || statusInfo.label}</div>
         </div>
-        <div className="resource-summary-tile" style={{ padding: '10px 12px' }}>
-          <span className="resource-summary-label">最近探测</span>
-          <span className="resource-summary-helper" style={{ marginTop: 0 }}>
+        <div>
+          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 2 }}>最近探测</div>
+          <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '尚未探测'}
-          </span>
+          </div>
         </div>
       </div>
 

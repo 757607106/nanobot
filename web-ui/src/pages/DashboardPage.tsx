@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import MetricCard from '../components/console/MetricCard'
 import SectionCard from '../components/console/SectionCard'
+import PageHeader from '../components/console/PageHeader'
 import type {
   AgentDefinition,
   CronStatus,
@@ -100,43 +101,32 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="page-stack stagger-container">
+    <div className="page-stack stagger-container" style={{ width: '100%', minWidth: 0 }}>
       {/* ── 顶部状态栏 ── */}
-      <div style={{
-        padding: 'var(--nb-spacing-lg) 0 var(--nb-spacing-xl) 0',
-        borderBottom: `1px solid var(--nb-border)`,
-        marginBottom: 'var(--nb-spacing-xl)',
-      }}>
-        <Flex justify="space-between" align="flex-end" wrap="wrap" gap="var(--nb-spacing-md)">
-          <Flex vertical gap="var(--nb-spacing-xs)">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: isSystemOnline ? token.colorSuccess : token.colorWarning,
-                boxShadow: `0 0 10px ${isSystemOnline ? token.colorSuccess : token.colorWarning}`,
-              }} />
-              <Typography.Text type="secondary" style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 12, letterSpacing: '0.06em' }}>
-                {isSystemOnline ? '系统运行中' : '系统待机'} · {dateString}
-              </Typography.Text>
-            </div>
-            <Typography.Title level={1} style={{
-              fontFamily: 'var(--nb-font-display)',
-              margin: 0,
-              fontSize: 'clamp(26px, 3.5vw, 38px)',
-              fontWeight: 800,
-              letterSpacing: '-0.03em',
-            }}>
-              控制台总览
-            </Typography.Title>
-          </Flex>
-          <Space size={10}>
+      <PageHeader
+        title="控制台总览"
+        subtitle={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: isSystemOnline ? token.colorSuccess : token.colorWarning,
+              boxShadow: `0 0 10px ${isSystemOnline ? token.colorSuccess : token.colorWarning}`,
+            }} />
+            <span style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 13, letterSpacing: '0.04em' }}>
+              {isSystemOnline ? '系统运行中' : '系统待机'} · {dateString}
+            </span>
+          </div>
+        }
+        actions={
+          <Flex gap={12} align="center">
             <Button
+              type="text"
               icon={<ReloadOutlined spin={loading} />}
               onClick={() => void loadDashboard()}
               disabled={loading}
-              style={{ borderRadius: 'var(--nb-radius-sm)' }}
+              style={{ color: 'var(--nb-text-secondary)' }}
             >
               刷新
             </Button>
@@ -144,23 +134,17 @@ export default function DashboardPage() {
               type="primary"
               icon={<MessageOutlined />}
               onClick={() => navigate('/chat')}
-              style={{ borderRadius: 'var(--nb-radius-sm)', fontWeight: 600 }}
             >
               发起对话
             </Button>
-          </Space>
-        </Flex>
-      </div>
+          </Flex>
+        }
+      />
 
       {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 'var(--nb-spacing-lg)' }} /> : null}
 
       {/* ── 核心指标卡 ── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 'var(--nb-spacing-md)',
-        marginBottom: 'var(--nb-spacing-xl)',
-      }}>
+      <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]" style={{ marginBottom: 'var(--nb-spacing-xl)' }}>
         <MetricCard
           label="智能体"
           value={loading ? cardSkeleton() : agents.length}
@@ -198,8 +182,55 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ── 主体双栏 ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 'var(--nb-spacing-lg)', alignItems: 'start' }}>
+      {/* ── 主体内容区 ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: 'var(--nb-spacing-lg)', alignItems: 'start' }}>
+
+        {/* 左半区：任务动作与会话阵列 */}
+        <Flex vertical gap="var(--nb-spacing-lg)" style={{ minWidth: 0 }}>
+          
+          {/* 快捷按钮阵列 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--nb-spacing-md)' }}>
+            <div 
+              onClick={() => navigate('/studio')}
+              style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
+            >
+              <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(22, 119, 255, 0.1)', color: '#1677ff' }}>
+                <RobotOutlined style={{ fontSize: 16 }} />
+              </Flex>
+              <div>
+                <Typography.Text strong style={{ display: 'block', fontSize: 14 }}>创建智能体</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.4, display: 'block' }}>配置并调试核心数字员工角色</Typography.Text>
+              </div>
+            </div>
+            
+            <div 
+              onClick={() => navigate('/knowledge')}
+              style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
+            >
+              <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(250, 140, 22, 0.1)', color: '#fa8c16' }}>
+                <DatabaseOutlined style={{ fontSize: 16 }} />
+              </Flex>
+              <div>
+                <Typography.Text strong style={{ display: 'block', fontSize: 14 }}>构建知识库</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.4, display: 'block' }}>导入私有语料训练专属大脑</Typography.Text>
+              </div>
+            </div>
+            
+            <div 
+              onClick={() => navigate('/channels')}
+              style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
+            >
+              <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(82, 196, 26, 0.1)', color: '#52c41a' }}>
+                <ApiOutlined style={{ fontSize: 16 }} />
+              </Flex>
+              <div>
+                <Typography.Text strong style={{ display: 'block', fontSize: 14 }}>连接发布渠道</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.4, display: 'block' }}>将中枢系统接入办公平台或社群</Typography.Text>
+              </div>
+            </div>
+          </div>
+
+          {/* 会话矩阵块 */}
 
         {/* 左：最近会话 */}
         <SectionCard
@@ -218,35 +249,53 @@ export default function DashboardPage() {
               ))}
             </Flex>
           ) : recentSessions.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--nb-spacing-md)' }}>
               {recentSessions.map((session, i) => (
                 <motion.div
                   key={session.sessionId || session.id}
                   onClick={() => navigate(`/chat?session=${session.sessionId || session.id}`)}
                   style={{
-                    padding: 'var(--nb-spacing-sm) var(--nb-spacing-md)',
-                    background: i % 2 === 0 ? 'transparent' : 'var(--nb-card-subtle-bg)',
+                    padding: '16px',
+                    background: 'var(--nb-surface)',
                     cursor: 'pointer',
-                    borderRadius: 'var(--nb-radius-sm)',
+                    borderRadius: 'var(--nb-radius-md)',
+                    border: '1px solid var(--nb-border)',
                     display: 'flex',
+                    flexDirection: 'column',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
+                    minHeight: 110,
                   }}
-                  whileHover={{ backgroundColor: 'var(--nb-card-subtle-bg)' }}
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2, delay: i * 0.05 }}
+                  whileHover={{ 
+                    borderColor: 'var(--nb-border-strong)',
+                    scale: 1.02,
+                    boxShadow: 'var(--nb-shadow-soft)'
+                  }}
+                  whileTap={{ scale: 0.98 }}
                 >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block' }} ellipsis>
+                  <Flex align="flex-start" gap={10} style={{ marginBottom: 12 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 6, background: 'color-mix(in srgb, var(--nb-accent) 15%, transparent)',
+                      color: 'var(--nb-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    }}>
+                      <MessageOutlined style={{ fontSize: 13 }} />
+                    </div>
+                    <Typography.Text strong style={{ fontSize: 14, lineHeight: 1.3, maxHeight: 40, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', display: '-webkit-box' }} title={getSessionTitle(session.title)}>
                       {getSessionTitle(session.title)}
                     </Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+                  </Flex>
+                  
+                  <Flex justify="space-between" align="center" style={{ marginTop: 'auto' }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 11 }}>
                       {formatSessionTime(session.updatedAt || session.createdAt)}
                     </Typography.Text>
-                  </div>
-                  <Flex align="center" gap="var(--nb-spacing-sm)" style={{ flexShrink: 0 }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
-                      {session.messageCount} 条消息
-                    </Typography.Text>
-                    <RightOutlined style={{ color: token.colorTextQuaternary, fontSize: 10 }} />
+                    <Flex align="center" gap={4} style={{ background: 'var(--nb-body-bg)', padding: '2px 8px', borderRadius: 20 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 11, fontWeight: 500 }}>
+                        {session.messageCount} msg
+                      </Typography.Text>
+                    </Flex>
                   </Flex>
                 </motion.div>
               ))}
@@ -263,9 +312,10 @@ export default function DashboardPage() {
             </Flex>
           )}
         </SectionCard>
+        </Flex>
 
         {/* 右：状态面板 */}
-        <Flex vertical gap="var(--nb-spacing-md)">
+        <Flex vertical gap="var(--nb-spacing-lg)" style={{ position: 'sticky', top: 80 }}>
           {/* 系统状态 */}
           <SectionCard title="系统状态">
             {loading ? (

@@ -1,5 +1,7 @@
 import { Alert, Button, Empty, Flex, Input, Modal, Segmented, Space, Table, Tag, Typography, theme } from 'antd'
 import type { TableColumnsType } from 'antd'
+import { AppstoreOutlined, DatabaseOutlined, CloudServerOutlined, KeyOutlined, LinkOutlined, MessageOutlined, PictureOutlined } from '@ant-design/icons'
+import MetricCard from '../../components/console/MetricCard'
 import { capabilityLabel, inferCapabilityType } from './utils'
 import type { AddModelDraft, CapabilityType, TestDraft } from './types'
 import type { ModelBindingTestResult } from '../../types'
@@ -63,15 +65,19 @@ export function AddModelDialog({
       styles={{ body: { paddingTop: 12 } }}
     >
       <div className="console-modal-stack">
-        <div className="resource-summary-strip">
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">供应商</span>
-            <span className="resource-summary-value" style={{ fontSize: 16 }}>{providerLabel || '未选择'}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">已有模型</span>
-            <span className="resource-summary-value">{existingBindingCount}</span>
-          </div>
+        <div className="console-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          <MetricCard
+            label="供应商"
+            value={providerLabel || '未选择'}
+            icon={<CloudServerOutlined />}
+            tone={providerLabel ? 'primary' : 'neutral'}
+          />
+          <MetricCard
+            label="已有模型"
+            value={existingBindingCount}
+            icon={<DatabaseOutlined />}
+            tone="neutral"
+          />
         </div>
 
         <FieldGroup label="模型 ID（必填）">
@@ -177,23 +183,31 @@ export function RemoteModelsDialog({ open, models, error, onClose, onImport }: R
       onCancel={onClose}
     >
       <div className="console-modal-stack">
-        <div className="resource-summary-strip">
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">可发现模型</span>
-            <span className="resource-summary-value">{modelRows.length}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">文本对话</span>
-            <span className="resource-summary-value">{typedCounts.text_chat}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">多模态</span>
-            <span className="resource-summary-value">{typedCounts.multimodal}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">嵌入模型</span>
-            <span className="resource-summary-value">{typedCounts.embedding}</span>
-          </div>
+        <div className="console-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
+          <MetricCard
+            label="可发现模型"
+            value={modelRows.length}
+            icon={<DatabaseOutlined />}
+            tone="neutral"
+          />
+          <MetricCard
+            label="文本对话"
+            value={typedCounts.text_chat}
+            icon={<MessageOutlined />}
+            tone="neutral"
+          />
+          <MetricCard
+            label="多模态"
+            value={typedCounts.multimodal}
+            icon={<PictureOutlined />}
+            tone="neutral"
+          />
+          <MetricCard
+            label="嵌入模型"
+            value={typedCounts.embedding}
+            icon={<AppstoreOutlined />}
+            tone="neutral"
+          />
         </div>
 
         {error ? <Alert type="error" showIcon message={error} /> : null}
@@ -266,19 +280,25 @@ export function TestConnectionDialog({
       styles={{ body: { paddingTop: 12 } }}
     >
       <div className="console-modal-stack">
-        <div className="resource-summary-strip">
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">目标模型</span>
-            <span className="resource-summary-value" style={{ fontSize: 16 }}>{draft.model || '待输入'}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">API Key</span>
-            <span className="resource-summary-value">{hasApiKey ? '已提供' : '未提供'}</span>
-          </div>
-          <div className="resource-summary-tile">
-            <span className="resource-summary-label">API Base</span>
-            <span className="resource-summary-value">{hasApiBase ? '已指定' : '默认地址'}</span>
-          </div>
+        <div className="console-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          <MetricCard
+            label="目标模型"
+            value={draft.model || '待输入'}
+            icon={<CloudServerOutlined />}
+            tone={draft.model ? 'primary' : 'neutral'}
+          />
+          <MetricCard
+            label="API Key"
+            value={hasApiKey ? '已提供' : '未提供'}
+            icon={<KeyOutlined />}
+            tone={hasApiKey ? 'success' : 'neutral'}
+          />
+          <MetricCard
+            label="API Base"
+            value={hasApiBase ? '已指定' : '默认地址'}
+            icon={<LinkOutlined />}
+            tone="neutral"
+          />
         </div>
 
         <div className="console-modal-grid">

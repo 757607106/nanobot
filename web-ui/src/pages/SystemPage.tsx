@@ -122,7 +122,7 @@ export default function SystemPage() {
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
-      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+      <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
         <MetricCard
           label="健康状态"
           value="在线"
@@ -153,13 +153,13 @@ export default function SystemPage() {
         />
       </div>
 
-      <div className="grid gap-4 grid-cols-[minmax(0,1.12fr)_minmax(320px,0.88fr)]">
+      <div className="grid gap-6 grid-cols-[minmax(0,1.12fr)_minmax(320px,0.88fr)]">
         <SectionCard
           title="运行清单"
           action={<Tag color="blue">v{status.web.version}</Tag>}
         >
           <Flex vertical gap={20}>
-            <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+            <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
               <DetailRow label="工作区" value={status.web.workspace} />
               <DetailRow label="配置文件" value={status.web.configPath} />
               <DetailRow label="Provider" value={status.web.provider} />
