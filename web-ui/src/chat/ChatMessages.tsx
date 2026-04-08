@@ -124,17 +124,17 @@ export function ChatMessages({
       },
       header: (
         <Flex justify="space-between" gap={12} wrap="wrap">
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
             {getChatMessageTitle(item, { assistantLabel })}
           </Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
             {item.createdAt ? formatDateTimeZh(item.createdAt) : '刚刚'}
           </Text>
         </Flex>
       ),
       footer: isAssistant ? (
         <Space size={12} wrap>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
             {getMessageStatusLabel(info.status)}
           </Text>
           {canReload ? (
@@ -149,7 +149,7 @@ export function ChatMessages({
           ) : null}
         </Space>
       ) : isTool ? (
-        <Text type="secondary" style={{ fontSize: 12 }}>
+        <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
           工具结果
         </Text>
       ) : null,

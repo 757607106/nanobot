@@ -488,10 +488,10 @@ export function KnowledgeUploadModal({
                 <p className="ant-upload-drag-icon">
                   <UploadOutlined style={{ fontSize: 36, color: 'var(--nb-accent)' }} />
                 </p>
-                <p className="ant-upload-text" style={{ fontSize: 16, fontWeight: 500, margin: '8px 0' }}>
+                <p className="ant-upload-text" style={{ fontSize: 'var(--nb-text-lg)', fontWeight: 'var(--nb-font-weight-medium)', margin: '8px 0' }}>
                   点击或拖拽文件到此区域
                 </p>
-                <p className="ant-upload-hint" style={{ fontSize: 13, color: 'var(--nb-text-secondary)', padding: '0 24px' }}>
+                <p className="ant-upload-hint" style={{ fontSize: 'var(--nb-text-sm)', color: 'var(--nb-text-secondary)', padding: '0 24px' }}>
                   支持单次上传多份文件，文件会在点击底部的“上传到知识库”时被批量处理写入。
                 </p>
               </Upload.Dragger>

@@ -168,7 +168,7 @@ export default function AgentDetail({
 
   const avatarPickerContent = (
     <div style={{ width: 340 }}>
-      <Typography.Text strong style={{ display: 'block', marginBottom: 12, fontSize: 14 }}>
+      <Typography.Text strong style={{ display: 'block', marginBottom: 12, fontSize: 'var(--nb-text-sm)' }}>
         选择数字员工形象
       </Typography.Text>
       <div style={{
@@ -282,7 +282,7 @@ export default function AgentDetail({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 11,
+                  fontSize: 'var(--nb-text-2xs)',
                   color: 'var(--nb-muted)',
                 }}>
                   <EditOutlined />
@@ -290,15 +290,15 @@ export default function AgentDetail({
               </div>
             </Popover>
             <Flex vertical gap={8}>
-              <Typography.Title level={2} style={{ margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Typography.Title level={2} style={{ margin: 0, fontWeight: 'var(--nb-font-weight-title)', display: 'flex', alignItems: 'center', gap: 12 }}>
                 {detailTitle}
                 {!isCreateRoute && (
-                  <Tag color={form.enabled ? 'processing' : 'default'} style={{ borderRadius: 12, padding: '2px 10px', fontSize: 13, border: 'none', margin: 0 }}>
+                  <Tag color={form.enabled ? 'processing' : 'default'} style={{ borderRadius: 12, padding: '2px 10px', fontSize: 'var(--nb-text-sm)', border: 'none', margin: 0 }}>
                     {form.enabled ? 'Active' : 'Inactive'}
                   </Tag>
                 )}
               </Typography.Title>
-              <Typography.Text type="secondary" style={{ fontSize: 15, maxWidth: 600 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-md)', maxWidth: 600 }}>
                 {detailSubtitle || '设定该数字员工的基础行为准则与响应模型'}
               </Typography.Text>
             </Flex>
@@ -345,7 +345,7 @@ export default function AgentDetail({
                 </Dropdown>
               </>
             )}
-            <Button type="primary" icon={<SaveOutlined />} onClick={onSave} loading={saving} style={{ borderRadius: 12, fontWeight: 500 }}>
+            <Button type="primary" icon={<SaveOutlined />} onClick={onSave} loading={saving} style={{ borderRadius: 12, fontWeight: 'var(--nb-font-weight-medium)' }}>
               保存变更
             </Button>
           </Flex>
@@ -364,7 +364,7 @@ export default function AgentDetail({
           items={[
             {
               key: 'basic',
-              label: <span style={{ fontWeight: 500, fontSize: 15 }}>核心配置 (Engine & Rules)</span>,
+              label: <span style={{ fontWeight: 'var(--nb-font-weight-medium)', fontSize: 'var(--nb-text-md)' }}>核心配置 (Engine & Rules)</span>,
               children: (
                 <AgentEditor
                   form={form}
@@ -377,7 +377,7 @@ export default function AgentDetail({
             },
             {
               key: 'capabilities',
-              label: <span style={{ fontWeight: 500, fontSize: 15 }}>外接能力 ({capabilityCount})</span>,
+              label: <span style={{ fontWeight: 'var(--nb-font-weight-medium)', fontSize: 'var(--nb-text-md)' }}>外接能力 ({capabilityCount})</span>,
               children: (
                 <CapabilitiesTab
                   form={form}
@@ -391,7 +391,7 @@ export default function AgentDetail({
             },
             {
               key: 'memory',
-              label: <span style={{ fontWeight: 500, fontSize: 15 }}>记忆治理 ({pendingMemoryCount})</span>,
+              label: <span style={{ fontWeight: 'var(--nb-font-weight-medium)', fontSize: 'var(--nb-text-md)' }}>记忆治理 ({pendingMemoryCount})</span>,
               children: (
                 <MemoryTab
                   currentAgent={currentAgent}

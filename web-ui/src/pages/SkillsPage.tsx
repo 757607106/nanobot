@@ -104,26 +104,26 @@ function SkillCard({
               alignItems: 'center',
               justifyContent: 'center',
               color: '#fff',
-              fontSize: 18,
-              fontWeight: 600,
+              fontSize: 'var(--nb-title-xs)',
+              fontWeight: 'var(--nb-font-weight-strong)',
               flexShrink: 0,
             }}
           >
             {skill.name.charAt(0).toUpperCase()}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <Typography.Text strong style={{ fontSize: 16, display: 'block', letterSpacing: '-0.01em' }}>
+            <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)', display: 'block', letterSpacing: '-0.01em' }}>
               {skill.name}
             </Typography.Text>
             <Flex gap={6} style={{ marginTop: 4 }} wrap="wrap">
-              <Tag bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 11 }}>
+              <Tag bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}>
                 V{skill.version || '1.0.0'}
               </Tag>
               {type === 'installed' && (
                 <Tag
                   color={isWorkspace ? 'green' : 'blue'}
                   bordered={false}
-                  style={{ margin: 0, borderRadius: 6, fontSize: 11 }}
+                  style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}
                 >
                   {isWorkspace ? 'LOCAL' : 'CORE'}
                 </Tag>
@@ -132,7 +132,7 @@ function SkillCard({
                 <Tag
                   color={MARKET_COMPATIBILITY_META[compatibility]?.color || 'default'}
                   bordered={false}
-                  style={{ margin: 0, borderRadius: 6, fontSize: 11 }}
+                  style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}
                 >
                   {compatibilityLabel?.toUpperCase()}
                 </Tag>
@@ -148,7 +148,7 @@ function SkillCard({
               <Button size="small" type="text" danger icon={<DeleteOutlined />} loading={actionLoading} />
             </Popconfirm>
           ) : (
-            <Tag bordered={false} style={{ fontSize: 11, background: 'var(--nb-card-subtle-border)' }}>BUILTIN</Tag>
+            <Tag bordered={false} style={{ fontSize: 'var(--nb-text-2xs)', background: 'var(--nb-card-subtle-border)' }}>BUILTIN</Tag>
           )
         ) : (
           <Button
@@ -167,7 +167,7 @@ function SkillCard({
       <Typography.Paragraph
         type="secondary"
         ellipsis={{ rows: 2 }}
-        style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}
+        style={{ fontSize: 'var(--nb-text-sm)', lineHeight: 1.6, marginBottom: 20 }}
       >
         {skill.description || '—'}
       </Typography.Paragraph>
@@ -176,24 +176,24 @@ function SkillCard({
         {type === 'installed' ? (
           <>
             {'author' in skill && skill.author && (
-              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8, opacity: 0.6 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', display: 'block', marginBottom: 8, opacity: 0.6 }}>
                 DEVELOPED BY {getSkillAuthorLabel(skill.author as string)?.toUpperCase()}
               </Typography.Text>
             )}
           </>
         ) : (
           <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-            <Typography.Text type="secondary" style={{ fontSize: 12, opacity: 0.6 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', opacity: 0.6 }}>
               {('downloads' in skill ? skill.downloads : 0)} 次下载
             </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12, opacity: 0.6 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', opacity: 0.6 }}>
               {'updatedAt' in skill && skill.updatedAt ? formatDateTimeZh(skill.updatedAt).split(' ')[0] : '-'}
             </Typography.Text>
           </Flex>
         )}
         <Flex gap={6} wrap="wrap">
           {(skill.tags || []).slice(0, 3).map((tag) => (
-            <Tag key={tag} bordered={false} style={{ margin: 0, fontSize: 11, borderRadius: 4, background: 'var(--nb-card-subtle-border)' }}>
+            <Tag key={tag} bordered={false} style={{ margin: 0, fontSize: 'var(--nb-text-2xs)', borderRadius: 4, background: 'var(--nb-card-subtle-border)' }}>
               {tag}
             </Tag>
           ))}

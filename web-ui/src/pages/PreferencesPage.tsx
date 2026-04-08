@@ -47,8 +47,8 @@ export default function PreferencesPage() {
                 onChange={(value) => setPreference(value as ThemePreference)}
                 options={themeOptions.map(({ value, label, icon }) => ({
                   value,
-                  icon: <span style={{ fontSize: 16 }}>{icon}</span>,
-                  label: <span style={{ fontSize: 14, fontWeight: 500 }}>{label}</span>,
+                  icon: <span style={{ fontSize: 'var(--nb-text-lg)' }}>{icon}</span>,
+                  label: <span style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)' }}>{label}</span>,
                 }))}
                 style={{ borderRadius: 12, padding: 4 }}
               />
@@ -73,10 +73,10 @@ export default function PreferencesPage() {
             >
               <Flex vertical gap={4} style={{ minWidth: 0 }}>
                 <Flex align="center" gap={10}>
-                  <CodeOutlined style={{ color: 'var(--nb-accent)', fontSize: 18 }} />
-                  <Typography.Text strong style={{ fontSize: 15 }}>显示开发者视图</Typography.Text>
+                  <CodeOutlined style={{ color: 'var(--nb-accent)', fontSize: 'var(--nb-title-xs)' }} />
+                  <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)' }}>显示开发者视图</Typography.Text>
                 </Flex>
-                <Typography.Text type="secondary" style={{ fontSize: 13, opacity: 0.8 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)', opacity: 0.8 }}>
                   主要用于调试 MCP 接口和自动化工作流。
                 </Typography.Text>
               </Flex>

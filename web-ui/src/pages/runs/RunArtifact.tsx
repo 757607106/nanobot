@@ -58,7 +58,7 @@ export default function RunArtifactPanel({
         <Title level={4} style={{ margin: 0, marginBottom: 8 }}>
           {artifact?.fileName || artifactAudit?.fileName || '运行归档'}
         </Title>
-        <Text type="secondary" style={{ marginBottom: 16, fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+        <Text type="secondary" style={{ marginBottom: 16, fontFamily: 'var(--font-mono)', fontSize: 'var(--nb-text-xs)' }}>
           {artifact?.artifactPath || run.artifactPath}
         </Text>
 

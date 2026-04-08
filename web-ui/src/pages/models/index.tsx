@@ -449,19 +449,19 @@ export default function ModelsPage() {
         <MetricCard
           label="已注册模型"
           value={totalBindingCount}
-          icon={<LinkOutlined style={{ fontSize: 16 }} />}
+          icon={<LinkOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
           tone="primary"
         />
         <MetricCard
           label="可用供应商"
           value={`${configuredProviderCount}/${providers.length}`}
-          icon={<CheckCircleOutlined style={{ fontSize: 16 }} />}
+          icon={<CheckCircleOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
           tone="success"
         />
         <MetricCard
           label="默认模型"
           value={bindings[defaultBindingName]?.model || bindings[defaultBindingName]?.label || '未设置'}
-          icon={<DatabaseOutlined style={{ fontSize: 16 }} />}
+          icon={<DatabaseOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
           tone="neutral"
         />
       </div>
@@ -493,7 +493,7 @@ export default function ModelsPage() {
           description="所有已注册的模型，按能力类型分类。"
           action={
             totalBindingCount > 0 ? undefined : (
-              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                 请先在供应商管理中添加模型
               </Typography.Text>
             )
@@ -567,7 +567,7 @@ export default function ModelsPage() {
                     <ProviderAvatar providerName={provider.name} label={provider.label} size={44} />
                     <Space size={6} wrap align="center">
                       {provider.defaultProvider ? (
-                        <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 11 }}>
+                        <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}>
                           默认
                         </Tag>
                       ) : null}
@@ -580,7 +580,7 @@ export default function ModelsPage() {
                             background: provider.configured ? token.colorSuccess : token.colorWarning,
                           }}
                         />
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
                           {provider.configured ? '已配置' : '待预置'}
                         </Typography.Text>
                       </div>
@@ -589,12 +589,12 @@ export default function ModelsPage() {
 
                   {/* 名称和分类 */}
                   <div style={{ marginTop: 2 }}>
-                    <Typography.Text strong style={{ fontSize: 16, display: 'block' }}>
+                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)', display: 'block' }}>
                       {provider.label}
                     </Typography.Text>
                     <Typography.Text
                       type="secondary"
-                      style={{ fontSize: 13, display: 'block', marginTop: 3 }}
+                      style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginTop: 3 }}
                       ellipsis
                     >
                       {provider.categoryLabel}
@@ -603,7 +603,7 @@ export default function ModelsPage() {
 
                   {/* 模型数量统计 */}
                   <Flex align="center" justify="space-between" style={{ marginTop: 'auto', paddingTop: 8 }}>
-                    <Typography.Text type={provider.bindingsCount > 0 ? undefined : 'secondary'} style={{ fontSize: 13 }}>
+                    <Typography.Text type={provider.bindingsCount > 0 ? undefined : 'secondary'} style={{ fontSize: 'var(--nb-text-sm)' }}>
                       <span style={{ fontWeight: provider.bindingsCount > 0 ? 600 : 400 }}>{provider.bindingsCount}</span> 个模型
                     </Typography.Text>
                     <Button size="small" type={provider.configured ? 'default' : 'primary'} style={{ borderRadius: 6 }}>
@@ -652,7 +652,7 @@ export default function ModelsPage() {
                   <Flex align="center" gap={12}>
                     <ProviderAvatar providerName={activeProviderName!} label={activeProviderMeta.label} size={40} />
                     <div>
-                      <Typography.Text strong style={{ fontSize: 18, display: 'block' }}>
+                      <Typography.Text strong style={{ fontSize: 'var(--nb-title-xs)', display: 'block' }}>
                         {activeProviderMeta.label}
                       </Typography.Text>
                       <Space size={6} style={{ marginTop: 2 }}>

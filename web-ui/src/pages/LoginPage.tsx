@@ -113,7 +113,7 @@ export default function LoginPage() {
     height: 46,
     background: 'rgba(255, 255, 255, 0.7)',
     border: '1px solid rgba(0, 0, 0, 0.06)',
-    fontSize: 14,
+    fontSize: 'var(--nb-text-sm)',
     boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.03)',
   }
 
@@ -211,7 +211,7 @@ export default function LoginPage() {
                 margin: 0,
                 fontFamily: 'var(--nb-font-display)',
                 fontSize: 28,
-                fontWeight: 700,
+                fontWeight: 'var(--nb-font-weight-title)',
                 letterSpacing: '-0.03em',
                 lineHeight: 1.15,
                 color: '#0F172A',
@@ -224,7 +224,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit}>
             {/* ── Username ── */}
             <motion.div variants={stagger.item} style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)' }}>
                 账号
               </label>
               <Input
@@ -239,7 +239,7 @@ export default function LoginPage() {
 
             {/* ── Password ── */}
             <motion.div variants={stagger.item} style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)' }}>
                 {initializing ? '设置密码' : '密码'}
               </label>
               <Input.Password
@@ -262,7 +262,7 @@ export default function LoginPage() {
                   transition={{ duration: 0.3 }}
                   style={{ overflow: 'hidden', marginBottom: 16 }}
                 >
-                  <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: 500 }}>
+                  <label style={{ display: 'block', marginBottom: 6, color: '#475569', fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)' }}>
                     确认密码
                   </label>
                   <Input.Password
@@ -303,8 +303,8 @@ export default function LoginPage() {
                 style={{
                   height: 46,
                   borderRadius: 10,
-                  fontSize: 15,
-                  fontWeight: 600,
+                  fontSize: 'var(--nb-text-md)',
+                  fontWeight: 'var(--nb-font-weight-strong)',
                   fontFamily: 'var(--nb-font-display)',
                   border: 'none',
                   background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',

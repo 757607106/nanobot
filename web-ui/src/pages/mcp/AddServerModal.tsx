@@ -50,7 +50,7 @@ export default function AddServerModal({
   const labelStyle = {
     display: 'block',
     fontSize: 'var(--nb-text-sm)',
-    fontWeight: 500,
+    fontWeight: 'var(--nb-font-weight-medium)',
     color: token.colorText,
     marginBottom: 6,
   }

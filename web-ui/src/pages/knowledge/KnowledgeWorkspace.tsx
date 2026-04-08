@@ -404,7 +404,7 @@ export default function KnowledgeWorkspace() {
               gap: 20
             }}
           >
-            <div style={{ color: 'var(--nb-ink)', fontSize: 'var(--nb-text-sm)', fontWeight: 600, marginRight: 8 }}>
+            <div style={{ color: 'var(--nb-ink)', fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-strong)', marginRight: 8 }}>
               已选择 {selectedFileIds.length} 项
             </div>
             
@@ -613,7 +613,7 @@ export default function KnowledgeWorkspace() {
                   onChange={(e) => onFormStateChange({ ...formState, tagsText: e.target.value })}
                   placeholder="逗号分隔，例如: AI, 文档, FAQ"
                 />
-                <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', marginTop: 2, display: 'block' }}>
                   多个标签用英文逗号分隔
                 </Typography.Text>
               </div>
@@ -635,7 +635,7 @@ export default function KnowledgeWorkspace() {
                   style={{ width: '100%' }}
                   notFoundContent={
                     <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                         暂无可用的 Embedding 模型
                       </Typography.Text>
                       <Button
@@ -649,12 +649,12 @@ export default function KnowledgeWorkspace() {
                   }
                 />
                 {embeddingBindingOptions.length === 0 && (
-                  <Typography.Text type="warning" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                  <Typography.Text type="warning" style={{ fontSize: 'var(--nb-text-xs)', marginTop: 4, display: 'block' }}>
                     ⚠ 未配置 Embedding 模型，文档索引将无法工作。
                     <Button
                       type="link"
                       size="small"
-                      style={{ fontSize: 12, padding: '0 4px' }}
+                      style={{ fontSize: 'var(--nb-text-xs)', padding: '0 4px' }}
                       onClick={() => navigate('/models')}
                     >
                       前往配置
@@ -674,7 +674,7 @@ export default function KnowledgeWorkspace() {
                   style={{ width: '100%' }}
                   notFoundContent={
                     <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                         暂无可用的 LLM 模型
                       </Typography.Text>
                       <Button
@@ -715,7 +715,7 @@ export default function KnowledgeWorkspace() {
               <Flex vertical gap={20}>
                 {/* — 多模态处理 — */}
                 <div>
-                  <Typography.Text strong style={{ fontSize: 13, display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                  <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
                     多模态处理
                   </Typography.Text>
                   <div className="knowledge-settings-grid">
@@ -739,7 +739,7 @@ export default function KnowledgeWorkspace() {
                           onChange={(checked) => onFormStateChange({ ...formState, enableMultimodal: checked })}
                           disabled={!formState.visionBindingName}
                         />
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
                           {formState.visionBindingName ? 'PDF 图片将被 AI 理解并加入索引' : '请先选择 Vision 模型'}
                         </Typography.Text>
                       </div>
@@ -749,7 +749,7 @@ export default function KnowledgeWorkspace() {
 
                 {/* — 检索增强 — */}
                 <div>
-                  <Typography.Text strong style={{ fontSize: 13, display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                  <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
                     检索增强
                   </Typography.Text>
                   <div className="knowledge-settings-grid">
@@ -770,7 +770,7 @@ export default function KnowledgeWorkspace() {
 
                 {/* — 其他 — */}
                 <div>
-                  <Typography.Text strong style={{ fontSize: 13, display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                  <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
                     其他
                   </Typography.Text>
                   <div className="knowledge-settings-grid">
@@ -908,7 +908,7 @@ export default function KnowledgeWorkspace() {
             items={workspaceTabItems.map(({ key, label }) => ({ key, label }))}
             style={{ marginBottom: 0 }}
           />
-          <div className="knowledge-tab-content-borderless" style={{ background: '#fff', borderRadius: '0 8px 8px 8px', padding: '16px' }}>
+          <div className="knowledge-tab-content-borderless" style={{ background: 'var(--nb-card-bg)', borderRadius: '0 8px 8px 8px', padding: '16px' }}>
             {workspaceTabItems.find((item) => item.key === activeTab)?.children}
           </div>
         </div>

@@ -103,7 +103,7 @@ export function ChatSidebar({
           borderRadius: 8,
           justifyContent: 'center',
           marginBottom: 20,
-          fontWeight: 500,
+          fontWeight: 'var(--nb-font-weight-medium)',
         }}
       >
         全新对话

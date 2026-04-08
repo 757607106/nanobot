@@ -105,7 +105,7 @@ export default function RunDetail({
                   style={{
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    fontSize: 14,
+                    fontSize: 'var(--nb-text-sm)',
                     lineHeight: 1.7,
                   }}
                   dangerouslySetInnerHTML={{
@@ -159,7 +159,7 @@ export default function RunDetail({
                     {formatDateTimeZh(run.createdAt)}
                   </Descriptions.Item>
                   <Descriptions.Item label="执行耗时">
-                    <Text style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                    <Text style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--nb-text-sm)' }}>
                       {formatDuration(run.createdAt ?? '', run.finishedAt)}
                     </Text>
                   </Descriptions.Item>

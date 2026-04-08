@@ -181,8 +181,8 @@ export default function AgentEditor({
             key: 'advanced',
             label: (
               <Flex align="center" gap={8}>
-                <SettingOutlined style={{ fontSize: 14, color: 'var(--nb-muted)' }} />
-                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                <SettingOutlined style={{ fontSize: 'var(--nb-text-sm)', color: 'var(--nb-muted)' }} />
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                   高级参数
                 </Typography.Text>
               </Flex>
@@ -253,7 +253,7 @@ export default function AgentEditor({
 
                 {modelSuggestions.length > 0 && !form.binding ? (
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', marginBottom: 8, display: 'block' }}>
                       快速选择模型
                     </Typography.Text>
                     <Space wrap size={[8, 8]}>

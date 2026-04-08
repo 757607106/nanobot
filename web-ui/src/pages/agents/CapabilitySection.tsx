@@ -58,14 +58,14 @@ export default function CapabilitySection({
                 <Flex justify="space-between" align="flex-start" gap={12}>
                   <Flex vertical gap={6} style={{ minWidth: 0, flex: '1 1 auto' }}>
                     <Space wrap size={[8, 8]}>
-                      <Typography.Text strong style={{ fontSize: 15, color: selected ? 'var(--nb-token-color-primary-text)' : 'inherit' }}>
+                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)', color: selected ? 'var(--nb-token-color-primary-text)' : 'inherit' }}>
                         {item.name}
                       </Typography.Text>
                       {item.isOrphan ? <Tag color="warning" style={{ borderRadius: 12, border: 'none' }}>遗留引用</Tag> : null}
                     </Space>
                     <Typography.Paragraph
                       type="secondary"
-                      style={{ margin: 0, fontSize: 13, lineHeight: 1.5, opacity: selected ? 0.8 : 1 }}
+                      style={{ margin: 0, fontSize: 'var(--nb-text-sm)', lineHeight: 1.5, opacity: selected ? 0.8 : 1 }}
                       ellipsis={{ rows: 2, tooltip: item.description }}
                     >
                       {item.description}

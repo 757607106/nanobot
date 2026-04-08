@@ -98,7 +98,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       dataIndex: 'label',
       key: 'label',
       render: (text) => (
-        <Text strong style={{ fontSize: 14 }}>{text}</Text>
+        <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{text}</Text>
       ),
     },
     {
@@ -130,7 +130,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       key: 'duration',
       width: 100,
       render: (_, record) => (
-        <Text type="secondary" style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+        <Text type="secondary" style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--nb-text-sm)' }}>
           {formatDuration(record.createdAt ?? '', record.finishedAt)}
         </Text>
       ),

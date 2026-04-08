@@ -90,7 +90,7 @@ export default function MetricCard({
             type="secondary"
             style={{
               fontSize: 'var(--nb-text-xs)',
-              fontWeight: 700,
+              fontWeight: 'var(--nb-font-weight-title)',
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
             }}
@@ -125,7 +125,7 @@ export default function MetricCard({
             margin: 0,
             lineHeight: 1.05,
             fontSize: 'var(--nb-scale-xl)',
-            fontWeight: 700,
+            fontWeight: 'var(--nb-font-weight-title)',
             color: token.colorText,
             wordBreak: 'break-word',
           }}

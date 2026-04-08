@@ -76,15 +76,15 @@ export default function ServerCard({ entry, loading, onToggle, onDelete }: Serve
             }}
           >
             {entry.transport === 'stdio' ? (
-              <CodeOutlined style={{ fontSize: 18, color: token.colorTextSecondary }} />
+              <CodeOutlined style={{ fontSize: 'var(--nb-title-xs)', color: token.colorTextSecondary }} />
             ) : (
-              <GlobalOutlined style={{ fontSize: 18, color: token.colorTextSecondary }} />
+              <GlobalOutlined style={{ fontSize: 'var(--nb-title-xs)', color: token.colorTextSecondary }} />
             )}
           </div>
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                fontWeight: 600,
+                fontWeight: 'var(--nb-font-weight-strong)',
                 fontSize: token.fontSizeLG,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -149,12 +149,12 @@ export default function ServerCard({ entry, loading, onToggle, onDelete }: Serve
         }}
       >
         <div>
-          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 2 }}>验证状态</div>
-          <div style={{ fontSize: 13, fontWeight: 500 }}>{entry.lastProbeStatus || statusInfo.label}</div>
+          <div style={{ fontSize: 'var(--nb-text-xs)', color: token.colorTextSecondary, marginBottom: 2 }}>验证状态</div>
+          <div style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)' }}>{entry.lastProbeStatus || statusInfo.label}</div>
         </div>
         <div>
-          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 2 }}>最近探测</div>
-          <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 'var(--nb-text-xs)', color: token.colorTextSecondary, marginBottom: 2 }}>最近探测</div>
+          <div style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '尚未探测'}
           </div>
         </div>
@@ -224,7 +224,7 @@ export default function ServerCard({ entry, loading, onToggle, onDelete }: Serve
           >
             <PoweroffOutlined
               style={{
-                fontSize: 16,
+                fontSize: 'var(--nb-text-lg)',
                 color: entry.enabled ? token.colorSuccess : token.colorTextDisabled,
               }}
             />
@@ -249,7 +249,7 @@ export default function ServerCard({ entry, loading, onToggle, onDelete }: Serve
             }}
             onClick={() => onDelete(entry)}
           >
-            <DeleteOutlined style={{ fontSize: 16, color: token.colorError }} />
+            <DeleteOutlined style={{ fontSize: 'var(--nb-text-lg)', color: token.colorError }} />
           </button>
         </Tooltip>
       </div>

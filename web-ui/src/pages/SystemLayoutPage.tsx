@@ -20,8 +20,18 @@ const allSystemRoutes: SystemRoute[] = [
 ]
 
 function resolveActiveKey(pathname: string, routes: SystemRoute[]) {
-  const matched = routes.find((item) => pathname === item.key || pathname.startsWith(`${item.key}/`))
-  return matched?.key ?? '/system'
+  // 优先精确匹配
+  const exactMatch = routes.find((item) => pathname === item.key)
+  if (exactMatch) {
+    return exactMatch.key
+  }
+  
+  // 然后降级为基于最长前缀的模糊匹配
+  const prefixMatch = [...routes]
+    .sort((a, b) => b.key.length - a.key.length)
+    .find((item) => pathname.startsWith(`${item.key}/`))
+    
+  return prefixMatch?.key ?? '/system'
 }
 
 export default function SystemLayoutPage() {

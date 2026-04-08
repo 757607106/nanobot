@@ -29,8 +29,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
         gap: 4,
       }}
     >
-      <Typography.Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</Typography.Text>
-      <Typography.Text className="break-all" strong style={{ fontSize: 14 }}>{value}</Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</Typography.Text>
+      <Typography.Text className="break-all" strong style={{ fontSize: 'var(--nb-text-sm)' }}>{value}</Typography.Text>
     </div>
   )
 }
@@ -202,7 +202,7 @@ export default function SystemPage() {
               <Typography.Title level={2} style={{ margin: 0 }}>
                 {status.stats.webSessions}
               </Typography.Title>
-              <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6 }}>
+              <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0', fontSize: 'var(--nb-text-sm)', lineHeight: 1.6 }}>
                 {status.stats.totalSessions} 会话 · {status.stats.messages} 消息
               </Typography.Paragraph>
             </div>

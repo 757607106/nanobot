@@ -200,10 +200,10 @@ export default function AppShell() {
             style={{ flexShrink: 0 }}
           />
           <div style={{ minWidth: 0 }}>
-            <Typography.Title level={5} style={{ margin: 0, fontSize: 15 }}>
+            <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-md)' }}>
               {PLATFORM_BRAND_NAME}
             </Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>
               Operations Console
             </Typography.Text>
           </div>
@@ -227,8 +227,8 @@ export default function AppShell() {
                     display: 'block',
                     paddingInline: 12,
                     marginBottom: 4,
-                    fontSize: 12,
-                    fontWeight: 600,
+                    fontSize: 'var(--nb-text-xs)',
+                    fontWeight: 'var(--nb-font-weight-strong)',
                     letterSpacing: '0.08em',
                     textTransform: 'uppercase',
                   }}
@@ -267,7 +267,7 @@ export default function AppShell() {
               {authStatus?.username?.slice(0, 1).toUpperCase()}
             </Avatar>
             <div style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11, letterSpacing: '0.04em' }}>
+              <Typography.Text type="secondary" style={{ display: 'block', fontSize: 'var(--nb-text-2xs)', letterSpacing: '0.04em' }}>
                 Account
               </Typography.Text>
               <Typography.Text
@@ -367,8 +367,8 @@ export default function AppShell() {
                   type="secondary"
                   style={{
                     display: 'block',
-                    fontSize: 11,
-                    fontWeight: 600,
+                    fontSize: 'var(--nb-text-2xs)',
+                    fontWeight: 'var(--nb-font-weight-strong)',
                     letterSpacing: '0.08em',
                     textTransform: 'uppercase',
                   }}
@@ -380,7 +380,7 @@ export default function AppShell() {
                   style={{
                     display: 'block',
                     marginTop: 2,
-                    fontSize: 14,
+                    fontSize: 'var(--nb-text-sm)',
                     lineHeight: 1.2,
                   }}
                 >

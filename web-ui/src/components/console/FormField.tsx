@@ -30,7 +30,7 @@ export default function FormField({
     <div style={{ minWidth: 0, ...(fullWidth ? { gridColumn: '1 / -1' } : {}) }}>
       <Typography.Text
         type="secondary"
-        style={{ display: 'block', fontSize: 13, marginBottom: 8 }}
+        style={{ display: 'block', fontSize: 'var(--nb-text-sm)', marginBottom: 8 }}
       >
         {label}
         {required ? <span style={{ color: 'var(--nb-accent)', marginLeft: 4 }}>*</span> : null}
@@ -39,7 +39,7 @@ export default function FormField({
       {helper ? (
         <Typography.Text
           type="secondary"
-          style={{ display: 'block', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}
+          style={{ display: 'block', fontSize: 'var(--nb-text-xs)', marginTop: 6, lineHeight: 1.5 }}
         >
           {helper}
         </Typography.Text>

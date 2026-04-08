@@ -391,14 +391,14 @@ export default function ProfilePage() {
                       <Typography.Title level={2} style={{ margin: 0, fontSize: 28, letterSpacing: '-0.02em' }}>
                         {profile.username}
                       </Typography.Title>
-                      <Tag color="gold" bordered={false} style={{ margin: 0, borderRadius: 6, fontWeight: 600 }}>ADMIN</Tag>
+                      <Tag color="gold" bordered={false} style={{ margin: 0, borderRadius: 6, fontWeight: 'var(--nb-font-weight-strong)' }}>ADMIN</Tag>
                     </Flex>
 
                     <Flex vertical gap={4}>
-                      <Typography.Text strong style={{ fontSize: 16 }}>
+                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)' }}>
                         {profile.displayName || '未设置展示名称'}
                       </Typography.Text>
-                      <Typography.Text type="secondary" style={{ fontSize: 14 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                         {profile.email || '未设置邮箱地址'}
                       </Typography.Text>
                     </Flex>
@@ -421,7 +421,7 @@ export default function ProfilePage() {
                     <SafetyCertificateOutlined style={{ color: 'var(--nb-success)' }} />
                     <Typography.Text strong>实例鉴权</Typography.Text>
                   </Flex>
-                  <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+                  <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 'var(--nb-text-sm)', lineHeight: 1.6 }}>
                     当前实例由 Nanobot 管理，一个实例只能拥有一个主管理员。
                   </Typography.Paragraph>
                 </div>
@@ -432,7 +432,7 @@ export default function ProfilePage() {
                   size="small"
                   items={securityItems}
                   labelStyle={{ color: 'var(--nb-text-quaternary)', width: 120 }}
-                  contentStyle={{ fontWeight: 500 }}
+                  contentStyle={{ fontWeight: 'var(--nb-font-weight-medium)' }}
                 />
               </Flex>
             </SectionCard>
@@ -451,7 +451,7 @@ export default function ProfilePage() {
 
             <SectionCard title="安全与密码轮换">
               <Flex vertical gap={20}>
-                <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+                <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 'var(--nb-text-sm)', lineHeight: 1.6 }}>
                   为保护您的账户安全，建议开启高强度密码（12位+混合字符）并定期轮换。
                 </Typography.Paragraph>
                 <Button 

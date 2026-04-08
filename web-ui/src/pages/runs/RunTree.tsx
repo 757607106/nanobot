@@ -59,7 +59,7 @@ function TreeNode({ node, selectedRunId, navigate }: TreeNodeProps) {
           <Badge status={statusBadgeStatus(node.status)} text={statusLabel(node.status)} />
         </div>
         {node.resultSummary?.content && (
-          <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+          <Text type="secondary" ellipsis style={{ fontSize: 'var(--nb-text-xs)' }}>
             {node.resultSummary.content}
           </Text>
         )}

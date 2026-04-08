@@ -71,14 +71,14 @@ export default function ProviderList({
                       </div>
                       <Space size={6} wrap>
                         {item.defaultProvider ? (
-                          <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 8, fontSize: 11 }}>
+                          <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 8, fontSize: 'var(--nb-text-2xs)' }}>
                             默认
                           </Tag>
                         ) : null}
                         <Tag
                           color={item.configured ? 'success' : 'warning'}
                           bordered={false}
-                          style={{ margin: 0, borderRadius: 8, fontSize: 11 }}
+                          style={{ margin: 0, borderRadius: 8, fontSize: 'var(--nb-text-2xs)' }}
                         >
                           {item.configured ? '已配置' : '待补齐'}
                         </Tag>
@@ -93,7 +93,7 @@ export default function ProviderList({
                     </Typography.Paragraph>
 
                     <Flex align="center" justify="space-between" gap={8} style={{ marginTop: 12 }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                         {item.bindingsCount} 个模型
                       </Typography.Text>
                       <div

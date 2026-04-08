@@ -92,7 +92,7 @@ function SectionHeader({
           borderRadius: 14,
           background: `${token.colorPrimary}12`,
           color: token.colorPrimary,
-          fontSize: 18,
+          fontSize: 'var(--nb-title-xs)',
         }}
       >
         {icon}
@@ -443,7 +443,7 @@ export default function SetupPage() {
                   <Form.Item label="高级运行参数">
                     <div className="grid gap-4 sm:grid-cols-2">
                        <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 13 }}>最大回复长度</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>最大回复长度</Typography.Text>
                         <InputNumber
                           min={1}
                           className="w-full"
@@ -453,7 +453,7 @@ export default function SetupPage() {
                         />
                       </Flex>
                       <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 13 }}>记忆上下文窗口</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>记忆上下文窗口</Typography.Text>
                         <InputNumber
                           min={1}
                           className="w-full"
@@ -463,7 +463,7 @@ export default function SetupPage() {
                         />
                       </Flex>
                       <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 13 }}>温度 (创意性)</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>温度 (创意性)</Typography.Text>
                         <InputNumber
                           min={0}
                           max={2}
@@ -475,7 +475,7 @@ export default function SetupPage() {
                         />
                       </Flex>
                       <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 13 }}>推理偏好</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>推理偏好</Typography.Text>
                         <Select
                           value={String(config.agents.defaults.reasoningEffort || 'medium')}
                           options={[

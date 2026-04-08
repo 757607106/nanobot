@@ -425,7 +425,7 @@ export default function ChannelDetailPage() {
       />
 
       <Flex align="center" gap={12} style={{ marginBottom: 8 }}>
-        <Tag color={getChannelStatusColor(detail.channel.status)} style={{ borderRadius: 8, fontSize: 13 }}>
+        <Tag color={getChannelStatusColor(detail.channel.status)} style={{ borderRadius: 8, fontSize: 'var(--nb-text-sm)' }}>
           {detail.channel.statusLabel}
         </Tag>
         <Switch

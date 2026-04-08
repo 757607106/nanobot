@@ -323,7 +323,7 @@ export default function McpServerDetailDrawer({
             {/* Row 1: name + enable */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>展示名称</label>
+                <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>展示名称</label>
                 <Input
                   value={draft.displayName}
                   onChange={(e) => applyDraftPatch({ displayName: e.target.value })}
@@ -341,7 +341,7 @@ export default function McpServerDetailDrawer({
                   height: 40,
                 }}
               >
-                <Text style={{ fontSize: 13, whiteSpace: 'nowrap' }}>聊天中启用</Text>
+                <Text style={{ fontSize: 'var(--nb-text-sm)', whiteSpace: 'nowrap' }}>聊天中启用</Text>
                 <Switch
                   checked={draft.enabled}
                   onChange={(checked) => applyDraftPatch({ enabled: checked })}
@@ -353,7 +353,7 @@ export default function McpServerDetailDrawer({
             {/* Row 2: transport + timeout */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>传输方式</label>
+                <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>传输方式</label>
                 <Select
                   value={draft.type}
                   onChange={(value) => applyDraftPatch({ type: value })}
@@ -365,7 +365,7 @@ export default function McpServerDetailDrawer({
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>超时时间（秒）</label>
+                <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>超时时间（秒）</label>
                 <InputNumber
                   min={1}
                   style={{ width: '100%' }}
@@ -379,7 +379,7 @@ export default function McpServerDetailDrawer({
             {draft.type === 'stdio' ? (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>命令</label>
+                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>命令</label>
                   <Input
                     value={draft.command}
                     onChange={(e) => applyDraftPatch({ command: e.target.value })}
@@ -388,7 +388,7 @@ export default function McpServerDetailDrawer({
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>参数（每行一个）</label>
+                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>参数（每行一个）</label>
                   <Input.TextArea
                     rows={3}
                     value={draft.argsText}
@@ -397,12 +397,12 @@ export default function McpServerDetailDrawer({
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>环境变量（JSON）</label>
+                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>环境变量（JSON）</label>
                   <Input.TextArea
                     rows={5}
                     value={showSensitive ? draft.envText : maskMappingText(draft.envText)}
                     onChange={(e) => applyDraftPatch({ envText: e.target.value })}
-                    style={{ fontFamily: 'monospace', fontSize: 12 }}
+                    style={{ fontFamily: 'monospace', fontSize: 'var(--nb-text-xs)' }}
                     data-testid={testIds.mcp.detailEnv}
                     readOnly={!showSensitive}
                     placeholder='{"KEY": "VALUE"}'
@@ -416,7 +416,7 @@ export default function McpServerDetailDrawer({
                       background: 'var(--nb-card-subtle-bg)',
                       border: '1px solid var(--nb-card-subtle-border)',
                       fontFamily: 'IBM Plex Mono, monospace',
-                      fontSize: 11,
+                      fontSize: 'var(--nb-text-2xs)',
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                       color: token.colorTextSecondary,
@@ -429,7 +429,7 @@ export default function McpServerDetailDrawer({
             ) : (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>URL</label>
+                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>URL</label>
                   <Input
                     value={draft.url}
                     onChange={(e) => applyDraftPatch({ url: e.target.value })}
@@ -437,12 +437,12 @@ export default function McpServerDetailDrawer({
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>请求头（JSON）</label>
+                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>请求头（JSON）</label>
                   <Input.TextArea
                     rows={5}
                     value={showSensitive ? draft.headersText : maskMappingText(draft.headersText)}
                     onChange={(e) => applyDraftPatch({ headersText: e.target.value })}
-                    style={{ fontFamily: 'monospace', fontSize: 12 }}
+                    style={{ fontFamily: 'monospace', fontSize: 'var(--nb-text-xs)' }}
                     readOnly={!showSensitive}
                     placeholder='{"Authorization": "Bearer ..."}'
                   />
@@ -455,7 +455,7 @@ export default function McpServerDetailDrawer({
                       background: 'var(--nb-card-subtle-bg)',
                       border: '1px solid var(--nb-card-subtle-border)',
                       fontFamily: 'IBM Plex Mono, monospace',
-                      fontSize: 11,
+                      fontSize: 'var(--nb-text-2xs)',
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                       color: token.colorTextSecondary,

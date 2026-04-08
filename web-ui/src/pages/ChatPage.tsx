@@ -266,11 +266,11 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
               />
             )}
             <Flex vertical gap={2} style={{ minWidth: 0 }}>
-              <Title level={5} style={{ margin: 0, fontSize: 15 }} ellipsis>
+              <Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-md)' }} ellipsis>
                 {selectedSessionTitle}
               </Title>
               {selectedSessionSubtitle ? (
-                <Text type="secondary" style={{ fontSize: 11 }}>{selectedSessionSubtitle}</Text>
+                <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>{selectedSessionSubtitle}</Text>
               ) : null}
             </Flex>
           </Flex>
@@ -290,10 +290,10 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
               data-testid={testIds.chat.switchAgent}
               optionRender={(option) => (
                 <Flex align="center" gap={8}>
-                  <RobotOutlined style={{ color: token.colorTextSecondary, fontSize: 13 }} />
+                  <RobotOutlined style={{ color: token.colorTextSecondary, fontSize: 'var(--nb-text-sm)' }} />
                   <span>{option.label}</span>
                   {option.value === currentAgentValue ? (
-                    <Tag color="blue" style={{ marginLeft: 'auto', fontSize: 10 }}>当前</Tag>
+                    <Tag color="blue" style={{ marginLeft: 'auto', fontSize: 'var(--nb-text-2xs)' }}>当前</Tag>
                   ) : null}
                 </Flex>
               )}

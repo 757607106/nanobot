@@ -1282,7 +1282,7 @@ export default function KnowledgePage() {
               style={{ width: '100%' }}
               notFoundContent={
                 <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
-                  <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                     暂无可用的 Embedding 模型
                   </Typography.Text>
                   <Button

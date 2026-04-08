@@ -449,7 +449,7 @@ export default function ChannelsPage() {
       styles={{ body: { padding: 'var(--nb-spacing-md)' } }}
     >
       <Flex vertical gap="var(--nb-spacing-md)">
-        <Typography.Text strong style={{ fontSize: 14 }}>
+        <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
           投递设置
         </Typography.Text>
         <Flex justify="space-between" align="center">
@@ -511,19 +511,19 @@ export default function ChannelsPage() {
           label="已接入"
           value={channels.filter((c) => c.configured).length}
           tone="primary"
-          icon={<CheckCircleOutlined style={{ fontSize: 16 }} />}
+          icon={<CheckCircleOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
         />
         <MetricCard
           label="运行中"
           value={channels.filter((c) => c.enabled).length}
           tone="success"
-          icon={<CheckCircleOutlined style={{ fontSize: 16 }} />}
+          icon={<CheckCircleOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
         />
         <MetricCard
           label="待补全"
           value={channels.filter((c) => c.missingFields.length > 0).length}
           tone="warning"
-          icon={<WarningOutlined style={{ fontSize: 16 }} />}
+          icon={<WarningOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
         />
       </div>
 
@@ -566,14 +566,14 @@ export default function ChannelsPage() {
                   <Tag
                     bordered={false}
                     color={channel.enabled ? 'success' : channel.configured ? 'processing' : 'default'}
-                    style={{ margin: 0, borderRadius: 8, fontSize: 11 }}
+                    style={{ margin: 0, borderRadius: 8, fontSize: 'var(--nb-text-2xs)' }}
                   >
                     {channel.enabled ? '运行中' : channel.configured ? '已配置' : '未配置'}
                   </Tag>
                 </Flex>
 
                 {/* 渠道名 */}
-                <Typography.Text strong style={{ fontSize: 15 }}>
+                <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)' }}>
                   {channel.label}
                 </Typography.Text>
               </motion.div>
@@ -617,7 +617,7 @@ export default function ChannelsPage() {
                   <Flex align="center" gap={12}>
                     <ChannelAvatar channelName={activeChannel.name} label={activeChannel.label} size={40} />
                     <div>
-                      <Typography.Text strong style={{ fontSize: 16, display: 'block' }}>
+                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)', display: 'block' }}>
                         {activeChannel.label}
                       </Typography.Text>
                       <ChannelStatusTag status={activeChannel.status} />
@@ -625,7 +625,7 @@ export default function ChannelsPage() {
                   </Flex>
                   <Flex align="center" gap={12}>
                     <Flex align="center" gap={6}>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>启用</Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>启用</Typography.Text>
                       <Switch
                         size="small"
                         checked={Boolean(activeDraft.enabled ?? activeChannel.enabled)}
@@ -666,7 +666,7 @@ export default function ChannelsPage() {
                     }}
                   >
                     <WarningOutlined style={{ color: token.colorWarning }} />
-                    <Typography.Text style={{ fontSize: 13 }}>
+                    <Typography.Text style={{ fontSize: 'var(--nb-text-sm)' }}>
                       还需填写 {activeChannel.missingFields.length} 个必填项
                     </Typography.Text>
                   </Flex>
@@ -684,7 +684,7 @@ export default function ChannelsPage() {
                           <Tag color={getProbeStatusColor(activeProbe.status)} style={{ margin: 0 }}>
                             {activeProbe.statusLabel}
                           </Tag>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
                             {activeProbe.summary}
                           </Typography.Text>
                         </Flex>
@@ -733,7 +733,7 @@ export default function ChannelsPage() {
                     styles={{ body: { padding: 16 } }}
                   >
                     <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-                      <Typography.Text strong style={{ fontSize: 14 }}>
+                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
                         扫码绑定
                       </Typography.Text>
                       <Space size={8}>
@@ -781,12 +781,12 @@ export default function ChannelsPage() {
                         {weixinBinding.qrCode ? (
                           <Flex vertical align="center" gap={8} style={{ padding: '12px 0' }}>
                             <QRCode value={weixinBinding.qrCode} size={180} />
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
                               请用微信扫描上方二维码登录
                             </Typography.Text>
                           </Flex>
                         ) : (
-                          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                             {weixinBinding.authenticated ? '已成功登录' : '点击“获取二维码”启动绑定流程'}
                           </Typography.Text>
                         )}
@@ -795,7 +795,7 @@ export default function ChannelsPage() {
                         )}
                       </Flex>
                     ) : (
-                      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                         点击“获取二维码”启动微信扫码绑定
                       </Typography.Text>
                     )}

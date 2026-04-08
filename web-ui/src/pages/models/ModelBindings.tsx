@@ -86,14 +86,14 @@ export default function ModelBindings({
                     <Flex align="center" gap={6}>
                       {!hasModel && (
                         <Tooltip title="模型 ID 未配置，无法使用">
-                          <WarningOutlined style={{ color: 'var(--ant-color-warning)', fontSize: 14 }} />
+                          <WarningOutlined style={{ color: 'var(--ant-color-warning)', fontSize: 'var(--nb-text-sm)' }} />
                         </Tooltip>
                       )}
                       <Typography.Text
                         strong
                         ellipsis={{ tooltip: binding.model || '未配置模型 ID' }}
                         style={{
-                          fontSize: 16,
+                          fontSize: 'var(--nb-text-lg)',
                           letterSpacing: '-0.01em',
                           fontFamily: hasModel ? 'var(--font-mono, monospace)' : undefined,
                           color: hasModel ? undefined : 'var(--ant-color-text-quaternary)',
@@ -102,12 +102,12 @@ export default function ModelBindings({
                         {binding.model || '未配置模型 ID'}
                       </Typography.Text>
                     </Flex>
-                    <Typography.Text type="secondary" style={{ fontSize: 13, opacity: 0.8 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)', opacity: 0.8 }}>
                       {binding.label || binding.bindingName}
                     </Typography.Text>
                   </Flex>
                   {isDefault && (
-                    <Tag color="success" bordered={false} style={{ margin: 0, borderRadius: 8, fontSize: 11, fontWeight: 600 }}>
+                    <Tag color="success" bordered={false} style={{ margin: 0, borderRadius: 8, fontSize: 'var(--nb-text-2xs)', fontWeight: 'var(--nb-font-weight-strong)' }}>
                       DEFAULT
                     </Tag>
                   )}
@@ -127,7 +127,7 @@ export default function ModelBindings({
                     <Tag
                       color={capabilityColor(binding.capabilityType as CapabilityType)}
                       bordered={false}
-                      style={{ borderRadius: 6, fontSize: 11, padding: '0 8px' }}
+                      style={{ borderRadius: 6, fontSize: 'var(--nb-text-2xs)', padding: '0 8px' }}
                     >
                       {capabilityLabel(binding.capabilityType as CapabilityType).toUpperCase()}
                     </Tag>
@@ -146,7 +146,7 @@ export default function ModelBindings({
                     {!isDefault && binding.capabilityType !== 'embedding' ? (
                       <Button 
                         size="small" 
-                        style={{ borderRadius: 8, fontSize: 12 }} 
+                        style={{ borderRadius: 8, fontSize: 'var(--nb-text-xs)' }} 
                         onClick={() => onSetDefault(binding.bindingName)}
                       >
                         设为默认

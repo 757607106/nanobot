@@ -36,8 +36,8 @@ export default function PageHeader({
             className="page-header-eyebrow"
             style={{
               color: token.colorPrimary,
-              fontSize: 11,
-              fontWeight: 700,
+              fontSize: 'var(--nb-text-2xs)',
+              fontWeight: 'var(--nb-font-weight-title)',
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
             }}

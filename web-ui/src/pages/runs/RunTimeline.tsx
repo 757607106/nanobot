@@ -32,11 +32,11 @@ export default function RunTimeline({ run, devMode }: RunTimelineProps) {
 
     return {
       dot: isFailed ? (
-        <CloseCircleOutlined style={{ color: 'var(--ant-color-error)', fontSize: 16 }} />
+        <CloseCircleOutlined style={{ color: 'var(--ant-color-error)', fontSize: 'var(--nb-text-lg)' }} />
       ) : isCompleted ? (
-        <CheckCircleOutlined style={{ color: 'var(--ant-color-success)', fontSize: 16 }} />
+        <CheckCircleOutlined style={{ color: 'var(--ant-color-success)', fontSize: 'var(--nb-text-lg)' }} />
       ) : (
-        <ClockCircleOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 14 }} />
+        <ClockCircleOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 'var(--nb-text-sm)' }} />
       ),
       color: isFailed ? 'red' : isCompleted ? 'green' : isLast ? 'blue' : 'gray',
       children: (
@@ -44,7 +44,7 @@ export default function RunTimeline({ run, devMode }: RunTimelineProps) {
           <Space wrap>
             <Text strong>{eventLabel(event.eventType, devMode)}</Text>
             {devMode && <Tag bordered={false}>{event.eventType}</Tag>}
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
               {formatDateTimeZh(event.createdAt)}
             </Text>
           </Space>
@@ -53,7 +53,7 @@ export default function RunTimeline({ run, devMode }: RunTimelineProps) {
               type="secondary"
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 12,
+                fontSize: 'var(--nb-text-xs)',
                 display: 'block',
                 padding: '4px 8px',
                 background: 'var(--nb-surface-strong)',

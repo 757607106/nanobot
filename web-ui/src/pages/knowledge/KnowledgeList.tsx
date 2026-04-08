@@ -75,8 +75,8 @@ export default function KnowledgeList({
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: '#fff',
-                          fontSize: 16,
-                          fontWeight: 600,
+                          fontSize: 'var(--nb-text-lg)',
+                          fontWeight: 'var(--nb-font-weight-strong)',
                           flexShrink: 0,
                         }}
                       >
@@ -86,17 +86,17 @@ export default function KnowledgeList({
                         <Typography.Text
                           strong
                           className="knowledge-nav-item-title"
-                          style={{ color: isSelected ? token.colorPrimary : undefined, fontSize: 14, display: 'block' }}
+                          style={{ color: isSelected ? token.colorPrimary : undefined, fontSize: 'var(--nb-text-sm)', display: 'block' }}
                         >
                           {item.name}
                         </Typography.Text>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
                           {item.enabled ? '检索可用' : '已停用'} · {item.stats?.fileCount || 0} 文件 · {item.stats?.indexedCount || 0} 已索引
                         </Typography.Text>
                       </div>
                       <Tag
                         color={item.enabled ? 'success' : 'default'}
-                        style={{ margin: 0, fontSize: 11 }}
+                        style={{ margin: 0, fontSize: 'var(--nb-text-2xs)' }}
                       >
                         {item.enabled ? '启用' : '停用'}
                       </Tag>

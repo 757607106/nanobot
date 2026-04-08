@@ -16,7 +16,7 @@ interface FieldGroupProps {
 function FieldGroup({ label, children }: FieldGroupProps) {
   return (
     <Flex vertical gap={6}>
-      <Typography.Text strong style={{ fontSize: 13 }}>
+      <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
         {label}
       </Typography.Text>
       {children}

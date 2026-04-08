@@ -195,7 +195,7 @@ export default function RunBoundaryAuditPanel({ audit, devMode }: RunBoundaryAud
               padding: 16,
               background: 'var(--nb-surface-strong)',
               borderRadius: 8,
-              fontSize: 12,
+              fontSize: 'var(--nb-text-xs)',
               overflow: 'auto',
             }}
           >

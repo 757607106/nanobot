@@ -114,7 +114,7 @@ export default function DashboardPage() {
               background: isSystemOnline ? token.colorSuccess : token.colorWarning,
               boxShadow: `0 0 10px ${isSystemOnline ? token.colorSuccess : token.colorWarning}`,
             }} />
-            <span style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 13, letterSpacing: '0.04em' }}>
+            <span style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 'var(--nb-text-sm)', letterSpacing: '0.04em' }}>
               {isSystemOnline ? '系统运行中' : '系统待机'} · {dateString}
             </span>
           </div>
@@ -195,11 +195,11 @@ export default function DashboardPage() {
               style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
             >
               <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(22, 119, 255, 0.1)', color: '#1677ff' }}>
-                <RobotOutlined style={{ fontSize: 16 }} />
+                <RobotOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />
               </Flex>
               <div>
-                <Typography.Text strong style={{ display: 'block', fontSize: 14 }}>创建智能体</Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.4, display: 'block' }}>配置并调试核心数字员工角色</Typography.Text>
+                <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>创建智能体</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>配置并调试核心数字员工角色</Typography.Text>
               </div>
             </div>
             
@@ -208,11 +208,11 @@ export default function DashboardPage() {
               style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
             >
               <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(250, 140, 22, 0.1)', color: '#fa8c16' }}>
-                <DatabaseOutlined style={{ fontSize: 16 }} />
+                <DatabaseOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />
               </Flex>
               <div>
-                <Typography.Text strong style={{ display: 'block', fontSize: 14 }}>构建知识库</Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.4, display: 'block' }}>导入私有语料训练专属大脑</Typography.Text>
+                <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>构建知识库</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>导入私有语料训练专属大脑</Typography.Text>
               </div>
             </div>
             
@@ -221,11 +221,11 @@ export default function DashboardPage() {
               style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
             >
               <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(82, 196, 26, 0.1)', color: '#52c41a' }}>
-                <ApiOutlined style={{ fontSize: 16 }} />
+                <ApiOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />
               </Flex>
               <div>
-                <Typography.Text strong style={{ display: 'block', fontSize: 14 }}>连接发布渠道</Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.4, display: 'block' }}>将中枢系统接入办公平台或社群</Typography.Text>
+                <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>连接发布渠道</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>将中枢系统接入办公平台或社群</Typography.Text>
               </div>
             </div>
           </div>
@@ -280,19 +280,19 @@ export default function DashboardPage() {
                       width: 28, height: 28, borderRadius: 6, background: 'color-mix(in srgb, var(--nb-accent) 15%, transparent)',
                       color: 'var(--nb-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                     }}>
-                      <MessageOutlined style={{ fontSize: 13 }} />
+                      <MessageOutlined style={{ fontSize: 'var(--nb-text-sm)' }} />
                     </div>
-                    <Typography.Text strong style={{ fontSize: 14, lineHeight: 1.3, maxHeight: 40, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', display: '-webkit-box' }} title={getSessionTitle(session.title)}>
+                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', lineHeight: 1.3, maxHeight: 40, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', display: '-webkit-box' }} title={getSessionTitle(session.title)}>
                       {getSessionTitle(session.title)}
                     </Typography.Text>
                   </Flex>
                   
                   <Flex justify="space-between" align="center" style={{ marginTop: 'auto' }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>
                       {formatSessionTime(session.updatedAt || session.createdAt)}
                     </Typography.Text>
                     <Flex align="center" gap={4} style={{ background: 'var(--nb-body-bg)', padding: '2px 8px', borderRadius: 20 }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 11, fontWeight: 500 }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)', fontWeight: 'var(--nb-font-weight-medium)' }}>
                         {session.messageCount} msg
                       </Typography.Text>
                     </Flex>
@@ -306,7 +306,7 @@ export default function DashboardPage() {
                 <path d="M0 20 H30 L40 5 L50 35 L60 15 L70 25 L80 20 H120" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--nb-muted)' }} />
                 <circle cx="60" cy="15" r="3" fill="var(--nb-accent)" />
               </svg>
-              <Typography.Text type="secondary" style={{ marginTop: 14, fontSize: 12, letterSpacing: '0.04em' }}>
+              <Typography.Text type="secondary" style={{ marginTop: 14, fontSize: 'var(--nb-text-xs)', letterSpacing: '0.04em' }}>
                 暂无会话记录
               </Typography.Text>
             </Flex>
@@ -336,11 +336,11 @@ export default function DashboardPage() {
                       borderBottom: i < arr.length - 1 ? `1px solid ${token.colorBorderSecondary}` : 'none',
                     }}
                   >
-                    <Typography.Text type="secondary" style={{ fontSize: 13 }}>{row.label}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>{row.label}</Typography.Text>
                     {row.color ? (
                       <Tag color={row.color} style={{ margin: 0 }}>{row.value}</Tag>
                     ) : (
-                      <Typography.Text strong style={{ fontSize: 13, fontFamily: 'var(--nb-font-mono)' }}>{row.value}</Typography.Text>
+                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', fontFamily: 'var(--nb-font-mono)' }}>{row.value}</Typography.Text>
                     )}
                   </Flex>
                 ))}
@@ -369,7 +369,7 @@ export default function DashboardPage() {
                 ))}
               </Flex>
             ) : (
-              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
                 暂无已启用渠道
               </Typography.Text>
             )}

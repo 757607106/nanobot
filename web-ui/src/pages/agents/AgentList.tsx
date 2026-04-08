@@ -43,7 +43,7 @@ export default function AgentList({
     <Flex vertical gap={24}>
       <Flex align="center" justify="space-between" wrap="wrap" gap={16}>
         <div>
-          <Typography.Title level={3} style={{ margin: 0, fontWeight: 700 }}>
+          <Typography.Title level={3} style={{ margin: 0, fontWeight: 'var(--nb-font-weight-title)' }}>
             数字员工大厅
           </Typography.Title>
           <Typography.Text type="secondary">
@@ -72,7 +72,7 @@ export default function AgentList({
             icon={<PlusOutlined />}
             onClick={() => navigate('/studio/agents/new')}
             size="large"
-            style={{ borderRadius: 12, fontWeight: 500 }}
+            style={{ borderRadius: 12, fontWeight: 'var(--nb-font-weight-medium)' }}
           >
             新员工入职
           </Button>
@@ -164,16 +164,16 @@ export default function AgentList({
                           fontSize: 'var(--nb-text-md)',
                           display: 'block',
                           color: 'var(--nb-ink)',
-                          fontWeight: 700,
+                          fontWeight: 'var(--nb-font-weight-title)',
                         }}
                       >
                         {record.name}
                       </Typography.Text>
                       <Typography.Text
                         style={{
-                          fontSize: 13,
+                          fontSize: 'var(--nb-text-sm)',
                           color: avatar.color,
-                          fontWeight: 500,
+                          fontWeight: 'var(--nb-font-weight-medium)',
                           display: 'block',
                           marginTop: 2,
                         }}
@@ -198,7 +198,7 @@ export default function AgentList({
                   <Typography.Paragraph
                     type="secondary"
                     ellipsis={{ rows: 2 }}
-                    style={{ margin: 0, fontSize: 13, lineHeight: 1.6, flex: 1 }}
+                    style={{ margin: 0, fontSize: 'var(--nb-text-sm)', lineHeight: 1.6, flex: 1 }}
                   >
                     {record.description || '一位神秘的 AI 员工，暂无背景介绍。'}
                   </Typography.Paragraph>
@@ -212,10 +212,10 @@ export default function AgentList({
                         style={{
                           borderRadius: 12,
                           padding: '1px 10px',
-                          fontSize: 12,
+                          fontSize: 'var(--nb-text-xs)',
                           background: `${avatar.color}14`,
                           color: avatar.color,
-                          fontWeight: 500,
+                          fontWeight: 'var(--nb-font-weight-medium)',
                           margin: 0,
                         }}
                       >
@@ -228,7 +228,7 @@ export default function AgentList({
                         style={{
                           borderRadius: 12,
                           padding: '1px 10px',
-                          fontSize: 12,
+                          fontSize: 'var(--nb-text-xs)',
                           background: 'rgba(0,0,0,0.04)',
                           color: 'var(--nb-muted)',
                           margin: 0,

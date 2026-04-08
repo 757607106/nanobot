@@ -110,8 +110,8 @@ function MetaLabel({ children }: { children: ReactNode }) {
     <Text
       type="secondary"
       style={{
-        fontSize: 11,
-        fontWeight: 600,
+        fontSize: 'var(--nb-text-2xs)',
+        fontWeight: 'var(--nb-font-weight-strong)',
         letterSpacing: '0.02em',
       }}
     >
@@ -219,7 +219,7 @@ function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
     background: token.colorFillAlter,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
-    fontSize: 12,
+    fontSize: 'var(--nb-text-xs)',
     fontFamily: 'var(--nb-font-mono, monospace)',
     maxHeight: 320,
     overflow: 'auto',
@@ -253,10 +253,10 @@ function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
                   justifyContent: 'center',
                   flexShrink: 0,
                 }}>
-                  <ToolOutlined style={{ fontSize: 12, color: token.colorPrimary }} />
+                  <ToolOutlined style={{ fontSize: 'var(--nb-text-xs)', color: token.colorPrimary }} />
                 </div>
-                <Text strong style={{ fontSize: 13 }}>{name}</Text>
-                <Text type="secondary" style={{ fontSize: 11, marginLeft: 'auto' }}>
+                <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{name}</Text>
+                <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)', marginLeft: 'auto' }}>
                   {getToolArgumentsPreview(toolCall)}
                 </Text>
               </Flex>
@@ -289,7 +289,7 @@ function ToolResultCard({ message }: { message: ChatMessage }) {
     wordBreak: 'break-all',
     maxHeight: 400,
     overflow: 'auto',
-    fontSize: 12,
+    fontSize: 'var(--nb-text-xs)',
     fontFamily: 'var(--nb-font-mono, monospace)',
     border: `1px solid ${token.colorBorderSecondary}`,
   }
@@ -318,10 +318,10 @@ function ToolResultCard({ message }: { message: ChatMessage }) {
                 justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <ToolOutlined style={{ fontSize: 12, color: token.colorWarning }} />
+                <ToolOutlined style={{ fontSize: 'var(--nb-text-xs)', color: token.colorWarning }} />
               </div>
-              <Text strong style={{ fontSize: 13 }}>{message.name || 'tool'}</Text>
-              <Text type="secondary" style={{ fontSize: 11, marginLeft: 'auto' }}>
+              <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{message.name || 'tool'}</Text>
+              <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)', marginLeft: 'auto' }}>
                 {message.createdAt ? formatDateTimeZh(message.createdAt) : '刚刚'}
               </Text>
             </Flex>
