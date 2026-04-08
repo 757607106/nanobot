@@ -58,7 +58,7 @@ class Session:
             if message.get("role") == "user" and isinstance(content, str):
                 content = build_chat_request_content(content, normalize_chat_attachments(message.get("attachments") or []))
             entry: dict[str, Any] = {"role": message["role"], "content": content}
-            for key in ("tool_calls", "tool_call_id", "name"):
+            for key in ("tool_calls", "tool_call_id", "name", "reasoning_content"):
                 if key in message:
                     entry[key] = message[key]
             out.append(entry)

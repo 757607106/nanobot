@@ -18,6 +18,12 @@ Each skill is a directory containing a `SKILL.md` file with:
 
 Important: in the current product, "installed" only means the skill was imported into the workspace and can be discovered by the loader. It does **not** guarantee that the skill is fully adapted to nanobot's runtime model.
 
+When skills reference large local documentation or logs, prefer nanobot's built-in
+`grep` / `glob` tools to narrow the search space before loading full files.
+Use `grep(output_mode="count")` / `files_with_matches` for broad searches first,
+use `head_limit` / `offset` to page through large result sets,
+and `glob(entry_type="dirs")` when discovering directory structure matters.
+
 ## Attribution
 
 These skills are adapted from [OpenClaw](https://github.com/openclaw/openclaw)'s skill system.
