@@ -258,14 +258,16 @@ function buildGraphLayout(
       return {
         type: 'd3-force' as const,
         preventOverlap: true,
-        collideStrength: 0.9,
-        nodeSize,
-        nodeSpacing: focusActive ? 10 : 12,
-        alphaDecay: 0.08,
-        alphaMin: 0.02,
-        linkDistance: focusActive ? 150 : 116,
-        edgeStrength: 0.88,
-        nodeStrength: focusActive ? -360 : -280,
+        alphaDecay: 0.1,
+        alphaMin: 0.01,
+        velocityDecay: 0.6,
+        iterations: 150,
+        force: {
+          center: { x: width / 2, y: height / 2, strength: 0.1 },
+          charge: { strength: -400, distanceMax: 800 },
+          link: { distance: 180, strength: 0.8 }
+        },
+        collide: { radius: 36, strength: 0.8, iterations: 3 }
       }
   }
 }
@@ -388,35 +390,20 @@ export function KnowledgeGraphTab({
     return allRelations
   }, [allRelations, selectedEdgeId, selectedNodeId, selectedRelation])
 
-  const displayGraph = useMemo<GraphDisplayState>(() => {
+  const focusState = useMemo(() => {
     if (!selectedNodeId && !selectedEdgeId) {
-      return {
-        nodes: filteredGraphData.nodes,
-        edges: filteredGraphData.edges,
-        focusActive: false,
-      }
+      return { active: false, nodeIds: new Set<string>(), edgeIds: new Set<string>() }
     }
-
-    const focusNodeIds = new Set<string>()
-    const focusEdgeIds = new Set<string>()
-
+    const nodeIds = new Set<string>()
+    const edgeIds = new Set<string>()
     for (const relation of focusRelations) {
-      focusNodeIds.add(relation.sourceId)
-      focusNodeIds.add(relation.targetId)
-      focusEdgeIds.add(relation.id)
+      nodeIds.add(relation.sourceId)
+      nodeIds.add(relation.targetId)
+      edgeIds.add(relation.id)
     }
-    if (selectedNodeId) {
-      focusNodeIds.add(selectedNodeId)
-    }
-
-    return {
-      nodes: filteredGraphData.nodes.filter((node) => focusNodeIds.has(node.id)),
-      edges: filteredGraphData.edges.filter((edge) => focusEdgeIds.has(edge.id)),
-      focusActive: true,
-    }
-  }, [filteredGraphData.edges, filteredGraphData.nodes, focusRelations, selectedEdgeId, selectedNodeId])
-
-  const visibleNodeIds = useMemo(() => new Set(displayGraph.nodes.map((node) => node.id)), [displayGraph.nodes])
+    if (selectedNodeId) nodeIds.add(selectedNodeId)
+    return { active: true, nodeIds, edgeIds }
+  }, [focusRelations, selectedEdgeId, selectedNodeId])
 
   const selectedNodeRelations = useMemo<SelectedNodeRelationRecord[]>(() => {
     if (!selectedNode) return []
@@ -433,56 +420,47 @@ export function KnowledgeGraphTab({
     [focusRelations, selectedNode, selectedNodeRelations],
   )
 
-  const labelNodeIds = useMemo(() => {
-    if (displayGraph.focusActive) {
-      return new Set(displayGraph.nodes.map((node) => node.id))
-    }
-    return new Set(
-      [...displayGraph.nodes]
-        .sort((left, right) => (relationCountByNode.get(right.id) || 0) - (relationCountByNode.get(left.id) || 0))
-        .slice(0, 12)
-        .map((node) => node.id),
-    )
-  }, [displayGraph.focusActive, displayGraph.nodes, relationCountByNode])
-
-  const graphPayload = useMemo(() => {
+  const baseGraphPayload = useMemo(() => {
     const degreeMap = new Map<string, number>()
-    for (const node of displayGraph.nodes) {
+    for (const node of filteredGraphData.nodes) {
       degreeMap.set(node.id, relationCountByNode.get(node.id) || 0)
     }
 
+    const topDegreeNodeIds = new Set(
+      [...filteredGraphData.nodes]
+        .sort((left, right) => (degreeMap.get(right.id) || 0) - (degreeMap.get(left.id) || 0))
+        .slice(0, 16)
+        .map((node) => node.id),
+    )
+
     return {
-      nodes: displayGraph.nodes.map((node) => {
+      nodes: filteredGraphData.nodes.map((node) => {
         const degree = degreeMap.get(node.id) || 0
-        const isCenter = node.id === selectedNodeId
         return {
           id: node.id,
           data: {
             color: getColorForType(getNodeType(node), graphColors),
             degree,
-            label: labelNodeIds.has(node.id) ? getDisplayNodeLabel(node, displayGraph.focusActive) : '',
-            selected: node.id === selectedNodeId,
-            focused: !displayGraph.focusActive || visibleNodeIds.has(node.id),
-            isCenter,
-            size: getGraphNodeSize(degree, isCenter, displayGraph.focusActive),
+            label: truncateText(getNodeLabel(node), 36),
+            isTopNode: topDegreeNodeIds.has(node.id),
+            size: Math.min(18 + degree * 2.4, 48),
+            isLowSignal: isLowSignalNode(node)
           },
         }
       }),
-      edges: displayGraph.edges.map((edge) => {
+      edges: filteredGraphData.edges.map((edge) => {
         const keywords = getEdgeKeywords(edge)
-        const edgeLabel = displayGraph.focusActive ? (keywords[0] || getEdgeTitle(edge)) : ''
         return {
           id: edge.id,
           source: edge.source,
           target: edge.target,
           data: {
-            selected: edge.id === selectedEdgeId,
-            label: truncateText(edgeLabel, 12),
+            label: truncateText(keywords[0] || getEdgeTitle(edge), 12),
           },
         }
       }),
     }
-  }, [displayGraph, graphColors, labelNodeIds, relationCountByNode, selectedEdgeId, selectedNodeId, visibleNodeIds])
+  }, [filteredGraphData, graphColors, relationCountByNode])
 
   useEffect(() => {
     if (selectedNodeId && !filteredGraphData.nodes.some((node) => node.id === selectedNodeId)) {
@@ -500,7 +478,7 @@ export function KnowledgeGraphTab({
     const MAX_RETRIES = 5
 
     async function renderGraph() {
-      if (!containerRef.current || graphPayload.nodes.length === 0) {
+      if (!containerRef.current || baseGraphPayload.nodes.length === 0) {
         if (graphRef.current) {
           graphRef.current.destroy()
           graphRef.current = null
@@ -531,49 +509,110 @@ export function KnowledgeGraphTab({
           graphRef.current = null
         }
 
-        const layout = buildGraphLayout(layoutMode, displayGraph.focusActive, graphPayload.nodes.length, width, height)
+        const layout = buildGraphLayout(layoutMode, focusState.active, baseGraphPayload.nodes.length, width, height)
 
         const instance = new Graph({
           container: containerRef.current,
           width,
           height,
-          data: graphPayload,
+          data: baseGraphPayload,
           autoFit: 'view',
           layout,
           node: {
             type: 'circle',
             style: {
-              size: (datum: any) => {
-                return Number(datum.data?.size || 28)
-              },
+              size: (datum: any) => Number(datum.data?.size || 28),
               fill: (datum: any) => datum.data?.color || graphColors.default,
-              opacity: (datum: any) => (displayGraph.focusActive && !datum.data?.focused ? 0.18 : 1),
-              stroke: (datum: any) => (datum.data?.selected ? token.colorPrimary : token.colorBgContainer),
-              lineWidth: (datum: any) => (datum.data?.selected ? 3.5 : datum.data?.isCenter ? 2.6 : 2),
+              stroke: '#ffffff', // Clean white border for everything
+              lineWidth: 1.5,
+              opacity: 0.95,
               labelText: (datum: any) => datum.data?.label || '',
               labelFill: token.colorText,
-              labelFontSize: (datum: any) => (datum.data?.isCenter ? 13 : 11),
+              labelFontSize: 11,
               labelWordWrap: true,
-              labelMaxWidth: displayGraph.focusActive ? '320%' : '170%',
-              shadowColor: token.colorFillSecondary,
+              labelMaxWidth: '260%',
+              labelPosition: 'bottom',
+              labelOffsetY: 5,
+              shadowColor: 'rgba(0,0,0,0.06)',
               shadowBlur: 8,
             },
+            state: {
+              active: {
+                opacity: 1,
+                labelText: (datum: any) => datum.data?.label,
+                labelFontSize: 13,
+                labelPosition: 'bottom',
+                labelOffsetY: 8,
+                labelBackground: true,
+                labelBackgroundFill: '#ffffff',
+                labelBackgroundOpacity: 0.9,
+                labelBackgroundRadius: 4,
+                shadowColor: (datum: any) => datum.data?.color || graphColors.default,
+                shadowBlur: 14,
+              },
+              inactive: {
+                opacity: 0.15,
+                lineWidth: 1,
+                labelText: '',
+              },
+              selected: {
+                opacity: 1,
+                stroke: '#ffffff',
+                lineWidth: 2,
+                labelText: (datum: any) => datum.data?.label,
+                labelFontSize: 14,
+                labelPosition: 'bottom',
+                labelOffsetY: 8,
+                labelBackground: true,
+                labelBackgroundFill: '#ffffff',
+                labelBackgroundOpacity: 0.95,
+                labelBackgroundRadius: 6,
+                size: (datum: any) => Number(datum.data?.size || 28) + 4,
+                shadowColor: (datum: any) => datum.data?.color || graphColors.default,
+                shadowBlur: 24,
+              }
+            }
           },
           edge: {
             type: 'quadratic',
             style: {
-              stroke: (datum: any) => (datum.data?.selected ? token.colorWarning : token.colorBorderSecondary),
-              opacity: displayGraph.focusActive ? 0.85 : 0.42,
-              lineWidth: (datum: any) => (datum.data?.selected ? 3 : displayGraph.focusActive ? 1.9 : 1.2),
-              endArrow: true,
-              labelText: (datum: any) => datum.data?.label || '',
-              labelFill: token.colorTextSecondary,
-              labelFontSize: 10,
-              labelBackground: true,
-              labelBackgroundFill: token.colorBgContainer,
-              labelBackgroundOpacity: 0.85,
-              labelBackgroundRadius: 3,
+              stroke: token.colorBorderSecondary,
+              opacity: 0.5,
+              lineWidth: 1,
+              endArrow: true, // we leave this as standard antv might still resolve it
+              labelText: '', 
             },
+            state: {
+              active: {
+                opacity: 0.8,
+                lineWidth: 2,
+                labelText: (datum: any) => datum.data?.label,
+                labelFill: token.colorTextSecondary,
+                labelFontSize: 10,
+                labelAutoRotate: true,
+                labelBackground: true,
+                labelBackgroundFill: '#ffffff',
+                labelBackgroundOpacity: 0.85,
+                labelBackgroundRadius: 3,
+                stroke: token.colorTextSecondary,
+              },
+              inactive: {
+                opacity: 0.08,
+              },
+              selected: {
+                stroke: token.colorPrimary,
+                lineWidth: 2.5,
+                opacity: 0.9,
+                labelText: (datum: any) => datum.data?.label,
+                labelFill: token.colorPrimary,
+                labelFontSize: 11,
+                labelAutoRotate: true,
+                labelBackground: true,
+                labelBackgroundFill: '#ffffff',
+                labelBackgroundOpacity: 0.95,
+                labelBackgroundRadius: 3,
+              }
+            }
           },
           behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas', 'hover-activate'],
         })
@@ -637,7 +676,45 @@ export function KnowledgeGraphTab({
         graphRef.current = null
       }
     }
-  }, [displayGraph.focusActive, graphColors, graphPayload, layoutMode, token])
+  }, [baseGraphPayload, layoutMode, token])
+  // State management effect
+  useEffect(() => {
+    if (!graphRef.current || !hasGraph) return
+    const graph = graphRef.current
+
+    if (!focusState.active) {
+       // Clear all states
+       const updates: Record<string, string[]> = {}
+       for (const node of baseGraphPayload.nodes) updates[node.id] = []
+       for (const edge of baseGraphPayload.edges) updates[edge.id] = []
+       try { graph.setElementState(updates) } catch (e) {}
+       return
+    }
+
+    const updates: Record<string, string[]> = {}
+    for (const node of baseGraphPayload.nodes) {
+       if (node.id === selectedNodeId) {
+           updates[node.id] = ['selected', 'active']
+       } else if (focusState.nodeIds.has(node.id)) {
+           updates[node.id] = ['active']
+       } else {
+           updates[node.id] = ['inactive']
+       }
+    }
+    for (const edge of baseGraphPayload.edges) {
+       if (edge.id === selectedEdgeId) {
+           updates[edge.id] = ['selected', 'active']
+       } else if (focusState.edgeIds.has(edge.id)) {
+           updates[edge.id] = ['active']
+       } else {
+           updates[edge.id] = ['inactive']
+       }
+    }
+    try {
+        graph.setElementState(updates)
+    } catch (e) {}
+  }, [focusState, selectedNodeId, selectedEdgeId, baseGraphPayload, hasGraph])
+
 
   const selectedTypeCount = useMemo(() => {
     if (!selectedNode) return ''
@@ -682,13 +759,13 @@ export function KnowledgeGraphTab({
       </div>
 
       <div className="knowledge-stat-grid is-graph">
-        <Statistic title="实体" value={displayGraph.nodes.length || graphStats?.nodeCount || 0} />
-        <Statistic title="关系" value={displayGraph.edges.length || graphStats?.edgeCount || 0} />
-        <Statistic title="渲染" value={displayGraph.focusActive ? `${getGraphLayoutLabel(layoutMode)} · 焦点` : getGraphLayoutLabel(layoutMode)} />
-        <Statistic title={displayGraph.focusActive ? '邻接关系' : '隐藏噪音'} value={displayGraph.focusActive ? selectedTypeCount || '0' : (viewMode === 'core' ? filteredGraphData.hiddenNodeCount : 0)} />
+        <Statistic title="实体" value={baseGraphPayload.nodes.length || graphStats?.nodeCount || 0} />
+        <Statistic title="关系" value={baseGraphPayload.edges.length || graphStats?.edgeCount || 0} />
+        <Statistic title="渲染" value={focusState.active ? `${getGraphLayoutLabel(layoutMode)} · 焦点` : getGraphLayoutLabel(layoutMode)} />
+        <Statistic title={focusState.active ? '邻接关系' : '隐藏噪音'} value={focusState.active ? selectedTypeCount || '0' : (viewMode === 'core' ? filteredGraphData.hiddenNodeCount : 0)} />
       </div>
 
-      {!graphLoading && hasGraph && viewMode === 'core' && !displayGraph.focusActive && (filteredGraphData.hiddenNodeCount > 0 || filteredGraphData.hiddenEdgeCount > 0) ? (
+      {!graphLoading && hasGraph && viewMode === 'core' && !focusState.active && (filteredGraphData.hiddenNodeCount > 0 || filteredGraphData.hiddenEdgeCount > 0) ? (
         <Alert
           type="info"
           showIcon
@@ -699,7 +776,7 @@ export function KnowledgeGraphTab({
 
       {graphLoading ? (
         <div className="knowledge-loading-panel"><Spin /></div>
-      ) : graphPayload.nodes.length > 0 ? (
+      ) : baseGraphPayload.nodes.length > 0 ? (
         <div className="knowledge-graph-browser">
           <div className="knowledge-graph-browser-stage">
             <div className="knowledge-graph-canvas-shell knowledge-graph-browser-shell">
@@ -725,11 +802,11 @@ export function KnowledgeGraphTab({
             </div>
             <div className="knowledge-graph-stage-footer">
               <Text type="secondary">
-                {displayGraph.focusActive
+                {focusState.active
                   ? `焦点视图：${selectedNode ? getNodeLabel(selectedNode) : '当前关系'} · ${getGraphLayoutLabel(layoutMode)}`
                   : `当前渲染：${getGraphLayoutLabel(layoutMode)}。点击一个实体后，会切换到它的一跳关系视图。`}
               </Text>
-              {displayGraph.focusActive ? (
+              {focusState.active ? (
                 <Button
                   size="small"
                   onClick={() => {
@@ -756,7 +833,7 @@ export function KnowledgeGraphTab({
                         : '点击左侧实体后，在这里查看属性和关系'}
                   </Text>
                 </div>
-                {selectedNode ? <Tag>{getNodeTypeLabel(selectedNode)}</Tag> : <Tag>{displayGraph.focusActive ? '焦点' : '全图'}</Tag>}
+                {selectedNode ? <Tag>{getNodeTypeLabel(selectedNode)}</Tag> : <Tag>{focusState.active ? '焦点' : '全图'}</Tag>}
               </div>
 
               <div className="knowledge-graph-side-panel knowledge-graph-side-panel-compact">
