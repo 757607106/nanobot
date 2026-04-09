@@ -385,6 +385,20 @@ class RAGConfig(Base):
     milvus: RagMilvusConfig = Field(default_factory=RagMilvusConfig)
     graph_store: RagGraphStoreConfig = Field(default_factory=RagGraphStoreConfig)
 
+# Multimodal model keywords used by capability type inference (module-level to
+# avoid Pydantic treating it as a ModelPrivateAttr inside the Config class).
+_MULTIMODAL_MODEL_KEYWORDS = (
+    "vision", "vl", "omni", "qvq", "pixtral",
+    "gpt-4o", "gpt-4-turbo",
+    "claude-opus", "claude-sonnet",
+    "gemini-2", "gemini-1.5", "gemini-pro",
+    "glm-4v",
+    "qwen-vl", "qwen2-vl", "qwen2.5-vl",
+    "step-1v", "step-2v",
+    "yi-vision",
+    "internvl",
+)
+
 
 class Config(BaseSettings):
     """Root configuration for nanobot."""
@@ -468,10 +482,12 @@ class Config(BaseSettings):
             for part in (model or "", label or "")
             if str(part or "").strip()
         )
-        if any(token in haystack for token in ("embedding", "embeddings", "embed", "bge", "e5", "gte", "voyage")):
-            return "embedding"
         if any(token in haystack for token in ("rerank", "reranker", "bge-reranker", "jina-reranker")):
             return "rerank"
+        if any(token in haystack for token in ("embedding", "embeddings", "embed", "bge", "e5", "gte", "voyage")):
+            return "embedding"
+        if any(token in haystack for token in _MULTIMODAL_MODEL_KEYWORDS):
+            return "multimodal"
         return "text_chat"
 
     def _legacy_binding_for_provider(

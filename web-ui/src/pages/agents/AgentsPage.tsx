@@ -215,13 +215,6 @@ export default function AgentsPage() {
       message.error(nextError)
       return
     }
-    if (!(payload.rules || []).length) {
-      const nextError = '至少需要一条运行规则。'
-      setError(nextError)
-      message.error(nextError)
-      return
-    }
-
     try {
       setSaving(true)
       setError(null)
@@ -240,6 +233,56 @@ export default function AgentsPage() {
       message.error(nextError)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleInlineDescriptionUpdate(targetAgentId: string, description: string) {
+    const existing = agents.find((a) => a.agentId === targetAgentId)
+    if (!existing || existing.description === description) return
+
+    try {
+      const availableBindings = globalConfig ? getAllModelBindings(globalConfig, globalConfigMeta) : {}
+      const targetForm = agentToForm(existing)
+      targetForm.description = description
+      const payload = toPayload(targetForm, availableBindings)
+
+      await api.updateAgent(targetAgentId, payload)
+      message.success('员工职责已更新')
+      await loadWorkspace()
+      
+      if (currentAgent?.agentId === targetAgentId) {
+        updateForm('description', description)
+      }
+    } catch (updateError) {
+      message.error(getErrorMessage(updateError, '更新职责失败'))
+    }
+  }
+
+  async function handleInlineRoleUpdate(targetAgentId: string, newRole: string) {
+    const existing = agents.find((a) => a.agentId === targetAgentId)
+    if (!existing) return
+    const currentRole = existing.tags[0] || ''
+    if (currentRole === newRole) return
+
+    try {
+      const availableBindings = globalConfig ? getAllModelBindings(globalConfig, globalConfigMeta) : {}
+      const targetForm = agentToForm(existing)
+      if (targetForm.tags.length > 0) {
+        targetForm.tags[0] = newRole
+      } else {
+        targetForm.tags = [newRole]
+      }
+      const payload = toPayload(targetForm, availableBindings)
+
+      await api.updateAgent(targetAgentId, payload)
+      message.success('岗位头衔已更新')
+      await loadWorkspace()
+      
+      if (currentAgent?.agentId === targetAgentId) {
+        updateForm('tags', targetForm.tags)
+      }
+    } catch (updateError) {
+      message.error(getErrorMessage(updateError, '更新岗位失败'))
     }
   }
 
@@ -421,6 +464,8 @@ export default function AgentsPage() {
             loadingWorkspace={loadingWorkspace}
             error={error}
             selectedAgentId={selectedAgentId}
+            onUpdateDescription={handleInlineDescriptionUpdate}
+            onUpdateRole={handleInlineRoleUpdate}
             onRefresh={loadWorkspace}
           />
         </div>

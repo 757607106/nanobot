@@ -7,6 +7,7 @@ document lifecycle: raw-file parsing → markdown conversion → LightRAG indexi
 
 from __future__ import annotations
 
+import base64
 import csv
 import hashlib
 import io
@@ -71,6 +72,7 @@ class DocumentPipeline:
         consume_job_options_fn: Any,
         move_file_fn: Any,
         generate_questions_fn: Any,
+        resolve_vision_runtime_fn: Any = None,
     ) -> None:
         self.store = store
         self.artifacts = artifacts
@@ -90,6 +92,7 @@ class DocumentPipeline:
         self._consume_job_options = consume_job_options_fn
         self._move_file = move_file_fn
         self._generate_questions = generate_questions_fn
+        self._resolve_vision_runtime = resolve_vision_runtime_fn
 
     # ── Text / format helpers ──────────────────────────────────────────────
 
@@ -175,6 +178,107 @@ class DocumentPipeline:
         reader = PdfReader(io.BytesIO(content))
         return self._normalize_whitespace("\n\n".join(page.extract_text() or "" for page in reader.pages))
 
+    def _extract_pdf_with_vision(
+        self,
+        content: bytes,
+        *,
+        vision_runtime: dict[str, Any],
+        max_images_per_page: int = 5,
+        max_image_bytes: int = 4 * 1024 * 1024,
+    ) -> str:
+        """Extract PDF text with Vision-based image descriptions.
+
+        For each page, first extracts text, then extracts embedded images
+        and calls the Vision model to describe them.  Descriptions are
+        interleaved with page text in the output.
+        """
+        try:
+            from pypdf import PdfReader
+        except ImportError as exc:
+            raise KnowledgeBaseValidationError(
+                "PDF parsing requires optional dependency 'pypdf'."
+            ) from exc
+
+        from nanobot.platform.knowledge.llm_helpers import KnowledgeLLMHelper
+
+        reader = PdfReader(io.BytesIO(content))
+        sections: list[str] = []
+        total_images_described = 0
+
+        for page_idx, page in enumerate(reader.pages):
+            # 1. Extract text for this page
+            page_text = (page.extract_text() or "").strip()
+            if page_text:
+                sections.append(page_text)
+
+            # 2. Extract images from this page
+            try:
+                page_images = list(page.images)
+            except Exception:
+                logger.debug("Failed to extract images from page {}", page_idx + 1)
+                continue
+
+            images_on_page = 0
+            for img in page_images:
+                if images_on_page >= max_images_per_page:
+                    break
+                try:
+                    img_data: bytes = img.data
+                    if len(img_data) < 500:  # skip tiny artifacts
+                        continue
+                    if len(img_data) > max_image_bytes:
+                        logger.debug(
+                            "Skipping oversized image ({} bytes) on page {}",
+                            len(img_data), page_idx + 1,
+                        )
+                        continue
+
+                    # Determine MIME type from image name
+                    img_name = str(getattr(img, "name", "") or "").lower()
+                    if img_name.endswith(".jpg") or img_name.endswith(".jpeg"):
+                        mime = "image/jpeg"
+                    elif img_name.endswith(".png"):
+                        mime = "image/png"
+                    elif img_name.endswith(".gif"):
+                        mime = "image/gif"
+                    elif img_name.endswith(".webp"):
+                        mime = "image/webp"
+                    else:
+                        mime = "image/png"  # default fallback
+
+                    img_b64 = base64.b64encode(img_data).decode("ascii")
+                    description = self._run_async(
+                        KnowledgeLLMHelper(
+                            config=None, run_async_fn=self._run_async,
+                        ).describe_image_async(
+                            image_base64=img_b64,
+                            mime_type=mime,
+                            vision_runtime=vision_runtime,
+                        )
+                    )
+
+                    if description:
+                        sections.append(
+                            f"\n[图片描述 (第{page_idx + 1}页)]\n{description}\n"
+                        )
+                        images_on_page += 1
+                        total_images_described += 1
+                    else:
+                        logger.debug(
+                            "Vision model returned empty for image on page {}",
+                            page_idx + 1,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to describe image on page {}", page_idx + 1
+                    )
+
+        logger.info(
+            "PDF vision parsing complete: {} pages, {} images described",
+            len(reader.pages), total_images_described,
+        )
+        return self._normalize_whitespace("\n\n".join(sections))
+
     def _extract_docx_text(self, content: bytes) -> str:
         try:
             from docx import Document
@@ -190,6 +294,7 @@ class DocumentPipeline:
         file_name: str,
         mime_type: str | None,
         content: bytes,
+        vision_runtime: dict[str, Any] | None = None,
     ) -> tuple[str, str, dict[str, Any], list[dict[str, Any]] | None]:
         suffix = Path(file_name).suffix.lower()
         parser_name = suffix.lstrip(".") or "text"
@@ -209,7 +314,12 @@ class DocumentPipeline:
         elif suffix == ".xlsx":
             text = self._xlsx_to_text(content)
         elif suffix == ".pdf":
-            text = self._extract_pdf_text(content)
+            if vision_runtime and vision_runtime.get("model"):
+                text = self._extract_pdf_with_vision(content, vision_runtime=vision_runtime)
+                parser_name = "pdf+vision"
+                metadata["visionModel"] = vision_runtime.get("model", "")
+            else:
+                text = self._extract_pdf_text(content)
         elif suffix == ".docx":
             text = self._extract_docx_text(content)
         else:
@@ -241,11 +351,27 @@ class DocumentPipeline:
             replace(current, status=KnowledgeDocumentStatus.PARSING, error_message=None, updated_at=now_iso())
         )
         content = source_path.read_bytes()
+
+        # Resolve vision runtime if KB has multimodal enabled
+        vision_runtime: dict[str, Any] | None = None
+        try:
+            kb = self.require_kb(current.kb_id)
+            additional = kb.additional_params or {}
+            enable_multimodal = bool(additional.get("enable_multimodal"))
+            if enable_multimodal and self._resolve_vision_runtime is not None:
+                vision_info = additional.get("visionInfo") or {}
+                vision_runtime = self._resolve_vision_runtime(vision_info)
+                if vision_runtime and not vision_runtime.get("model"):
+                    vision_runtime = None  # no valid model resolved
+        except Exception:
+            logger.debug("Failed to resolve vision runtime for KB {}", current.kb_id)
+
         text, parser_name, metadata, faq_items = self._parse_file_content(
             title=current.filename,
             file_name=current.original_filename or current.filename,
             mime_type=current.content_type,
             content=content,
+            vision_runtime=vision_runtime,
         )
         parsed_path = Path(current.markdown_file or self._file_storage_paths(current.kb_id, current.file_id, current.filename)[1])
         parsed_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Collapse, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography, App } from 'antd'
+import { Button, Collapse, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography, App, Row, Col } from 'antd'
 import { SettingOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { api } from '../../api'
 import SectionCard from '../../components/console/SectionCard'
@@ -74,19 +74,10 @@ export default function AgentEditor({
     const provider = (form.binding ? availableBindings[form.binding]?.provider : null)
       || form.provider
       || inferProviderFromModel(globalConfigMeta, form.model || null)
-      || getPreferredProvider(globalConfig, globalConfigMeta)
     return getModelSuggestions(provider, form.model || null)
   }, [availableBindings, form.binding, form.model, form.provider, globalConfig, globalConfigMeta])
 
   const promptLength = form.systemPrompt.trim().length
-  const ruleCount = useMemo(
-    () => form.rulesText
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .length,
-    [form.rulesText],
-  )
 
   const [isOptimizing, setIsOptimizing] = useState(false)
 
@@ -150,13 +141,8 @@ export default function AgentEditor({
   }
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-      gap: 24,
-      alignItems: 'start'
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <Row gutter={[24, 24]} style={{ alignItems: 'stretch' }}>
+      <Col xs={24} lg={10} xl={9} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <SectionCard title="核心设定">
           <div
             style={{
@@ -175,12 +161,29 @@ export default function AgentEditor({
               />
             </FormField>
 
-            <FormField label="能力标签">
+            <FormField label="岗位头衔">
               <Input
-                value={form.tags.join(', ')}
-                onChange={(event) => onUpdateForm('tags', parseTags(event.target.value))}
-                placeholder="Python, React, API设计"
-                aria-label="标签"
+                value={form.tags[0] || ''}
+                onChange={(event) => {
+                  const val = event.target.value.trim()
+                  const rest = form.tags.slice(1)
+                  onUpdateForm('tags', [val, ...rest])
+                }}
+                placeholder="例如：人事助理、销售精英"
+                aria-label="岗位头衔"
+                style={{ borderRadius: 12, padding: '8px 12px' }}
+              />
+            </FormField>
+
+            <FormField label="其他能力标签">
+              <Input
+                value={form.tags.slice(1).join(', ')}
+                onChange={(event) => {
+                  const rest = parseTags(event.target.value)
+                  onUpdateForm('tags', [form.tags[0] || '', ...rest])
+                }}
+                placeholder="Python, React, API设计 (逗号分隔)"
+                aria-label="技能标签"
                 style={{ borderRadius: 12, padding: '8px 12px' }}
               />
             </FormField>
@@ -308,9 +311,9 @@ export default function AgentEditor({
             border: '1px solid var(--nb-card-border)',
           }}
         />
-      </div>
+      </Col>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <Col xs={24} lg={14} xl={15} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <SectionCard title="核心逻辑指令">
           <Flex vertical gap={24}>
             <FormField 
@@ -334,7 +337,7 @@ export default function AgentEditor({
                 <Input.TextArea
                   value={form.systemPrompt}
                   onChange={(event) => onUpdateForm('systemPrompt', event.target.value)}
-                  rows={14}
+                  autoSize={{ minRows: 16 }}
                   aria-label="角色说明"
                   style={{ 
                     borderRadius: 12, border: 'none', background: 'transparent',
@@ -344,21 +347,9 @@ export default function AgentEditor({
                 />
               </div>
             </FormField>
-
-            <FormField label="Behavioral Guidelines (行为守则)">
-              <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
-                <Input.TextArea
-                  value={form.rulesText}
-                  onChange={(event) => onUpdateForm('rulesText', event.target.value)}
-                  rows={8}
-                  aria-label="工作规则"
-                  style={{ borderRadius: 12, border: 'none', background: 'transparent', lineHeight: 1.6 }}
-                />
-              </div>
-            </FormField>
           </Flex>
         </SectionCard>
-      </div>
-    </div>
+      </Col>
+    </Row>
   )
 }

@@ -2,15 +2,29 @@ import { providerCategoryLabels } from './configMeta'
 import { getModelSuggestions } from './modelCatalog'
 import type { ConfigData, ConfigMeta, ModelBinding, ProviderConfig, ProviderMeta } from './types'
 
+const _EMBEDDING_KEYWORDS = ['embedding', 'embeddings', 'embed', 'bge', 'e5', 'gte', 'voyage']
+const _RERANK_KEYWORDS = ['rerank', 'reranker', 'bge-reranker', 'jina-reranker']
+const _MULTIMODAL_KEYWORDS = [
+  'vision', 'vl', 'omni', 'qvq', 'pixtral',
+  'gpt-4o', 'gpt-4-turbo',
+  'claude-opus', 'claude-sonnet',
+  'gemini-2', 'gemini-1.5', 'gemini-pro',
+  'glm-4v',
+  'qwen-vl', 'qwen2-vl', 'qwen2.5-vl',
+  'step-1v', 'step-2v',
+  'yi-vision',
+  'internvl',
+]
+
 export function resolveBindingCapabilityType(binding: Pick<ModelBinding, 'capabilityType' | 'model' | 'label'> | undefined) {
   const normalized = `${binding?.model || ''} ${binding?.label || ''}`.trim().toLowerCase()
-  if (['embedding', 'embeddings', 'embed', 'bge', 'e5', 'gte', 'voyage'].some((token) => normalized.includes(token))) {
-    return 'embedding' as const
-  }
-  if (['rerank', 'reranker', 'bge-reranker', 'jina-reranker'].some((token) => normalized.includes(token))) {
+  if (_RERANK_KEYWORDS.some((token) => normalized.includes(token))) {
     return 'rerank' as const
   }
-  if (binding?.capabilityType === 'multimodal') {
+  if (_EMBEDDING_KEYWORDS.some((token) => normalized.includes(token))) {
+    return 'embedding' as const
+  }
+  if (binding?.capabilityType === 'multimodal' || _MULTIMODAL_KEYWORDS.some((token) => normalized.includes(token))) {
     return 'multimodal' as const
   }
   return (binding?.capabilityType ?? 'text_chat') as 'text_chat' | 'embedding' | 'multimodal' | 'rerank'

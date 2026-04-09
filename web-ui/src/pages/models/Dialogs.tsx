@@ -112,6 +112,7 @@ export function AddModelDialog({
               { label: '文本对话', value: 'text_chat' },
               { label: '向量嵌入', value: 'embedding' },
               { label: '多模态', value: 'multimodal' },
+              { label: '重排序', value: 'rerank' },
             ]}
           />
         </FieldGroup>

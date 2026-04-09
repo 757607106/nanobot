@@ -24,15 +24,29 @@ export function getBindingRouteErrorMessage(error: unknown, action: '检测连�
   return error instanceof Error ? error.message : `${action}失败`
 }
 
+const EMBEDDING_KEYWORDS = ['embedding', 'embeddings', 'embed', 'bge', 'e5', 'gte', 'voyage']
+const RERANK_KEYWORDS = ['rerank', 'reranker', 'bge-reranker', 'jina-reranker']
+const MULTIMODAL_KEYWORDS = [
+  'vision', 'vl', 'omni', 'qvq', 'pixtral',
+  'gpt-4o', 'gpt-4-turbo',
+  'claude-opus', 'claude-sonnet',
+  'gemini-2', 'gemini-1.5', 'gemini-pro',
+  'glm-4v',
+  'qwen-vl', 'qwen2-vl', 'qwen2.5-vl',
+  'step-1v', 'step-2v',
+  'yi-vision',
+  'internvl',
+]
+
 export function inferCapabilityType(modelId: string): CapabilityType {
   const normalized = modelId.trim().toLowerCase()
-  if (['embedding', 'embeddings', 'embed', 'bge', 'e5', 'gte', 'voyage'].some((token) => normalized.includes(token))) {
-    return 'embedding'
-  }
-  if (['rerank', 'reranker', 'bge-reranker', 'jina-reranker'].some((token) => normalized.includes(token))) {
+  if (RERANK_KEYWORDS.some((token) => normalized.includes(token))) {
     return 'rerank'
   }
-  if (['vision', 'vl', 'omni', 'gpt-4o', 'qvq'].some((token) => normalized.includes(token))) {
+  if (EMBEDDING_KEYWORDS.some((token) => normalized.includes(token))) {
+    return 'embedding'
+  }
+  if (MULTIMODAL_KEYWORDS.some((token) => normalized.includes(token))) {
     return 'multimodal'
   }
   return 'text_chat'

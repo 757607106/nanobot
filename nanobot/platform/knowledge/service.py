@@ -127,6 +127,7 @@ class KnowledgeBaseService:
             consume_job_options_fn=self._consume_job_options,
             move_file_fn=self.move_file,
             generate_questions_fn=self.generate_sample_questions,
+            resolve_vision_runtime_fn=self._resolve_vision_runtime_from_info,
         )
 
         self.file_manager = KnowledgeFileManager(
@@ -256,6 +257,17 @@ class KnowledgeBaseService:
             binding_name=binding_name,
             model_name=model_name,
             capability_type=capability_type,
+        )
+
+    def _resolve_vision_runtime_from_info(self, vision_info: dict[str, Any]) -> dict[str, Any]:
+        """Resolve a visionInfo dict (from KB additional_params) to a runtime dict.
+
+        Called by DocumentPipeline when parsing PDF files with multimodal enabled.
+        """
+        return self._resolve_binding_runtime(
+            binding_name=self._knowledge_model_value(vision_info, "bindingName", "binding_name"),
+            model_name=self._knowledge_model_value(vision_info, "modelName", "model_name", "model"),
+            capability_type="multimodal",
         )
 
     def _resolve_kb_runtime_overrides(self, kb_id: str) -> dict[str, Any]:

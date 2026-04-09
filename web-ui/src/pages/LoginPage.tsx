@@ -7,7 +7,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { PLATFORM_BRAND_NAME } from '../branding'
 import { testIds } from '../testIds'
 import { AnimatedCats } from './AnimatedCats'
-import { AnimatedLogo } from '../components/AnimatedLogo'
 
 interface LoginLocationState {
   from?: {
@@ -181,15 +180,13 @@ export default function LoginPage() {
             `,
           }}
         >
-          {/* ── Brand Lockup (Animated Logo + Text) ── */}
-          <motion.div variants={stagger.item} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 36, textAlign: 'center' }}>
-            <AnimatedLogo size={68} isTyping={isTyping} />
+          {/* ── Brand Lockup (Text Only) ── */}
+          <motion.div variants={stagger.item} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 32, textAlign: 'center' }}>
             <Typography.Text strong style={{ 
-                marginTop: 16,
                 color: '#0F172A', 
-                fontSize: 26,
+                fontSize: 28,
                 fontFamily: 'var(--nb-font-display)', 
-                letterSpacing: '-0.02em', 
+                letterSpacing: '-0.03em', 
                 display: 'block', 
                 lineHeight: 1 
             }}>

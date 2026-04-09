@@ -37,7 +37,7 @@ export function agentToForm(agent: AgentDefinition): AgentFormState {
     name: agent.name,
     description: agent.description,
     systemPrompt: agent.systemPrompt,
-    rulesText: agent.rules.join('\n'),
+    rulesText: '', // Kept for type compatibility if not removed from types.ts
     model: agent.model || '',
     binding: agent.binding || '',
     provider: agent.provider || '',
@@ -93,7 +93,7 @@ export function toPayload(
     name: form.name.trim(),
     description: form.description.trim(),
     systemPrompt: form.systemPrompt.trim(),
-    rules: parseRules(form.rulesText),
+    rules: [], // Deprecated in UI, merged into systemPrompt directly
     model,
     binding,
     provider,

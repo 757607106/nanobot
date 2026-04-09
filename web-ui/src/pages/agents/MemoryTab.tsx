@@ -115,7 +115,7 @@ export default function MemoryTab({
 
             {loadingMemory && agentMemoryCandidates.length === 0 ? (
               <Flex justify="center" align="center" style={{ minHeight: 180 }}>
-                <Spin tip="正在同步候选记录..." size="large" />
+                <Spin tip="正在同步候选记录..." size="large"><div /></Spin>
               </Flex>
             ) : agentMemoryCandidates.length === 0 ? (
               <Empty image={false} className="minimal-empty" description="已清空" style={{ marginTop: 24, marginBottom: 24 }} />

@@ -126,7 +126,7 @@ export default function AgentDetail({
     return (
       <SectionCard title="员工详情">
         <Flex justify="center" align="center" style={{ minHeight: 220 }}>
-          <Spin tip="正在加载员工详情..." size="large" />
+          <Spin tip="正在加载员工详情..." size="large"><div /></Spin>
         </Flex>
       </SectionCard>
     )

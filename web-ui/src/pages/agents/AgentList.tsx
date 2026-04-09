@@ -11,6 +11,8 @@ interface AgentListProps {
   loadingWorkspace: boolean
   error: string | null
   selectedAgentId: string | null
+  onUpdateDescription: (agentId: string, description: string) => void
+  onUpdateRole: (agentId: string, role: string) => void
   onRefresh: () => void
 }
 
@@ -19,6 +21,8 @@ export default function AgentList({
   loadingWorkspace,
   error,
   selectedAgentId,
+  onUpdateDescription,
+  onUpdateRole,
   onRefresh,
 }: AgentListProps) {
   const navigate = useNavigate()
@@ -91,11 +95,12 @@ export default function AgentList({
       ) : (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))',
           gap: 20,
         }}>
           {filteredAgents.map((record, index) => {
             const avatar = getAgentAvatar(record.agentId, record.name, record.description, record.tags)
+            const displayRole = record.tags?.[0] || avatar.label
             return (
               <motion.div
                 key={record.agentId}
@@ -274,9 +279,12 @@ export default function AgentList({
                         fontSize: 'var(--nb-text-xs)',
                         color: 'var(--nb-muted)',
                         fontWeight: 'var(--nb-font-weight-medium)',
+                        lineHeight: 1.2,
+                        margin: 0,
+                        display: 'inline-block'
                       }}
                     >
-                      {avatar.label}
+                      {displayRole}
                     </Typography.Text>
                   </div>
                 </div>

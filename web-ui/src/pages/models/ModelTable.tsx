@@ -19,6 +19,7 @@ const CAPABILITY_TABS = [
   { label: '文本对话', value: 'text_chat' },
   { label: '向量嵌入', value: 'embedding' },
   { label: '多模态', value: 'multimodal' },
+  { label: '重排序', value: 'rerank' },
 ]
 
 function capabilityColor(type: CapabilityType) {
@@ -82,11 +83,9 @@ export default function ModelTable({
 
   // Count by capability
   const counts = useMemo(() => {
-    const c = { all: bindings.length, text_chat: 0, embedding: 0, multimodal: 0 }
+    const c = { all: bindings.length, text_chat: 0, embedding: 0, multimodal: 0, rerank: 0 }
     for (const b of bindings) {
-      if (b.capabilityType === 'text_chat') c.text_chat++
-      else if (b.capabilityType === 'embedding') c.embedding++
-      else if (b.capabilityType === 'multimodal') c.multimodal++
+      if (b.capabilityType in c) c[b.capabilityType as keyof typeof c]++
     }
     return c
   }, [bindings])
@@ -172,21 +171,41 @@ export default function ModelTable({
         { text: '多模态', value: 'multimodal' },
       ],
       onFilter: (value, record) => record.capabilityType === value,
-      render: (_value, record) => (
-        <Tag
-          color={capabilityColor(record.capabilityType)}
-          bordered={false}
-          style={{ borderRadius: 6, fontSize: 'var(--nb-text-xs)', cursor: onCapabilityChange ? 'pointer' : undefined }}
-          onClick={onCapabilityChange ? () => {
-            const types: CapabilityType[] = ['text_chat', 'embedding', 'multimodal']
-            const currentIndex = types.indexOf(record.capabilityType)
-            const nextType = types[(currentIndex + 1) % types.length]
-            onCapabilityChange(record.bindingName, nextType)
-          } : undefined}
-        >
-          {capabilityLabel(record.capabilityType)}
-        </Tag>
-      ),
+      render: (_value, record) => {
+        if (!onCapabilityChange) {
+          return (
+            <Tag
+              color={capabilityColor(record.capabilityType)}
+              bordered={false}
+              style={{ borderRadius: 6, fontSize: 'var(--nb-text-xs)' }}
+            >
+              {capabilityLabel(record.capabilityType)}
+            </Tag>
+          )
+        }
+        const menuItems: CapabilityType[] = ['text_chat', 'embedding', 'multimodal', 'rerank']
+        return (
+          <Dropdown
+            menu={{
+              items: menuItems.map((type) => ({
+                key: type,
+                label: capabilityLabel(type),
+                onClick: () => onCapabilityChange(record.bindingName, type),
+              })),
+              selectedKeys: [record.capabilityType],
+            }}
+            trigger={['click']}
+          >
+            <Tag
+              color={capabilityColor(record.capabilityType)}
+              bordered={false}
+              style={{ borderRadius: 6, fontSize: 'var(--nb-text-xs)', cursor: 'pointer' }}
+            >
+              {capabilityLabel(record.capabilityType)} ▾
+            </Tag>
+          </Dropdown>
+        )
+      },
     },
     {
       title: '操作',

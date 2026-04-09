@@ -86,6 +86,91 @@ class KnowledgeLLMHelper:
             return text[start:end + 1]
         return None
 
+    # ── Vision helpers ──
+
+    async def describe_image_async(
+        self,
+        *,
+        image_base64: str,
+        mime_type: str = "image/png",
+        vision_runtime: dict[str, Any],
+        prompt: str = "请详细描述这张图片的内容。如果包含文字请完整提取，如果是图表请描述数据和趋势，如果是流程图请描述步骤和关系。使用中文回答。",
+        timeout: float = 60.0,
+    ) -> str | None:
+        """Call a Vision model to describe a single image.
+
+        Parameters
+        ----------
+        image_base64:
+            Base64-encoded image content.
+        mime_type:
+            MIME type of the image (e.g. ``image/png``, ``image/jpeg``).
+        vision_runtime:
+            Resolved vision model runtime dict with keys:
+            ``model``, ``provider_name``, ``api_key``, ``api_base``,
+            ``extra_headers``.
+        prompt:
+            The user prompt sent alongside the image.
+        timeout:
+            Request timeout in seconds.
+
+        Returns
+        -------
+        The text description, or ``None`` on failure.
+        """
+        model = str(vision_runtime.get("model") or "").strip()
+        if not model or not image_base64:
+            return None
+
+        try:
+            import litellm
+
+            provider_name = str(vision_runtime.get("provider_name") or "").strip()
+            api_key = str(vision_runtime.get("api_key") or "").strip() or None
+            api_base = str(vision_runtime.get("api_base") or "").strip() or None
+            extra_headers = dict(vision_runtime.get("extra_headers") or {})
+
+            # Build litellm-compatible model name with provider prefix
+            from nanobot.providers.registry import find_by_name
+            provider_spec = find_by_name(provider_name) if provider_name else None
+            litellm_model = model
+            if provider_spec and provider_spec.litellm_prefix:
+                if not model.startswith(provider_spec.litellm_prefix):
+                    litellm_model = f"{provider_spec.litellm_prefix}{model}"
+
+            data_url = f"data:{mime_type};base64,{image_base64}"
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": data_url},
+                        },
+                    ],
+                }
+            ]
+
+            response = await litellm.acompletion(
+                model=litellm_model,
+                messages=messages,
+                api_key=api_key,
+                api_base=api_base,
+                extra_headers=extra_headers or None,
+                max_tokens=1024,
+                temperature=0.1,
+                timeout=timeout,
+            )
+            content = str(
+                getattr(response.choices[0].message, "content", None) or ""
+            ).strip()
+            return content or None
+
+        except Exception:
+            logger.exception("Vision image description failed for model {}", model)
+            return None
+
     # ── Binding resolution helpers ──
 
     def resolve_binding_runtime(
