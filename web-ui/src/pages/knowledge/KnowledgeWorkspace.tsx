@@ -493,7 +493,7 @@ export default function KnowledgeWorkspace() {
       key: 'graph',
       label: '知识图谱',
       children: (
-        <Suspense fallback={<Flex justify="center" align="center" style={{ minHeight: 400 }}><Spin tip="正在加载知识图谱引擎..."><div /></Spin></Flex>}>
+        <Suspense fallback={<Flex justify="center" align="center" style={{ minHeight: 400 }}><Spin tip="正在加载知识图谱引擎..." size="large" /></Flex>}>
           <KnowledgeGraphTab
             graphLabel={graphConfig.label}
             graphDepth={graphConfig.depth}
@@ -820,7 +820,7 @@ export default function KnowledgeWorkspace() {
       <div className="knowledge-workspace-container">
         <SectionCard title="知识库">
           <Flex justify="center" align="center" className="knowledge-workspace-loading">
-            <Spin tip="正在加载知识库详情..."><div /></Spin>
+            <Spin tip="正在加载知识库详情..." size="large" />
           </Flex>
         </SectionCard>
       </div>

@@ -369,24 +369,35 @@ export function KnowledgeUploadModal({
   return (
     <Modal
       open={open}
-      width={980}
+      width={720}
       title="添加文件"
       onCancel={closeModal}
-      onOk={() => void handleSubmit()}
-      okText={okText}
       confirmLoading={submitting}
       destroyOnHidden
       className="knowledge-upload-modal"
+      footer={(
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text type="secondary" style={{ fontSize: '13px' }}>
+            当前模式: {normalizeModeLabel(mode)}
+            {mode === 'web_url' && createdUrlFileIds.length > 0 ? ` · 已抓取 ${createdUrlFileIds.length} 条` : ''}
+          </Text>
+          <Space>
+            <Button onClick={closeModal}>取消</Button>
+            <Button type="primary" loading={submitting} onClick={() => void handleSubmit()}>
+              {okText}
+            </Button>
+          </Space>
+        </div>
+      )}
     >
       <div className="knowledge-upload-workbench">
-        <div className="knowledge-upload-header">
-          <div>
-            <Title level={4} style={{ margin: 0 }}>添加文件</Title>
-            <Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
+        <div style={{ marginBottom: 24 }}>
+          <Space align="center" style={{ marginBottom: 4 }}>
+            <Text type="secondary">
               支持文件、URL 和 FAQ 三种来源，提交后会写入当前知识库 {kb?.name ? `「${kb.name}」` : ''}。
-            </Paragraph>
-          </div>
-          <Tag color="green">{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
+            </Text>
+            <Tag color="green">{KNOWLEDGE_ARCHITECTURE_LABEL}</Tag>
+          </Space>
         </div>
 
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -400,99 +411,108 @@ export function KnowledgeUploadModal({
             ]}
           />
 
-          <div className="knowledge-upload-settings-grid">
-            <div className="knowledge-upload-setting">
-              <Text type="secondary">目标文件夹</Text>
-              <Select
-                allowClear
-                placeholder="选择目标文件夹，可为空"
-                value={targetParentId}
-                options={folderOptions}
-                onChange={(value) => setTargetParentId(value)}
-              />
-            </div>
-            <div className="knowledge-upload-setting">
-              <Text type="secondary">上传后自动入库</Text>
-              <div className="knowledge-upload-switch-row">
-                <Switch checked={autoIndex} onChange={setAutoIndex} />
-                <Text type="secondary">解析并生成索引</Text>
+          <Card size="small" bordered={false} style={{ background: 'var(--nb-background)' }}>
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>目标文件夹</Text>
+                  <Select
+                    allowClear
+                    placeholder="选填"
+                    value={targetParentId}
+                    options={folderOptions}
+                    onChange={(value) => setTargetParentId(value)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>上传后自动入库</Text>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32 }}>
+                    <Switch checked={autoIndex} onChange={setAutoIndex} />
+                    <Text type="secondary">解析并生成索引</Text>
+                  </div>
+                </div>
               </div>
-            </div>
-            {(mode === 'web_url' || mode === 'faq_table') ? (
-              <div className="knowledge-upload-setting knowledge-upload-setting-span-2">
-                <Text type="secondary">来源标题</Text>
-                <Input
-                  value={sourceTitle}
-                  onChange={(event) => setSourceTitle(event.target.value)}
-                  placeholder={mode === 'web_url' ? '可选，用于同一批 URL 的来源标题' : 'FAQ 文件标题'}
-                />
-              </div>
-            ) : null}
-          </div>
+              {(mode === 'web_url' || mode === 'faq_table') ? (
+                <div>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>来源标题</Text>
+                  <Input
+                    value={sourceTitle}
+                    onChange={(event) => setSourceTitle(event.target.value)}
+                    placeholder={mode === 'web_url' ? '可选，用于同一批 URL 的来源标题' : 'FAQ 文件标题'}
+                  />
+                </div>
+              ) : null}
+            </Space>
+          </Card>
 
           {autoIndex ? (
-            <Card size="small" className="knowledge-upload-card" title="入库参数">
-              <div className="knowledge-upload-settings-grid">
-                <div className="knowledge-upload-setting">
-                  <Text type="secondary">分块策略</Text>
-                  <Select
-                    value={chunkPresetId}
-                    options={CHUNK_PRESET_OPTIONS.map((item) => ({ label: item.label, value: item.value }))}
-                    onChange={(value) => setChunkPresetId(value)}
-                  />
+            <Card size="small" title={<Text strong>入库参数</Text>} style={{ background: 'var(--nb-card-bg)' }}>
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>分块策略</Text>
+                    <Select
+                      value={chunkPresetId}
+                      options={CHUNK_PRESET_OPTIONS.map((item) => ({ label: item.label, value: item.value }))}
+                      onChange={(value) => setChunkPresetId(value)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>Chunk Size / Overlap</Text>
+                    <Space.Compact style={{ width: '100%' }}>
+                      <InputNumber
+                        min={200}
+                        max={8000}
+                        value={chunkSize}
+                        onChange={(value) => setChunkSize(Number(value || 1000))}
+                        style={{ flex: 1 }}
+                        placeholder="Size"
+                      />
+                      <InputNumber
+                        min={0}
+                        max={4000}
+                        value={chunkOverlap}
+                        onChange={(value) => setChunkOverlap(Number(value || 0))}
+                        style={{ flex: 1 }}
+                        placeholder="Overlap"
+                      />
+                    </Space.Compact>
+                  </div>
                 </div>
-                <div className="knowledge-upload-setting">
-                  <Text type="secondary">Chunk Size</Text>
-                  <InputNumber
-                    min={200}
-                    max={8000}
-                    value={chunkSize}
-                    style={{ width: '100%' }}
-                    onChange={(value) => setChunkSize(Number(value || 1000))}
-                  />
-                </div>
-                <div className="knowledge-upload-setting">
-                  <Text type="secondary">Chunk Overlap</Text>
-                  <InputNumber
-                    min={0}
-                    max={4000}
-                    value={chunkOverlap}
-                    style={{ width: '100%' }}
-                    onChange={(value) => setChunkOverlap(Number(value || 0))}
-                  />
-                </div>
-                <div className="knowledge-upload-setting knowledge-upload-setting-span-2">
-                  <Text type="secondary">QA 分隔符</Text>
+                <div style={{ flex: 1 }}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>QA 分隔符</Text>
                   <Input
                     value={qaSeparator}
                     onChange={(event) => setQaSeparator(event.target.value)}
-                    placeholder="例如：---FAQ---"
+                    placeholder="选填（例如：---FAQ---）"
                   />
                 </div>
-              </div>
+              </Space>
             </Card>
           ) : null}
 
           {mode === 'file' ? (
-            <Card size="small" className="knowledge-upload-card" title="文件上传">
+            <Card size="small" style={{ background: 'var(--nb-card-bg)' }}>
               <Upload.Dragger
                 multiple
                 beforeUpload={(file, fileList) => {
                   appendFiles(fileList as unknown as File[])
-                  return false // Prevent automatic upload
+                  return false
                 }}
                 showUploadList={false}
                 fileList={[]}
-                style={{ padding: '32px 0', background: 'var(--nb-card-subtle-bg)', border: '1px dashed var(--nb-card-subtle-border)', borderRadius: 12 }}
+                style={{ padding: '24px 0', background: 'var(--nb-card-subtle-bg)', border: '1px dashed var(--nb-card-subtle-border)', borderRadius: 8 }}
               >
                 <p className="ant-upload-drag-icon">
-                  <UploadOutlined style={{ fontSize: 36, color: 'var(--nb-accent)' }} />
+                  <UploadOutlined style={{ fontSize: 28, color: 'var(--nb-accent)' }} />
                 </p>
-                <p className="ant-upload-text" style={{ fontSize: 'var(--nb-text-lg)', fontWeight: 'var(--nb-font-weight-medium)', margin: '8px 0' }}>
+                <p className="ant-upload-text" style={{ fontSize: 'var(--nb-text-md)', fontWeight: 'var(--nb-font-weight-medium)', margin: '4px 0' }}>
                   点击或拖拽文件到此区域
                 </p>
-                <p className="ant-upload-hint" style={{ fontSize: 'var(--nb-text-sm)', color: 'var(--nb-text-secondary)', padding: '0 24px' }}>
-                  支持单次上传多份文件，文件会在点击底部的“上传到知识库”时被批量处理写入。
+                <p className="ant-upload-hint" style={{ fontSize: 'var(--nb-text-xs)', color: 'var(--nb-text-secondary)', padding: '0 24px', margin: 0 }}>
+                  支持单次多选
                 </p>
               </Upload.Dragger>
 
@@ -501,6 +521,7 @@ export function KnowledgeUploadModal({
                   size="small"
                   className="knowledge-upload-list"
                   dataSource={selectedFiles}
+                  style={{ marginTop: 12, maxHeight: 200, overflowY: 'auto' }}
                   renderItem={(file) => (
                     <List.Item
                       actions={[
@@ -520,47 +541,33 @@ export function KnowledgeUploadModal({
                     </List.Item>
                   )}
                 />
-              ) : (
-                <Empty description="还没有选择文件" image={false} className="minimal-empty" />
-              )}
+              ) : null}
             </Card>
           ) : null}
 
           {mode === 'web_url' ? (
-            <Card
-              size="small"
-              className="knowledge-upload-card"
-              title="URL 批量加载"
-              extra={
-                <Space>
-                  <Button
-                    icon={<ReloadOutlined />}
-                    loading={loadingUrls}
-                    onClick={() => void loadUrls()}
-                    disabled={!urlInput.trim()}
-                  >
-                    加载 URLs
-                  </Button>
-                </Space>
-              }
-            >
+            <Card size="small" title={<Text strong>URL 批量加载</Text>}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Input.TextArea
                   value={urlInput}
                   onChange={(event) => setUrlInput(event.target.value)}
-                  autoSize={{ minRows: 4, maxRows: 8 }}
-                  placeholder="一行一个 URL，也支持逗号或分号分隔"
+                  autoSize={{ minRows: 3, maxRows: 6 }}
+                  placeholder="一行一个 URL，也支持逗号分隔"
                 />
-                <Alert
-                  showIcon
-                  type="info"
-                  message="URL 会在加载时直接写入知识库，列表会显示抓取结果；如果打开了自动入库，提交时会继续解析并建立索引。"
-                />
+                <Button
+                  icon={<ReloadOutlined />}
+                  loading={loadingUrls}
+                  onClick={() => void loadUrls()}
+                  disabled={!urlInput.trim()}
+                  block
+                >
+                  预加载 URLs
+                </Button>
                 {urlItems.length > 0 ? (
                   <List
                     size="small"
-                    className="knowledge-upload-list"
                     dataSource={urlItems}
+                    style={{ maxHeight: 200, overflowY: 'auto' }}
                     renderItem={(item) => (
                       <List.Item
                         actions={[
@@ -574,12 +581,8 @@ export function KnowledgeUploadModal({
                         ]}
                       >
                         <List.Item.Meta
-                          title={item.url}
-                          description={
-                            item.status === 'error'
-                              ? item.error
-                              : item.file?.filename || (item.status === 'loading' ? '正在抓取...' : '等待处理')
-                          }
+                          title={<Text style={{ fontSize: '13px' }} ellipsis>{item.url}</Text>}
+                          description={<Text style={{ fontSize: '12px' }} type="secondary" ellipsis>{item.status === 'error' ? item.error : item.file?.title || item.file?.filename || '...'}</Text>}
                         />
                       </List.Item>
                     )}
@@ -590,13 +593,13 @@ export function KnowledgeUploadModal({
           ) : null}
 
           {mode === 'faq_table' ? (
-            <Card size="small" className="knowledge-upload-card" title="FAQ 编辑">
+            <Card size="small" style={{ maxHeight: 400, overflowY: 'auto' }}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 {faqItems.map((item, index) => (
                   <Card
                     key={`faq-${index}`}
                     size="small"
-                    className="knowledge-upload-faq-card"
+                    type="inner"
                     title={`FAQ ${index + 1}`}
                     extra={
                       faqItems.length > 1 ? (
@@ -624,7 +627,7 @@ export function KnowledgeUploadModal({
                       <Input.TextArea
                         value={item.answer}
                         placeholder="答案"
-                        rows={3}
+                        rows={2}
                         onChange={(event) =>
                           setFaqItems((prev) =>
                             prev.map((entry, itemIndex) =>
@@ -637,6 +640,8 @@ export function KnowledgeUploadModal({
                   </Card>
                 ))}
                 <Button
+                  type="dashed"
+                  block
                   icon={<PlusOutlined />}
                   onClick={() => setFaqItems((prev) => [...prev, { question: '', answer: '' }])}
                 >
@@ -646,19 +651,6 @@ export function KnowledgeUploadModal({
             </Card>
           ) : null}
         </Space>
-
-        <div className="knowledge-upload-footer">
-          <Text type="secondary">
-            当前模式: {normalizeModeLabel(mode)}
-            {mode === 'web_url' && createdUrlFileIds.length > 0 ? ` · 已抓取 ${createdUrlFileIds.length} 条` : ''}
-          </Text>
-          <Space>
-            <Button onClick={closeModal}>取消</Button>
-            <Button type="primary" loading={submitting} onClick={() => void handleSubmit()}>
-              {okText}
-            </Button>
-          </Space>
-        </div>
       </div>
     </Modal>
   )

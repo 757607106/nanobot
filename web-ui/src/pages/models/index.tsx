@@ -275,11 +275,12 @@ export default function ModelsPage() {
     message.success(`已导入 ${modelId}`)
   }
 
-  function openTestDialog(initialData?: { apiKey?: string; apiBase?: string; model?: string }) {
-    const activeProviderConfig = config?.providers?.[activeProviderName || '']
+  function openTestDialog(initialData?: { apiKey?: string; apiBase?: string; model?: string }, providerNameOverride?: string) {
+    const resolvedProviderName = providerNameOverride || activeProviderName || ''
+    const providerConfig = config?.providers?.[resolvedProviderName]
     setTestDraft({
-      apiKey: initialData?.apiKey || activeProviderConfig?.apiKey || '',
-      apiBase: initialData?.apiBase || activeProviderConfig?.apiBase || '',
+      apiKey: initialData?.apiKey || providerConfig?.apiKey || '',
+      apiBase: initialData?.apiBase || providerConfig?.apiBase || '',
       model: initialData?.model || '',
     })
     setTestResult(null)
@@ -506,10 +507,11 @@ export default function ModelsPage() {
             searchQuery={deferredQuery}
             onTest={(_bindingName, model) => {
               const binding = bindings[_bindingName]
-              if (binding?.provider) {
-                setActiveProviderName(binding.provider)
+              const providerName = binding?.provider
+              if (providerName) {
+                setActiveProviderName(providerName)
               }
-              openTestDialog({ model })
+              openTestDialog({ model }, providerName)
             }}
             onSetDefault={setAsDefaultBinding}
             onDelete={requestDeleteBinding}
@@ -766,6 +768,7 @@ export default function ModelsPage() {
         testing={testing}
         draft={testDraft}
         result={testResult}
+        providerMeta={activeProviderMeta}
         onDraftChange={setTestDraft}
         onConfirm={() => void handleTestConnection()}
         onCancel={() => setTestDialogOpen(false)}

@@ -33,18 +33,22 @@ export default function KnowledgeList({
         action={<span className="console-inline-code">{`${visibleKnowledgeBases.length}/${knowledgeBases.length}`}</span>}
       >
         <Flex vertical gap={16}>
-          <Input
-            placeholder="搜索知识库、标签或描述"
-            value={knowledgeSearch}
-            onChange={(event) => onSearchChange(event.target.value)}
-            prefix={<SearchOutlined />}
-            allowClear
-            aria-label="搜索知识库"
-          />
+          <div style={{ padding: '0 4px' }}>
+            <Input
+              placeholder="搜索知识库、标签..."
+              value={knowledgeSearch}
+              onChange={(event) => onSearchChange(event.target.value)}
+              prefix={<SearchOutlined style={{ color: 'var(--nb-text-tertiary)', fontSize: 13 }} />}
+              allowClear
+              variant="filled"
+              style={{ borderRadius: 8, padding: '4px 12px', fontSize: 13 }}
+              aria-label="搜索知识库"
+            />
+          </div>
 
           {loading ? (
             <Flex justify="center" align="center" className="knowledge-list-loading">
-              <Spin tip="正在加载知识库目录..."><div /></Spin>
+              <Spin tip="正在加载知识库目录..." size="large" />
             </Flex>
           ) : visibleKnowledgeBases.length === 0 ? (
             <Empty

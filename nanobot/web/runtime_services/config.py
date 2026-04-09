@@ -91,6 +91,7 @@ class WebConfigRuntimeService:
                     "isLocal": spec.is_local,
                     "isOauth": spec.is_oauth,
                     "isDirect": spec.is_direct,
+                    "envKey": spec.env_key or None,
                 }
             )
 
@@ -260,8 +261,87 @@ class WebConfigRuntimeService:
             raise ValueError("Custom provider requires an API Base.")
         if provider_name == "azure_openai" and (not api_key or not api_base):
             raise ValueError("Azure OpenAI requires both API Key and API Base.")
-        if not spec.is_local and provider_name not in {"custom", "azure_openai"} and not (api_key or api_base):
-            raise ValueError("This provider requires an API Key or API Base.")
+        if not spec.is_local and not spec.is_oauth and provider_name not in {"custom", "azure_openai"}:
+            if spec.default_api_base:
+                if not api_key:
+                    raise ValueError(
+                        "此供应商需要 API Key。"
+                        + (f"（可通过环境变量 {spec.env_key} 配置）" if spec.env_key else "")
+                    )
+            elif not api_key and not api_base:
+                raise ValueError("此供应商需要 API Key 或 API Base。")
+
+        # Detect embedding model by name
+        _EMBEDDING_KEYWORDS = ("embedding", "embeddings", "embed", "bge", "e5", "gte", "voyage")
+        is_embedding = any(kw in model.lower() for kw in _EMBEDDING_KEYWORDS)
+
+        if is_embedding:
+            # Test embedding model via direct HTTP call to /embeddings endpoint
+            base_url = self._resolve_catalog_base(provider_name, api_base or None)
+            if not base_url and spec.default_api_base:
+                base_url = spec.default_api_base.rstrip("/")
+            if not base_url:
+                raise ValueError("无法确定 API 地址，请填写 API Base。")
+
+            headers = self._build_model_headers(provider_name, api_key)
+            headers["Content-Type"] = "application/json"
+
+            started = time.perf_counter()
+            try:
+                async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                    resp = await client.post(
+                        f"{base_url.rstrip('/')}/embeddings",
+                        headers=headers,
+                        json={"model": model, "input": ["hello"]},
+                    )
+                elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+            except Exception as exc:
+                elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+                return {
+                    "ok": False,
+                    "provider": provider_name,
+                    "model": model,
+                    "bindingName": binding_name,
+                    "label": label,
+                    "latencyMs": elapsed_ms,
+                    "finishReason": "error",
+                    "message": f"嵌入测试失败: {exc}",
+                    "responsePreview": None,
+                    "usage": {},
+                }
+
+            if resp.status_code >= 400:
+                error_text = resp.text[:240]
+                return {
+                    "ok": False,
+                    "provider": provider_name,
+                    "model": model,
+                    "bindingName": binding_name,
+                    "label": label,
+                    "latencyMs": elapsed_ms,
+                    "finishReason": "error",
+                    "message": f"嵌入测试失败: {error_text}",
+                    "responsePreview": None,
+                    "usage": {},
+                }
+
+            result_data = resp.json()
+            data_items = result_data.get("data", [])
+            usage = result_data.get("usage", {})
+            dim = len(data_items[0]["embedding"]) if data_items and isinstance(data_items[0], dict) and "embedding" in data_items[0] else 0
+
+            return {
+                "ok": True,
+                "provider": provider_name,
+                "model": model,
+                "bindingName": binding_name,
+                "label": label,
+                "latencyMs": elapsed_ms,
+                "finishReason": "complete",
+                "message": "嵌入检测通过",
+                "responsePreview": f"向量维度: {dim}" if dim else None,
+                "usage": usage,
+            }
 
         probe_config = self.state.config.model_copy(deep=True)
         probe_config.model_bindings[binding_name] = ModelBindingConfig(

@@ -1242,8 +1242,8 @@ export default function KnowledgePage() {
         okText="创建"
         confirmLoading={loading.creating}
       >
-        <div className="knowledge-settings-grid">
-          <div className="studio-form-field studio-form-field-span-2">
+        <Flex vertical gap={16}>
+          <div className="studio-form-field">
             <Typography.Text type="secondary">名称</Typography.Text>
             <Input
               value={formState.name}
@@ -1251,7 +1251,7 @@ export default function KnowledgePage() {
               placeholder="知识库名称"
             />
           </div>
-          <div className="studio-form-field studio-form-field-span-2">
+          <div className="studio-form-field">
             <Flex justify="space-between" align="center">
               <Typography.Text type="secondary">描述</Typography.Text>
               <Button
@@ -1270,44 +1270,46 @@ export default function KnowledgePage() {
               placeholder="知识库描述"
             />
           </div>
-          <div className="studio-form-field">
-            <Typography.Text type="secondary">Embedding 模型</Typography.Text>
-            <Select
-              value={formState.embedBindingName || undefined}
-              onChange={(value) => setFormState((prev) => ({ ...prev, embedBindingName: value }))}
-              options={embeddingBindingOptions}
-              placeholder="选择 Embedding 模型"
-              showSearch
-              optionFilterProp="label"
-              style={{ width: '100%' }}
-              notFoundContent={
-                <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
-                  <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
-                    暂无可用的 Embedding 模型
-                  </Typography.Text>
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => navigate('/models')}
-                  >
-                    前往模型页面配置 →
-                  </Button>
-                </Flex>
-              }
-            />
-          </div>
-          <div className="studio-form-field">
-            <Typography.Text type="secondary">LLM 模型</Typography.Text>
-            <Select
-              value={formState.llmBindingName || undefined}
-              onChange={(value) => setFormState((prev) => ({ ...prev, llmBindingName: value }))}
-              options={llmBindingOptions}
-              placeholder="选择 LLM 模型"
-              showSearch
-              optionFilterProp="label"
-              style={{ width: '100%' }}
-            />
-          </div>
+          <Flex gap={16}>
+            <div className="studio-form-field" style={{ flex: 1, minWidth: 0 }}>
+              <Typography.Text type="secondary">Embedding 模型</Typography.Text>
+              <Select
+                value={formState.embedBindingName || undefined}
+                onChange={(value) => setFormState((prev) => ({ ...prev, embedBindingName: value }))}
+                options={embeddingBindingOptions}
+                placeholder="选择 Embedding 模型"
+                showSearch
+                optionFilterProp="label"
+                style={{ width: '100%' }}
+                notFoundContent={
+                  <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                      暂无可用的 Embedding 模型
+                    </Typography.Text>
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => navigate('/models')}
+                    >
+                      前往模型页面配置 →
+                    </Button>
+                  </Flex>
+                }
+              />
+            </div>
+            <div className="studio-form-field" style={{ flex: 1, minWidth: 0 }}>
+              <Typography.Text type="secondary">LLM 模型</Typography.Text>
+              <Select
+                value={formState.llmBindingName || undefined}
+                onChange={(value) => setFormState((prev) => ({ ...prev, llmBindingName: value }))}
+                options={llmBindingOptions}
+                placeholder="选择 LLM 模型"
+                showSearch
+                optionFilterProp="label"
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Flex>
           <div className="studio-form-field">
             <Typography.Text type="secondary">语言</Typography.Text>
             <Select
@@ -1317,7 +1319,7 @@ export default function KnowledgePage() {
               style={{ width: '100%' }}
             />
           </div>
-        </div>
+        </Flex>
       </Modal>
 
       <Modal

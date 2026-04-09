@@ -126,7 +126,7 @@ export default function AgentDetail({
     return (
       <SectionCard title="员工详情">
         <Flex justify="center" align="center" style={{ minHeight: 220 }}>
-          <Spin tip="正在加载员工详情..."><div /></Spin>
+          <Spin tip="正在加载员工详情..." size="large" />
         </Flex>
       </SectionCard>
     )
@@ -177,31 +177,30 @@ export default function AgentDetail({
         gap: 10,
       }}>
         {AVATAR_PRESETS.map((preset) => (
-          <Tooltip key={preset.key} title={preset.label}>
-            <div
-              onClick={() => handleSelectAvatar(preset)}
+          <div
+            key={preset.key}
+            onClick={() => handleSelectAvatar(preset)}
+            style={{
+              cursor: 'pointer',
+              borderRadius: 14,
+              padding: 3,
+              background: avatar.key === preset.key ? preset.gradient : 'transparent',
+              border: avatar.key === preset.key ? `2px solid ${preset.color}` : '2px solid transparent',
+              transition: 'all 0.2s ease',
+              aspectRatio: '1',
+            }}
+          >
+            <img
+              src={preset.src}
+              alt={preset.label}
               style={{
-                cursor: 'pointer',
-                borderRadius: 14,
-                padding: 3,
-                background: avatar.key === preset.key ? preset.gradient : 'transparent',
-                border: avatar.key === preset.key ? `2px solid ${preset.color}` : '2px solid transparent',
-                transition: 'all 0.2s ease',
-                aspectRatio: '1',
+                width: '100%',
+                height: '100%',
+                borderRadius: 11,
+                objectFit: 'cover',
               }}
-            >
-              <img
-                src={preset.src}
-                alt={preset.label}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: 11,
-                  objectFit: 'cover',
-                }}
-              />
-            </div>
-          </Tooltip>
+            />
+          </div>
         ))}
       </div>
     </div>
@@ -212,13 +211,13 @@ export default function AgentDetail({
       
       <div style={{
         background: 'var(--nb-surface-strong)',
-        borderRadius: 24,
-        padding: '32px',
+        borderRadius: 20,
+        padding: '16px 24px',
         border: '1px solid var(--nb-card-border)',
         boxShadow: 'var(--nb-shadow-soft)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 24,
+        gap: 16,
         position: 'relative',
         overflow: 'hidden'
       }}>
@@ -236,8 +235,8 @@ export default function AgentDetail({
           borderRadius: '50%'
         }} />
 
-        <Flex justify="space-between" align="flex-start" style={{ position: 'relative', zIndex: 1 }}>
-          <Flex gap={24} align="center">
+        <Flex justify="space-between" align="center" style={{ position: 'relative', zIndex: 1 }}>
+          <Flex gap={16} align="center">
             <Popover
               content={avatarPickerContent}
               trigger="click"
@@ -246,16 +245,16 @@ export default function AgentDetail({
               placement="bottomLeft"
             >
               <div style={{
-                width: 80,
-                height: 80,
-                borderRadius: 24,
+                width: 60,
+                height: 60,
+                borderRadius: 16,
                 background: avatar.gradient,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 boxShadow: `0 10px 30px -5px ${avatar.color}33`,
                 flexShrink: 0,
-                padding: 4,
+                padding: 3,
                 cursor: 'pointer',
                 position: 'relative',
               }}>
@@ -265,7 +264,7 @@ export default function AgentDetail({
                   style={{
                     width: '100%',
                     height: '100%',
-                    borderRadius: 20,
+                    borderRadius: 13,
                     objectFit: 'cover',
                   }}
                 />
@@ -274,31 +273,31 @@ export default function AgentDetail({
                   position: 'absolute',
                   bottom: -4,
                   right: -4,
-                  width: 24,
-                  height: 24,
+                  width: 20,
+                  height: 20,
                   borderRadius: '50%',
                   background: 'var(--nb-surface-strong)',
                   border: '2px solid var(--nb-card-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 'var(--nb-text-2xs)',
+                  fontSize: 'var(--nb-text-3xs)',
                   color: 'var(--nb-muted)',
                 }}>
-                  <EditOutlined />
+                  <EditOutlined style={{ fontSize: 10 }} />
                 </div>
               </div>
             </Popover>
-            <Flex vertical gap={8}>
-              <Typography.Title level={2} style={{ margin: 0, fontWeight: 'var(--nb-font-weight-title)', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Flex vertical gap={4}>
+              <Typography.Title level={3} style={{ margin: 0, fontWeight: 'var(--nb-font-weight-title)', display: 'flex', alignItems: 'center', gap: 12 }}>
                 {detailTitle}
                 {!isCreateRoute && (
-                  <Tag color={form.enabled ? 'processing' : 'default'} style={{ borderRadius: 12, padding: '2px 10px', fontSize: 'var(--nb-text-sm)', border: 'none', margin: 0 }}>
+                  <Tag color={form.enabled ? 'processing' : 'default'} style={{ borderRadius: 12, padding: '2px 10px', fontSize: 'var(--nb-text-xs)', border: 'none', margin: 0 }}>
                     {form.enabled ? 'Active' : 'Inactive'}
                   </Tag>
                 )}
               </Typography.Title>
-              <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-md)', maxWidth: 600 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)', maxWidth: 600 }}>
                 {detailSubtitle || '设定该数字员工的基础行为准则与响应模型'}
               </Typography.Text>
             </Flex>

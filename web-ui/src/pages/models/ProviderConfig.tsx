@@ -51,6 +51,20 @@ export default function ProviderConfig({
 
   const isConfigured = hasCredentialMaterial(providerConfig?.apiKey, providerConfig?.apiBase)
 
+  // 动态必填规则
+  const apiKeyRequired = (
+    providerMeta.category === 'direct' && providerName === 'azure_openai'
+  ) || (
+    !providerMeta.isOauth && !providerMeta.isLocal && !providerMeta.isDirect && Boolean(providerMeta.defaultApiBase)
+  ) || (
+    providerMeta.isGateway && Boolean(providerMeta.defaultApiBase)
+  )
+
+  const apiBaseRequired = providerName === 'custom' || providerName === 'azure_openai'
+
+  const apiKeyLabel = apiKeyRequired ? 'API Key（必填）' : 'API Key'
+  const apiBaseLabel = apiBaseRequired ? 'API Base URL（必填）' : 'API Base URL'
+
   return (
     <SectionCard
       title="供应商配置"
@@ -117,7 +131,7 @@ export default function ProviderConfig({
           }}
         >
           {!providerMeta.isOauth ? (
-            <FieldGroup label="API Key">
+            <FieldGroup label={apiKeyLabel}>
               <Input.Password
                 size="large"
                 variant="filled"
@@ -126,11 +140,16 @@ export default function ProviderConfig({
                 onChange={(e) => onUpdateCredential('apiKey', e.target.value)}
                 style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)' }}
               />
+              {providerMeta.envKey ? (
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+                  可通过环境变量 <Typography.Text code style={{ fontSize: 'var(--nb-text-xs)' }}>{providerMeta.envKey}</Typography.Text> 配置
+                </Typography.Text>
+              ) : null}
             </FieldGroup>
           ) : null}
 
           {(!providerMeta.isDirect || providerMeta.isLocal) ? (
-            <FieldGroup label="API Base URL">
+            <FieldGroup label={apiBaseLabel}>
               <Input
                 size="large"
                 variant="filled"

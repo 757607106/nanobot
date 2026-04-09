@@ -4,7 +4,7 @@ import { AppstoreOutlined, DatabaseOutlined, CloudServerOutlined, KeyOutlined, L
 import MetricCard from '../../components/console/MetricCard'
 import { capabilityLabel, inferCapabilityType } from './utils'
 import type { AddModelDraft, CapabilityType, TestDraft } from './types'
-import type { ModelBindingTestResult } from '../../types'
+import type { ModelBindingTestResult, ProviderMeta } from '../../types'
 
 function capabilityColor(type: CapabilityType) {
   if (type === 'embedding') return 'gold'
@@ -247,6 +247,7 @@ interface TestConnectionDialogProps {
   testing: boolean
   draft: TestDraft
   result: ModelBindingTestResult | null
+  providerMeta?: ProviderMeta | null
   onDraftChange: (draft: TestDraft) => void
   onConfirm: () => void
   onCancel: () => void
@@ -257,6 +258,7 @@ export function TestConnectionDialog({
   testing,
   draft,
   result,
+  providerMeta,
   onDraftChange,
   onConfirm,
   onCancel,
@@ -291,7 +293,7 @@ export function TestConnectionDialog({
             label="API Key"
             value={hasApiKey ? '已提供' : '未提供'}
             icon={<KeyOutlined />}
-            tone={hasApiKey ? 'success' : 'neutral'}
+            tone={hasApiKey ? 'success' : (providerMeta?.defaultApiBase && !providerMeta?.isLocal ? 'warning' : 'neutral')}
           />
           <MetricCard
             label="API Base"
@@ -316,6 +318,7 @@ export function TestConnectionDialog({
               aria-label="API Base URL"
               value={draft.apiBase}
               onChange={(e) => onDraftChange({ ...draft, apiBase: e.target.value })}
+              placeholder={providerMeta?.defaultApiBase || undefined}
             />
           </FieldGroup>
         </div>

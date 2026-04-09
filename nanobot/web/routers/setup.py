@@ -106,11 +106,19 @@ def update_setup_provider(request: Request, payload: SetupProviderRequest) -> JS
             "Azure OpenAI requires both API Key and API Base.",
         )
     if not spec.is_oauth and not spec.is_local and provider_name not in {"custom", "azure_openai"}:
-        if not api_key and not api_base:
+        if spec.default_api_base:
+            if not api_key:
+                raise APIError(
+                    400,
+                    "SETUP_PROVIDER_INVALID",
+                    "此供应商需要 API Key。"
+                    + (f"（可通过环境变量 {spec.env_key} 配置）" if spec.env_key else ""),
+                )
+        elif not api_key and not api_base:
             raise APIError(
                 400,
                 "SETUP_PROVIDER_INVALID",
-                "This provider requires an API Key or API Base.",
+                "此供应商需要 API Key 或 API Base。",
             )
 
     defaults_payload["binding"] = binding_id

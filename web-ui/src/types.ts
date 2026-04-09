@@ -169,6 +169,7 @@ export interface ProviderMeta {
   isLocal: boolean
   isOauth: boolean
   isDirect: boolean
+  envKey?: string | null
 }
 
 export interface ConfigMeta {
