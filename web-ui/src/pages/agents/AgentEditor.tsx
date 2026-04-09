@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Button, Collapse, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography } from 'antd'
-import { SettingOutlined } from '@ant-design/icons'
+import { Button, Collapse, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography, App } from 'antd'
+import { SettingOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { api } from '../../api'
 import SectionCard from '../../components/console/SectionCard'
 import FormField from '../../components/console/FormField'
 import DevOnly from '../../components/DevOnly'
@@ -32,6 +33,8 @@ export default function AgentEditor({
   globalConfigMeta,
   onUpdateForm,
 }: AgentEditorProps) {
+  const { message } = App.useApp()
+
   const agentProviderOptions = useMemo(
     () => getProviderOptions(globalConfigMeta),
     [globalConfigMeta],
@@ -84,6 +87,37 @@ export default function AgentEditor({
       .length,
     [form.rulesText],
   )
+
+  const [isOptimizing, setIsOptimizing] = useState(false)
+
+  async function handleOptimizePrompt() {
+    if (!form.systemPrompt && !form.description) {
+      message.warning('请先填写身份背景与职责或部分指令内容')
+      return
+    }
+    
+    setIsOptimizing(true)
+    try {
+      const response = await api.optimizeAgentPrompt({
+        name: form.name,
+        description: form.description,
+        systemPrompt: form.systemPrompt,
+        model: form.model,
+        provider: form.provider,
+      })
+      if (response && response.optimized_prompt) {
+        onUpdateForm('systemPrompt', response.optimized_prompt)
+        message.success('指令已优化更新！')
+      } else {
+        message.warning('优化返回结果为空，请稍后重试。')
+      }
+    } catch (error) {
+      console.error('Failed to optimize prompt', error)
+      message.error(error instanceof Error ? error.message : '指令优化失败，请稍后重试。')
+    } finally {
+      setIsOptimizing(false)
+    }
+  }
 
   function updateProvider(value: string) {
     const nextProvider = value
@@ -279,7 +313,23 @@ export default function AgentEditor({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <SectionCard title="核心逻辑指令">
           <Flex vertical gap={24}>
-            <FormField label="System Directives (核心指令)">
+            <FormField 
+              label={
+                <Flex align="center" justify="space-between" style={{ width: '100%' }}>
+                  <span>System Directives (核心指令)</span>
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    icon={<ExperimentOutlined />} 
+                    loading={isOptimizing}
+                    onClick={handleOptimizePrompt}
+                    style={{ padding: 0, fontSize: 'var(--nb-text-xs)' }}
+                  >
+                    AI 补全与优化
+                  </Button>
+                </Flex>
+              }
+            >
               <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
                 <Input.TextArea
                   value={form.systemPrompt}

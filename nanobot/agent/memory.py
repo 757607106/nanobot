@@ -54,6 +54,22 @@ class MemoryStore:
         ])
         self._maybe_migrate_legacy_history()
 
+    def set_identity_root(self, identity_root: Path) -> None:
+        """Redirect SOUL.md / USER.md lookups to a separate identity directory.
+
+        Called by ContextBuilder when the agent's identity root differs from
+        its data root (multi-agent isolation scenario).  When *identity_root*
+        equals *self.workspace* this is a no-op in practice — the paths stay
+        the same as the defaults set in ``__init__``.
+        """
+        self.soul_file = identity_root / "SOUL.md"
+        self.user_file = identity_root / "USER.md"
+        # Only track identity files via git when they live inside our workspace
+        tracked = ["memory/MEMORY.md"]
+        if identity_root == self.workspace:
+            tracked.extend(["SOUL.md", "USER.md"])
+        self._git = GitStore(self.workspace, tracked_files=tracked)
+
     @property
     def git(self) -> GitStore:
         return self._git
@@ -532,6 +548,7 @@ class Dream:
         max_batch_size: int = 20,
         max_iterations: int = 10,
         max_tool_result_chars: int = 16_000,
+        skip_identity_files: bool = False,
     ):
         self.store = store
         self.provider = provider
@@ -539,6 +556,7 @@ class Dream:
         self.max_batch_size = max_batch_size
         self.max_iterations = max_iterations
         self.max_tool_result_chars = max_tool_result_chars
+        self.skip_identity_files = skip_identity_files
         self._runner = AgentRunner(provider)
         self._tools = self._build_tools()
 
@@ -550,7 +568,15 @@ class Dream:
 
         tools = ToolRegistry()
         workspace = self.store.workspace
-        tools.register(ReadFileTool(workspace=workspace, allowed_dir=workspace))
+        # When identity files live outside the agent workspace, grant read access
+        # to specific files only (not the entire directory)
+        extra_read_files: list[Path] = []
+        if self.store.soul_file.parent != workspace:
+            extra_read_files.extend([self.store.soul_file, self.store.user_file])
+        tools.register(ReadFileTool(
+            workspace=workspace, allowed_dir=workspace,
+            extra_allowed_files=extra_read_files or None,
+        ))
         tools.register(EditFileTool(workspace=workspace, allowed_dir=workspace))
         return tools
 
@@ -576,13 +602,17 @@ class Dream:
 
         # Current file contents
         current_memory = self.store.read_memory() or "(empty)"
-        current_soul = self.store.read_soul() or "(empty)"
+        current_soul = self.store.read_soul() or "(empty)" if not self.skip_identity_files else None
         current_user = self.store.read_user() or "(empty)"
-        file_context = (
-            f"## Current MEMORY.md\n{current_memory}\n\n"
-            f"## Current SOUL.md\n{current_soul}\n\n"
-            f"## Current USER.md\n{current_user}"
-        )
+        
+        file_context_parts = [
+            f"## Current MEMORY.md\n{current_memory}\n"
+        ]
+        if not self.skip_identity_files:
+            file_context_parts.append(f"## Current SOUL.md\n{current_soul}\n")
+        file_context_parts.append(f"## Current USER.md\n{current_user}")
+        
+        file_context = "\n".join(file_context_parts)
 
         # Phase 1: Analyze
         phase1_prompt = (

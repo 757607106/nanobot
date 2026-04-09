@@ -6,18 +6,20 @@ import platform
 from pathlib import Path
 from typing import Any
 
-from nanobot.utils.helpers import current_time_str
-
 from nanobot.agent.memory import MemoryStore
-from nanobot.utils.prompt_templates import render_template
 from nanobot.agent.skills import SkillsLoader
-from nanobot.utils.helpers import build_assistant_message, detect_image_mime
+from nanobot.harness.workspace import WorkspaceContext
+from nanobot.utils.helpers import build_assistant_message, current_time_str, detect_image_mime
+from nanobot.utils.prompt_templates import render_template
 
 
 class ContextBuilder:
     """Builds the context (system prompt + messages) for the agent."""
 
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md"]
+    # Files that define the agent's identity — skipped when the agent provides
+    # its own system_prompt_override so it doesn't inherit the global identity.
+    _IDENTITY_BOOTSTRAP_FILES = {"SOUL.md"}
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
 
     def __init__(
@@ -27,13 +29,25 @@ class ContextBuilder:
         memory_workspace: Path | None = None,
         virtual_workspace_path: Path | str | None = None,
         timezone: str | None = None,
+        workspace_context: WorkspaceContext | None = None,
     ):
-        self.workspace = workspace
-        self.memory_workspace = memory_workspace or workspace
-        self.virtual_workspace_path = Path(virtual_workspace_path) if virtual_workspace_path is not None else workspace
+        if workspace_context is not None:
+            self.workspace = workspace_context.identity_root
+            self.memory_workspace = workspace_context.agent_root
+            self.virtual_workspace_path = workspace_context.display_path
+        else:
+            self.workspace = workspace
+            self.memory_workspace = memory_workspace or workspace
+            self.virtual_workspace_path = (
+                Path(virtual_workspace_path)
+                if virtual_workspace_path is not None
+                else workspace
+            )
         self.timezone = timezone
         self.memory = MemoryStore(self.memory_workspace)
-        self.skills = SkillsLoader(workspace)
+        if self.workspace != self.memory_workspace:
+            self.memory.set_identity_root(self.workspace)
+        self.skills = SkillsLoader(self.workspace)
 
     def build_system_prompt(
         self,
@@ -43,14 +57,24 @@ class ContextBuilder:
         memory_sections: list[tuple[str, str]] | None = None,
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
-        parts = [self._get_identity()]
-
-        bootstrap = self._load_bootstrap_files()
-        if bootstrap:
-            parts.append(bootstrap)
+        parts: list[str] = []
 
         if extra_system_prompt:
+            # Agent defines its own identity — use it as the primary prompt and
+            # skip ALL global bootstrap files (SOUL.md, AGENTS.md, USER.md,
+            # TOOLS.md) so the global workspace persona/settings don't leak
+            # into an agent that supplies its own system prompt.
             parts.append(f"# Agent Profile\n\n{extra_system_prompt.strip()}")
+            # Still include lightweight runtime/workspace metadata.
+            runtime_section = self._get_runtime_section()
+            if runtime_section:
+                parts.append(runtime_section)
+        else:
+            # Default mode — use the global identity.
+            parts.append(self._get_identity())
+            bootstrap = self._load_bootstrap_files(skip_identity=False)
+            if bootstrap:
+                parts.append(bootstrap)
 
         memory_parts: list[str] = []
         if include_workspace_memory:
@@ -83,22 +107,47 @@ class ContextBuilder:
 
         return "\n\n---\n\n".join(parts)
 
-    def _get_identity(self) -> str:
-        """Get the core identity section."""
-        workspace_path = (
+    def _resolve_workspace_path(self) -> str:
+        """Return the workspace path string used in templates."""
+        return (
             str(self.virtual_workspace_path.expanduser())
             if self.virtual_workspace_path != self.workspace
             else str(self.workspace.expanduser().resolve())
         )
+
+    def _get_identity(self) -> str:
+        """Get the core identity section (includes persona + runtime info)."""
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
 
         return render_template(
             "agent/identity.md",
-            workspace_path=workspace_path,
+            workspace_path=self._resolve_workspace_path(),
             runtime=runtime,
             platform_policy=render_template("agent/platform_policy.md", system=system),
         )
+
+    def _get_runtime_section(self) -> str:
+        """Get lightweight runtime/workspace metadata without identity persona.
+
+        Used when an agent supplies its own system prompt so it receives
+        useful environment information without the global 'You are nanobot'
+        identity leaking in.
+        """
+        workspace_path = self._resolve_workspace_path()
+        system = platform.system()
+        runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
+        policy = render_template("agent/platform_policy.md", system=system).strip()
+
+        lines = [
+            "# Runtime Environment",
+            "",
+            f"Runtime: {runtime}",
+            f"Workspace: {workspace_path}",
+        ]
+        if policy:
+            lines += ["", policy]
+        return "\n".join(lines)
 
     @staticmethod
     def _build_runtime_context(
@@ -126,11 +175,18 @@ class ContextBuilder:
 
         return _to_blocks(left) + _to_blocks(right)
 
-    def _load_bootstrap_files(self) -> str:
-        """Load all bootstrap files from workspace."""
+    def _load_bootstrap_files(self, *, skip_identity: bool = False) -> str:
+        """Load bootstrap files from workspace.
+
+        When *skip_identity* is ``True``, files in ``_IDENTITY_BOOTSTRAP_FILES``
+        (e.g. ``SOUL.md``) are skipped so an agent-defined system prompt can
+        establish its own identity without being overridden by the global one.
+        """
         parts = []
 
         for filename in self.BOOTSTRAP_FILES:
+            if skip_identity and filename in self._IDENTITY_BOOTSTRAP_FILES:
+                continue
             file_path = self.workspace / filename
             if file_path.exists():
                 content = file_path.read_text(encoding="utf-8")

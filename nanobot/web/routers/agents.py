@@ -215,6 +215,16 @@ def disable_agent(request: Request, agent_id: str) -> JSONResponse:
     return _json_response(200, _ok(data))
 
 
+@router.post("/api/v1/agents/optimize-prompt")
+async def optimize_agent_prompt(
+    request: Request,
+    payload: dict[str, Any] = Body(default_factory=dict),
+) -> JSONResponse:
+    tenant_id = get_tenant_id(request)
+    data = await request.app.state.web.agent_runtime.optimize_prompt(payload, tenant_id=tenant_id)
+    return _json_response(200, _ok(data))
+
+
 @router.post("/api/v1/agents/{agent_id}/test-run")
 async def test_run_agent(
     request: Request,

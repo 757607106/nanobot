@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import os
 import time
 from contextlib import AsyncExitStack, nullcontext
@@ -16,11 +15,11 @@ from loguru import logger
 from nanobot.agent.context import ContextBuilder
 from nanobot.agent.hook import AgentHook, AgentHookContext, CompositeHook
 from nanobot.agent.memory import Consolidator, Dream
-from nanobot.agent.runner import AgentRunSpec, AgentRunner
+from nanobot.agent.runner import AgentRunner, AgentRunSpec
+from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 from nanobot.agent.subagent import SubagentManager
 from nanobot.agent.tools.base import Tool
 from nanobot.agent.tools.cron import CronTool
-from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
@@ -29,9 +28,10 @@ from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.bus.events import InboundMessage, OutboundMessage
-from nanobot.command import CommandContext, CommandRouter, register_builtin_commands
+from nanobot.harness.workspace import WorkspaceContext
 from nanobot.bus.queue import MessageBus
 from nanobot.chat_payload import normalize_chat_attachments
+from nanobot.command import CommandContext, CommandRouter, register_builtin_commands
 from nanobot.config.schema import AgentDefaults
 from nanobot.harness.environment import resolve_execution_environment
 from nanobot.harness.sandbox import SandboxBinding, build_sandbox_provider
@@ -255,11 +255,17 @@ class AgentLoop:
 
         virtual_workspace_path = str(getattr(self.sandbox_binding, "runtime_workdir", workspace) or workspace)
         resolved_context_workspace = Path(context_workspace) if context_workspace is not None else workspace
+        self._ws_ctx = WorkspaceContext(
+            identity_root=resolved_context_workspace,
+            agent_root=workspace,
+            virtual_path=Path(virtual_workspace_path),
+        )
         self.context = ContextBuilder(
             resolved_context_workspace,
             memory_workspace=workspace,
             virtual_workspace_path=virtual_workspace_path,
             timezone=timezone,
+            workspace_context=self._ws_ctx,
         )
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
@@ -273,6 +279,7 @@ class AgentLoop:
             max_tool_result_chars=self.max_tool_result_chars,
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
+            workspace_context=self._ws_ctx,
         )
 
         self._running = False
@@ -305,6 +312,7 @@ class AgentLoop:
             store=self.context.memory,
             provider=provider,
             model=self.model,
+            skip_identity_files=bool(self.system_prompt_override)
         )
         self._register_default_tools()
         self.commands = CommandRouter()
@@ -496,6 +504,27 @@ class AgentLoop:
             handled = await self._channel_dispatcher.dispatch(msg)
             if handled:
                 return
+        run_id = None
+        if self._run_registry is not None:
+            try:
+                from nanobot.platform.runs.models import RunKind
+                record = self._run_registry.create_run(
+                    kind=RunKind.AGENT,
+                    label="Fallback Agent",
+                    task_preview=(msg.content or "")[:280],
+                    tenant_id=getattr(self._run_registry, "tenant_id", "default"),
+                    instance_id=getattr(self._run_registry, "instance_id", "default"),
+                    agent_id="default",
+                    thread_id=msg.chat_id,
+                    session_key=msg.session_key,
+                    origin_channel=msg.channel,
+                    origin_chat_id=msg.chat_id,
+                    workspace_path=str(self.workspace),
+                )
+                run_id = record.run_id
+                self._run_registry.start_run(run_id)
+            except Exception as e:
+                logger.warning("Failed to create fallback run record: {}", e)
 
         lock = self._session_locks.setdefault(msg.session_key, asyncio.Lock())
         gate = self._concurrency_gate or nullcontext()
@@ -536,6 +565,16 @@ class AgentLoop:
                 response = await self._process_message(
                     msg, on_stream=on_stream, on_stream_end=on_stream_end,
                 )
+                if run_id:
+                    try:
+                        from nanobot.platform.runs.models import RunResultSummary
+                        self._run_registry.complete_run(
+                            run_id,
+                            RunResultSummary(content=response.content if response else "(no response)"),
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to complete fallback run record: {}", e)
+
                 if response is not None:
                     await self.bus.publish_outbound(response)
                 elif msg.channel == "cli":
@@ -544,9 +583,19 @@ class AgentLoop:
                         content="", metadata=msg.metadata or {},
                     ))
             except asyncio.CancelledError:
+                if run_id:
+                    try:
+                        self._run_registry.cancel_run(run_id)
+                    except Exception:
+                        pass
                 logger.info("Task cancelled for session {}", msg.session_key)
                 raise
-            except Exception:
+            except Exception as exc:
+                if run_id:
+                    try:
+                        self._run_registry.fail_run(run_id, "FALLBACK_ERROR", str(exc))
+                    except Exception:
+                        pass
                 logger.exception("Error processing message for session {}", msg.session_key)
                 await self.bus.publish_outbound(OutboundMessage(
                     channel=msg.channel, chat_id=msg.chat_id,

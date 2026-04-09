@@ -3,7 +3,7 @@ import { Typography } from 'antd'
 
 interface FormFieldProps {
   /** Field label */
-  label: string
+  label: ReactNode
   /** Whether the field is required */
   required?: boolean
   /** Optional helper text below the input */

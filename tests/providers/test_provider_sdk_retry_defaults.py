@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
-from nanobot.providers.anthropic_provider import AnthropicProvider
+import pytest
+
 from nanobot.providers.azure_openai_provider import AzureOpenAIProvider
 from nanobot.providers.openai_compat_provider import OpenAICompatProvider
 
@@ -14,6 +15,11 @@ def test_openai_compat_disables_sdk_retries_by_default() -> None:
 
 
 def test_anthropic_disables_sdk_retries_by_default() -> None:
+    # Skip if anthropic SDK is not installed
+    pytest.importorskip("anthropic", reason="anthropic SDK not installed")
+
+    from nanobot.providers.anthropic_provider import AnthropicProvider
+
     with patch("anthropic.AsyncAnthropic") as mock_client:
         AnthropicProvider(api_key="sk-test", default_model="claude-sonnet-4-5")
 

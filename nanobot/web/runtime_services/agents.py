@@ -7,13 +7,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
+from loguru import logger
+
+from nanobot.agent.loop import AgentLoop
+from nanobot.agent.skills import SkillsLoader
+from nanobot.bus.events import InboundMessage, extract_outbound_content
 from nanobot.harness import (
     AgentThreadWorkspaceProvider,
+    ExecutionAssemblyState,
     ExecutionContext,
     ExecutionEnvironmentBinding,
-    ExecutionAssemblyState,
     ExecutionMiddlewareChain,
-    KnowledgeBindingMiddleware,
     KnowledgeBindingResult,
     KnowledgePolicy,
     KnowledgePolicyMiddleware,
@@ -31,13 +35,10 @@ from nanobot.harness import (
     build_sandbox_provider,
     resolve_execution_environment,
 )
-from nanobot.agent.loop import AgentLoop
-from nanobot.bus.events import InboundMessage, extract_outbound_content
-from nanobot.agent.skills import SkillsLoader
-from nanobot.providers.registry import find_by_model
 from nanobot.platform.agents import AgentDefinitionNotFoundError
 from nanobot.platform.agents.model_selection import canonicalize_agent_model_selection
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
+from nanobot.providers.registry import find_by_model
 
 if TYPE_CHECKING:
     from nanobot.config.schema import Config
@@ -951,15 +952,23 @@ class WebAgentRuntimeService:
 
         try:
             self.state.runs.start_run(record.run_id)
-            response = await self._execute_agent_turn(
-                isolated_agent,
-                task=task,
-                execution_context=execution_context,
-                on_progress=_on_progress,
-                on_stream=on_stream,
-                on_run_event=on_run_event,
-                chat_message=chat_message,
-            )
+            try:
+                timeout_seconds = int(agent.get("maxExecutionTimeoutSeconds") or 300)
+                response = await asyncio.wait_for(
+                    self._execute_agent_turn(
+                        isolated_agent,
+                        task=task,
+                        execution_context=execution_context,
+                        on_progress=_on_progress,
+                        on_stream=on_stream,
+                        on_run_event=on_run_event,
+                        chat_message=chat_message,
+                    ),
+                    timeout=timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                response = f"Execution timed out after {timeout_seconds} seconds."
+                logger.warning(response)
             artifact_path = self.state.runs.write_markdown_artifact(
                 record.run_id,
                 title=f"Run Artifact · {execution_context.label}",
@@ -1097,3 +1106,62 @@ class WebAgentRuntimeService:
             result["messages"] = self._format_messages(actual_session_key, actual_session_id)
             result["assistantMessage"] = self._get_last_assistant_message(actual_session_key, actual_session_id)
         return result
+
+    async def optimize_prompt(self, payload: dict[str, Any], tenant_id: str) -> dict[str, Any]:
+        """Optimize user-provided agent system prompt using the prompt-optimizer skill."""
+        import time
+
+        from nanobot.agent.loop import AgentLoop
+        from nanobot.bus.events import InboundMessage
+
+        name = str(payload.get("name") or "未命名助手").strip()
+        description = str(payload.get("description") or "无详细背景").strip()
+        original_prompt = str(payload.get("system_prompt") or payload.get("systemPrompt") or "").strip()
+        model = str(payload.get("model") or "").strip() or self.state.config.agents.defaults.model
+        provider = str(payload.get("provider") or "").strip() or self.state.config.agents.defaults.provider
+
+        if not provider:
+            from nanobot.platform.agents.model_selection import canonicalize_agent_model_selection
+            selection = canonicalize_agent_model_selection(model=model, binding=None, provider=None, global_config_meta=self.state.get_config_meta())
+            provider = selection.provider
+
+        config_override = self.state.config.model_copy(deep=True)
+        config_override.agents.defaults.model = model
+        config_override.agents.defaults.provider = provider
+        provider_instance = self.state.config_runtime.make_provider(config_override)
+
+        optimize_session_id = f"opt-{int(time.time() * 1000)}"
+
+        instructions = f"""你是一个专门用于基于 Anthropic 最新最佳实践进行 Prompt 优化的专家系统。
+你在内部装备了 prompt-optimizer 技能。现在，用户希望为一个名为 "{name}"，职责是 "{description}" 的 AI 数字员工优化系统 Prompt。
+
+原有的 System Prompt 如下:
+{original_prompt}
+
+务必遵循以下要求：
+1. 请直接跳过提问环节（这是全自动单轮优化），立刻运用你的 prompt-optimizer 技能和里面的场景模板，为该核心数字员工输出一份最终版本的、最符合黄金法则的 System Prompt。
+2. 你必须直接返回最终优化好的 System Prompt 内容，并且**只返回优化后的 System Prompt 本身文本**。不要将最终结果包裹在解释说明中，也不要包裹在 markdown xml 代码块中。最终返回的全部内容将被系统直接写入该Agent的系统提示词数据库，所以如果里面掺杂了你的分析语或者前后缀，就会导致该数字员工失控。
+3. 如果模板本身建议输出 xml 结构表示，你可以使用结构化的标签来排版你要返回的内容。但永远保持输出就只是这个数字员工将要继承的系统设定本身。
+"""
+        agent = AgentLoop(
+            bus=self.state.bus,
+            provider=provider_instance,
+            model=model,
+            workspace=self.state.config.workspace_path,
+            context_workspace=self.state.config.workspace_path,
+            system_prompt_override=instructions,
+            skill_names=["prompt-optimizer"],
+        )
+
+        msg = InboundMessage(
+            channel="system",
+            chat_id=optimize_session_id,
+            sender_id="user",
+            content="请严格按照你的 System 设定和技能规范，直接输出优化完成的最终 Prompt 文本。",
+            session_key_override=f"system:{optimize_session_id}",
+        )
+
+        result_msg = await agent._process_message(msg)
+        return {
+            "optimized_prompt": result_msg.content if result_msg else ""
+        }

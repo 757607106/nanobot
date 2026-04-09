@@ -73,8 +73,7 @@ class PromptSeedMiddleware:
 
     def apply(self, state: ExecutionAssemblyState) -> None:
         system_prompt = str(state.agent.get("systemPrompt") or "").strip()
-        if system_prompt:
-            state.prompt_sections.append(system_prompt)
+        state.prompt_sections.append(system_prompt or "You are a helpful AI assistant.")
         for section in state.additional_prompt_sections:
             text = str(section or "").strip()
             if text:

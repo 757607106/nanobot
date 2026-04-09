@@ -172,6 +172,8 @@ class WebChannelRuntimeService:
                 mcp_servers=config.tools.mcp_servers,
                 channels_config=config.channels,
                 channel_dispatcher=dispatcher,
+                run_registry=self.state.runs,
+                cron_service=self.state.cron,
             )
 
             self._channel_manager = ChannelManager(

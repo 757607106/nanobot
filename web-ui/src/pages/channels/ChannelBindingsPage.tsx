@@ -106,7 +106,13 @@ export default function ChannelBindingsPage() {
 
   const [formState, setFormState] = useState<BindingFormState>(createEmptyForm())
   const [searchQuery, setSearchQuery] = useState('')
-  const [showEnabledOnly, setShowEnabledOnly] = useState(false)
+  const [showEnabledOnly, setShowEnabledOnly] = useState(() => {
+    return localStorage.getItem('nanobot:bindingsEnabledFilter') === 'true'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('nanobot:bindingsEnabledFilter', String(showEnabledOnly))
+  }, [showEnabledOnly])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

@@ -18,6 +18,7 @@ from nanobot.agent.tools.search import GlobTool, GrepTool
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.bus.events import InboundMessage
+from nanobot.harness.workspace import WorkspaceContext
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import ExecToolConfig, WebToolsConfig
 from nanobot.providers.base import LLMProvider
@@ -51,6 +52,7 @@ class SubagentManager:
         web_config: "WebToolsConfig | None" = None,
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
+        workspace_context: WorkspaceContext | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
 
@@ -65,6 +67,7 @@ class SubagentManager:
         self.runner = AgentRunner(provider)
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._session_tasks: dict[str, set[str]] = {}  # session_key -> {task_id, ...}
+        self._ws_ctx = workspace_context or WorkspaceContext.shared(workspace)
 
     async def spawn(
         self,
@@ -235,11 +238,11 @@ class SubagentManager:
         from nanobot.agent.skills import SkillsLoader
 
         time_ctx = ContextBuilder._build_runtime_context(None, None)
-        skills_summary = SkillsLoader(self.workspace).build_skills_summary()
+        skills_summary = SkillsLoader(self._ws_ctx.agent_root).build_skills_summary()
         return render_template(
             "agent/subagent_system.md",
             time_ctx=time_ctx,
-            workspace=str(self.workspace),
+            workspace=str(self._ws_ctx.agent_root),
             skills_summary=skills_summary or "",
         )
 

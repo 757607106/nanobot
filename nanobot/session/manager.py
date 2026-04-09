@@ -278,3 +278,36 @@ class SessionManager:
                 continue
 
         return sorted(sessions, key=lambda x: x.get("updated_at", ""), reverse=True)
+
+    def garbage_collect(self, ttl_days: int = 30, test_ttl_hours: int = 1) -> None:
+        """Clean up old sessions to prevent memory leaks and disk accumulation.
+        
+        Args:
+            ttl_days: Normal sessions older than this will be deleted.
+            test_ttl_hours: Test sessions (agent-test:*, test:*) older than this will be deleted.
+        """
+        now = datetime.now()
+        for session_info in self.list_sessions():
+            key = session_info["key"]
+            updated_str = session_info.get("updated_at")
+            if not updated_str:
+                continue
+
+            try:
+                updated_at = datetime.fromisoformat(updated_str)
+            except ValueError:
+                continue
+
+            age_hours = (now - updated_at).total_seconds() / 3600
+
+            # Fast TTL for test sessions
+            if key.startswith("agent-test:") or key.startswith("test:"):
+                if age_hours > test_ttl_hours:
+                    logger.info("Garbage collecting test session: {}", key)
+                    self.delete(key)
+                continue
+
+            # Normal TTL for long-running sessions
+            if age_hours > (ttl_days * 24):
+                logger.info("Garbage collecting old session: {} (age: {:.1f} days)", key, age_hours / 24)
+                self.delete(key)

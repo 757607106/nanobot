@@ -845,6 +845,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  optimizeAgentPrompt: (payload: { name: string; description: string; systemPrompt: string; model?: string; provider?: string }) =>
+    request<{ optimized_prompt: string }>('/agents/optimize-prompt', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   updateAgent: (agentId: string, payload: Partial<AgentDefinitionMutationInput>) =>
     request<AgentDefinition>(`/agents/${encodeURIComponent(agentId)}`, {
       method: 'PUT',

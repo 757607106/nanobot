@@ -115,6 +115,28 @@ class WebAppState:
         self.config_runtime.rebuild_runtime(config)
         self.schedule_runtime.start_runtime()
 
+        def _bg_gc():
+            try:
+                time.sleep(30)
+                from loguru import logger
+                logger.info("Running background garbage collection...")
+                if self.sessions:
+                    try:
+                        self.sessions.garbage_collect()
+                    except Exception as e:
+                        logger.warning("Session GC skipped/failed: {}", e)
+                try:
+                    from nanobot.utils.cleanup import cleanup_isolated_workspaces
+                    deleted = cleanup_isolated_workspaces(root_workspace=self.config.workspace_path)
+                    if deleted > 0:
+                        logger.info("Cleaned up {} isolated workspaces.", deleted)
+                except Exception as e:
+                    logger.warning("Workspace GC skipped/failed: {}", e)
+            except Exception:
+                pass
+
+        threading.Thread(target=_bg_gc, daemon=True, name="BackgroundGC").start()
+
     def _session_key(self, session_id: str) -> str:
         return self.chat_runtime.session_key(session_id)
 

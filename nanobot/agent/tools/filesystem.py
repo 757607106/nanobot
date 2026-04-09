@@ -17,6 +17,7 @@ def _resolve_path(
     virtual_workspace: Path | None = None,
     allowed_dir: Path | None = None,
     extra_allowed_dirs: list[Path] | None = None,
+    extra_allowed_files: list[Path] | None = None,
 ) -> Path:
     """Resolve path against workspace (if relative) and enforce directory restriction."""
     p = Path(path).expanduser()
@@ -31,7 +32,11 @@ def _resolve_path(
     resolved = p.resolve()
     if allowed_dir:
         media_path = get_media_dir().resolve()
-        all_dirs = [allowed_dir] + [media_path] + (extra_allowed_dirs or []) 
+        # Check against allowed files first (exact match)
+        if extra_allowed_files and resolved in [f.resolve() for f in extra_allowed_files]:
+            return resolved
+        # Then check against allowed directories
+        all_dirs = [allowed_dir] + [media_path] + (extra_allowed_dirs or [])
         if not any(_is_under(resolved, d) for d in all_dirs):
             raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
     return resolved
@@ -54,14 +59,16 @@ class _FsTool(Tool):
         virtual_workspace: Path | None = None,
         allowed_dir: Path | None = None,
         extra_allowed_dirs: list[Path] | None = None,
+        extra_allowed_files: list[Path] | None = None,
     ):
         self._workspace = workspace
         self._virtual_workspace = virtual_workspace
         self._allowed_dir = allowed_dir
         self._extra_allowed_dirs = extra_allowed_dirs
+        self._extra_allowed_files = extra_allowed_files
 
     def _resolve(self, path: str) -> Path:
-        return _resolve_path(path, self._workspace, self._virtual_workspace, self._allowed_dir, self._extra_allowed_dirs)
+        return _resolve_path(path, self._workspace, self._virtual_workspace, self._allowed_dir, self._extra_allowed_dirs, self._extra_allowed_files)
 
 
 # ---------------------------------------------------------------------------

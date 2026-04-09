@@ -3,6 +3,9 @@
 import pytest
 from pathlib import Path
 
+# Skip all tests if dulwich is not installed
+pytest.importorskip("dulwich", reason="dulwich not installed")
+
 from nanobot.utils.gitstore import GitStore, CommitInfo
 
 
