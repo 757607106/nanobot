@@ -115,6 +115,10 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
         if (reasoningParts.some(p => p.length > 0)) {
           baseMessage.reasoningContent = reasoningParts.join('')
         }
+      } else {
+        // If reasoning is completely turned off, strip any dangling server reasoning content
+        // so that the UI never thinks reasoning is active.
+        baseMessage.reasoningContent = undefined
       }
     }
 
@@ -123,7 +127,7 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
 
     for (const event of events) {
       if (event.type === 'chunk') {
-        if ('reasoningContent' in event && event.reasoningContent) {
+        if ('reasoningContent' in event && event.reasoningContent && this._currentReasoningEffortEnabled) {
           currentSubMsg.reasoningContent = (currentSubMsg.reasoningContent || '') + event.reasoningContent
         }
         if ('content' in event && event.content) {
