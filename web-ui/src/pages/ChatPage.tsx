@@ -10,6 +10,7 @@ import { getDisplaySessionTitle } from '../chat/chatPresentation'
 import { ChatSidebar } from '../chat/ChatSidebar'
 import { ChatMessages } from '../chat/ChatMessages'
 import { ChatInput } from '../chat/ChatInput'
+import type { ReasoningEffortLevel } from '../chat/ChatInput'
 import '../chat/chat.css'
 import { formatRelativeTimeZh } from '../locale'
 import { testIds } from '../testIds'
@@ -39,6 +40,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const [renameValue, setRenameValue] = useState('')
   const [renameTarget, setRenameTarget] = useState<SessionSummary | null>(null)
   const [composerValue, setComposerValue] = useState('')
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffortLevel | null>(null)
   const [agents, setAgents] = useState<AgentDefinition[]>([])
   const [loadingAgents, setLoadingAgents] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -225,7 +227,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   }
 
   async function executeSubmit(content: string) {
-    const success = await handleSubmit(content)
+    const success = await handleSubmit(content, { reasoningEffort })
     if (success) {
       setComposerValue('')
     }
@@ -342,6 +344,8 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
             onDraftAttachmentRefsChange={setDraftAttachmentRefs}
             dropContainerRef={chatPanelRef}
             isDesktopLayout={isDesktopLayout}
+            reasoningEffort={reasoningEffort}
+            onReasoningEffortChange={setReasoningEffort}
           />
         </Flex>
       </div>

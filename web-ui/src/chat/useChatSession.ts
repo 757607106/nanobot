@@ -501,11 +501,13 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
     }
   }
 
-  async function handleSubmit(content: string) {
+  async function handleSubmit(content: string, options?: { reasoningEffort?: 'low' | 'medium' | 'high' | null }) {
     const trimmed = content.trim()
     if (!trimmed || isRequesting || uploadingFiles) {
       return
     }
+
+    const reasoningEffort = options?.reasoningEffort ?? null
 
     try {
       let sessionId = currentSessionIdRef.current
@@ -533,6 +535,7 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
           displayContent: trimmed,
           query: buildChatRequestQuery(trimmed, attachments),
           attachments,
+          reasoningEffort,
         })
       } else {
         shouldSyncSessionRef.current = true
@@ -542,6 +545,7 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
           displayContent: trimmed,
           query: buildChatRequestQuery(trimmed, attachments),
           attachments,
+          reasoningEffort,
         })
       }
 

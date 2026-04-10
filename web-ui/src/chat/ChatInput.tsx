@@ -1,8 +1,8 @@
 import type { ComponentProps, ComponentRef } from 'react'
 import React, { forwardRef } from 'react'
 import { Attachments, Sender } from '@ant-design/x'
-import { Badge, Button, Card, Flex, Space, Typography, theme } from 'antd'
-import { CloudUploadOutlined, LinkOutlined } from '@ant-design/icons'
+import { Badge, Button, Divider, Flex, Select, Switch, Typography, theme } from 'antd'
+import { CloudUploadOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { AttachmentTags } from './chatPresentation'
 import { testIds } from '../testIds'
 import type { ChatAttachmentRef, ChatUploadItem } from '../types'
@@ -10,6 +10,8 @@ import type { ChatAttachmentRef, ChatUploadItem } from '../types'
 const { Text } = Typography
 
 type ComposerAttachment = NonNullable<ComponentProps<typeof Attachments>['items']>[number]
+
+export type ReasoningEffortLevel = 'low' | 'medium' | 'high'
 
 export interface ChatInputProps {
   value: string
@@ -25,7 +27,15 @@ export interface ChatInputProps {
   onDraftAttachmentRefsChange: (refs: ChatAttachmentRef[]) => void
   dropContainerRef: React.RefObject<HTMLElement | null>
   isDesktopLayout: boolean
+  reasoningEffort: ReasoningEffortLevel | null
+  onReasoningEffortChange: (value: ReasoningEffortLevel | null) => void
 }
+
+const EFFORT_OPTIONS = [
+  { value: 'low' as const, label: '轻度' },
+  { value: 'medium' as const, label: '标准' },
+  { value: 'high' as const, label: '深入' },
+]
 
 export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>(
   function ChatInput(
@@ -43,6 +53,8 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
       onDraftAttachmentRefsChange,
       dropContainerRef,
       isDesktopLayout,
+      reasoningEffort,
+      onReasoningEffortChange,
     },
     ref,
   ) {
@@ -84,6 +96,8 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
       })
       onPendingAttachmentsChange(updatedFileList as ComposerAttachment[])
     }
+
+    const thinkingEnabled = reasoningEffort !== null
 
     const senderHeader = (
       <Sender.Header
@@ -151,18 +165,72 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
           autoSize={{ minRows: 1, maxRows: 5 }}
           placeholder={`给 ${assistantLabel} 发送消息`}
           header={senderHeader}
-          prefix={
-            <div style={{ position: 'relative' }}>
-              <Badge dot={pendingAttachments.length > 0 && !headerOpen} offset={[-4, 4]}>
-                <Button 
-                  type="text" 
-                  onClick={() => setHeaderOpen(!headerOpen)} 
-                  icon={<LinkOutlined />} 
-                  disabled={uploadingFiles}
-                />
-              </Badge>
-            </div>
-          }
+          suffix={false}
+          footer={(_value, { components }) => {
+            const { SendButton, LoadingButton } = components
+            return (
+              <Flex justify="space-between" align="center" style={{ width: '100%' }}>
+                <Flex gap={4} align="center">
+                  {/* 附件按钮 */}
+                  <div style={{ position: 'relative' }}>
+                    <Badge dot={pendingAttachments.length > 0 && !headerOpen} offset={[-4, 4]}>
+                      <Button 
+                        type="text" 
+                        size="small"
+                        onClick={() => setHeaderOpen(!headerOpen)} 
+                        icon={<LinkOutlined />} 
+                        disabled={uploadingFiles}
+                      />
+                    </Badge>
+                  </div>
+                  <Divider type="vertical" style={{ margin: '0 2px' }} />
+                  {/* 深度思考开关 */}
+                  <Flex align="center" gap={6}>
+                    <ThunderboltOutlined style={{
+                      fontSize: 14,
+                      color: thinkingEnabled ? token.colorPrimary : token.colorTextQuaternary,
+                      transition: 'color 0.2s',
+                    }} />
+                    <Text
+                      style={{
+                        fontSize: 'var(--nb-text-xs)',
+                        color: thinkingEnabled ? token.colorText : token.colorTextTertiary,
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        transition: 'color 0.2s',
+                      }}
+                      onClick={() => onReasoningEffortChange(thinkingEnabled ? null : 'medium')}
+                    >
+                      深度思考
+                    </Text>
+                    <Switch
+                      size="small"
+                      checked={thinkingEnabled}
+                      onChange={(checked) => onReasoningEffortChange(checked ? 'medium' : null)}
+                    />
+                    {thinkingEnabled && (
+                      <Select
+                        size="small"
+                        variant="borderless"
+                        value={reasoningEffort!}
+                        onChange={(val) => onReasoningEffortChange(val)}
+                        options={EFFORT_OPTIONS}
+                        popupMatchSelectWidth={false}
+                        style={{ width: 72 }}
+                      />
+                    )}
+                  </Flex>
+                </Flex>
+                <Flex align="center">
+                  {isRequesting || uploadingFiles ? (
+                    <LoadingButton type="default" />
+                  ) : (
+                    <SendButton type="primary" disabled={!value.trim()} />
+                  )}
+                </Flex>
+              </Flex>
+            )
+          }}
         />
       </div>
     )
