@@ -345,6 +345,29 @@ function useCodeBlockStyle(): CSSProperties {
   }
 }
 
+/**
+ * Automatically expands the 'Think' component while loading, and collapses it when finished.
+ * This aligns with SOTA deep reasoning UX paradigms.
+ */
+function AutoThinkBlock({ loading, content }: { loading: boolean; content: string }) {
+  const [expanded, setExpanded] = React.useState(loading)
+
+  React.useEffect(() => {
+    setExpanded(loading)
+  }, [loading])
+
+  return (
+    <Think
+      loading={loading}
+      title="深度思考"
+      expanded={expanded}
+      onExpand={setExpanded}
+    >
+      <MarkdownBubble content={content} isStreaming={loading} />
+    </Think>
+  )
+}
+
 /* ── 工具图标 Badge ── */
 function ToolIconBox({ icon, color }: { icon: ReactNode; color: string }) {
   return (
@@ -489,12 +512,10 @@ export function ChatMessageBody({
         return (
           <React.Fragment key={`segment-${seg.id || index}`}>
             {hasReasoning && (
-              <Think loading={isStreaming && isLastSegment} title="深度思考">
-                <MarkdownBubble
-                  content={String(seg.reasoningContent)}
-                  isStreaming={isStreaming && isLastSegment}
-                />
-              </Think>
+              <AutoThinkBlock
+                loading={isStreaming && isLastSegment}
+                content={String(seg.reasoningContent)}
+              />
             )}
 
             {toolChainItems.length > 0 && (
