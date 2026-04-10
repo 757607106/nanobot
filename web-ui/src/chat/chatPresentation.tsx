@@ -3,6 +3,7 @@ import React from 'react'
 import {
   ApiOutlined,
   CheckCircleOutlined,
+  CheckCircleFilled,
   CloseCircleOutlined,
   CodeOutlined,
   FileSearchOutlined,
@@ -10,6 +11,9 @@ import {
   SearchOutlined,
   SyncOutlined,
   ToolOutlined,
+  GlobalOutlined,
+  FileTextOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons'
 import { Mermaid, ThoughtChain, Think, FileCard } from '@ant-design/x'
 import type { ThoughtChainItemType } from '@ant-design/x'
@@ -22,6 +26,54 @@ import type { ChatAttachmentRef, ChatMessage, ChatToolCall } from '../types'
 import { getToolCallName, normalizeChatMessage } from './chatMessageUtils'
 
 const { Text } = Typography
+
+interface ToolUIMap {
+  activeTitle: string
+  successTitle: string
+  activeIcon: ReactNode
+  successIcon: ReactNode
+}
+
+const TOOL_UI_MAPPING: Record<string, ToolUIMap> = {
+  web_search: {
+    activeTitle: '正在进行全网检索',
+    successTitle: '完成网络信息收集',
+    activeIcon: <GlobalOutlined spin />,
+    successIcon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />
+  },
+  web_fetch: {
+    activeTitle: '正在深度阅读网页',
+    successTitle: '网页阅读完毕',
+    activeIcon: <FileTextOutlined spin />,
+    successIcon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />
+  },
+  create_file: {
+    activeTitle: '正在创建本地文件',
+    successTitle: '文件创建完毕',
+    activeIcon: <CodeOutlined spin />,
+    successIcon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />
+  },
+  run_command: {
+    activeTitle: '正在运行系统命令',
+    successTitle: '命令执行完毕',
+    activeIcon: <FunctionOutlined spin />,
+    successIcon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />
+  }
+}
+
+function getToolUIMeta(toolName: string, isSuccess: boolean) {
+  const meta = TOOL_UI_MAPPING[toolName]
+  if (meta) {
+    return {
+      title: isSuccess ? meta.successTitle : meta.activeTitle,
+      icon: isSuccess ? meta.successIcon : meta.activeIcon
+    }
+  }
+  return {
+    title: isSuccess ? `${toolName} 执行完毕` : `调用专属工具: ${toolName}`,
+    icon: isSuccess ? <CheckCircleFilled style={{ color: 'var(--nb-success)' }} /> : <LoadingOutlined />
+  }
+}
 
 const TOOL_RESULT_PREVIEW_LIMIT = 1400
 
@@ -399,10 +451,12 @@ export function ChatMessageBody({
             const name = getToolCallName(t)
             const resultMsg = seg._toolResults.find(r => r.toolCallId === t.id) || seg._toolResults[tIndex]
             
+            const meta = getToolUIMeta(name, !!resultMsg)
+
             toolChainItems.push({
               key: `tc-${index}-${t.id || tIndex}`,
-              title: `调用工具: ${name}`,
-              icon: resultMsg ? <CheckCircleOutlined style={{ color: token.colorSuccess }} /> : <SyncOutlined spin style={{ color: token.colorPrimary }} />,
+              title: meta.title,
+              icon: meta.icon,
               status: resultMsg ? 'success' : 'loading',
               collapsible: true, // Natively expand tool args & results using Ant Design X standard!
               content: (
@@ -418,10 +472,13 @@ export function ChatMessageBody({
         } else if (seg._toolResults.length > 0) {
           // Fallback if tools were executed without a matching toolCall entry
           seg._toolResults.forEach((r, rIndex) => {
+            const name = r.name || '未知工具'
+            const meta = getToolUIMeta(name, true)
+
             toolChainItems.push({
               key: `tr-orphan-${index}-${rIndex}`,
-              title: `${r.name || '工具'} 执行完毕`,
-              icon: <CheckCircleOutlined style={{ color: token.colorSuccess }} />,
+              title: meta.title,
+              icon: meta.icon,
               status: 'success',
               collapsible: true,
               content: <XMarkdown content={`\`\`\`json\n${truncateContent(formatResultContent(String(r.content || '')))}\n\`\`\``} />,
