@@ -12,6 +12,7 @@ import {
   dedupeAttachmentRefs,
   normalizeChatMessage,
   parseStreamEvent,
+  normalizeProgressStep,
 } from './chatMessageUtils'
 
 const API_BASE = '/api/v1'
