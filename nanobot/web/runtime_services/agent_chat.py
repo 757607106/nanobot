@@ -342,7 +342,7 @@ class WebAgentChatRuntimeService:
                 str((assistant_message or {}).get("content") or "")
                 or str(((result.get("run") or {}).get("resultSummary") or {}).get("content") or "")
             ),
-            "assistantMessage": assistant_message,
+            "message": assistant_message,
             "session": result.get("session"),
             "messages": result.get("messages"),
             "knowledgeHits": result.get("knowledgeHits", []),

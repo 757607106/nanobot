@@ -28,6 +28,7 @@ class ChatMessageRequest(BaseModel):
     content: str | None = None
     displayContent: str | None = None
     attachments: list[dict[str, Any]] | None = None
+    reasoningEffort: str | None = None
 
 
 class ChatSessionFilesRequest(BaseModel):
@@ -186,6 +187,7 @@ async def create_chat_message(
 
     state = request.app.state.web
     attachments = payload.attachments or []
+    reasoning_effort = (payload.reasoningEffort or "").strip() or None
 
     if stream:
 
@@ -220,6 +222,7 @@ async def create_chat_message(
                         display_content=display_content,
                         attachments=attachments,
                         on_stream=on_stream,
+                        reasoning_effort=reasoning_effort,
                     )
                     await queue.put({"type": "done", **data})
                 except KeyError:
@@ -266,6 +269,7 @@ async def create_chat_message(
             on_progress,
             display_content=display_content,
             attachments=attachments,
+            reasoning_effort=reasoning_effort,
         )
     except KeyError as exc:
         raise APIError(404, "CHAT_SESSION_NOT_FOUND", "Session not found.") from exc

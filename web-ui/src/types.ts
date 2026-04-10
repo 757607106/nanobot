@@ -52,6 +52,7 @@ export interface ChatMessage {
   name?: string
   attachments?: ChatAttachmentRef[]
   progressSteps?: ChatProgressStep[]
+  reasoningContent?: string | null
 }
 
 export interface ChatRequestInput {
@@ -60,6 +61,7 @@ export interface ChatRequestInput {
   query: string
   displayContent?: string
   attachments?: ChatAttachmentRef[]
+  reasoningEffort?: 'low' | 'medium' | 'high' | null
 }
 
 export interface ChatUploadItem {

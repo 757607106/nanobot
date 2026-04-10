@@ -1,15 +1,28 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { PaperClipOutlined, ToolOutlined } from '@ant-design/icons'
-import { ThoughtChain } from '@ant-design/x'
-import type { ThoughtChainItem } from '@ant-design/x'
+import React from 'react'
+import {
+  ApiOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  CodeOutlined,
+  FileSearchOutlined,
+  FunctionOutlined,
+  PaperClipOutlined,
+  SearchOutlined,
+  SyncOutlined,
+  ToolOutlined,
+} from '@ant-design/icons'
+import { Mermaid, ThoughtChain } from '@ant-design/x'
+import type { ThoughtChainItemType } from '@ant-design/x'
 import type { MessageInfo } from '@ant-design/x-sdk'
 import { Collapse, Flex, Space, Tag, Tooltip, Typography, theme } from 'antd'
+import type { ComponentProps as XMarkdownComponentProps } from '@ant-design/x-markdown'
 import { XMarkdown } from '@ant-design/x-markdown'
 import { formatDateTimeZh } from '../locale'
 import type { ChatAttachmentRef, ChatMessage, ChatToolCall } from '../types'
 import { getToolCallName, normalizeChatMessage } from './chatMessageUtils'
 
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 
 const TOOL_RESULT_PREVIEW_LIMIT = 1400
 
@@ -81,25 +94,42 @@ function formatToolArgumentsBlock(toolCall: ChatToolCall) {
   return args
 }
 
+function getStepIcon(kind: string, status: ThoughtChainItemType['status']) {
+  if (status === 'error') return <CloseCircleOutlined />
+  if (kind === 'tool') return <ToolOutlined />
+  return <SyncOutlined spin={status === 'loading'} />
+}
+
+function getStepDescription(status: ThoughtChainItemType['status']) {
+  switch (status) {
+    case 'loading':
+      return '执行中...'
+    case 'error':
+      return '执行失败'
+    case 'success':
+    default:
+      return '已完成'
+  }
+}
+
 function buildThoughtChainItems(
   steps: ChatMessage['progressSteps'],
   status: MessageInfo<ChatMessage>['status'],
-): ThoughtChainItem[] {
+): ThoughtChainItemType[] {
   const progressSteps = steps ?? []
   return progressSteps.map((step, index) => {
     const isLast = index === progressSteps.length - 1
-    let itemStatus: ThoughtChainItem['status'] = 'success'
+    let itemStatus: ThoughtChainItemType['status'] = 'success'
     if (status === 'loading' || status === 'updating') {
-      itemStatus = isLast ? 'pending' : 'success'
+      itemStatus = isLast ? 'loading' : 'success'
     } else if (status === 'error' || status === 'abort') {
       itemStatus = isLast ? 'error' : 'success'
     }
-    const isTool = step.kind === 'tool'
     return {
       key: step.key,
-      icon: <ToolOutlined />,
-      title: isTool ? step.label : step.label,
-      description: isTool ? '工具执行中' : '处理中',
+      icon: getStepIcon(step.kind, itemStatus),
+      title: step.label,
+      description: getStepDescription(itemStatus),
       status: itemStatus,
     }
   })
@@ -120,13 +150,57 @@ function MetaLabel({ children }: { children: ReactNode }) {
   )
 }
 
+/* ── Code block component: intercepts mermaid fenced blocks ── */
+function CodeBlockComponent(props: XMarkdownComponentProps) {
+  // Destructure XMarkdown-specific props and the DOM `class` attribute (renamed to className for React)
+  const {
+    lang,
+    block,
+    children,
+    domNode,
+    streamStatus,
+    class: htmlClass,
+    ...rest
+  } = props as XMarkdownComponentProps & { class?: string }
+
+  // For fenced ```mermaid code blocks, delegate to the Mermaid component
+  // Only render when stream is done to avoid parsing incomplete syntax
+  if (block && lang === 'mermaid' && children && streamStatus !== 'loading') {
+    const codeText = typeof children === 'string'
+      ? children
+      : Array.isArray(children)
+        ? (children as React.ReactNode[]).map((c) => (typeof c === 'string' ? c : '')).join('')
+        : ''
+    if (codeText.trim()) {
+      return <Mermaid>{codeText.trim()}</Mermaid>
+    }
+  }
+
+  // Default code rendering — convert `class` to `className` for React
+  return <code {...rest} className={htmlClass}>{children}</code>
+}
+
+/*
+ * Stabilize the XMarkdown components mapping outside render.
+ * Only map `code` — the code component detects `lang === 'mermaid'` internally.
+ * Note: `mermaid: Mermaid` is NOT included because XMarkdown passes React nodes
+ * (not raw strings) as children for HTML tag mappings, which Mermaid cannot parse.
+ */
+const XMARKDOWN_COMPONENTS: Record<string, React.ComponentType<XMarkdownComponentProps>> = {
+  code: CodeBlockComponent as unknown as React.ComponentType<XMarkdownComponentProps>,
+}
+
+const XMARKDOWN_STREAMING_ACTIVE = { hasNextChunk: true }
+
 /* ── Markdown 渲染 ── */
 function MarkdownBubble({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
   return (
     <div className="markdown-bubble">
       <XMarkdown
         content={content}
-        streaming={isStreaming ? { hasNextChunk: true } : undefined}
+        streaming={isStreaming ? XMARKDOWN_STREAMING_ACTIVE : undefined}
+        components={XMARKDOWN_COMPONENTS}
+        paragraphTag="div"
       />
     </div>
   )
@@ -204,37 +278,81 @@ export function AttachmentTags({
   )
 }
 
-/* ── 工具调用卡片 (重构为美观紧凑样式) ── */
-function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
-  const { token } = theme.useToken()
+const TOOL_ICON_MAP: Record<string, ReactNode> = {
+  search: <SearchOutlined />,
+  find: <FileSearchOutlined />,
+  query: <FileSearchOutlined />,
+  exec: <CodeOutlined />,
+  run: <CodeOutlined />,
+  code: <CodeOutlined />,
+  api: <ApiOutlined />,
+  call: <FunctionOutlined />,
+  func: <FunctionOutlined />,
+}
 
-  if (!toolCalls.length) {
-    return null
+function getToolIcon(name: string) {
+  const lower = name.toLowerCase()
+  for (const [keyword, icon] of Object.entries(TOOL_ICON_MAP)) {
+    if (lower.includes(keyword)) return icon
   }
+  return <ToolOutlined />
+}
 
-  const codeStyle: CSSProperties = {
+/* ── Shared code block style ── */
+function useCodeBlockStyle(): CSSProperties {
+  const { token } = theme.useToken()
+  return {
     margin: 0,
-    padding: 12,
+    padding: 10,
     borderRadius: 8,
     background: token.colorFillAlter,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
     fontSize: 'var(--nb-text-xs)',
     fontFamily: 'var(--nb-font-mono, monospace)',
-    maxHeight: 320,
+    maxHeight: 360,
     overflow: 'auto',
     border: `1px solid ${token.colorBorderSecondary}`,
+    lineHeight: 1.6,
+  }
+}
+
+/* ── Tool icon badge ── */
+function ToolIconBox({ icon, color }: { icon: ReactNode; color: string }) {
+  return (
+    <div style={{
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      background: `color-mix(in srgb, ${color} 12%, transparent)`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 11, color, display: 'flex', lineHeight: 1 }}>{icon}</span>
+    </div>
+  )
+}
+
+/* ── 工具调用卡片（紧凑样式） ── */
+function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
+  const { token } = theme.useToken()
+  const codeStyle = useCodeBlockStyle()
+
+  if (!toolCalls.length) {
+    return null
   }
 
   return (
-    <Flex vertical gap={6}>
+    <Flex vertical gap={4}>
       <MetaLabel>工具调用</MetaLabel>
       <Collapse
         size="small"
         expandIconPosition="end"
+        bordered={false}
         style={{
           borderRadius: 10,
-          border: `1px solid ${token.colorBorderSecondary}`,
           background: token.colorFillQuaternary,
         }}
         items={toolCalls.map((toolCall, index) => {
@@ -242,29 +360,22 @@ function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
           return {
             key: `${name}-${index}`,
             label: (
-              <Flex align="center" gap={8}>
-                <div style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 6,
-                  background: `${token.colorPrimary}14`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <ToolOutlined style={{ fontSize: 'var(--nb-text-xs)', color: token.colorPrimary }} />
-                </div>
-                <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{name}</Text>
-                <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)', marginLeft: 'auto' }}>
+              <Flex align="center" gap={6} style={{ minWidth: 0 }}>
+                <ToolIconBox icon={getToolIcon(name)} color={token.colorPrimary} />
+                <Text strong style={{ fontSize: 'var(--nb-text-sm)', flexShrink: 0 }}>{name}</Text>
+                <Text
+                  type="secondary"
+                  ellipsis
+                  style={{ fontSize: 'var(--nb-text-2xs)', flex: 1, minWidth: 0 }}
+                >
                   {getToolArgumentsPreview(toolCall)}
                 </Text>
               </Flex>
             ),
             children: (
-              <Paragraph code style={codeStyle}>
+              <pre className="tool-call-json-block" style={codeStyle}>
                 {formatToolArgumentsBlock(toolCall)}
-              </Paragraph>
+              </pre>
             ),
           }
         })}
@@ -273,85 +384,126 @@ function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
   )
 }
 
-/* ── 工具结果卡片 ── */
+function formatResultContent(content: string) {
+  const parsed = safeJsonParse(content)
+  if (parsed) {
+    return JSON.stringify(parsed, null, 2)
+  }
+  return content
+}
+
+function getResultSummary(content: string, limit = 80): string {
+  const parsed = safeJsonParse(content)
+  if (parsed) {
+    if (typeof parsed === 'object' && parsed !== null) {
+      const keys = Object.keys(parsed as Record<string, unknown>)
+      if (Array.isArray(parsed)) {
+        return `数组 · ${parsed.length} 项`
+      }
+      return keys.slice(0, 4).join(', ') + (keys.length > 4 ? ` (+${keys.length - 4})` : '')
+    }
+    return String(parsed).slice(0, limit)
+  }
+  const firstLine = content.split('\n')[0]?.trim() || ''
+  return firstLine.length > limit ? `${firstLine.slice(0, limit)}...` : firstLine
+}
+
+/* ── 工具结果卡片（紧凑单层） ── */
 function ToolResultCard({ message }: { message: ChatMessage }) {
   const { token } = theme.useToken()
+  const codeStyle = useCodeBlockStyle()
   const fullContent = String(message.content || '')
-  const previewContent = truncateContent(fullContent)
-  const isTruncated = previewContent !== fullContent
-
-  const codeStyle: CSSProperties = {
-    margin: 0,
-    padding: 12,
-    borderRadius: 8,
-    background: token.colorFillAlter,
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-all',
-    maxHeight: 400,
-    overflow: 'auto',
-    fontSize: 'var(--nb-text-xs)',
-    fontFamily: 'var(--nb-font-mono, monospace)',
-    border: `1px solid ${token.colorBorderSecondary}`,
-  }
+  const formatted = formatResultContent(fullContent)
+  const previewContent = truncateContent(formatted)
+  const toolName = message.name || 'tool'
+  const summary = getResultSummary(fullContent)
 
   return (
     <Collapse
       size="small"
       expandIconPosition="end"
+      bordered={false}
       style={{
         borderRadius: 10,
-        border: `1px solid ${token.colorBorderSecondary}`,
         background: token.colorFillQuaternary,
       }}
       items={[
         {
           key: 'result',
           label: (
-            <Flex align="center" gap={8}>
-              <div style={{
-                width: 24,
-                height: 24,
-                borderRadius: 6,
-                background: `${token.colorWarning}14`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}>
-                <ToolOutlined style={{ fontSize: 'var(--nb-text-xs)', color: token.colorWarning }} />
-              </div>
-              <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{message.name || 'tool'}</Text>
-              <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)', marginLeft: 'auto' }}>
-                {message.createdAt ? formatDateTimeZh(message.createdAt) : '刚刚'}
+            <Flex align="center" gap={6} style={{ minWidth: 0 }}>
+              <ToolIconBox icon={<CheckCircleOutlined />} color={token.colorSuccess} />
+              <Text strong style={{ fontSize: 'var(--nb-text-sm)', flexShrink: 0 }}>{toolName}</Text>
+              {summary ? (
+                <Text
+                  type="secondary"
+                  ellipsis
+                  style={{ fontSize: 'var(--nb-text-2xs)', flex: 1, minWidth: 0 }}
+                >
+                  {summary}
+                </Text>
+              ) : null}
+            </Flex>
+          ),
+          children: (
+            <pre className="tool-result-json-block" style={codeStyle}>
+              {previewContent}
+            </pre>
+          ),
+        },
+      ]}
+    />
+  )
+}
+
+/* ── Reasoning / Thinking block ── */
+function ReasoningBlock({ content }: { content: string }) {
+  const { token } = theme.useToken()
+
+  return (
+    <Collapse
+      ghost
+      size="small"
+      defaultActiveKey={[]}
+      items={[
+        {
+          key: 'reasoning',
+          label: (
+            <Flex align="center" gap={6}>
+              <span style={{ fontSize: 14 }}>💭</span>
+              <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>深度思考</Text>
+              <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>
+                {content.length > 200 ? `${Math.ceil(content.length / 100) * 100}+ 字` : ''}
               </Text>
             </Flex>
           ),
           children: (
-            <Flex vertical gap={8}>
-              <Paragraph code style={codeStyle}>
-                {previewContent}
-              </Paragraph>
-              {isTruncated ? (
-                <Collapse
-                  ghost
-                  size="small"
-                  items={[
-                    {
-                      key: 'full',
-                      label: '展开完整结果',
-                      children: (
-                        <Paragraph code style={codeStyle}>
-                          {fullContent}
-                        </Paragraph>
-                      ),
-                    },
-                  ]}
-                />
-              ) : null}
-            </Flex>
+            <div
+              className="reasoning-content-block"
+              style={{
+                fontSize: 'var(--nb-text-sm)',
+                color: token.colorTextSecondary,
+                lineHeight: 1.7,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                maxHeight: 400,
+                overflowY: 'auto',
+                padding: '8px 12px',
+                borderRadius: 8,
+                background: token.colorFillQuaternary,
+                border: `1px solid ${token.colorBorderSecondary}`,
+              }}
+            >
+              {content}
+            </div>
           ),
         },
       ]}
+      style={{
+        borderRadius: 10,
+        border: `1px solid color-mix(in srgb, ${token.colorPrimary} 15%, transparent)`,
+        background: `color-mix(in srgb, ${token.colorPrimary} 4%, transparent)`,
+      }}
     />
   )
 }
@@ -377,6 +529,7 @@ export function ChatMessageBody({
   }
 
   const hasMessageContent = Boolean(String(message.content || '').trim())
+  const hasReasoningContent = Boolean(String(message.reasoningContent || '').trim())
   const showPlaceholderCopy =
     !hasMessageContent &&
     message.role === 'assistant' &&
@@ -398,11 +551,19 @@ export function ChatMessageBody({
           ) : (
             <ThoughtChain
               items={buildThoughtChainItems(progressSteps, info.status)}
+              styles={{
+                item: {
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s ease',
+                },
+              }}
               style={{
-                padding: 10,
-                borderRadius: 10,
+                padding: '10px 12px',
+                borderRadius: '10px',
                 background: token.colorFillQuaternary,
                 border: `1px solid ${token.colorBorderSecondary}`,
+                gap: '2px',
               }}
             />
           )}
@@ -410,6 +571,10 @@ export function ChatMessageBody({
       ) : null}
 
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
+
+      {hasReasoningContent && message.role === 'assistant' ? (
+        <ReasoningBlock content={String(message.reasoningContent)} />
+      ) : null}
 
       {hasMessageContent ? (
         <MarkdownBubble

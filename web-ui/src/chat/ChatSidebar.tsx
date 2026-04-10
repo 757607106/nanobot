@@ -1,4 +1,4 @@
-import type { Conversation } from '@ant-design/x'
+import type { ConversationItemType } from '@ant-design/x'
 import { Conversations } from '@ant-design/x'
 import { DeleteOutlined, EditOutlined, MessageOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { App, Button, Empty, Flex, Spin, Typography, theme } from 'antd'
@@ -66,7 +66,7 @@ export function ChatSidebar({
       .includes(query)
   })
 
-  const conversationItems: Conversation[] = filteredSessions.map((session) => ({
+  const conversationItems: ConversationItemType[] = filteredSessions.map((session) => ({
     key: session.id,
     group: getSessionGroup(session.updatedAt || session.createdAt),
     timestamp: new Date(session.updatedAt || session.createdAt || Date.now()).getTime(),
@@ -141,7 +141,7 @@ export function ChatSidebar({
             classNames={{ item: 'chat-conversation-item' }}
             tabIndex={0}
             groupable={{
-              title: (group) => <Text type="secondary">{group}</Text>,
+              label: (group: string) => <Text type="secondary">{group}</Text>,
             }}
             onActiveChange={(key) => {
               startTransition(() => {

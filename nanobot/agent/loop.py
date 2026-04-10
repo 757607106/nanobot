@@ -414,6 +414,7 @@ class AgentLoop:
         channel: str = "cli",
         chat_id: str = "direct",
         message_id: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> tuple[str | None, list[str], list[dict]]:
         """Run the agent iteration loop.
 
@@ -448,6 +449,7 @@ class AgentLoop:
             model=self.model,
             max_iterations=self.max_iterations,
             max_tool_result_chars=self.max_tool_result_chars,
+            reasoning_effort=reasoning_effort,
             hook=hook,
             error_message="Sorry, I encountered an error calling the AI model.",
             concurrent_tools=True,
@@ -713,6 +715,8 @@ class AgentLoop:
                 channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=meta,
             ))
 
+        _reasoning_effort = (run_context or {}).get("reasoning_effort") if isinstance(run_context, dict) else None
+
         final_content, _, all_msgs = await self._run_agent_loop(
             initial_messages,
             on_progress=on_progress or _bus_progress,
@@ -721,6 +725,7 @@ class AgentLoop:
             session=session,
             channel=msg.channel, chat_id=msg.chat_id,
             message_id=msg.metadata.get("message_id"),
+            reasoning_effort=_reasoning_effort,
         )
 
         if final_content is None or not final_content.strip():

@@ -1,9 +1,10 @@
-import type { ComponentProps, ComponentRef } from 'react'
+import type { ComponentRef } from 'react'
 import { useRef } from 'react'
 import type { MessageInfo } from '@ant-design/x-sdk'
 import { Bubble, Welcome } from '@ant-design/x'
-import { Button, Card, Empty, Flex, Space, Spin, Typography, theme } from 'antd'
-import { ReloadOutlined, RobotOutlined, ToolOutlined, UserOutlined } from '@ant-design/icons'
+import type { BubbleItemType } from '@ant-design/x'
+import { Avatar, Button, Flex, Space, Spin, Typography, theme } from 'antd'
+import { ReloadOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons'
 import { ChatMessageBody, getChatMessageTitle } from './chatPresentation'
 import { normalizeChatMessage } from './chatMessageUtils'
 import { formatDateTimeZh } from '../locale'
@@ -52,7 +53,7 @@ export function ChatMessages({
   const historyRef = useRef<HTMLDivElement | null>(null)
   const surfaceRadius = token.borderRadiusLG + 8
 
-  const bubbleItems: ComponentProps<typeof Bubble.List>['items'] = messageInfos.map((info) => {
+  const bubbleItems: BubbleItemType[] = messageInfos.map((info) => {
     const item = normalizeChatMessage(info.message)
     const isUser = item.role === 'user'
     const isAssistant = item.role === 'assistant'
@@ -68,8 +69,8 @@ export function ChatMessages({
       borderColor = 'transparent'
       color = 'var(--nb-ink)'
     } else if (isTool) {
-      background = 'var(--nb-card-subtle-bg)'
-      borderColor = 'var(--nb-card-subtle-border)'
+      background = 'transparent'
+      borderColor = 'transparent'
     }
 
     if (info.status === 'error') {
@@ -80,19 +81,24 @@ export function ChatMessages({
 
     return {
       key: info.id,
+      role: isUser ? 'user' : isTool ? 'system' : 'ai',
       placement: isUser ? 'end' : 'start',
       loading:
         isAssistant &&
         (info.status === 'loading' || info.status === 'updating') &&
         !(item.progressSteps?.length || item.content),
-      avatar: {
-        icon: isUser ? <UserOutlined /> : isTool ? <ToolOutlined /> : <RobotOutlined />,
-        style: {
-          background: isUser ? 'var(--nb-accent)' : isTool ? 'var(--nb-warning)' : 'var(--nb-surface-panel-bg)',
-          color: isUser ? 'var(--nb-ink)' : token.colorText,
-          boxShadow: 'var(--nb-shadow-soft)',
-        },
-      },
+      avatar: isTool ? (
+        <div style={{ width: 32, height: 32, visibility: 'hidden' }} />
+      ) : (
+        <Avatar
+          icon={isUser ? <UserOutlined /> : <RobotOutlined />}
+          style={{
+            background: isUser ? 'var(--nb-accent)' : 'var(--nb-surface-panel-bg)',
+            color: isUser ? 'var(--nb-ink)' : token.colorText,
+            boxShadow: 'var(--nb-shadow-soft)',
+          }}
+        />
+      ),
       variant: 'borderless', // custom defined via styles
       shape: 'round',
       classNames: {
@@ -107,22 +113,22 @@ export function ChatMessages({
       },
       styles: {
         content: {
-          borderRadius: 20,
-          padding: isDesktopLayout ? '16px 20px' : '14px 18px',
+          borderRadius: isTool ? 12 : 20,
+          padding: isTool ? '4px 0' : isDesktopLayout ? '16px 20px' : '14px 18px',
           background,
-          border: `1px solid ${borderColor}`,
+          border: isTool ? 'none' : `1px solid ${borderColor}`,
           color,
-          boxShadow: isUser ? '0 12px 24px rgba(36, 88, 198, 0.12)' : 'var(--nb-surface-soft-shadow)',
-          backdropFilter: isUser ? 'none' : 'blur(28px) saturate(140%)',
+          boxShadow: isUser ? '0 12px 24px rgba(36, 88, 198, 0.12)' : isTool ? 'none' : 'var(--nb-surface-soft-shadow)',
+          backdropFilter: isUser ? 'none' : isTool ? 'none' : 'blur(28px) saturate(140%)',
         },
         header: {
-          marginBottom: 8,
+          marginBottom: isTool ? 0 : 8,
         },
         footer: {
-          marginTop: 8,
+          marginTop: isTool ? 0 : 8,
         },
       },
-      header: (
+      header: isTool ? null : (
         <Flex justify="space-between" gap={12} wrap="wrap">
           <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
             {getChatMessageTitle(item, { assistantLabel })}
@@ -148,10 +154,6 @@ export function ChatMessages({
             </Button>
           ) : null}
         </Space>
-      ) : isTool ? (
-        <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
-          工具结果
-        </Text>
       ) : null,
       content: <ChatMessageBody info={info} />,
     }

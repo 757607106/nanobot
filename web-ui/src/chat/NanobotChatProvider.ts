@@ -58,6 +58,7 @@ function createFetchChatStream(
         content: query,
         displayContent: requestParams.displayContent,
         attachments: requestParams.attachments || [],
+        reasoningEffort: requestParams.reasoningEffort || null,
       }),
     })
 
@@ -101,6 +102,8 @@ function getStreamEvents(chunks: SSEOutput[]): StreamEvent[] {
 }
 
 export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatRequestInput, SSEOutput> {
+  private accumulatedChunks: SSEOutput[] = []
+
   constructor(options: NanobotChatProviderOptions = {}) {
     const buildMessagesPath = options.buildMessagesPath || buildDefaultMessagesPath
     super({
@@ -112,6 +115,7 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
   }
 
   transformParams(requestParams: Partial<ChatRequestInput>) {
+    this.accumulatedChunks = []
     const sessionId = String(requestParams.sessionId || '').trim()
     const query = String(requestParams.query || '').trim()
 
@@ -120,6 +124,7 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
       query,
       displayContent: String(requestParams.displayContent || query).trim(),
       attachments: dedupeAttachmentRefs(requestParams.attachments || []),
+      reasoningEffort: requestParams.reasoningEffort || null,
     }
   }
 
@@ -134,13 +139,21 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
   }
 
   transformMessage(info: TransformMessage<ChatMessage, SSEOutput>) {
-    const events = getStreamEvents(info.chunks)
+    if (info.chunk && typeof info.chunk === 'object') {
+      this.accumulatedChunks.push(info.chunk)
+    }
+
+    const allChunks = this.accumulatedChunks.length > 0 ? this.accumulatedChunks : info.chunks
+    const events = getStreamEvents(allChunks)
     const doneEvent = [...events].reverse().find((event) => event.type === 'done')
 
     if (doneEvent?.message) {
+      const collectedSteps = collectProgressSteps(events, info.originMessage)
       return normalizeChatMessage({
         ...doneEvent.message,
-        progressSteps: collectProgressSteps(events, info.originMessage),
+        progressSteps: collectedSteps.length > 0
+          ? collectedSteps
+          : (doneEvent.message.progressSteps ?? []),
       })
     }
 

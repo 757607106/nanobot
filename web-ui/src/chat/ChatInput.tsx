@@ -63,7 +63,7 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
             void onSubmit(val)
           }}
           onCancel={onCancel}
-          onPasteFile={(_firstFile, files) => {
+          onPasteFile={(files) => {
             const nextAttachments = Array.from(files).map(createPendingAttachment)
             onPendingAttachmentsChange([...pendingAttachments, ...nextAttachments])
           }}
@@ -72,9 +72,10 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
           header={
             showSenderHeader ? (
               <Sender.Header open title="本轮上下文" closable={false}>
-                <Flex vertical gap={12}>
-                  {draftAttachmentRefs.length ? (
-                    <Card size="small" title="本轮引用">
+                <Flex vertical gap={8} style={{ padding: '0 8px' }}>
+                  {draftAttachmentRefs.length > 0 && (
+                    <Flex vertical gap={4}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>本轮引用</Text>
                       <AttachmentTags
                         attachments={draftAttachmentRefs}
                         removable
@@ -84,10 +85,11 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
                           )
                         }}
                       />
-                    </Card>
-                  ) : null}
-                  {pendingAttachments.length > 0 ? (
-                    <Card size="small" title="待上传文件">
+                    </Flex>
+                  )}
+                  {pendingAttachments.length > 0 && (
+                    <Flex vertical gap={4}>
+                      {draftAttachmentRefs.length > 0 && <Text type="secondary" style={{ fontSize: 12 }}>附件</Text>}
                       <Attachments
                         items={pendingAttachments}
                         multiple
@@ -96,8 +98,8 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
                         beforeUpload={() => false}
                         onChange={({ fileList }) => onPendingAttachmentsChange(fileList as ComposerAttachment[])}
                       />
-                    </Card>
-                  ) : null}
+                    </Flex>
+                  )}
                 </Flex>
               </Sender.Header>
             ) : null

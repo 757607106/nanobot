@@ -77,6 +77,8 @@ class WebChatRuntimeService:
             payload["toolCallId"] = message["tool_call_id"]
         if message.get("name"):
             payload["name"] = message["name"]
+        if message.get("reasoning_content"):
+            payload["reasoningContent"] = message["reasoning_content"]
         attachments = normalize_chat_attachments(message.get("attachments") or [])
         if attachments:
             payload["attachments"] = attachments
@@ -570,6 +572,7 @@ class WebChatRuntimeService:
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
         on_stream=None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         key = self.session_key(session_id)
         session = self.state.sessions.get_or_create(key)
@@ -579,20 +582,23 @@ class WebChatRuntimeService:
         normalized_attachments = normalize_chat_attachments(attachments)
         if normalized_attachments:
             self.add_session_file_refs(session, normalized_attachments)
+        run_context: dict[str, Any] = {
+            "chat_message": {
+                "display_content": display_content or content,
+                "attachments": normalized_attachments,
+            },
+        }
+        if reasoning_effort:
+            run_context["reasoning_effort"] = reasoning_effort
         response = await self._dispatch_chat_turn(
             session_key=key,
             session_id=session_id,
             content=content,
             on_progress=on_progress,
             on_stream=on_stream,
-            run_context={
-                "chat_message": {
-                    "display_content": display_content or content,
-                    "attachments": normalized_attachments,
-                },
-            },
+            run_context=run_context,
         )
         return {
             "content": response,
-            "assistantMessage": self.get_last_assistant_message(session_id),
+            "message": self.get_last_assistant_message(session_id),
         }

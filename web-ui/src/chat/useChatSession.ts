@@ -80,7 +80,7 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
       }
       const data = inAgentMode && agentId ? await api.getAgentMessages(agentId, sessionId) : await api.getMessages(sessionId)
       return data.map((item, index) => ({
-        id: item.id || `${inAgentMode ? 'agent' : 'history'}-${sessionId}-${index}`,
+        id: item.id ? `h_${item.id}` : `${inAgentMode ? 'agent' : 'history'}-${sessionId}-${index}`,
         message: normalizeChatMessage(item),
         status: 'success' as const,
       }))
@@ -278,7 +278,7 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
       if (currentSessionIdRef.current === sessionId) {
         setMessages(
           history.map((item, index) => ({
-            id: item.id || `${inAgentMode ? 'agent' : 'history'}-${sessionId}-${index}`,
+            id: item.id ? `h_${item.id}` : `${inAgentMode ? 'agent' : 'history'}-${sessionId}-${index}`,
             message: normalizeChatMessage(item),
             status: 'success',
           })),
