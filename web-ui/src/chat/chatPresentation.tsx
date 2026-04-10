@@ -293,7 +293,7 @@ function useCodeBlockStyle(): CSSProperties {
   }
 }
 
-/* ── Tool icon badge ── */
+/* ── 工具图标 Badge ── */
 function ToolIconBox({ icon, color }: { icon: ReactNode; color: string }) {
   return (
     <div style={{
@@ -308,79 +308,6 @@ function ToolIconBox({ icon, color }: { icon: ReactNode; color: string }) {
     }}>
       <span style={{ fontSize: 11, color, display: 'flex', lineHeight: 1 }}>{icon}</span>
     </div>
-  )
-}
-
-/* ── 工具调用卡片（紧凑样式） ── */
-function ToolCallCards({ toolCalls, toolResults }: { toolCalls: ChatToolCall[], toolResults?: ChatMessage[] }) {
-  const { token } = theme.useToken()
-  const codeStyle = useCodeBlockStyle()
-
-  if (!toolCalls.length) {
-    return null
-  }
-
-  return (
-    <Flex vertical gap={4}>
-      <MetaLabel>工具调用</MetaLabel>
-      <Collapse
-        size="small"
-        expandIconPosition="end"
-        bordered={false}
-        style={{
-          borderRadius: 10,
-          background: token.colorFillQuaternary,
-        }}
-        items={toolCalls.map((toolCall, index) => {
-          const name = getToolCallName(toolCall)
-          // match result by tool_call_id or sequence natively
-          const resultMsg = toolResults?.find(r => r.toolCallId === toolCall.id) || toolResults?.[index]
-          const fullResult = resultMsg ? String(resultMsg.content || '') : ''
-          const resultPreview = fullResult ? truncateContent(formatResultContent(fullResult)) : ''
-          const resultSummary = resultMsg ? getResultSummary(fullResult) : ''
-
-          return {
-            key: `${name}-${index}`,
-            label: (
-              <Flex align="center" gap={6} style={{ minWidth: 0 }}>
-                {resultMsg ? (
-                  <ToolIconBox icon={<CheckCircleOutlined />} color={token.colorSuccess} />
-                ) : (
-                  <ToolIconBox icon={getToolIcon(name)} color={token.colorPrimary} />
-                )}
-                <Text strong style={{ fontSize: 'var(--nb-text-sm)', flexShrink: 0 }}>{name}</Text>
-                <Text
-                  type="secondary"
-                  ellipsis
-                  style={{ fontSize: 'var(--nb-text-2xs)', flex: 1, minWidth: 0 }}
-                >
-                  {resultMsg && resultSummary ? resultSummary : getToolArgumentsPreview(toolCall)}
-                </Text>
-              </Flex>
-            ),
-            children: (
-              <Flex vertical gap={8}>
-                {resultMsg ? (
-                  <Flex vertical gap={4}>
-                    <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>返回结果</Text>
-                    <pre className="tool-result-json-block" style={{ ...codeStyle, maxHeight: 200 }}>
-                      {resultPreview}
-                    </pre>
-                  </Flex>
-                ) : (
-                  <Flex vertical gap={4}>
-                    <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>调用参数</Text>
-                    <pre className="tool-call-json-block" style={{ ...codeStyle, maxHeight: 200 }}>
-                      {formatToolArgumentsBlock(toolCall)}
-                    </pre>
-                  </Flex>
-                )}
-              </Flex>
-            ),
-          }
-        })}
-      />
-    </Flex>
   )
 }
 
@@ -408,54 +335,6 @@ function getResultSummary(content: string, limit = 80): string {
   return firstLine.length > limit ? `${firstLine.slice(0, limit)}...` : firstLine
 }
 
-/* ── 工具结果卡片（紧凑单层） ── */
-function ToolResultCard({ message }: { message: ChatMessage }) {
-  const { token } = theme.useToken()
-  const codeStyle = useCodeBlockStyle()
-  const fullContent = String(message.content || '')
-  const formatted = formatResultContent(fullContent)
-  const previewContent = truncateContent(formatted)
-  const toolName = message.name || 'tool'
-  const summary = getResultSummary(fullContent)
-
-  return (
-    <Collapse
-      size="small"
-      expandIconPosition="end"
-      bordered={false}
-      style={{
-        borderRadius: 10,
-        background: token.colorFillQuaternary,
-      }}
-      items={[
-        {
-          key: 'result',
-          label: (
-            <Flex align="center" gap={6} style={{ minWidth: 0 }}>
-              <ToolIconBox icon={<CheckCircleOutlined />} color={token.colorSuccess} />
-              <Text strong style={{ fontSize: 'var(--nb-text-sm)', flexShrink: 0 }}>{toolName}</Text>
-              {summary ? (
-                <Text
-                  type="secondary"
-                  ellipsis
-                  style={{ fontSize: 'var(--nb-text-2xs)', flex: 1, minWidth: 0 }}
-                >
-                  {summary}
-                </Text>
-              ) : null}
-            </Flex>
-          ),
-          children: (
-            <pre className="tool-result-json-block" style={codeStyle}>
-              {previewContent}
-            </pre>
-          ),
-        },
-      ]}
-    />
-  )
-}
-
 export function ChatMessageBody({
   info,
   assistantLoadingCopy = '正在组织回复与工具执行结果...',
@@ -466,12 +345,137 @@ export function ChatMessageBody({
   showToolCalls?: boolean
 }) {
   const { token } = theme.useToken()
+  const codeStyle = useCodeBlockStyle()
   const message = normalizeChatMessage(info.message)
   const progressSteps = message.progressSteps ?? []
   const isStreaming = info.status === 'loading' || info.status === 'updating'
+  const toolResults = (message as any)._toolResults as ChatMessage[] | undefined
 
   if (message.role === 'tool') {
-    return <ToolResultCard message={message} />
+    return <div style={{ display: 'none' }} />
+  }
+
+  const hasRichToolCalls = showToolCalls && message.toolCalls && message.toolCalls.length > 0;
+
+  // 1. 生成层次交织的内部节点：由于大模型的“深度思考”文本与工具调用在逻辑上是先后关联的。
+  // 我们通过分析 _iterations（完毕后）或 progressSteps（流式中），将思考过程（Text）紧密分布在具体的工具（ThoughtChain.Item）正上方。
+  const innerNodes: React.ReactNode[] = []
+  const iterations = (message as any)._iterations as Array<{ reasoningContent?: string; toolCalls?: any[]; _toolResults?: any[] }> | undefined
+
+  const renderElegantToolNode = (toolCall: any, resultMsg: any, uniqueIdx: number) => {
+    const fullResult = resultMsg ? String(resultMsg.content || '') : ''
+    const resultSummary = resultMsg ? getResultSummary(fullResult) : ''
+    
+    return (
+      <ThoughtChain.Item
+        key={`elegant-tool-${uniqueIdx}`}
+        variant="solid"
+        icon={resultMsg ? <CheckCircleOutlined style={{ color: token.colorSuccess }} /> : <SyncOutlined spin style={{ color: token.colorPrimary }} />}
+        title={<Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>执行动作: {getToolCallName(toolCall)}</Text>}
+        description={
+          <Flex vertical gap={4} style={{ marginTop: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>
+              调用参数: {getToolArgumentsPreview(toolCall)}
+            </Text>
+            {resultMsg && (
+              <Collapse
+                ghost
+                size="small"
+                items={[
+                  {
+                    key: 'result',
+                    label: <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>返回结果: {resultSummary || '详见返回JSON'}</Text>,
+                    children: (
+                      <pre className="tool-result-json-block" style={{ ...codeStyle, maxHeight: 300, overflow: 'auto', margin: 0 }}>
+                        {truncateContent(formatResultContent(fullResult))}
+                      </pre>
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </Flex>
+        }
+        status={resultMsg ? 'success' : 'loading'}
+      />
+    )
+  }
+
+  if (iterations && iterations.length > 1 && !isStreaming) {
+    // 方式 A：流式结束后，使用后端按批次写库的 _iterations 精准还原层次编排
+    iterations.forEach((iter, idx) => {
+      if (iter.reasoningContent?.trim()) {
+        innerNodes.push(
+          <Text key={`iter-txt-${idx}`} type="secondary" style={{ whiteSpace: 'pre-wrap', marginBottom: iter.toolCalls?.length ? 4 : 0 }}>
+            {iter.reasoningContent}
+          </Text>
+        )
+      }
+      iter.toolCalls?.forEach((tc, tIdx) => {
+        const resultMsg = iter._toolResults?.find(r => r.toolCallId === tc.id) || iter._toolResults?.[tIdx]
+        innerNodes.push(renderElegantToolNode(tc, resultMsg, idx * 1000 + tIdx))
+      })
+    })
+  } else {
+    // 方式 B：流式生成中或单循环，利用 progressSteps 产生的事件流进行对齐还原
+    let mappedToolIndex = 0
+    progressSteps.forEach((step, idx) => {
+      if (step.kind === 'progress' && step.label.trim()) {
+        innerNodes.push(
+          <Text key={`prog-txt-${idx}`} type="secondary" style={{ whiteSpace: 'pre-wrap', marginBottom: 4 }}>
+            {step.label}
+          </Text>
+        )
+      } else if (step.kind === 'tool') {
+        const tc = message.toolCalls?.[mappedToolIndex]
+        if (tc) {
+          const resultMsg = toolResults?.find(r => r.toolCallId === tc.id) || toolResults?.[mappedToolIndex]
+          innerNodes.push(renderElegantToolNode(tc, resultMsg, idx))
+          mappedToolIndex++
+        } else {
+          // JSON 参数尚未通过网络全量抵达时的降级占位表示
+          innerNodes.push(
+            <ThoughtChain.Item
+              key={`prog-wait-${idx}`}
+              variant="solid"
+              icon={<SyncOutlined spin />}
+              title={<Text strong>执行动作: {step.label}</Text>}
+              status="loading"
+            />
+          )
+        }
+      }
+    })
+    
+    // 兜底补齐：如果有未匹配完的挂起 toolCalls，默认排列在最后
+    if (message.toolCalls && mappedToolIndex < message.toolCalls.length) {
+      for (let i = mappedToolIndex; i < message.toolCalls.length; i++) {
+        const tc = message.toolCalls[i]
+        const resultMsg = toolResults?.find(r => r.toolCallId === tc.id) || toolResults?.[i]
+        innerNodes.push(renderElegantToolNode(tc, resultMsg, 10000 + i))
+      }
+    }
+  }
+
+  // 2. 组装最顶层的单一 ThoughtChain 折叠板（符合官方设计建议，不污染全局排版）
+  const chainItems: ThoughtChainItemType[] = []
+  if (innerNodes.length > 0) {
+    const totalTools = message.toolCalls?.length || 0
+    const isAllFinished = toolResults && toolResults.length >= totalTools
+
+    chainItems.push({
+      key: 'tool-chain-root',
+      icon: isAllFinished && !isStreaming ? <CheckCircleOutlined style={{ color: token.colorSuccess }} /> : <SyncOutlined spin style={{ color: token.colorPrimary }} />,
+      title: totalTools > 0 ? '执行动作序列' : '动作思考序列',
+      description: totalTools > 0 ? `系统共执行了 ${totalTools} 项工具调用` : '大模型执行思维演练中',
+      collapsible: true, // 允许手动折叠
+      status: (isAllFinished && !isStreaming) ? 'success' : 'loading',
+      content: (
+        <Flex gap="small" vertical style={{ padding: '8px 0', marginLeft: '4px' }}>
+          {innerNodes}
+        </Flex>
+      ),
+    })
   }
 
   const hasMessageContent = Boolean(String(message.content || '').trim())
@@ -483,55 +487,7 @@ export function ChatMessageBody({
 
   return (
     <Flex vertical gap={12}>
-      {progressSteps.length > 0 ? (
-        <Collapse
-          size="small"
-          expandIconPosition="end"
-          bordered={false}
-          style={{
-            borderRadius: 10,
-            background: token.colorFillQuaternary,
-          }}
-          items={[
-            {
-              key: 'progress',
-              label: (
-                <Flex align="center" gap={6} style={{ minWidth: 0 }}>
-                  <ToolIconBox 
-                    icon={info.status === 'loading' || info.status === 'updating' ? <SyncOutlined spin /> : <CheckCircleOutlined />} 
-                    color={info.status === 'loading' || info.status === 'updating' ? token.colorPrimary : token.colorSuccess} 
-                  />
-                  <Text strong style={{ fontSize: 'var(--nb-text-sm)', flexShrink: 0 }}>执行脉络</Text>
-                  <Text type="secondary" ellipsis style={{ fontSize: 'var(--nb-text-2xs)', flex: 1, minWidth: 0 }}>
-                    {progressSteps[progressSteps.length - 1]?.label || '处理中...'}
-                  </Text>
-                </Flex>
-              ),
-              children: (
-                <ThoughtChain
-                  items={buildThoughtChainItems(progressSteps, info.status).map(item => ({
-                    ...item,
-                    description: undefined // 移除过于臃肿的二级描述
-                  }))}
-                  styles={{
-                    item: {
-                      padding: '4px 0',
-                    },
-                  }}
-                  style={{
-                    padding: '0 8px 8px 8px',
-                    gap: 0,
-                  }}
-                />
-              ),
-            },
-          ]}
-        />
-      ) : null}
-
-      {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
-
-      {hasReasoningContent && message.role === 'assistant' ? (
+      {hasReasoningContent && message.role === 'assistant' && chainItems.length === 0 ? (
         <Think loading={isStreaming} title="深度思考">
           <MarkdownBubble
             content={String(message.reasoningContent)}
@@ -540,6 +496,19 @@ export function ChatMessageBody({
         </Think>
       ) : null}
 
+      {chainItems.length > 0 ? (
+        <ThoughtChain
+          items={chainItems}
+          style={{
+            background: token.colorFillQuaternary,
+            padding: '12px 16px',
+            borderRadius: 10,
+          }}
+        />
+      ) : null}
+
+      {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
+
       {hasMessageContent ? (
         <MarkdownBubble
           content={String(message.content ?? '')}
@@ -547,13 +516,6 @@ export function ChatMessageBody({
         />
       ) : showPlaceholderCopy ? (
         <Text type="secondary">{assistantLoadingCopy}</Text>
-      ) : null}
-
-      {showToolCalls && message.role === 'assistant' ? (
-        <ToolCallCards 
-          toolCalls={message.toolCalls || []} 
-          toolResults={(message as any)._toolResults as ChatMessage[] | undefined} 
-        />
       ) : null}
     </Flex>
   )

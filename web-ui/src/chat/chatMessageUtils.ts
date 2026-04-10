@@ -149,12 +149,38 @@ export function collectProgressSteps(events: StreamEvent[], originMessage?: Chat
       return steps
     }
     if (event.toolComplete) {
+      // Find the corresponding starting step for this tool and mark it completed,
+      // rather than appending a duplicate 'completed' record.
+      const targetName = event.toolName || event.content
+      
+      // Find the LAST uncompleted tool step that matches the tool name.
+      // E.g., 'Executing web_search...' includes 'web_search'.
+      let existingStepIndex = -1
+      for (let i = steps.length - 1; i >= 0; i--) {
+        const s = steps[i]
+        if (s.kind === 'tool' && !s.completed) {
+          const sLabel = s.label as string
+          if (sLabel === targetName || sLabel.includes(targetName)) {
+            existingStepIndex = i
+            break
+          }
+        }
+      }
+
+      if (existingStepIndex !== -1) {
+        const newSteps = [...steps]
+        newSteps[existingStepIndex] = {
+          ...newSteps[existingStepIndex],
+          completed: true,
+          label: event.toolStatus ? `${targetName}: ${event.toolStatus}` : targetName,
+        }
+        return newSteps
+      }
+
+      // If not found, just append it
       const label = event.toolName
         ? `${event.toolName}${event.toolStatus ? `: ${event.toolStatus}` : ''}`
         : event.content
-      if (hasProgressStep(steps, label, 'tool')) {
-        return steps
-      }
       return [
         ...steps,
         {

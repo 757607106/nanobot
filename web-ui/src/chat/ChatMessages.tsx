@@ -73,14 +73,46 @@ export function ChatMessages({
   const groupedMessageInfos: MessageInfo<ChatMessage>[] = []
   let currentAssistant: MessageInfo<ChatMessage> | null = null
 
-  // Pre-process messages to fold 'tool' records into preceding 'assistant'
+  // Pre-process messages to group all consecutive 'assistant' and 'tool' records into a single 'assistant' message.
+  // This matches the live-streaming visual where an entire agent loop shares one unified Bubble.
   for (const info of messageInfos) {
     if (info.message.role === 'assistant') {
-      currentAssistant = { ...info, message: { ...info.message, _toolResults: [] } as any }
-      groupedMessageInfos.push(currentAssistant)
+      if (currentAssistant) {
+        // Merge this assistant message into the ongoing conversation turn
+        currentAssistant.message.content = `${currentAssistant.message.content || ''}${info.message.content || ''}`
+        if (info.message.reasoningContent) {
+          currentAssistant.message.reasoningContent = `${currentAssistant.message.reasoningContent || ''}${
+            info.message.reasoningContent
+          }`
+        }
+        if (info.message.toolCalls?.length) {
+          currentAssistant.message.toolCalls = [
+            ...(currentAssistant.message.toolCalls || []),
+            ...info.message.toolCalls,
+          ]
+        }
+        // Preserve chronological iteration details for interlaced rendering
+        ;(currentAssistant.message as any)._iterations.push({
+          reasoningContent: info.message.reasoningContent,
+          toolCalls: info.message.toolCalls || [],
+          _toolResults: [],
+        })
+      } else {
+        currentAssistant = { ...info, message: { ...info.message, _toolResults: [], _iterations: [] } as any }
+        ;(currentAssistant.message as any)._iterations.push({
+          reasoningContent: info.message.reasoningContent,
+          toolCalls: info.message.toolCalls || [],
+          _toolResults: [],
+        })
+        groupedMessageInfos.push(currentAssistant)
+      }
     } else if (info.message.role === 'tool') {
       if (currentAssistant) {
-        (currentAssistant.message as any)._toolResults.push(info.message)
+        ;(currentAssistant.message as any)._toolResults.push(info.message)
+        const iters = (currentAssistant.message as any)._iterations
+        if (iters && iters.length > 0) {
+          iters[iters.length - 1]._toolResults.push(info.message)
+        }
       } else {
         groupedMessageInfos.push(info)
       }
