@@ -12,7 +12,6 @@ import {
   dedupeAttachmentRefs,
   normalizeChatMessage,
   parseStreamEvent,
-  normalizeProgressStep,
 } from './chatMessageUtils'
 
 const API_BASE = '/api/v1'
@@ -168,9 +167,7 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
         const finalMsg = normalizeChatMessage({
           ...info.originMessage,
           ...doneEvent.message,
-          progressSteps: doneEvent.progressSteps
-            ? doneEvent.progressSteps.map(normalizeProgressStep)
-            : (doneEvent.message.progressSteps ?? []),
+          progressSteps: doneEvent.progressSteps ?? (doneEvent.message.progressSteps ?? []),
         })
 
         // Preserve our meticulously constructed tool time-series UI segments!
