@@ -161,6 +161,34 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
       baseMessage.progressSteps = progressSteps
     }
 
+    if (info.status === 'success') {
+      const doneEvent: any = events.find((event) => event.type === 'done')
+      if (doneEvent && doneEvent.message) {
+        const finalMsg = normalizeChatMessage({
+          ...info.originMessage,
+          ...doneEvent.message,
+          progressSteps: doneEvent.progressSteps
+            ? doneEvent.progressSteps.map(normalizeProgressStep)
+            : (doneEvent.message.progressSteps ?? []),
+        })
+
+        // Preserve our meticulously constructed tool time-series UI segments!
+        ;(finalMsg as any)._subMessages = (baseMessage as any)._subMessages
+
+        // Forcefully assert our local reasoning toggle over the backend's default DB dumps!
+        if (!this._currentReasoningEffortEnabled) {
+          finalMsg.reasoningContent = undefined;
+          if ((finalMsg as any)._subMessages) {
+             (finalMsg as any)._subMessages.forEach((s: any) => {
+               s.reasoningContent = undefined
+             })
+          }
+        }
+
+        return finalMsg
+      }
+    }
+
     return baseMessage
   }
 }
