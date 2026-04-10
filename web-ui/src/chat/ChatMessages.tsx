@@ -1,5 +1,5 @@
 import type { ComponentRef } from 'react'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { MessageInfo } from '@ant-design/x-sdk'
 import { Bubble, Welcome } from '@ant-design/x'
 import type { BubbleItemType } from '@ant-design/x'
@@ -51,7 +51,24 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { token } = theme.useToken()
   const historyRef = useRef<HTMLDivElement | null>(null)
-  const surfaceRadius = token.borderRadiusLG + 8
+  const prevSessionRef = useRef<string | null | undefined>(undefined)
+
+  // 切换会话或历史消息加载完毕后，自动滚动到底部
+  useEffect(() => {
+    const sessionChanged = prevSessionRef.current !== currentSessionId
+    prevSessionRef.current = currentSessionId
+
+    if (isLoadingMessages) return
+    if (!messageInfos.length) return
+
+    // 使用 rAF 确保 DOM 已渲染完毕
+    requestAnimationFrame(() => {
+      const container = historyRef.current
+      if (container) {
+        container.scrollTop = container.scrollHeight
+      }
+    })
+  }, [currentSessionId, isLoadingMessages, messageInfos.length])
 
   const groupedMessageInfos: MessageInfo<ChatMessage>[] = []
   let currentAssistant: MessageInfo<ChatMessage> | null = null
