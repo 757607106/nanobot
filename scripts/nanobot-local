@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+LOCAL_HOME="${NANOBOT_LOCAL_HOME:-$ROOT_DIR/.nanobot-local}"
+CONFIG_PATH="${NANOBOT_CONFIG_PATH:-$LOCAL_HOME/config.json}"
+WORKSPACE_PATH="${NANOBOT_WORKSPACE_PATH:-$LOCAL_HOME/workspace}"
+
+mkdir -p "$LOCAL_HOME"
+
+if [[ ! -f "$CONFIG_PATH" ]]; then
+  echo "[nanobot-local] Initializing local instance config at: $CONFIG_PATH"
+  uv run nanobot onboard --config "$CONFIG_PATH" --workspace "$WORKSPACE_PATH"
+fi
+
+export NANOBOT_CONFIG_PATH="$CONFIG_PATH"
+exec uv run nanobot "$@"

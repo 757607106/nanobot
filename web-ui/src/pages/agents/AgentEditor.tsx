@@ -74,7 +74,7 @@ export default function AgentEditor({
     const provider = (form.binding ? availableBindings[form.binding]?.provider : null)
       || form.provider
       || inferProviderFromModel(globalConfigMeta, form.model || null)
-    return getModelSuggestions(provider, form.model || null)
+    return getModelSuggestions(provider || '', form.model || null)
   }, [availableBindings, form.binding, form.model, form.provider, globalConfig, globalConfigMeta])
 
   const promptLength = form.systemPrompt.trim().length
