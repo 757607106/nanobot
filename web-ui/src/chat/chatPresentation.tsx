@@ -12,7 +12,7 @@ import {
   SyncOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
-import { Mermaid, ThoughtChain, Think } from '@ant-design/x'
+import { Mermaid, ThoughtChain, Think, FileCard } from '@ant-design/x'
 import type { ThoughtChainItemType } from '@ant-design/x'
 import type { MessageInfo } from '@ant-design/x-sdk'
 import { Collapse, Flex, Space, Tag, Tooltip, Typography, theme } from 'antd'
@@ -165,6 +165,9 @@ function CodeBlockComponent(props: XMarkdownComponentProps) {
 
   // For fenced ```mermaid code blocks, delegate to the Mermaid component
   if (block && lang === 'mermaid' && children) {
+    if (streamStatus !== 'done') {
+      return <code {...rest} className={htmlClass}>{children}</code>
+    }
     const codeText = typeof children === 'string'
       ? children
       : Array.isArray(children)
@@ -179,21 +182,9 @@ function CodeBlockComponent(props: XMarkdownComponentProps) {
   return <code {...rest} className={htmlClass}>{children}</code>
 }
 
-function CodeBlockStreamingComponent(props: XMarkdownComponentProps) {
-  const { lang, block, children, domNode, streamStatus, class: htmlClass, ...rest } = props as XMarkdownComponentProps & { class?: string }
-  // Always render raw code during streaming to prevent mermaid syntax errors and layout jitter
-  return <code {...rest} className={htmlClass}>{children}</code>
-}
-
-const XMARKDOWN_COMPONENTS_DONE: Record<string, React.ComponentType<XMarkdownComponentProps>> = {
+const XMARKDOWN_COMPONENTS: Record<string, React.ComponentType<XMarkdownComponentProps>> = {
   code: CodeBlockComponent as unknown as React.ComponentType<XMarkdownComponentProps>,
 }
-
-const XMARKDOWN_COMPONENTS_STREAMING: Record<string, React.ComponentType<XMarkdownComponentProps>> = {
-  code: CodeBlockStreamingComponent as unknown as React.ComponentType<XMarkdownComponentProps>,
-}
-
-const XMARKDOWN_STREAMING_ACTIVE = { hasNextChunk: true }
 
 /* ── Markdown 渲染 ── */
 function MarkdownBubble({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
@@ -201,8 +192,8 @@ function MarkdownBubble({ content, isStreaming }: { content: string; isStreaming
     <div className="markdown-bubble">
       <XMarkdown
         content={content}
-        streaming={isStreaming ? XMARKDOWN_STREAMING_ACTIVE : undefined}
-        components={isStreaming ? XMARKDOWN_COMPONENTS_STREAMING : XMARKDOWN_COMPONENTS_DONE}
+        streaming={isStreaming ? { hasNextChunk: true } : undefined}
+        components={XMARKDOWN_COMPONENTS}
         paragraphTag="div"
       />
     </div>
@@ -247,37 +238,26 @@ export function AttachmentTags({
   removable?: boolean
   onRemove?: (relativePath: string) => void
 }) {
-  const { token } = theme.useToken()
-
   if (!attachments.length) {
     return null
   }
 
   return (
-    <Flex wrap gap={8}>
-      {attachments.map((item) => (
-        <Tooltip key={item.relativePath} title={item.relativePath}>
-          <Tag
-            closable={removable}
-            onClose={(event) => {
-              event.preventDefault()
-              onRemove?.(item.relativePath)
-            }}
-            icon={<PaperClipOutlined />}
-            className="chat-attachment-tag"
-            style={{
-              marginInlineEnd: 0,
-              maxWidth: '100%',
-              borderRadius: 999,
-              background: token.colorFillQuaternary,
-              borderColor: token.colorBorderSecondary,
-            }}
-          >
-            {getAttachmentName(item)}
-          </Tag>
-        </Tooltip>
-      ))}
-    </Flex>
+    <FileCard.List
+      size="small"
+      overflow="wrap"
+      removable={removable}
+      onRemove={(item) => {
+        if (item.id) {
+          onRemove?.(item.id)
+        }
+      }}
+      items={attachments.map((item) => ({
+        id: item.relativePath,
+        key: item.relativePath,
+        name: getAttachmentName(item),
+      }))}
+    />
   )
 }
 
@@ -339,7 +319,7 @@ function ToolIconBox({ icon, color }: { icon: ReactNode; color: string }) {
 }
 
 /* ── 工具调用卡片（紧凑样式） ── */
-function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
+function ToolCallCards({ toolCalls, toolResults }: { toolCalls: ChatToolCall[], toolResults?: ChatMessage[] }) {
   const { token } = theme.useToken()
   const codeStyle = useCodeBlockStyle()
 
@@ -360,25 +340,49 @@ function ToolCallCards({ toolCalls }: { toolCalls: ChatToolCall[] }) {
         }}
         items={toolCalls.map((toolCall, index) => {
           const name = getToolCallName(toolCall)
+          // match result by tool_call_id or sequence natively
+          const resultMsg = toolResults?.find(r => r.toolCallId === toolCall.id) || toolResults?.[index]
+          const fullResult = resultMsg ? String(resultMsg.content || '') : ''
+          const resultPreview = fullResult ? truncateContent(formatResultContent(fullResult)) : ''
+          const resultSummary = resultMsg ? getResultSummary(fullResult) : ''
+
           return {
             key: `${name}-${index}`,
             label: (
               <Flex align="center" gap={6} style={{ minWidth: 0 }}>
-                <ToolIconBox icon={getToolIcon(name)} color={token.colorPrimary} />
+                {resultMsg ? (
+                  <ToolIconBox icon={<CheckCircleOutlined />} color={token.colorSuccess} />
+                ) : (
+                  <ToolIconBox icon={getToolIcon(name)} color={token.colorPrimary} />
+                )}
                 <Text strong style={{ fontSize: 'var(--nb-text-sm)', flexShrink: 0 }}>{name}</Text>
                 <Text
                   type="secondary"
                   ellipsis
                   style={{ fontSize: 'var(--nb-text-2xs)', flex: 1, minWidth: 0 }}
                 >
-                  {getToolArgumentsPreview(toolCall)}
+                  {resultMsg && resultSummary ? resultSummary : getToolArgumentsPreview(toolCall)}
                 </Text>
               </Flex>
             ),
             children: (
-              <pre className="tool-call-json-block" style={codeStyle}>
-                {formatToolArgumentsBlock(toolCall)}
-              </pre>
+              <Flex vertical gap={8}>
+                {resultMsg ? (
+                  <Flex vertical gap={4}>
+                    <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>返回结果</Text>
+                    <pre className="tool-result-json-block" style={{ ...codeStyle, maxHeight: 200 }}>
+                      {resultPreview}
+                    </pre>
+                  </Flex>
+                ) : (
+                  <Flex vertical gap={4}>
+                    <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>调用参数</Text>
+                    <pre className="tool-call-json-block" style={{ ...codeStyle, maxHeight: 200 }}>
+                      {formatToolArgumentsBlock(toolCall)}
+                    </pre>
+                  </Flex>
+                )}
+              </Flex>
             ),
           }
         })}
@@ -489,42 +493,55 @@ export function ChatMessageBody({
   return (
     <Flex vertical gap={12}>
       {progressSteps.length > 0 ? (
-        <Flex vertical gap={6}>
-          <MetaLabel>执行过程</MetaLabel>
-          {progressDisplay === 'tag-list' ? (
-            <Space wrap>
-              {progressSteps.map((step) => (
-                <Tag key={step.key} color={step.kind === 'tool' ? 'blue' : 'gold'}>
-                  {step.label}
-                </Tag>
-              ))}
-            </Space>
-          ) : (
-            <ThoughtChain
-              items={buildThoughtChainItems(progressSteps, info.status)}
-              styles={{
-                item: {
-                  padding: '6px 10px',
-                  borderRadius: '8px',
-                  transition: 'all 0.2s ease',
-                },
-              }}
-              style={{
-                padding: '10px 12px',
-                borderRadius: '10px',
-                background: token.colorFillQuaternary,
-                border: `1px solid ${token.colorBorderSecondary}`,
-                gap: '2px',
-              }}
-            />
-          )}
-        </Flex>
+        <Collapse
+          size="small"
+          expandIconPosition="end"
+          bordered={false}
+          style={{
+            borderRadius: 10,
+            background: token.colorFillQuaternary,
+          }}
+          items={[
+            {
+              key: 'progress',
+              label: (
+                <Flex align="center" gap={6} style={{ minWidth: 0 }}>
+                  <ToolIconBox 
+                    icon={info.status === 'loading' || info.status === 'updating' ? <SyncOutlined spin /> : <CheckCircleOutlined />} 
+                    color={info.status === 'loading' || info.status === 'updating' ? token.colorPrimary : token.colorSuccess} 
+                  />
+                  <Text strong style={{ fontSize: 'var(--nb-text-sm)', flexShrink: 0 }}>执行脉络</Text>
+                  <Text type="secondary" ellipsis style={{ fontSize: 'var(--nb-text-2xs)', flex: 1, minWidth: 0 }}>
+                    {progressSteps[progressSteps.length - 1]?.label || '处理中...'}
+                  </Text>
+                </Flex>
+              ),
+              children: (
+                <ThoughtChain
+                  items={buildThoughtChainItems(progressSteps, info.status).map(item => ({
+                    ...item,
+                    description: undefined // 移除过于臃肿的二级描述
+                  }))}
+                  styles={{
+                    item: {
+                      padding: '4px 0',
+                    },
+                  }}
+                  style={{
+                    padding: '0 8px 8px 8px',
+                    gap: 0,
+                  }}
+                />
+              ),
+            },
+          ]}
+        />
       ) : null}
 
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
 
       {hasReasoningContent && message.role === 'assistant' ? (
-        <Think loading={isStreaming}>
+        <Think loading={isStreaming} title="深度思考">
           <MarkdownBubble
             content={String(message.reasoningContent)}
             isStreaming={isStreaming}
@@ -541,7 +558,12 @@ export function ChatMessageBody({
         <Text type="secondary">{assistantLoadingCopy}</Text>
       ) : null}
 
-      {showToolCalls && message.role === 'assistant' ? <ToolCallCards toolCalls={message.toolCalls || []} /> : null}
+      {showToolCalls && message.role === 'assistant' ? (
+        <ToolCallCards 
+          toolCalls={message.toolCalls || []} 
+          toolResults={(message as any)._toolResults as ChatMessage[] | undefined} 
+        />
+      ) : null}
     </Flex>
   )
 }

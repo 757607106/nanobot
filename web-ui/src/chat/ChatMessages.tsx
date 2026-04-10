@@ -53,7 +53,27 @@ export function ChatMessages({
   const historyRef = useRef<HTMLDivElement | null>(null)
   const surfaceRadius = token.borderRadiusLG + 8
 
-  const bubbleItems: BubbleItemType[] = messageInfos.map((info) => {
+  const groupedMessageInfos: MessageInfo<ChatMessage>[] = []
+  let currentAssistant: MessageInfo<ChatMessage> | null = null
+
+  // Pre-process messages to fold 'tool' records into preceding 'assistant'
+  for (const info of messageInfos) {
+    if (info.message.role === 'assistant') {
+      currentAssistant = { ...info, message: { ...info.message, _toolResults: [] } as any }
+      groupedMessageInfos.push(currentAssistant)
+    } else if (info.message.role === 'tool') {
+      if (currentAssistant) {
+        (currentAssistant.message as any)._toolResults.push(info.message)
+      } else {
+        groupedMessageInfos.push(info)
+      }
+    } else {
+      currentAssistant = null
+      groupedMessageInfos.push(info)
+    }
+  }
+
+  const bubbleItems: BubbleItemType[] = groupedMessageInfos.map((info) => {
     const item = normalizeChatMessage(info.message)
     const isUser = item.role === 'user'
     const isAssistant = item.role === 'assistant'

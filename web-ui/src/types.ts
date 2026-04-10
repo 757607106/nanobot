@@ -118,6 +118,7 @@ export type StreamEvent =
   | { type: 'start'; sessionId: string }
   | { type: 'progress'; content: string; toolHint?: boolean }
   | { type: 'chunk'; content: string }
+  | { type: 'tool_chunk'; toolCall: ChatToolCall; result?: string }
   | { type: 'done'; content: string; message: ChatMessage | null }
   | { type: 'error'; message: string }
 
