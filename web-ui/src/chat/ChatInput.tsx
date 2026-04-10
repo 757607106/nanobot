@@ -1,7 +1,7 @@
 import type { ComponentProps, ComponentRef } from 'react'
-import { forwardRef } from 'react'
+import React, { forwardRef } from 'react'
 import { Attachments, Sender } from '@ant-design/x'
-import { Button, Card, Flex, Space, Typography, theme } from 'antd'
+import { Badge, Button, Card, Flex, Space, Typography, theme } from 'antd'
 import { CloudUploadOutlined, LinkOutlined } from '@ant-design/icons'
 import { AttachmentTags } from './chatPresentation'
 import { testIds } from '../testIds'
@@ -47,9 +47,87 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
     ref,
   ) {
     const { token } = theme.useToken()
-    const surfaceRadius = token.borderRadiusLG + 8
+    const [headerOpen, setHeaderOpen] = React.useState(false)
 
-    const showSenderHeader = pendingAttachments.length > 0 || draftAttachmentRefs.length > 0
+    // Expand header automatically when sending new files
+    React.useEffect(() => {
+      if (pendingAttachments.length > 0) {
+        setHeaderOpen(true)
+      }
+    }, [pendingAttachments.length])
+
+    React.useEffect(() => {
+      // Clear all created object URLs when the component is unmounted
+      return () => {
+        pendingAttachments.forEach((item) => {
+          if (item.url?.startsWith('blob:')) {
+            URL.revokeObjectURL(item.url)
+          }
+        })
+      }
+    }, [pendingAttachments])
+
+    const handleAttachmentsChange = ({ file, fileList }: any) => {
+      const updatedFileList = fileList.map((item: any) => {
+        if (item.uid === file.uid && file.status !== 'removed' && item.originFileObj) {
+          // clear URL
+          if (item.url?.startsWith('blob:')) {
+            URL.revokeObjectURL(item.url)
+          }
+          // create new preview URL
+          return {
+            ...item,
+            url: URL.createObjectURL(item.originFileObj),
+          }
+        }
+        return item
+      })
+      onPendingAttachmentsChange(updatedFileList as ComposerAttachment[])
+    }
+
+    const senderHeader = (
+      <Sender.Header
+        title="本轮上下文"
+        open={headerOpen}
+        onOpenChange={setHeaderOpen}
+        styles={{ content: { padding: 0 } }}
+      >
+        <Flex vertical gap={8} style={{ padding: '0 8px 16px' }}>
+          {draftAttachmentRefs.length > 0 && (
+            <Flex vertical gap={4}>
+              <Text type="secondary" style={{ fontSize: 12 }}>关联知识与记忆</Text>
+              <AttachmentTags
+                attachments={draftAttachmentRefs}
+                removable
+                onRemove={(relativePath) => {
+                  onDraftAttachmentRefsChange(
+                    draftAttachmentRefs.filter((item) => item.relativePath !== relativePath),
+                  )
+                }}
+              />
+            </Flex>
+          )}
+          <Attachments
+            beforeUpload={() => false}
+            items={pendingAttachments}
+            onChange={handleAttachmentsChange}
+            disabled={uploadingFiles}
+            placeholder={(type) =>
+              type === 'drop'
+                ? {
+                    title: '松开鼠标以添加',
+                  }
+                : {
+                    icon: <CloudUploadOutlined />,
+                    title: '上传附件',
+                    description: '点击或拖拽文件到此区域进行上传',
+                  }
+            }
+            getDropContainer={() => dropContainerRef.current}
+          />
+        </Flex>
+      </Sender.Header>
+    )
 
     return (
       <div style={{ padding: isDesktopLayout ? '0 24px 24px' : '0 16px 16px' }} data-testid={testIds.chat.composer}>
@@ -65,66 +143,25 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
           onCancel={onCancel}
           onPasteFile={(files) => {
             const nextAttachments = Array.from(files).map(createPendingAttachment)
-            onPendingAttachmentsChange([...pendingAttachments, ...nextAttachments])
+            handleAttachmentsChange({ 
+               file: nextAttachments[0], 
+               fileList: [...pendingAttachments, ...nextAttachments] 
+            })
           }}
           autoSize={{ minRows: 1, maxRows: 5 }}
           placeholder={`给 ${assistantLabel} 发送消息`}
-          header={
-            showSenderHeader ? (
-              <Sender.Header open title="本轮上下文" closable={false}>
-                <Flex vertical gap={8} style={{ padding: '0 8px' }}>
-                  {draftAttachmentRefs.length > 0 && (
-                    <Flex vertical gap={4}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>本轮引用</Text>
-                      <AttachmentTags
-                        attachments={draftAttachmentRefs}
-                        removable
-                        onRemove={(relativePath) => {
-                          onDraftAttachmentRefsChange(
-                            draftAttachmentRefs.filter((item) => item.relativePath !== relativePath),
-                          )
-                        }}
-                      />
-                    </Flex>
-                  )}
-                  {pendingAttachments.length > 0 && (
-                    <Flex vertical gap={4}>
-                      {draftAttachmentRefs.length > 0 && <Text type="secondary" style={{ fontSize: 12 }}>附件</Text>}
-                      <Attachments
-                        items={pendingAttachments}
-                        multiple
-                        disabled={uploadingFiles}
-                        overflow="scrollX"
-                        beforeUpload={() => false}
-                        onChange={({ fileList }) => onPendingAttachmentsChange(fileList as ComposerAttachment[])}
-                      />
-                    </Flex>
-                  )}
-                </Flex>
-              </Sender.Header>
-            ) : null
-          }
+          header={senderHeader}
           prefix={
-            <Attachments
-              items={pendingAttachments}
-              multiple
-              disabled={uploadingFiles}
-              beforeUpload={() => false}
-              onChange={({ fileList }) => onPendingAttachmentsChange(fileList as ComposerAttachment[])}
-              getDropContainer={() => dropContainerRef.current}
-              placeholder={{
-                icon: <CloudUploadOutlined />,
-                title: '拖拽文件到这里',
-                description: '发送时自动上传',
-              }}
-            >
-              <Button
-                type="text"
-                icon={<LinkOutlined />}
-                disabled={uploadingFiles}
-                data-testid={testIds.chat.uploadFile}
-              />
-            </Attachments>
+            <div style={{ position: 'relative' }}>
+              <Badge dot={pendingAttachments.length > 0 && !headerOpen} offset={[-4, 4]}>
+                <Button 
+                  type="text" 
+                  onClick={() => setHeaderOpen(!headerOpen)} 
+                  icon={<LinkOutlined />} 
+                  disabled={uploadingFiles}
+                />
+              </Badge>
+            </div>
           }
         />
       </div>

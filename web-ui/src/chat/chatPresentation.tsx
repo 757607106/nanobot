@@ -12,7 +12,7 @@ import {
   SyncOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
-import { Mermaid, ThoughtChain } from '@ant-design/x'
+import { Mermaid, ThoughtChain, Think } from '@ant-design/x'
 import type { ThoughtChainItemType } from '@ant-design/x'
 import type { MessageInfo } from '@ant-design/x-sdk'
 import { Collapse, Flex, Space, Tag, Tooltip, Typography, theme } from 'antd'
@@ -164,8 +164,7 @@ function CodeBlockComponent(props: XMarkdownComponentProps) {
   } = props as XMarkdownComponentProps & { class?: string }
 
   // For fenced ```mermaid code blocks, delegate to the Mermaid component
-  // Only render when stream is done to avoid parsing incomplete syntax
-  if (block && lang === 'mermaid' && children && streamStatus !== 'loading') {
+  if (block && lang === 'mermaid' && children) {
     const codeText = typeof children === 'string'
       ? children
       : Array.isArray(children)
@@ -180,14 +179,18 @@ function CodeBlockComponent(props: XMarkdownComponentProps) {
   return <code {...rest} className={htmlClass}>{children}</code>
 }
 
-/*
- * Stabilize the XMarkdown components mapping outside render.
- * Only map `code` — the code component detects `lang === 'mermaid'` internally.
- * Note: `mermaid: Mermaid` is NOT included because XMarkdown passes React nodes
- * (not raw strings) as children for HTML tag mappings, which Mermaid cannot parse.
- */
-const XMARKDOWN_COMPONENTS: Record<string, React.ComponentType<XMarkdownComponentProps>> = {
+function CodeBlockStreamingComponent(props: XMarkdownComponentProps) {
+  const { lang, block, children, domNode, streamStatus, class: htmlClass, ...rest } = props as XMarkdownComponentProps & { class?: string }
+  // Always render raw code during streaming to prevent mermaid syntax errors and layout jitter
+  return <code {...rest} className={htmlClass}>{children}</code>
+}
+
+const XMARKDOWN_COMPONENTS_DONE: Record<string, React.ComponentType<XMarkdownComponentProps>> = {
   code: CodeBlockComponent as unknown as React.ComponentType<XMarkdownComponentProps>,
+}
+
+const XMARKDOWN_COMPONENTS_STREAMING: Record<string, React.ComponentType<XMarkdownComponentProps>> = {
+  code: CodeBlockStreamingComponent as unknown as React.ComponentType<XMarkdownComponentProps>,
 }
 
 const XMARKDOWN_STREAMING_ACTIVE = { hasNextChunk: true }
@@ -199,7 +202,7 @@ function MarkdownBubble({ content, isStreaming }: { content: string; isStreaming
       <XMarkdown
         content={content}
         streaming={isStreaming ? XMARKDOWN_STREAMING_ACTIVE : undefined}
-        components={XMARKDOWN_COMPONENTS}
+        components={isStreaming ? XMARKDOWN_COMPONENTS_STREAMING : XMARKDOWN_COMPONENTS_DONE}
         paragraphTag="div"
       />
     </div>
@@ -456,58 +459,6 @@ function ToolResultCard({ message }: { message: ChatMessage }) {
   )
 }
 
-/* ── Reasoning / Thinking block ── */
-function ReasoningBlock({ content }: { content: string }) {
-  const { token } = theme.useToken()
-
-  return (
-    <Collapse
-      ghost
-      size="small"
-      defaultActiveKey={[]}
-      items={[
-        {
-          key: 'reasoning',
-          label: (
-            <Flex align="center" gap={6}>
-              <span style={{ fontSize: 14 }}>💭</span>
-              <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>深度思考</Text>
-              <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>
-                {content.length > 200 ? `${Math.ceil(content.length / 100) * 100}+ 字` : ''}
-              </Text>
-            </Flex>
-          ),
-          children: (
-            <div
-              className="reasoning-content-block"
-              style={{
-                fontSize: 'var(--nb-text-sm)',
-                color: token.colorTextSecondary,
-                lineHeight: 1.7,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                maxHeight: 400,
-                overflowY: 'auto',
-                padding: '8px 12px',
-                borderRadius: 8,
-                background: token.colorFillQuaternary,
-                border: `1px solid ${token.colorBorderSecondary}`,
-              }}
-            >
-              {content}
-            </div>
-          ),
-        },
-      ]}
-      style={{
-        borderRadius: 10,
-        border: `1px solid color-mix(in srgb, ${token.colorPrimary} 15%, transparent)`,
-        background: `color-mix(in srgb, ${token.colorPrimary} 4%, transparent)`,
-      }}
-    />
-  )
-}
-
 export function ChatMessageBody({
   info,
   progressDisplay = 'thought-chain',
@@ -573,7 +524,12 @@ export function ChatMessageBody({
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
 
       {hasReasoningContent && message.role === 'assistant' ? (
-        <ReasoningBlock content={String(message.reasoningContent)} />
+        <Think loading={isStreaming}>
+          <MarkdownBubble
+            content={String(message.reasoningContent)}
+            isStreaming={isStreaming}
+          />
+        </Think>
       ) : null}
 
       {hasMessageContent ? (

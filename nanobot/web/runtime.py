@@ -351,6 +351,7 @@ class WebAppState:
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
         on_stream=None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         return await self.chat_runtime.chat(
             session_id,
@@ -359,6 +360,7 @@ class WebAppState:
             display_content=display_content,
             attachments=attachments,
             on_stream=on_stream,
+            reasoning_effort=reasoning_effort,
         )
 
     async def chat_with_agent(
