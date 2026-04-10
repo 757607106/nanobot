@@ -7,7 +7,6 @@ import {
   CodeOutlined,
   FileSearchOutlined,
   FunctionOutlined,
-  PaperClipOutlined,
   SearchOutlined,
   SyncOutlined,
   ToolOutlined,
@@ -15,7 +14,7 @@ import {
 import { Mermaid, ThoughtChain, Think, FileCard } from '@ant-design/x'
 import type { ThoughtChainItemType } from '@ant-design/x'
 import type { MessageInfo } from '@ant-design/x-sdk'
-import { Collapse, Flex, Space, Tag, Tooltip, Typography, theme } from 'antd'
+import { Collapse, Flex, Typography, theme } from 'antd'
 import type { ComponentProps as XMarkdownComponentProps } from '@ant-design/x-markdown'
 import { XMarkdown } from '@ant-design/x-markdown'
 import { formatDateTimeZh } from '../locale'
@@ -26,7 +25,6 @@ const { Text } = Typography
 
 const TOOL_RESULT_PREVIEW_LIMIT = 1400
 
-type ChatProgressDisplay = 'thought-chain' | 'tag-list'
 
 function truncateContent(content: string, limit = TOOL_RESULT_PREVIEW_LIMIT) {
   if (content.length <= limit) {
@@ -100,36 +98,31 @@ function getStepIcon(kind: string, status: ThoughtChainItemType['status']) {
   return <SyncOutlined spin={status === 'loading'} />
 }
 
-function getStepDescription(status: ThoughtChainItemType['status']) {
-  switch (status) {
-    case 'loading':
-      return '执行中...'
-    case 'error':
-      return '执行失败'
-    case 'success':
-    default:
-      return '已完成'
-  }
-}
-
 function buildThoughtChainItems(
   steps: ChatMessage['progressSteps'],
   status: MessageInfo<ChatMessage>['status'],
 ): ThoughtChainItemType[] {
   const progressSteps = steps ?? []
+  const isActive = status === 'loading' || status === 'updating'
+  const isFailed = status === 'error' || status === 'abort'
+
   return progressSteps.map((step, index) => {
     const isLast = index === progressSteps.length - 1
     let itemStatus: ThoughtChainItemType['status'] = 'success'
-    if (status === 'loading' || status === 'updating') {
+
+    if (step.completed) {
+      // 后端已确认该工具执行完毕，直接标记成功
+      itemStatus = 'success'
+    } else if (isActive) {
       itemStatus = isLast ? 'loading' : 'success'
-    } else if (status === 'error' || status === 'abort') {
+    } else if (isFailed) {
       itemStatus = isLast ? 'error' : 'success'
     }
+
     return {
       key: step.key,
       icon: getStepIcon(step.kind, itemStatus),
       title: step.label,
-      description: getStepDescription(itemStatus),
       status: itemStatus,
     }
   })
@@ -465,12 +458,10 @@ function ToolResultCard({ message }: { message: ChatMessage }) {
 
 export function ChatMessageBody({
   info,
-  progressDisplay = 'thought-chain',
   assistantLoadingCopy = '正在组织回复与工具执行结果...',
   showToolCalls = true,
 }: {
   info: MessageInfo<ChatMessage>
-  progressDisplay?: ChatProgressDisplay
   assistantLoadingCopy?: string
   showToolCalls?: boolean
 }) {

@@ -8,7 +8,6 @@ import {
 import { ApiError } from '../api'
 import type { ChatMessage, ChatRequestInput, StreamEvent } from '../types'
 import {
-  appendProgressStep,
   collectProgressSteps,
   dedupeAttachmentRefs,
   normalizeChatMessage,
@@ -158,43 +157,15 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
     }
 
     const baseMessage = normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() })
-    
-    // 解析后端提前派发的 tool_chunk 事件，实现流式期间的工具结果前置展示
-    const toolEvents = events.filter((event) => event.type === 'tool_chunk')
-    if (toolEvents.length > 0) {
-      baseMessage.toolCalls = [
-        ...(baseMessage.toolCalls || []),
-        ...toolEvents.map((e: any) => e.toolCall).filter(Boolean)
-      ]
-      
-      const nextToolResults = toolEvents
-        .filter((e: any) => e.toolCall && e.result)
-        .map((e: any) => ({
-          role: 'tool',
-          content: e.result,
-          toolCallId: e.toolCall.id || e.toolCall.name
-        }));
-        
-      if (nextToolResults.length > 0) {
-        (baseMessage as any)._toolResults = [
-          ...((baseMessage as any)._toolResults || []),
-          ...nextToolResults
-        ]
-      }
-    }
 
     const chunkEvents = events.filter((event) => event.type === 'chunk')
     if (chunkEvents.length > 0) {
       baseMessage.content = chunkEvents.map((event) => 'content' in event ? event.content : '').join('')
     }
 
-    const progressEvents = events.filter((event) => event.type === 'progress')
-    if (progressEvents.length > 0) {
-      baseMessage.progressSteps = []
-      return progressEvents.reduce(
-        (message, event) => appendProgressStep(message, 'content' in event ? event.content : '', Boolean('toolHint' in event ? event.toolHint : false)),
-        baseMessage,
-      )
+    const progressSteps = collectProgressSteps(events, info.originMessage)
+    if (progressSteps.length > 0) {
+      baseMessage.progressSteps = progressSteps
     }
 
     return baseMessage

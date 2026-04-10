@@ -55,6 +55,7 @@ class AgentRunSpec:
     provider_retry_mode: str = "standard"
     progress_callback: Any | None = None
     checkpoint_callback: Any | None = None
+    tool_complete_callback: Any | None = None
 
 
 @dataclass(slots=True)
@@ -354,15 +355,25 @@ class AgentRunner:
     ) -> tuple[list[Any], list[dict[str, str]], BaseException | None]:
         batches = self._partition_tool_batches(spec, tool_calls)
         tool_results: list[tuple[Any, dict[str, str], BaseException | None]] = []
+
+        async def _run_and_notify(tool_call: ToolCallRequest) -> tuple[Any, dict[str, str], BaseException | None]:
+            """Execute a single tool and fire completion callback immediately."""
+            result, event, error = await self._run_tool(spec, tool_call, external_lookup_counts)
+            if spec.tool_complete_callback is not None:
+                await spec.tool_complete_callback(tool_call, result, event, error)
+            return result, event, error
+
         for batch in batches:
             if spec.concurrent_tools and len(batch) > 1:
                 tool_results.extend(await asyncio.gather(*(
-                    self._run_tool(spec, tool_call, external_lookup_counts)
-                    for tool_call in batch
+                    _run_and_notify(tc) for tc in batch
                 )))
             else:
                 for tool_call in batch:
-                    tool_results.append(await self._run_tool(spec, tool_call, external_lookup_counts))
+                    r, e, err = await self._run_tool(spec, tool_call, external_lookup_counts)
+                    tool_results.append((r, e, err))
+                    if spec.tool_complete_callback is not None:
+                        await spec.tool_complete_callback(tool_call, r, e, err)
 
         results: list[Any] = []
         events: list[dict[str, str]] = []

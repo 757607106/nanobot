@@ -69,6 +69,22 @@ class _LoopHook(AgentHook):
         self._message_id = message_id
         self._stream_buf = ""
 
+    async def on_tool_complete(self, tool_call, result, event, error) -> None:
+        """Push a progress event when a single tool finishes execution."""
+        if self._on_progress is None:
+            return
+        tool_name = getattr(tool_call, "name", "tool")
+        status = event.get("status", "ok") if isinstance(event, dict) else "ok"
+        detail = event.get("detail", "") if isinstance(event, dict) else ""
+        summary = f"{tool_name}: {detail}" if detail else tool_name
+        await self._on_progress(
+            summary,
+            tool_hint=False,
+            tool_complete=True,
+            tool_name=tool_name,
+            tool_status=status,
+        )
+
     def wants_streaming(self) -> bool:
         return self._on_stream is not None
 
@@ -460,6 +476,7 @@ class AgentLoop:
             provider_retry_mode=self.provider_retry_mode,
             progress_callback=on_progress,
             checkpoint_callback=_checkpoint,
+            tool_complete_callback=loop_hook.on_tool_complete,
         ))
         self._last_usage = result.usage
         if result.stop_reason == "max_iterations":
@@ -707,7 +724,7 @@ class AgentLoop:
             channel=msg.channel, chat_id=msg.chat_id,
         )
 
-        async def _bus_progress(content: str, *, tool_hint: bool = False) -> None:
+        async def _bus_progress(content: str, *, tool_hint: bool = False, **kwargs) -> None:
             meta = dict(msg.metadata or {})
             meta["_progress"] = True
             meta["_tool_hint"] = tool_hint

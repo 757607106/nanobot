@@ -48,7 +48,7 @@ export function buildChatRequestQuery(content: string, attachments: ChatAttachme
 }
 
 function parseChatRequestQuery(content: string) {
-  const match = content.match(/^\[附加文件\]\n([\s\S]*?)\n\n\[用户问题\]\n([\s\S]*)$/)
+  const match = new RegExp('^\\[\u9644\u52a0\u6587\u4ef6\\]\\n([\\s\\S]*?)\\n\\n\\[\u7528\u6237\u95ee\u9898\\]\\n([\\s\\S]*)$').exec(content)
   if (!match) {
     return {
       content,
@@ -147,6 +147,24 @@ export function collectProgressSteps(events: StreamEvent[], originMessage?: Chat
   return events.reduce<ChatProgressStep[]>((steps, event, index) => {
     if (event.type !== 'progress') {
       return steps
+    }
+    if (event.toolComplete) {
+      const label = event.toolName
+        ? `${event.toolName}${event.toolStatus ? `: ${event.toolStatus}` : ''}`
+        : event.content
+      if (hasProgressStep(steps, label, 'tool')) {
+        return steps
+      }
+      return [
+        ...steps,
+        {
+          key: `tool-complete-${index}-${label}`,
+          label,
+          kind: 'tool' as const,
+          completed: true,
+          createdAt: originMessage?.createdAt || new Date().toISOString(),
+        },
+      ]
     }
     const kind: ChatProgressStep['kind'] = event.toolHint ? 'tool' : 'progress'
     if (hasProgressStep(steps, event.content, kind)) {

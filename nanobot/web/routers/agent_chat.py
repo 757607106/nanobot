@@ -137,14 +137,17 @@ async def create_agent_chat_message(
         async def event_stream():
             queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
-            async def on_progress(progress: str, *, tool_hint: bool = False) -> None:
-                await queue.put(
-                    {
-                        "type": "progress",
-                        "content": progress,
-                        "toolHint": tool_hint,
-                    }
-                )
+            async def on_progress(progress: str, *, tool_hint: bool = False, tool_complete: bool = False, tool_name: str = "", tool_status: str = "") -> None:
+                event: dict[str, Any] = {
+                    "type": "progress",
+                    "content": progress,
+                    "toolHint": tool_hint,
+                }
+                if tool_complete:
+                    event["toolComplete"] = True
+                    event["toolName"] = tool_name
+                    event["toolStatus"] = tool_status
+                await queue.put(event)
 
             async def on_stream(chunk_content: str) -> None:
                 if chunk_content:
