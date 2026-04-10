@@ -167,7 +167,47 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
     const chunkEvents = events.filter((event) => event.type === 'chunk')
     if (chunkEvents.length > 0) {
       baseMessage.content = chunkEvents.map((event) => 'content' in event ? event.content : '').join('')
+      if (this._currentReasoningEffortEnabled) {
+        const reasoningParts = chunkEvents.map((event) => 'reasoningContent' in event ? (event.reasoningContent || '') : '')
+        if (reasoningParts.some(p => p.length > 0)) {
+          baseMessage.reasoningContent = reasoningParts.join('')
+        }
+      }
     }
+
+    const subMessages: ChatMessage[] = []
+    let currentSubMsg: Partial<ChatMessage> = { role: 'assistant', reasoningContent: '', content: '', toolCalls: [] }
+
+    for (const event of events) {
+      if (event.type === 'chunk') {
+        if ('reasoningContent' in event && event.reasoningContent) {
+          currentSubMsg.reasoningContent = (currentSubMsg.reasoningContent || '') + event.reasoningContent
+        }
+        if ('content' in event && event.content) {
+          currentSubMsg.content = (currentSubMsg.content || '') + event.content
+        }
+        if ('toolCalls' in (event as any) && (event as any).toolCalls) {
+          currentSubMsg.toolCalls = (event as any).toolCalls as any
+        }
+      } else if (event.type === 'progress' && event.toolComplete) {
+        // We finished a tool. Push the current assistant context, then the tool result.
+        if (currentSubMsg.reasoningContent || currentSubMsg.content || (currentSubMsg.toolCalls && currentSubMsg.toolCalls.length > 0)) {
+          subMessages.push(currentSubMsg as ChatMessage)
+        }
+        subMessages.push({
+          role: 'tool',
+          name: event.toolName,
+          content: event.content === undefined ? '' : String(event.content),
+          toolCallId: event.toolName
+        } as ChatMessage)
+        currentSubMsg = { role: 'assistant', reasoningContent: '', content: '', toolCalls: [] }
+      }
+    }
+    if (currentSubMsg.reasoningContent || currentSubMsg.content || (currentSubMsg.toolCalls && currentSubMsg.toolCalls.length > 0)) {
+      subMessages.push(currentSubMsg as ChatMessage)
+    }
+
+    ;(baseMessage as any)._subMessages = subMessages
 
     const progressSteps = collectProgressSteps(events, info.originMessage)
     if (progressSteps.length > 0) {

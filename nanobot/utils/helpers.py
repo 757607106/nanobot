@@ -21,6 +21,17 @@ def strip_think(text: str) -> str:
     return text.strip()
 
 
+def extract_think(text: str) -> str | None:
+    """Extract content inside <think>…</think> blocks or unclosed trailing <think> tags."""
+    if not text:
+        return None
+    matches = list(re.finditer(r"<think>([\s\S]*?)(?:</think>|$)", text))
+    if not matches:
+        return None
+    pieces = [m.group(1).strip() for m in matches if m.group(1).strip()]
+    return "\n".join(pieces).strip() or None
+
+
 def detect_image_mime(data: bytes) -> str | None:
     """Detect image MIME type from magic bytes, ignoring file extension."""
     if data[:8] == b"\x89PNG\r\n\x1a\n":

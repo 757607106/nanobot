@@ -206,12 +206,13 @@ async def create_chat_message(
                     event["toolStatus"] = tool_status
                 await queue.put(event)
 
-            async def on_stream(chunk_content: str) -> None:
-                if chunk_content:
+            async def on_stream(chunk_content: str, reasoning_content: str | None = None) -> None:
+                if chunk_content or reasoning_content:
                     await queue.put(
                         {
                             "type": "chunk",
-                            "content": chunk_content,
+                            "content": chunk_content or "",
+                            "reasoningContent": reasoning_content or "",
                         }
                     )
 

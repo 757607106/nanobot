@@ -757,9 +757,19 @@ class OpenAICompatProvider(LLMProvider):
                     break
                 chunks.append(chunk)
                 if on_content_delta and chunk.choices:
-                    text = getattr(chunk.choices[0].delta, "content", None)
-                    if text:
-                        await on_content_delta(text)
+                    delta_obj = getattr(chunk.choices[0], "delta", None)
+                    if delta_obj:
+                        text = getattr(delta_obj, "content", None)
+                        reasoning = getattr(delta_obj, "reasoning_content", None)
+                        
+                        combined = ""
+                        if reasoning:
+                            combined += f"<think>{reasoning}</think>"
+                        if text:
+                            combined += text
+                            
+                        if combined:
+                            await on_content_delta(combined)
             return self._parse_chunks(chunks)
         except asyncio.TimeoutError:
             return LLMResponse(

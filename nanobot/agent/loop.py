@@ -53,7 +53,7 @@ class _LoopHook(AgentHook):
         self,
         agent_loop: AgentLoop,
         on_progress: Callable[..., Awaitable[None]] | None = None,
-        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream: Callable[[str, str | None], Awaitable[None]] | None = None,
         on_stream_end: Callable[..., Awaitable[None]] | None = None,
         *,
         channel: str = "cli",
@@ -88,15 +88,28 @@ class _LoopHook(AgentHook):
     def wants_streaming(self) -> bool:
         return self._on_stream is not None
 
-    async def on_stream(self, context: AgentHookContext, delta: str) -> None:
-        from nanobot.utils.helpers import strip_think
+    async def on_stream(self, context: AgentHookContext, delta: str, reasoning_delta: str | None = None) -> None:
+        from nanobot.utils.helpers import extract_think, strip_think
 
         prev_clean = strip_think(self._stream_buf)
+        prev_think = extract_think(self._stream_buf)
+
         self._stream_buf += delta
+        if reasoning_delta:
+            self._stream_buf += f"<think>{reasoning_delta}</think>"
+
         new_clean = strip_think(self._stream_buf)
-        incremental = new_clean[len(prev_clean):]
-        if incremental and self._on_stream:
-            await self._on_stream(incremental)
+        new_think = extract_think(self._stream_buf)
+
+        inc_clean = new_clean[len(prev_clean or ""):] if new_clean else ""
+        inc_think = new_think[len(prev_think or ""):] if new_think else ""
+        
+        if (inc_clean or inc_think) and self._on_stream:
+            # Type signature allows two arguments mapping to chunk_content and reasoning_content
+            try:
+                await self._on_stream(inc_clean, inc_think)
+            except TypeError:
+                await self._on_stream(inc_clean)
 
     async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
         if self._on_stream_end:
@@ -147,9 +160,9 @@ class _LoopHookChain(AgentHook):
         await self._primary.before_iteration(context)
         await self._extras.before_iteration(context)
 
-    async def on_stream(self, context: AgentHookContext, delta: str) -> None:
-        await self._primary.on_stream(context, delta)
-        await self._extras.on_stream(context, delta)
+    async def on_stream(self, context: AgentHookContext, delta: str, reasoning_delta: str | None = None) -> None:
+        await self._primary.on_stream(context, delta, reasoning_delta)
+        await self._extras.on_stream(context, delta, reasoning_delta)
 
     async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
         await self._primary.on_stream_end(context, resuming=resuming)
@@ -423,7 +436,7 @@ class AgentLoop:
         self,
         initial_messages: list[dict],
         on_progress: Callable[..., Awaitable[None]] | None = None,
-        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream: Callable[[str, str | None], Awaitable[None]] | None = None,
         on_stream_end: Callable[..., Awaitable[None]] | None = None,
         *,
         session: Session | None = None,
@@ -558,10 +571,12 @@ class AgentLoop:
                     def _current_stream_id() -> str:
                         return f"{stream_base_id}:{stream_segment}"
 
-                    async def on_stream(delta: str) -> None:
+                    async def on_stream(delta: str, reasoning_delta: str | None = None) -> None:
                         meta = dict(msg.metadata or {})
                         meta["_stream_delta"] = True
                         meta["_stream_id"] = _current_stream_id()
+                        if reasoning_delta:
+                            meta["_reasoning_delta"] = reasoning_delta
                         await self.bus.publish_outbound(OutboundMessage(
                             channel=msg.channel, chat_id=msg.chat_id,
                             content=delta,
@@ -649,7 +664,7 @@ class AgentLoop:
         msg: InboundMessage,
         session_key: str | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream: Callable[[str, str | None], Awaitable[None]] | None = None,
         on_stream_end: Callable[..., Awaitable[None]] | None = None,
         run_context: dict[str, Any] | None = None,
     ) -> OutboundMessage | None:

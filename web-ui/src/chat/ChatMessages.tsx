@@ -78,41 +78,15 @@ export function ChatMessages({
   for (const info of messageInfos) {
     if (info.message.role === 'assistant') {
       if (currentAssistant) {
-        // Merge this assistant message into the ongoing conversation turn
-        currentAssistant.message.content = `${currentAssistant.message.content || ''}${info.message.content || ''}`
-        if (info.message.reasoningContent) {
-          currentAssistant.message.reasoningContent = `${currentAssistant.message.reasoningContent || ''}${
-            info.message.reasoningContent
-          }`
-        }
-        if (info.message.toolCalls?.length) {
-          currentAssistant.message.toolCalls = [
-            ...(currentAssistant.message.toolCalls || []),
-            ...info.message.toolCalls,
-          ]
-        }
-        // Preserve chronological iteration details for interlaced rendering
-        ;(currentAssistant.message as any)._iterations.push({
-          reasoningContent: info.message.reasoningContent,
-          toolCalls: info.message.toolCalls || [],
-          _toolResults: [],
-        })
+        // Instead of string concatenation, we preserve the distinct sub-messages
+        ;(currentAssistant.message as any)._subMessages.push(info.message)
       } else {
-        currentAssistant = { ...info, message: { ...info.message, _toolResults: [], _iterations: [] } as any }
-        ;(currentAssistant.message as any)._iterations.push({
-          reasoningContent: info.message.reasoningContent,
-          toolCalls: info.message.toolCalls || [],
-          _toolResults: [],
-        })
+        currentAssistant = { ...info, message: { ...info.message, _subMessages: [info.message] } as any }
         groupedMessageInfos.push(currentAssistant)
       }
     } else if (info.message.role === 'tool') {
       if (currentAssistant) {
-        ;(currentAssistant.message as any)._toolResults.push(info.message)
-        const iters = (currentAssistant.message as any)._iterations
-        if (iters && iters.length > 0) {
-          iters[iters.length - 1]._toolResults.push(info.message)
-        }
+        ;(currentAssistant.message as any)._subMessages.push(info.message)
       } else {
         groupedMessageInfos.push(info)
       }

@@ -35,7 +35,7 @@ class AgentHook:
     async def before_iteration(self, context: AgentHookContext) -> None:
         pass
 
-    async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+    async def on_stream(self, context: AgentHookContext, delta: str, reasoning_delta: str | None = None) -> None:
         pass
 
     async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
@@ -77,8 +77,8 @@ class CompositeHook(AgentHook):
     async def before_iteration(self, context: AgentHookContext) -> None:
         await self._for_each_hook_safe("before_iteration", context)
 
-    async def on_stream(self, context: AgentHookContext, delta: str) -> None:
-        await self._for_each_hook_safe("on_stream", context, delta)
+    async def on_stream(self, context: AgentHookContext, delta: str, reasoning_delta: str | None = None) -> None:
+        await self._for_each_hook_safe("on_stream", context, delta, reasoning_delta)
 
     async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
         await self._for_each_hook_safe("on_stream_end", context, resuming=resuming)

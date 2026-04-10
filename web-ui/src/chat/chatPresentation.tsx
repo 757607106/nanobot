@@ -355,168 +355,135 @@ export function ChatMessageBody({
     return <div style={{ display: 'none' }} />
   }
 
-  const hasRichToolCalls = showToolCalls && message.toolCalls && message.toolCalls.length > 0;
+  const subMessages: ChatMessage[] = (message as any)._subMessages || [message]
 
-  // 1. 生成层次交织的内部节点：由于大模型的“深度思考”文本与工具调用在逻辑上是先后关联的。
-  // 我们通过分析 _iterations（完毕后）或 progressSteps（流式中），将思考过程（Text）紧密分布在具体的工具（ThoughtChain.Item）正上方。
-  const innerNodes: React.ReactNode[] = []
-  const iterations = (message as any)._iterations as Array<{ reasoningContent?: string; toolCalls?: any[]; _toolResults?: any[] }> | undefined
-
-  const renderElegantToolNode = (toolCall: any, resultMsg: any, uniqueIdx: number) => {
-    const fullResult = resultMsg ? String(resultMsg.content || '') : ''
-    const resultSummary = resultMsg ? getResultSummary(fullResult) : ''
-    
-    return (
-      <ThoughtChain.Item
-        key={`elegant-tool-${uniqueIdx}`}
-        variant="solid"
-        icon={resultMsg ? <CheckCircleOutlined style={{ color: token.colorSuccess }} /> : <SyncOutlined spin style={{ color: token.colorPrimary }} />}
-        title={<Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>执行动作: {getToolCallName(toolCall)}</Text>}
-        description={
-          <Flex vertical gap={4} style={{ marginTop: 4 }}>
-            <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>
-              调用参数: {getToolArgumentsPreview(toolCall)}
-            </Text>
-            {resultMsg && (
-              <Collapse
-                ghost
-                size="small"
-                items={[
-                  {
-                    key: 'result',
-                    label: <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>返回结果: {resultSummary || '详见返回JSON'}</Text>,
-                    children: (
-                      <pre className="tool-result-json-block" style={{ ...codeStyle, maxHeight: 300, overflow: 'auto', margin: 0 }}>
-                        {truncateContent(formatResultContent(fullResult))}
-                      </pre>
-                    ),
-                  },
-                ]}
-              />
-            )}
-          </Flex>
-        }
-        status={resultMsg ? 'success' : 'loading'}
-      />
-    )
-  }
-
-  if (iterations && iterations.length > 1 && !isStreaming) {
-    // 方式 A：流式结束后，使用后端按批次写库的 _iterations 精准还原层次编排
-    iterations.forEach((iter, idx) => {
-      if (iter.reasoningContent?.trim()) {
-        innerNodes.push(
-          <Text key={`iter-txt-${idx}`} type="secondary" style={{ whiteSpace: 'pre-wrap', marginBottom: iter.toolCalls?.length ? 4 : 0 }}>
-            {iter.reasoningContent}
-          </Text>
-        )
+  // Group tool results into their preceding assistant segment to form atomic turns
+  const segments: Array<ChatMessage & { _toolResults: ChatMessage[] }> = []
+  for (const subMsg of subMessages) {
+    if (subMsg.role === 'tool') {
+      const lastSeg = segments[segments.length - 1]
+      if (lastSeg) {
+        lastSeg._toolResults.push(subMsg)
+      } else {
+        segments.push({ role: 'assistant', content: '', _toolResults: [subMsg] })
       }
-      iter.toolCalls?.forEach((tc, tIdx) => {
-        const resultMsg = iter._toolResults?.find(r => r.toolCallId === tc.id) || iter._toolResults?.[tIdx]
-        innerNodes.push(renderElegantToolNode(tc, resultMsg, idx * 1000 + tIdx))
-      })
-    })
-  } else {
-    // 方式 B：流式生成中或单循环，利用 progressSteps 产生的事件流进行对齐还原
-    let mappedToolIndex = 0
-    progressSteps.forEach((step, idx) => {
-      if (step.kind === 'progress' && step.label.trim()) {
-        innerNodes.push(
-          <Text key={`prog-txt-${idx}`} type="secondary" style={{ whiteSpace: 'pre-wrap', marginBottom: 4 }}>
-            {step.label}
-          </Text>
-        )
-      } else if (step.kind === 'tool') {
-        const tc = message.toolCalls?.[mappedToolIndex]
-        if (tc) {
-          const resultMsg = toolResults?.find(r => r.toolCallId === tc.id) || toolResults?.[mappedToolIndex]
-          innerNodes.push(renderElegantToolNode(tc, resultMsg, idx))
-          mappedToolIndex++
-        } else {
-          // JSON 参数尚未通过网络全量抵达时的降级占位表示
-          innerNodes.push(
-            <ThoughtChain.Item
-              key={`prog-wait-${idx}`}
-              variant="solid"
-              icon={<SyncOutlined spin />}
-              title={<Text strong>执行动作: {step.label}</Text>}
-              status="loading"
-            />
-          )
-        }
-      }
-    })
-    
-    // 兜底补齐：如果有未匹配完的挂起 toolCalls，默认排列在最后
-    if (message.toolCalls && mappedToolIndex < message.toolCalls.length) {
-      for (let i = mappedToolIndex; i < message.toolCalls.length; i++) {
-        const tc = message.toolCalls[i]
-        const resultMsg = toolResults?.find(r => r.toolCallId === tc.id) || toolResults?.[i]
-        innerNodes.push(renderElegantToolNode(tc, resultMsg, 10000 + i))
-      }
+    } else {
+      segments.push({ ...subMsg, _toolResults: [] })
     }
   }
 
-  // 2. 组装最顶层的单一 ThoughtChain 折叠板（符合官方设计建议，不污染全局排版）
-  const chainItems: ThoughtChainItemType[] = []
-  if (innerNodes.length > 0) {
-    const totalTools = message.toolCalls?.length || 0
-    const isAllFinished = toolResults && toolResults.length >= totalTools
-
-    chainItems.push({
-      key: 'tool-chain-root',
-      icon: isAllFinished && !isStreaming ? <CheckCircleOutlined style={{ color: token.colorSuccess }} /> : <SyncOutlined spin style={{ color: token.colorPrimary }} />,
-      title: totalTools > 0 ? '执行动作序列' : '动作思考序列',
-      description: totalTools > 0 ? `系统共执行了 ${totalTools} 项工具调用` : '大模型执行思维演练中',
-      collapsible: true, // 允许手动折叠
-      status: (isAllFinished && !isStreaming) ? 'success' : 'loading',
-      content: (
-        <Flex gap="small" vertical style={{ padding: '8px 0', marginLeft: '4px' }}>
-          {innerNodes}
-        </Flex>
-      ),
-    })
-  }
-
-  const hasMessageContent = Boolean(String(message.content || '').trim())
-  const hasReasoningContent = message.reasoningContent != null
   const showPlaceholderCopy =
-    !hasMessageContent &&
+    !Boolean(String(message.content || '').trim()) &&
     message.role === 'assistant' &&
     isStreaming
 
+  // We rely on segments mapping for completed tools (which have rich outputs).
+  // For tools that are currently executing (loading), we retain them in progressSteps.
+  const generalProgressSteps = progressSteps.filter(step => step.kind !== 'tool' || !step.completed)
+  const generalChainItems = buildThoughtChainItems(generalProgressSteps, info.status).map(item => ({
+    ...item,
+    description: undefined,
+  }))
+
   return (
     <Flex vertical gap={12}>
-      {hasReasoningContent && message.role === 'assistant' && chainItems.length === 0 ? (
-        <Think loading={isStreaming} title="深度思考">
-          <MarkdownBubble
-            content={String(message.reasoningContent)}
-            isStreaming={isStreaming}
-          />
-        </Think>
-      ) : null}
+      {segments.map((seg, index) => {
+        const hasReasoning = Boolean(seg.reasoningContent)
+        const hasToolCalls = Boolean(seg.toolCalls && seg.toolCalls.length > 0)
+        const isLastSegment = index === segments.length - 1
 
-      {chainItems.length > 0 ? (
+        const toolChainItems: ThoughtChainItemType[] = []
+
+        if (hasToolCalls) {
+          seg.toolCalls!.forEach((t, tIndex) => {
+            const name = getToolCallName(t)
+            const resultMsg = seg._toolResults.find(r => r.toolCallId === t.id) || seg._toolResults[tIndex]
+            
+            toolChainItems.push({
+              key: `tc-${index}-${t.id || tIndex}`,
+              title: `调用工具: ${name}`,
+              icon: resultMsg ? <CheckCircleOutlined style={{ color: token.colorSuccess }} /> : <SyncOutlined spin style={{ color: token.colorPrimary }} />,
+              status: resultMsg ? 'success' : 'loading',
+              collapsible: true, // Natively expand tool args & results using Ant Design X standard!
+              content: (
+                <Flex vertical gap="small">
+                  <XMarkdown content={`**输入参数:**\n\`\`\`json\n${formatToolArgumentsBlock(t)}\n\`\`\``} />
+                  {resultMsg && (
+                    <XMarkdown content={`**返回结果:**\n\`\`\`json\n${truncateContent(formatResultContent(String(resultMsg.content || '')))}\n\`\`\``} />
+                  )}
+                </Flex>
+              ),
+            })
+          })
+        } else if (seg._toolResults.length > 0) {
+          // Fallback if tools were executed without a matching toolCall entry
+          seg._toolResults.forEach((r, rIndex) => {
+            toolChainItems.push({
+              key: `tr-orphan-${index}-${rIndex}`,
+              title: `${r.name || '工具'} 执行完毕`,
+              icon: <CheckCircleOutlined style={{ color: token.colorSuccess }} />,
+              status: 'success',
+              collapsible: true,
+              content: <XMarkdown content={`\`\`\`json\n${truncateContent(formatResultContent(String(r.content || '')))}\n\`\`\``} />,
+            })
+          })
+        }
+
+        return (
+          <React.Fragment key={`segment-${seg.id || index}`}>
+            {hasReasoning && (
+              <Think loading={isStreaming && isLastSegment} title="深度思考">
+                <MarkdownBubble
+                  content={String(seg.reasoningContent)}
+                  isStreaming={isStreaming && isLastSegment}
+                />
+              </Think>
+            )}
+
+            {toolChainItems.length > 0 && (
+              <ThoughtChain
+                items={toolChainItems}
+                style={{
+                  background: token.colorFillQuaternary,
+                  padding: '12px 16px',
+                  borderRadius: 10,
+                  marginTop: hasReasoning ? 4 : 0,
+                }}
+              />
+            )}
+          </React.Fragment>
+        )
+      })}
+
+      {generalChainItems.length > 0 && (
         <ThoughtChain
-          items={chainItems}
+          items={generalChainItems}
           style={{
             background: token.colorFillQuaternary,
             padding: '12px 16px',
             borderRadius: 10,
           }}
         />
-      ) : null}
+      )}
 
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
 
-      {hasMessageContent ? (
-        <MarkdownBubble
-          content={String(message.content ?? '')}
-          isStreaming={message.role === 'assistant' && isStreaming}
-        />
-      ) : showPlaceholderCopy ? (
-        <Text type="secondary">{assistantLoadingCopy}</Text>
-      ) : null}
+      {/* Aggregate any final actual text contents across segments */}
+      {(() => {
+        const fullContent = segments
+          .filter(s => s.role === 'assistant')
+          .map(s => s.content)
+          .join('\n')
+          .trim()
+        
+        if (fullContent) {
+          return <MarkdownBubble content={fullContent} isStreaming={isStreaming} />
+        }
+        if (showPlaceholderCopy) {
+          return <Text type="secondary">{assistantLoadingCopy}</Text>
+        }
+        return null
+      })()}
     </Flex>
   )
 }
