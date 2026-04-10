@@ -389,7 +389,7 @@ function getResultSummary(content: string, limit = 80): string {
 
 export function ChatMessageBody({
   info,
-  assistantLoadingCopy = '正在组织回复与工具执行结果...',
+  assistantLoadingCopy = '生成中...',
   showToolCalls = true,
 }: {
   info: MessageInfo<ChatMessage>
