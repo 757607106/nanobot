@@ -102,6 +102,7 @@ function getStreamEvents(chunks: SSEOutput[]): StreamEvent[] {
 
 export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatRequestInput, SSEOutput> {
   private accumulatedChunks: SSEOutput[] = []
+  private _currentReasoningEffortEnabled = false
 
   constructor(options: NanobotChatProviderOptions = {}) {
     const buildMessagesPath = options.buildMessagesPath || buildDefaultMessagesPath
@@ -115,6 +116,7 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
 
   transformParams(requestParams: Partial<ChatRequestInput>) {
     this.accumulatedChunks = []
+    this._currentReasoningEffortEnabled = Boolean(requestParams.reasoningEffort)
     const sessionId = String(requestParams.sessionId || '').trim()
     const query = String(requestParams.query || '').trim()
 
@@ -157,6 +159,10 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
     }
 
     const baseMessage = normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() })
+
+    if (this._currentReasoningEffortEnabled && baseMessage.reasoningContent === undefined) {
+      baseMessage.reasoningContent = ''
+    }
 
     const chunkEvents = events.filter((event) => event.type === 'chunk')
     if (chunkEvents.length > 0) {

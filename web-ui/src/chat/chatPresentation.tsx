@@ -475,7 +475,7 @@ export function ChatMessageBody({
   }
 
   const hasMessageContent = Boolean(String(message.content || '').trim())
-  const hasReasoningContent = Boolean(String(message.reasoningContent || '').trim())
+  const hasReasoningContent = message.reasoningContent != null
   const showPlaceholderCopy =
     !hasMessageContent &&
     message.role === 'assistant' &&
