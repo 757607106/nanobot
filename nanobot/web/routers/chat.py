@@ -25,6 +25,7 @@ class SessionRenameRequest(BaseModel):
 
 
 class ChatMessageRequest(BaseModel):
+    sessionId: str | None = None
     content: str | None = None
     displayContent: str | None = None
     attachments: list[dict[str, Any]] | None = None
@@ -174,12 +175,17 @@ def get_messages(
 
 
 @router.post("/api/v1/chat/sessions/{session_id}/messages")
+@router.post("/api/v1/chat/messages")
 async def create_chat_message(
     request: Request,
-    session_id: str,
     payload: ChatMessageRequest,
+    session_id: str | None = None,
     stream: bool = Query(False),
 ):
+    session_id = session_id or payload.sessionId
+    if not session_id:
+        raise APIError(400, "VALIDATION_ERROR", "sessionId is required.")
+
     content = (payload.content or "").strip()
     display_content = (payload.displayContent or content).strip()
     if not content:

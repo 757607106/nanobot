@@ -15,85 +15,22 @@ import {
 } from './chatMessageUtils'
 
 const API_BASE = '/api/v1'
-const XREQUEST_PLACEHOLDER_URL = `${API_BASE}/chat/sessions/__provider__`
+const XREQUEST_PLACEHOLDER_URL = `${API_BASE}/chat/messages?stream=1`
 
-export interface NanobotChatProviderOptions {
-  buildMessagesPath?: (requestParams: Partial<ChatRequestInput>) => string
-}
+export interface NanobotChatProviderOptions { }
 
-function buildDefaultMessagesPath(requestParams: Partial<ChatRequestInput>) {
-  const sessionId = String(requestParams.sessionId || '').trim()
-  return `${API_BASE}/chat/sessions/${encodeURIComponent(sessionId)}/messages?stream=1`
-}
-
-function createFetchChatStream(
-  buildMessagesPath: (requestParams: Partial<ChatRequestInput>) => string,
-) {
-  return async (
-    _baseURL: RequestInfo | URL,
-    options: XRequestOptions<ChatRequestInput, SSEOutput, ChatMessage>,
-  ) => {
-    const requestParams = options.params ?? {}
-    const sessionId = String(requestParams.sessionId || '').trim()
-    const query = String(requestParams.query || '').trim()
-
-    if (!sessionId) {
-      throw new Error('sessionId is required')
-    }
-
-    if (!query) {
-      throw new Error('query is required')
-    }
-
-    const response = await fetch(buildMessagesPath(requestParams), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers ?? {}),
-      },
-      credentials: 'include',
-      signal: options.signal,
-      body: JSON.stringify({
-        content: query,
-        displayContent: requestParams.displayContent,
-        attachments: requestParams.attachments || [],
-        reasoningEffort: requestParams.reasoningEffort || null,
-      }),
-    })
-
-    if (!response.ok) {
-      let message = '流式请求失败'
-      let code: string | undefined
-      let details: unknown
-
-      try {
-        const payload = (await response.json()) as {
-          error?: {
-            message?: string
-            code?: string
-            details?: unknown
-          } | null
-        }
-        message = payload.error?.message || message
-        code = payload.error?.code
-        details = payload.error?.details
-      } catch {
-        // Ignore JSON parsing failures and keep the fallback message.
-      }
-
-      if (response.status === 401 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('nanobot:auth-required'))
-      }
-
-      throw new ApiError(message, response.status, code, details)
-    }
-
-    if (!response.body) {
-      throw new ApiError('流式请求失败', response.status)
-    }
-
-    return response
+// A standard clean fetch interceptor exclusively for handling global 401 auth redirects,
+// without interfering with XRequest's native stream reading, JSON stringification, or request building.
+const interceptFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const mergedInit: RequestInit = {
+    credentials: 'include',
+    ...init,
   }
+  const response = await fetch(input, mergedInit)
+  if (response.status === 401 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('nanobot:auth-required'))
+  }
+  return response
 }
 
 function getStreamEvents(chunks: SSEOutput[]): StreamEvent[] {
@@ -104,12 +41,11 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
   private accumulatedChunks: SSEOutput[] = []
   private _currentReasoningEffortEnabled = false
 
-  constructor(options: NanobotChatProviderOptions = {}) {
-    const buildMessagesPath = options.buildMessagesPath || buildDefaultMessagesPath
+  constructor(_options: NanobotChatProviderOptions = {}) {
     super({
       request: XRequest(XREQUEST_PLACEHOLDER_URL, {
         manual: true,
-        fetch: createFetchChatStream(buildMessagesPath),
+        fetch: interceptFetch,
       }),
     })
   }
@@ -122,7 +58,8 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
 
     return {
       sessionId,
-      query,
+      content: query,
+      query, // Keep query for any internal UI references
       displayContent: String(requestParams.displayContent || query).trim(),
       attachments: dedupeAttachmentRefs(requestParams.attachments || []),
       reasoningEffort: requestParams.reasoningEffort || null,

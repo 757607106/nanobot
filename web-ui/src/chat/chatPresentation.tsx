@@ -528,7 +528,7 @@ export function ChatMessageBody({
       {/* Aggregate any final actual text contents across segments */}
       {(() => {
         const fullContent = segments
-          .filter(s => s.role === 'assistant')
+          .filter(s => s.role === 'assistant' || s.role === 'user')
           .map(s => s.content)
           .join('\n')
           .trim()
