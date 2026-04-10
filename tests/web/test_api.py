@@ -1302,7 +1302,7 @@ def test_web_api_chat_upload_and_dispatch(web_client: TestClient, monkeypatch) -
         await on_progress("checking uploads")
         return {
             "content": "Saw the uploaded file.",
-            "assistantMessage": None,
+            "message": None,
         }
 
     monkeypatch.setattr(web_client.app.state.web, "chat", fake_chat)

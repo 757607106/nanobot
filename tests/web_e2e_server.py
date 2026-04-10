@@ -237,7 +237,7 @@ def _patch_runtime(app) -> None:
         state.sessions.save(session)
         return {
             "content": reply,
-            "assistantMessage": state.get_last_assistant_message(session_id),
+            "message": state.get_last_assistant_message(session_id),
         }
 
     async def fake_agent_chat(
@@ -263,7 +263,7 @@ def _patch_runtime(app) -> None:
         assistant_message = state.get_last_agent_assistant_message(agent_id, session_id, tenant_id=tenant_id)
         return {
             "content": reply,
-            "assistantMessage": assistant_message,
+            "message": assistant_message,
         }
 
     async def fake_mcp_test(server_name: str, content: str, on_progress) -> dict[str, Any]:

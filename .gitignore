@@ -3,6 +3,8 @@
 .assets
 .docs
 .env
+.qoder/repowiki/
+.qoder/specs/
 node_modules/
 .web
 *.pyc
@@ -27,5 +29,10 @@ nano.*.save
 web-ui/test-results/
 web-ui/playwright-report/
 tmp/web-e2e-runtime/
+tmp/web-e2e-agent-knowledge-runtime/
+tmp/capture_ui_review.mjs
+tmp/config.json.bak
+web-ui/tmp-capture_ui_review.mjs
+web-ui/tmp_copy_avatars.py
 .DS_Store
 uv.lock
