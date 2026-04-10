@@ -45,7 +45,7 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
   const pendingSyncSessionIdRef = useRef<string | null>(null)
   const shouldSyncSessionRef = useRef(false)
   const wasRequestingRef = useRef(false)
-  const setMessagesRef = useRef((...args: Parameters<typeof setMessages>) => { /* placeholder */ })
+  const setMessagesRef = useRef<any>(() => { /* placeholder */ })
 
   const provider = useMemo(() => {
     if (!inAgentMode) {
