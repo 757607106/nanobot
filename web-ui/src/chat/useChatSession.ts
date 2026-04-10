@@ -52,11 +52,8 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
       return createNanobotChatProvider()
     }
     return createNanobotChatProvider({
-      buildMessagesPath: (requestParams) => {
-        const resolvedAgentId = String(requestParams.agentId || agentId || '').trim()
-        const sessionId = String(requestParams.sessionId || '').trim()
-        return `/api/v1/agents/${encodeURIComponent(resolvedAgentId)}/sessions/${encodeURIComponent(sessionId)}/messages?stream=1`
-      },
+      url: '/api/v1/agents/messages?stream=1',
+      agentId,
     })
   }, [agentId, inAgentMode])
 

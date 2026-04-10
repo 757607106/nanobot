@@ -26,6 +26,7 @@ class SessionRenameRequest(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     sessionId: str | None = None
+    agentId: str | None = None
     content: str | None = None
     displayContent: str | None = None
     attachments: list[dict[str, Any]] | None = None

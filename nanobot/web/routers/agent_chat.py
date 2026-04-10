@@ -116,13 +116,21 @@ def get_agent_messages(
 
 
 @router.post("/api/v1/agents/{agent_id}/sessions/{session_id}/messages")
+@router.post("/api/v1/agents/messages")
 async def create_agent_chat_message(
     request: Request,
-    agent_id: str,
-    session_id: str,
     payload: ChatMessageRequest,
+    agent_id: str | None = None,
+    session_id: str | None = None,
     stream: bool = Query(False),
 ):
+    agent_id = agent_id or payload.agentId
+    session_id = session_id or payload.sessionId
+    if not agent_id:
+        raise APIError(400, "VALIDATION_ERROR", "agentId is required for agent sessions.")
+    if not session_id:
+        raise APIError(400, "VALIDATION_ERROR", "sessionId is required.")
+
     content = (payload.content or "").strip()
     display_content = (payload.displayContent or content).strip()
     if not content:

@@ -17,7 +17,10 @@ import {
 const API_BASE = '/api/v1'
 const XREQUEST_PLACEHOLDER_URL = `${API_BASE}/chat/messages?stream=1`
 
-export interface NanobotChatProviderOptions { }
+export interface NanobotChatProviderOptions {
+  url?: string
+  agentId?: string
+}
 
 // A standard clean fetch interceptor exclusively for handling global 401 auth redirects,
 // without interfering with XRequest's native stream reading, JSON stringification, or request building.
@@ -40,14 +43,16 @@ function getStreamEvents(chunks: SSEOutput[]): StreamEvent[] {
 export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatRequestInput, SSEOutput> {
   private accumulatedChunks: SSEOutput[] = []
   private _currentReasoningEffortEnabled = false
+  private _agentId?: string
 
-  constructor(_options: NanobotChatProviderOptions = {}) {
+  constructor(options: NanobotChatProviderOptions = {}) {
     super({
-      request: XRequest(XREQUEST_PLACEHOLDER_URL, {
+      request: XRequest(options.url || XREQUEST_PLACEHOLDER_URL, {
         manual: true,
         fetch: interceptFetch,
       }),
     })
+    this._agentId = options.agentId
   }
 
   transformParams(requestParams: Partial<ChatRequestInput>) {
@@ -58,6 +63,7 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
 
     return {
       sessionId,
+      agentId: this._agentId || undefined,
       content: query,
       query, // Keep query for any internal UI references
       displayContent: String(requestParams.displayContent || query).trim(),
