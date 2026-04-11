@@ -252,9 +252,11 @@
   transition: all 0.2s ease;
 }
 
-/* ThoughtChain 容器平滑过渡 */
+/* ThoughtChain 容器平滑过渡 + 高度限制 */
 .ant-x-thought-chain {
   animation: thoughtChainFadeIn 0.2s ease;
+  max-height: 480px;
+  overflow-y: auto;
 }
 
 @keyframes thoughtChainFadeIn {
@@ -262,8 +264,19 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* 折叠展开内容高度限制 */
+.ant-x-thought-chain-item .markdown-bubble {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
 /* 防止消息高度突变 */
-.nb-chat-bubble .ant-bubble-content,
 .chat-bubble-list .ant-x-bubble-content {
   transition: height 0.15s ease, opacity 0.15s ease;
+}
+
+/* Think 组件折叠内容高度限制 */
+.ant-x-think .markdown-bubble {
+  max-height: 360px;
+  overflow-y: auto;
 }

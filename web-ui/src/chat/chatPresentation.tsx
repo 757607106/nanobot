@@ -1,14 +1,8 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import React from 'react'
 import {
-  ApiOutlined,
-  CheckCircleOutlined,
-  CheckCircleFilled,
-  CloseCircleOutlined,
   CodeOutlined,
-  FileSearchOutlined,
   FunctionOutlined,
-  SearchOutlined,
   SyncOutlined,
   ToolOutlined,
   GlobalOutlined,
@@ -18,11 +12,10 @@ import {
 import { Mermaid, ThoughtChain, Think, FileCard } from '@ant-design/x'
 import type { ThoughtChainItemType } from '@ant-design/x'
 import type { MessageInfo } from '@ant-design/x-sdk'
-import { Collapse, Flex, Typography, theme } from 'antd'
+import { Flex, Typography, theme } from 'antd'
 import type { ComponentProps as XMarkdownComponentProps } from '@ant-design/x-markdown'
 import { XMarkdown } from '@ant-design/x-markdown'
-import { formatDateTimeZh } from '../locale'
-import type { ChatAttachmentRef, ChatMessage, ChatToolCall } from '../types'
+import type { ChatAttachmentRef, ChatMessage } from '../types'
 import { getToolCallName, normalizeChatMessage } from './chatMessageUtils'
 
 const { Text } = Typography
@@ -39,25 +32,25 @@ const TOOL_UI_MAPPING: Record<string, ToolUIMap> = {
     activeTitle: '正在进行全网检索',
     successTitle: '完成网络信息收集',
     activeIcon: <GlobalOutlined spin />,
-    successIcon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />
+    successIcon: <GlobalOutlined style={{ color: 'var(--nb-text-tertiary)' }} />
   },
   web_fetch: {
     activeTitle: '正在深度阅读网页',
     successTitle: '网页阅读完毕',
     activeIcon: <FileTextOutlined spin />,
-    successIcon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />
+    successIcon: <FileTextOutlined style={{ color: 'var(--nb-text-tertiary)' }} />
   },
   create_file: {
     activeTitle: '正在创建本地文件',
     successTitle: '文件创建完毕',
     activeIcon: <CodeOutlined spin />,
-    successIcon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />
+    successIcon: <CodeOutlined style={{ color: 'var(--nb-text-tertiary)' }} />
   },
   run_command: {
     activeTitle: '正在运行系统命令',
     successTitle: '命令执行完毕',
     activeIcon: <FunctionOutlined spin />,
-    successIcon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />
+    successIcon: <FunctionOutlined style={{ color: 'var(--nb-text-tertiary)' }} />
   }
 }
 
@@ -71,18 +64,8 @@ function getToolUIMeta(toolName: string, isSuccess: boolean) {
   }
   return {
     title: isSuccess ? `${toolName} 执行完毕` : `调用专属工具: ${toolName}`,
-    icon: isSuccess ? <CheckCircleFilled style={{ color: 'var(--nb-success)' }} /> : <LoadingOutlined />
+    icon: isSuccess ? <ToolOutlined style={{ color: 'var(--nb-text-tertiary)' }} /> : <LoadingOutlined />
   }
-}
-
-const TOOL_RESULT_PREVIEW_LIMIT = 1400
-
-
-function truncateContent(content: string, limit = TOOL_RESULT_PREVIEW_LIMIT) {
-  if (content.length <= limit) {
-    return content
-  }
-  return `${content.slice(0, limit)}\n\n...`
 }
 
 function safeJsonParse(value?: string) {
@@ -94,105 +77,6 @@ function safeJsonParse(value?: string) {
   } catch {
     return null
   }
-}
-
-function summarizeValue(value: unknown, limit = 64): string {
-  if (typeof value === 'string') {
-    const compact = value.replace(/\s+/g, ' ').trim()
-    return compact.length > limit ? `${compact.slice(0, limit)}...` : compact
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value)
-  }
-  if (Array.isArray(value)) {
-    return `${value.length} 项`
-  }
-  if (value && typeof value === 'object') {
-    return '对象'
-  }
-  return '空'
-}
-
-function getToolArgumentsPreview(toolCall: ChatToolCall) {
-  const args = toolCall.function?.arguments
-  if (!args) {
-    return '无参数'
-  }
-
-  const parsed = safeJsonParse(args)
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    const preview = Object.entries(parsed as Record<string, unknown>)
-      .slice(0, 3)
-      .map(([key, value]) => `${key}: ${summarizeValue(value)}`)
-      .join(' · ')
-    return preview || '查看参数'
-  }
-
-  const compact = args.replace(/\s+/g, ' ').trim()
-  return compact.length > 120 ? `${compact.slice(0, 120)}...` : compact
-}
-
-function formatToolArgumentsBlock(toolCall: ChatToolCall) {
-  const args = toolCall.function?.arguments
-  if (!args) {
-    return '无参数'
-  }
-  const parsed = safeJsonParse(args)
-  if (parsed) {
-    return JSON.stringify(parsed, null, 2)
-  }
-  return args
-}
-
-function getStepIcon(kind: string, status: ThoughtChainItemType['status']) {
-  if (status === 'error') return <CloseCircleOutlined />
-  if (kind === 'tool') return <ToolOutlined />
-  return <SyncOutlined spin={status === 'loading'} />
-}
-
-function buildThoughtChainItems(
-  steps: ChatMessage['progressSteps'],
-  status: MessageInfo<ChatMessage>['status'],
-): ThoughtChainItemType[] {
-  const progressSteps = steps ?? []
-  const isActive = status === 'loading' || status === 'updating'
-  const isFailed = status === 'error' || status === 'abort'
-
-  return progressSteps.map((step, index) => {
-    const isLast = index === progressSteps.length - 1
-    let itemStatus: ThoughtChainItemType['status'] = 'success'
-
-    if (step.completed) {
-      // 后端已确认该工具执行完毕，直接标记成功
-      itemStatus = 'success'
-    } else if (isActive) {
-      itemStatus = isLast ? 'loading' : 'success'
-    } else if (isFailed) {
-      itemStatus = isLast ? 'error' : 'success'
-    }
-
-    return {
-      key: step.key,
-      icon: getStepIcon(step.kind, itemStatus),
-      title: step.label,
-      status: itemStatus,
-    }
-  })
-}
-
-function MetaLabel({ children }: { children: ReactNode }) {
-  return (
-    <Text
-      type="secondary"
-      style={{
-        fontSize: 'var(--nb-text-2xs)',
-        fontWeight: 'var(--nb-font-weight-strong)',
-        letterSpacing: '0.02em',
-      }}
-    >
-      {children}
-    </Text>
-  )
 }
 
 /* ── Code block component: intercepts mermaid fenced blocks ── */
@@ -306,110 +190,6 @@ export function AttachmentTags({
   )
 }
 
-const TOOL_ICON_MAP: Record<string, ReactNode> = {
-  search: <SearchOutlined />,
-  find: <FileSearchOutlined />,
-  query: <FileSearchOutlined />,
-  exec: <CodeOutlined />,
-  run: <CodeOutlined />,
-  code: <CodeOutlined />,
-  api: <ApiOutlined />,
-  call: <FunctionOutlined />,
-  func: <FunctionOutlined />,
-}
-
-function getToolIcon(name: string) {
-  const lower = name.toLowerCase()
-  for (const [keyword, icon] of Object.entries(TOOL_ICON_MAP)) {
-    if (lower.includes(keyword)) return icon
-  }
-  return <ToolOutlined />
-}
-
-/* ── Shared code block style ── */
-function useCodeBlockStyle(): CSSProperties {
-  const { token } = theme.useToken()
-  return {
-    margin: 0,
-    padding: 10,
-    borderRadius: 8,
-    background: token.colorFillAlter,
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-all',
-    fontSize: 'var(--nb-text-xs)',
-    fontFamily: 'var(--nb-font-mono, monospace)',
-    maxHeight: 360,
-    overflow: 'auto',
-    border: `1px solid ${token.colorBorderSecondary}`,
-    lineHeight: 1.6,
-  }
-}
-
-/**
- * Automatically expands the 'Think' component while loading, and collapses it when finished.
- * This aligns with SOTA deep reasoning UX paradigms.
- */
-function AutoThinkBlock({ loading, content }: { loading: boolean; content: string }) {
-  const [expanded, setExpanded] = React.useState(loading)
-
-  React.useEffect(() => {
-    setExpanded(loading)
-  }, [loading])
-
-  return (
-    <Think
-      loading={loading}
-      title="深度思考"
-      expanded={expanded}
-      onExpand={setExpanded}
-    >
-      <MarkdownBubble content={content} isStreaming={loading} />
-    </Think>
-  )
-}
-
-/* ── 工具图标 Badge ── */
-function ToolIconBox({ icon, color }: { icon: ReactNode; color: string }) {
-  return (
-    <div style={{
-      width: 22,
-      height: 22,
-      borderRadius: 6,
-      background: `color-mix(in srgb, ${color} 12%, transparent)`,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexShrink: 0,
-    }}>
-      <span style={{ fontSize: 11, color, display: 'flex', lineHeight: 1 }}>{icon}</span>
-    </div>
-  )
-}
-
-function formatResultContent(content: string) {
-  const parsed = safeJsonParse(content)
-  if (parsed) {
-    return JSON.stringify(parsed, null, 2)
-  }
-  return content
-}
-
-function getResultSummary(content: string, limit = 80): string {
-  const parsed = safeJsonParse(content)
-  if (parsed) {
-    if (typeof parsed === 'object' && parsed !== null) {
-      const keys = Object.keys(parsed as Record<string, unknown>)
-      if (Array.isArray(parsed)) {
-        return `数组 · ${parsed.length} 项`
-      }
-      return keys.slice(0, 4).join(', ') + (keys.length > 4 ? ` (+${keys.length - 4})` : '')
-    }
-    return String(parsed).slice(0, limit)
-  }
-  const firstLine = content.split('\n')[0]?.trim() || ''
-  return firstLine.length > limit ? `${firstLine.slice(0, limit)}...` : firstLine
-}
-
 export function ChatMessageBody({
   info,
   assistantLoadingCopy = '生成中...',
@@ -420,7 +200,6 @@ export function ChatMessageBody({
   showToolCalls?: boolean
 }) {
   const { token } = theme.useToken()
-  const codeStyle = useCodeBlockStyle()
   const message = normalizeChatMessage(info.message)
   const progressSteps = message.progressSteps ?? []
   const isStreaming = info.status === 'loading' || info.status === 'updating'
@@ -462,30 +241,41 @@ export function ChatMessageBody({
     message.role === 'assistant' &&
     isStreaming
 
-  // 构建交替 ThoughtChain
-  const unifiedItems: ThoughtChainItemType[] = []
+  // 构建交替渲染段落：Think 组件 + ThoughtChain 工具组
+  type RenderSegment =
+    | { type: 'think'; key: string; content: string; loading: boolean; isStreaming: boolean }
+    | { type: 'tools'; key: string; items: ThoughtChainItemType[] }
+
+  const segments: RenderSegment[] = []
+  let pendingToolItems: ThoughtChainItemType[] = []
+
+  // 将累积的工具项 flush 为一个 tools segment
+  const flushTools = () => {
+    if (pendingToolItems.length > 0) {
+      segments.push({ type: 'tools', key: `tools-${segments.length}`, items: pendingToolItems })
+      pendingToolItems = []
+    }
+  }
 
   if (progressSteps.length > 0) {
-    // 路径 A: 从流式 progressSteps 构建（streaming / sync 后保留的数据）
+    // 路径 A: 从流式 progressSteps 构建
     for (const step of progressSteps) {
       if (step.kind === 'thinking') {
-        unifiedItems.push({
+        flushTools()
+        segments.push({
+          type: 'think',
           key: step.key,
-          title: '深度思考',
-          icon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />,
-          status: 'success',
-          collapsible: true,
-          content: (
-            <MarkdownBubble content={step.reasoningContent || ''} isStreaming={false} />
-          ),
+          content: step.reasoningContent || '',
+          loading: false,
+          isStreaming: false,
         })
       } else if (step.kind === 'tool') {
         const toolBaseName = step.label?.split(':')[0]?.trim() || 'tool'
         const meta = getToolUIMeta(toolBaseName, !!step.completed)
-        unifiedItems.push({
+        pendingToolItems.push({
           key: step.key,
           title: meta.title,
-          icon: step.completed ? meta.icon : <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} />,
+          icon: step.completed ? meta.icon : <LoadingOutlined style={{ color: 'var(--nb-primary)' }} />,
           status: step.completed ? 'success' : 'loading',
           ...(step.completed && step.resultContent ? {
             collapsible: true,
@@ -495,7 +285,7 @@ export function ChatMessageBody({
           } : {}),
         })
       } else if (step.kind === 'progress') {
-        unifiedItems.push({
+        pendingToolItems.push({
           key: step.key,
           title: step.label || '处理中',
           icon: <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} />,
@@ -503,27 +293,24 @@ export function ChatMessageBody({
         })
       }
     }
+    flushTools()
 
-    // 当前正在流式输出的思考（还没遇到 toolHint 快照）
+    // 当前正在流式输出的思考
     const prevSnapshotEnd = progressSteps
       .filter(s => s.kind === 'thinking')
       .reduce((acc, s) => acc + (s.reasoningContent?.length || 0), 0)
     const currentThinking = effectiveReasoning.slice(prevSnapshotEnd)
     if (currentThinking) {
-      unifiedItems.push({
+      segments.push({
+        type: 'think',
         key: 'thinking-current',
-        title: '深度思考',
-        icon: isStreaming ? <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} /> : <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />,
-        status: isStreaming ? 'loading' : 'success',
-        collapsible: !isStreaming,
-        content: (
-          <MarkdownBubble content={currentThinking} isStreaming={isStreaming} />
-        ),
+        content: currentThinking,
+        loading: isStreaming,
+        isStreaming,
       })
     }
   } else if (subMessages.length > 1) {
-    // 路径 B: 从 sub-messages 构建（页面刷新加载历史，无 progressSteps）
-    // Pre-collect tool results by toolCallId for matching
+    // 路径 B: 从 sub-messages 构建（历史消息）
     const toolResultMap = new Map<string, string>()
     for (const subMsg of subMessages) {
       if (subMsg.role === 'tool' && subMsg.toolCallId) {
@@ -533,20 +320,16 @@ export function ChatMessageBody({
 
     for (const subMsg of subMessages) {
       if (subMsg.role !== 'assistant') continue
-      // 思考
       if (subMsg.reasoningContent?.trim()) {
-        unifiedItems.push({
-          key: `hist-thinking-${unifiedItems.length}`,
-          title: '深度思考',
-          icon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />,
-          status: 'success',
-          collapsible: true,
-          content: (
-            <MarkdownBubble content={subMsg.reasoningContent} isStreaming={false} />
-          ),
+        flushTools()
+        segments.push({
+          type: 'think',
+          key: `hist-thinking-${segments.length}`,
+          content: subMsg.reasoningContent,
+          loading: false,
+          isStreaming: false,
         })
       }
-      // 工具调用 + 匹配返回结果
       if (subMsg.toolCalls?.length) {
         for (const toolCall of subMsg.toolCalls) {
           const toolName = getToolCallName(toolCall)
@@ -554,11 +337,21 @@ export function ChatMessageBody({
           const toolCallId = String(toolCall.id || '').trim()
           const resultContent = toolCallId ? toolResultMap.get(toolCallId) : undefined
 
-          unifiedItems.push({
-            key: `hist-tool-${unifiedItems.length}`,
+          pendingToolItems.push({
+            key: `hist-tool-${segments.length}-${pendingToolItems.length}`,
             title: meta.title,
             icon: meta.icon,
             status: 'success',
+            description: toolCall.function?.arguments ? (() => {
+              const parsed = safeJsonParse(toolCall.function.arguments)
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return Object.entries(parsed as Record<string, unknown>)
+                  .slice(0, 3)
+                  .map(([k, v]) => `${k}: ${typeof v === 'string' ? (v.length > 40 ? v.slice(0, 40) + '...' : v) : JSON.stringify(v)}`)
+                  .join(' · ')
+              }
+              return undefined
+            })() : undefined,
             ...(resultContent ? {
               collapsible: true,
               content: (
@@ -569,33 +362,46 @@ export function ChatMessageBody({
         }
       }
     }
+    flushTools()
   } else {
-    // 路径 C: 单条消息，无 sub-messages，无 progressSteps（简单回复或无工具）
+    // 路径 C: 单消息
     if (effectiveReasoning.trim()) {
-      unifiedItems.push({
+      segments.push({
+        type: 'think',
         key: 'thinking-current',
-        title: '深度思考',
-        icon: isStreaming ? <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} /> : <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />,
-        status: isStreaming ? 'loading' : 'success',
-        collapsible: !isStreaming,
-        content: (
-          <MarkdownBubble content={effectiveReasoning} isStreaming={isStreaming} />
-        ),
+        content: effectiveReasoning,
+        loading: isStreaming,
+        isStreaming,
       })
     }
   }
 
   return (
     <Flex vertical gap={12}>
-      {unifiedItems.length > 0 && (
-        <ThoughtChain
-          items={unifiedItems}
-          style={{
-            background: token.colorFillQuaternary,
-            padding: '12px 16px',
-            borderRadius: 10,
-          }}
-        />
+      {segments.map((seg) =>
+        seg.type === 'think' ? (
+          <Think
+            key={seg.key}
+            title="深度思考"
+            loading={seg.loading}
+            defaultExpanded={seg.loading}
+          >
+            <MarkdownBubble content={seg.content} isStreaming={seg.isStreaming} />
+          </Think>
+        ) : (
+          <ThoughtChain
+            key={seg.key}
+            items={seg.items}
+            line
+            styles={{
+              root: {
+                background: token.colorFillQuaternary,
+                padding: '12px 16px',
+                borderRadius: 10,
+              },
+            }}
+          />
+        )
       )}
 
       {effectiveContent.trim() && (
@@ -607,7 +413,7 @@ export function ChatMessageBody({
 
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
 
-      {showPlaceholderCopy && unifiedItems.length === 0 && (
+      {showPlaceholderCopy && segments.length === 0 && (
         <Text type="secondary">{assistantLoadingCopy}</Text>
       )}
     </Flex>
