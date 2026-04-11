@@ -116,7 +116,6 @@ class TestMessageToolSuppressLogic:
         if len(progress) == 3:
             assert progress[2][0].startswith("read_file")
 
-
 class TestMessageToolTurnTracking:
 
     def test_sent_in_turn_tracks_same_target(self) -> None:

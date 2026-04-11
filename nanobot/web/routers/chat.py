@@ -201,16 +201,29 @@ async def create_chat_message(
         async def event_stream():
             queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
-            async def on_progress(progress: str, *, tool_hint: bool = False, tool_complete: bool = False, tool_name: str = "", tool_status: str = "") -> None:
+            async def on_progress(
+                progress: str,
+                *,
+                tool_hint: bool = False,
+                tool_complete: bool = False,
+                tool_name: str = "",
+                tool_status: str = "",
+                tool_calls: list[dict[str, Any]] | None = None,
+                tool_call_id: str = "",
+            ) -> None:
                 event: dict[str, Any] = {
                     "type": "progress",
                     "content": progress,
                     "toolHint": tool_hint,
                 }
+                if tool_calls:
+                    event["toolCalls"] = tool_calls
                 if tool_complete:
                     event["toolComplete"] = True
                     event["toolName"] = tool_name
                     event["toolStatus"] = tool_status
+                    if tool_call_id:
+                        event["toolCallId"] = tool_call_id
                 await queue.put(event)
 
             async def on_stream(chunk_content: str, reasoning_content: str | None = None) -> None:
@@ -270,7 +283,7 @@ async def create_chat_message(
             },
         )
 
-    async def on_progress(_progress: str, *, tool_hint: bool = False) -> None:
+    async def on_progress(_progress: str, *, tool_hint: bool = False, **_: Any) -> None:
         _ = tool_hint
 
     try:

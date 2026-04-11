@@ -26,6 +26,7 @@ else:
     from openai import AsyncOpenAI
 
 from nanobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from nanobot.utils.helpers import separate_reasoning_from_content
 
 if TYPE_CHECKING:
     from nanobot.providers.registry import ProviderSpec
@@ -441,6 +442,10 @@ class OpenAICompatProvider(LLMProvider):
                     response_map.get("reasoning_content")
                 )
                 if content is not None:
+                    # Fallback: extract thinking embedded in content via <think>...</think>.
+                    content, reasoning_content = separate_reasoning_from_content(
+                        content, existing_reasoning=reasoning_content,
+                    )
                     return LLMResponse(
                         content=content,
                         reasoning_content=reasoning_content,
@@ -486,12 +491,17 @@ class OpenAICompatProvider(LLMProvider):
                     function_provider_specific_fields=fn_prov,
                 ))
 
+            # Fallback: extract thinking embedded in content via <think>...</think>.
+            content, extracted_reasoning = separate_reasoning_from_content(
+                content, existing_reasoning=reasoning_content if isinstance(reasoning_content, str) else None,
+            )
+
             return LLMResponse(
                 content=content,
                 tool_calls=parsed_tool_calls,
                 finish_reason=finish_reason,
                 usage=self._extract_usage(response_map),
-                reasoning_content=reasoning_content if isinstance(reasoning_content, str) else None,
+                reasoning_content=extracted_reasoning,
             )
 
         if not response.choices:
@@ -527,12 +537,17 @@ class OpenAICompatProvider(LLMProvider):
                 function_provider_specific_fields=fn_prov,
             ))
 
+        # Fallback: extract thinking embedded in content via <think>...</think>.
+        content, extracted_reasoning = separate_reasoning_from_content(
+            content, existing_reasoning=getattr(msg, "reasoning_content", None) or None,
+        )
+
         return LLMResponse(
             content=content,
             tool_calls=tool_calls,
             finish_reason=finish_reason or "stop",
             usage=self._extract_usage(response),
-            reasoning_content=getattr(msg, "reasoning_content", None) or None,
+            reasoning_content=extracted_reasoning,
         )
 
     @classmethod
@@ -616,8 +631,17 @@ class OpenAICompatProvider(LLMProvider):
             for tc in (delta.tool_calls or []) if delta else []:
                 _accum_tc(tc, getattr(tc, "index", 0))
 
+        # --- Fallback: some providers embed thinking in content via <think>...</think> tags ---
+        # When reasoning_content field is empty but content contains thinking tags,
+        # extract them so the UI can display thinking separately from the answer.
+        raw_content = "".join(content_parts) or None
+        raw_reasoning = "".join(reasoning_parts) or None
+        clean_content, fallback_reasoning = separate_reasoning_from_content(
+            raw_content, existing_reasoning=raw_reasoning,
+        )
+
         return LLMResponse(
-            content="".join(content_parts) or None,
+            content=clean_content,
             tool_calls=[
                 ToolCallRequest(
                     id=b["id"] or _short_tool_id(),
@@ -631,7 +655,7 @@ class OpenAICompatProvider(LLMProvider):
             ],
             finish_reason=finish_reason,
             usage=usage,
-            reasoning_content="".join(reasoning_parts) or None,
+            reasoning_content=fallback_reasoning,
         )
 
     @classmethod
@@ -761,7 +785,20 @@ class OpenAICompatProvider(LLMProvider):
                     if delta_obj:
                         text = getattr(delta_obj, "content", None)
                         reasoning = getattr(delta_obj, "reasoning_content", None)
-                        
+
+                        # Build the combined delta for the streaming callback.
+                        #
+                        # Standard path: reasoning comes via a dedicated
+                        # ``reasoning_content`` field — wrap it in <think>...</think>
+                        # so the downstream hook (see _LoopHook.on_stream) can
+                        # separate thinking from answer content.
+                        #
+                        # Fallback path: some providers (e.g. DashScope qwen3-max)
+                        # embed thinking inside ``content`` using <think>...</think>
+                        # tags without populating ``reasoning_content``.  In that
+                        # case the tags are already in *text* and will flow
+                        # through naturally — _parse_chunks handles the final
+                        # extraction at the end of the stream.
                         combined = ""
                         if reasoning:
                             combined += f"<think>{reasoning}</think>"

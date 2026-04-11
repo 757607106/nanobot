@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -126,7 +126,7 @@ async def create_mcp_test_chat_message(
     if not content:
         raise APIError(400, "VALIDATION_ERROR", "content is required.")
 
-    async def on_progress(_progress: str, *, tool_hint: bool = False) -> None:
+    async def on_progress(_progress: str, *, tool_hint: bool = False, **_: Any) -> None:
         return None
 
     try:

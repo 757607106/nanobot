@@ -14,6 +14,8 @@ import {
   parseStreamEvent,
 } from './chatMessageUtils'
 
+// Removed debug logger
+
 const API_BASE = '/api/v1'
 const XREQUEST_PLACEHOLDER_URL = `${API_BASE}/chat/messages?stream=1`
 
@@ -36,12 +38,55 @@ const interceptFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   return response
 }
 
-function getStreamEvents(chunks: SSEOutput[]): StreamEvent[] {
-  return chunks.map(parseStreamEvent).filter((event): event is StreamEvent => event !== null)
+function parseStreamEvents(chunks?: SSEOutput[]): StreamEvent[] {
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    return []
+  }
+  return chunks
+    .map(parseStreamEvent)
+    .filter((event): event is StreamEvent => event !== null)
+}
+
+function cloneSubMessages(message?: ChatMessage): ChatMessage[] {
+  const raw = (message as any)?._subMessages
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw.map((item: ChatMessage) => normalizeChatMessage(item))
+}
+
+function readProgressEvents(message?: ChatMessage) {
+  const raw = (message as any)?._progressEvents
+  if (!Array.isArray(raw)) {
+    return [] as Extract<StreamEvent, { type: 'progress' }>[]
+  }
+  return raw.filter((event: StreamEvent) => event?.type === 'progress') as Extract<StreamEvent, { type: 'progress' }>[]
+}
+
+function getOrCreateAssistantSegment(subMessages: ChatMessage[], createdAt?: string) {
+  const last = subMessages[subMessages.length - 1]
+  if (last && last.role === 'assistant') {
+    return last
+  }
+  const segment = normalizeChatMessage({
+    role: 'assistant',
+    content: '',
+    reasoningContent: '',
+    toolCalls: [],
+    createdAt: createdAt || new Date().toISOString(),
+  })
+  subMessages.push(segment)
+  return segment
+}
+
+function clearReasoning(message: ChatMessage, subMessages: ChatMessage[]) {
+  message.reasoningContent = undefined
+  for (const item of subMessages) {
+    item.reasoningContent = undefined
+  }
 }
 
 export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatRequestInput, SSEOutput> {
-  private accumulatedChunks: SSEOutput[] = []
   private _currentReasoningEffortEnabled = false
   private _agentId?: string
 
@@ -56,7 +101,6 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
   }
 
   transformParams(requestParams: Partial<ChatRequestInput>) {
-    this.accumulatedChunks = []
     this._currentReasoningEffortEnabled = Boolean(requestParams.reasoningEffort)
     const sessionId = String(requestParams.sessionId || '').trim()
     const query = String(requestParams.query || '').trim()
@@ -83,97 +127,90 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
   }
 
   transformMessage(info: TransformMessage<ChatMessage, SSEOutput>) {
-    if (info.chunk && typeof info.chunk === 'object') {
-      this.accumulatedChunks.push(info.chunk)
-    }
+    const baseMessage = normalizeChatMessage(
+      info.originMessage ?? {
+        role: 'assistant',
+        content: '',
+        createdAt: new Date().toISOString(),
+      },
+    )
+    const subMessages = cloneSubMessages(info.originMessage)
+    const progressEvents = readProgressEvents(info.originMessage)
+    const currentEvent = parseStreamEvent(info.chunk)
 
-    const allChunks = this.accumulatedChunks.length > 0 ? this.accumulatedChunks : info.chunks
-    const events = getStreamEvents(allChunks)
-
-    const baseMessage = normalizeChatMessage(info.originMessage ?? { role: 'assistant', content: '', createdAt: new Date().toISOString() })
-
-    if (this._currentReasoningEffortEnabled && baseMessage.reasoningContent === undefined) {
-      baseMessage.reasoningContent = ''
-    }
-
-    const chunkEvents = events.filter((event) => event.type === 'chunk')
-    if (chunkEvents.length > 0) {
-      baseMessage.content = chunkEvents.map((event) => 'content' in event ? event.content : '').join('')
+    if (currentEvent?.type === 'chunk') {
+      if (currentEvent.content) {
+        baseMessage.content = `${baseMessage.content || ''}${currentEvent.content}`
+      }
       if (this._currentReasoningEffortEnabled) {
-        const reasoningParts = chunkEvents.map((event) => 'reasoningContent' in event ? (event.reasoningContent || '') : '')
-        if (reasoningParts.some(p => p.length > 0)) {
-          baseMessage.reasoningContent = reasoningParts.join('')
+        if (currentEvent.reasoningContent) {
+          baseMessage.reasoningContent = `${baseMessage.reasoningContent || ''}${currentEvent.reasoningContent}`
         }
       } else {
-        // If reasoning is completely turned off, strip any dangling server reasoning content
-        // so that the UI never thinks reasoning is active.
         baseMessage.reasoningContent = undefined
       }
-    }
 
-    const subMessages: ChatMessage[] = []
-    let currentSubMsg: Partial<ChatMessage> = { role: 'assistant', reasoningContent: '', content: '', toolCalls: [] }
-
-    for (const event of events) {
-      if (event.type === 'chunk') {
-        if ('reasoningContent' in event && event.reasoningContent && this._currentReasoningEffortEnabled) {
-          currentSubMsg.reasoningContent = (currentSubMsg.reasoningContent || '') + event.reasoningContent
-        }
-        if ('content' in event && event.content) {
-          currentSubMsg.content = (currentSubMsg.content || '') + event.content
-        }
-        if ('toolCalls' in (event as any) && (event as any).toolCalls) {
-          currentSubMsg.toolCalls = (event as any).toolCalls as any
-        }
-      } else if (event.type === 'progress' && event.toolComplete) {
-        // We finished a tool. Push the current assistant context, then the tool result.
-        if (currentSubMsg.reasoningContent || currentSubMsg.content || (currentSubMsg.toolCalls && currentSubMsg.toolCalls.length > 0)) {
-          subMessages.push(currentSubMsg as ChatMessage)
-        }
+      const currentSegment = getOrCreateAssistantSegment(subMessages, baseMessage.createdAt)
+      if (currentEvent.content) {
+        currentSegment.content = `${currentSegment.content || ''}${currentEvent.content}`
+      }
+      if (this._currentReasoningEffortEnabled && currentEvent.reasoningContent) {
+        currentSegment.reasoningContent = `${currentSegment.reasoningContent || ''}${currentEvent.reasoningContent}`
+      }
+    } else if (currentEvent?.type === 'progress') {
+      progressEvents.push(currentEvent)
+      if (currentEvent.toolHint && Array.isArray(currentEvent.toolCalls) && currentEvent.toolCalls.length > 0) {
+        const currentSegment = getOrCreateAssistantSegment(subMessages, baseMessage.createdAt)
+        currentSegment.toolCalls = currentEvent.toolCalls
+      } else if (currentEvent.toolComplete) {
         subMessages.push({
           role: 'tool',
-          name: event.toolName,
-          content: event.content === undefined ? '' : String(event.content),
-          toolCallId: event.toolName
-        } as ChatMessage)
-        currentSubMsg = { role: 'assistant', reasoningContent: '', content: '', toolCalls: [] }
+          name: currentEvent.toolName,
+          content: currentEvent.content === undefined ? '' : String(currentEvent.content),
+          toolCallId: currentEvent.toolCallId || currentEvent.toolName,
+          createdAt: new Date().toISOString(),
+        })
       }
     }
-    if (currentSubMsg.reasoningContent || currentSubMsg.content || (currentSubMsg.toolCalls && currentSubMsg.toolCalls.length > 0)) {
-      subMessages.push(currentSubMsg as ChatMessage)
+
+    if (progressEvents.length > 0) {
+      baseMessage.progressSteps = collectProgressSteps(progressEvents, info.originMessage)
+      ;(baseMessage as any)._progressEvents = progressEvents
     }
-
-    ;(baseMessage as any)._subMessages = subMessages
-
-    const progressSteps = collectProgressSteps(events, info.originMessage)
-    if (progressSteps.length > 0) {
-      baseMessage.progressSteps = progressSteps
+    if (subMessages.length > 0) {
+      ;(baseMessage as any)._subMessages = subMessages
     }
 
     if (info.status === 'success') {
-      const doneEvent: any = events.find((event) => event.type === 'done')
-      if (doneEvent && doneEvent.message) {
-        const finalMsg = normalizeChatMessage({
-          ...info.originMessage,
+      const doneEvent = parseStreamEvents(info.chunks).find(
+        (event): event is Extract<StreamEvent, { type: 'done' }> => event.type === 'done',
+      )
+      
+      if (doneEvent?.message) {
+        const finalMessage = normalizeChatMessage({
+          ...baseMessage,
           ...doneEvent.message,
-          progressSteps: doneEvent.progressSteps ?? (doneEvent.message.progressSteps ?? []),
+          content: doneEvent.content || doneEvent.message.content || baseMessage.content,
+          progressSteps:
+            doneEvent.message.progressSteps
+            ?? baseMessage.progressSteps
+            ?? [],
         })
-
-        // Preserve our meticulously constructed tool time-series UI segments!
-        ;(finalMsg as any)._subMessages = (baseMessage as any)._subMessages
-
-        // Forcefully assert our local reasoning toggle over the backend's default DB dumps!
-        if (!this._currentReasoningEffortEnabled) {
-          finalMsg.reasoningContent = undefined;
-          if ((finalMsg as any)._subMessages) {
-             (finalMsg as any)._subMessages.forEach((s: any) => {
-               s.reasoningContent = undefined
-             })
-          }
+        if (subMessages.length > 0) {
+          ;(finalMessage as any)._subMessages = subMessages
         }
-
-        return finalMsg
+        if (progressEvents.length > 0) {
+          ;(finalMessage as any)._progressEvents = progressEvents
+        }
+        if (!this._currentReasoningEffortEnabled) {
+          clearReasoning(finalMessage, subMessages)
+        }
+        return finalMessage
       }
+    }
+
+    if (!this._currentReasoningEffortEnabled) {
+      clearReasoning(baseMessage, subMessages)
     }
 
     return baseMessage

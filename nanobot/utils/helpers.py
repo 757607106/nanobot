@@ -15,9 +15,14 @@ from loguru import logger
 
 
 def strip_think(text: str) -> str:
-    """Remove <think>…</think> blocks and any unclosed trailing <think> tag."""
+    """Remove <think>…</think> blocks and any unclosed leading <think> tag.
+
+    The second pattern anchors to the start of the string so that a ``<think>``
+    appearing in the middle of already-generated content is NOT accidentally
+    stripped (e.g. a model quoting the tag in plain text).
+    """
     text = re.sub(r"<think>[\s\S]*?</think>", "", text)
-    text = re.sub(r"<think>[\s\S]*$", "", text)
+    text = re.sub(r"^\s*<think>[\s\S]*$", "", text)
     return text.strip()
 
 
@@ -30,6 +35,45 @@ def extract_think(text: str) -> str | None:
         return None
     pieces = [m.group(1).strip() for m in matches if m.group(1).strip()]
     return "\n".join(pieces).strip() or None
+
+
+def separate_reasoning_from_content(
+    content: str | None,
+    existing_reasoning: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Separate reasoning content from a content string that may embed <think>...</think> blocks.
+
+    Some providers (e.g. DashScope qwen3-max, certain volcengine models) return
+    thinking content inside the ``content`` field wrapped in <think>...</think> tags
+    instead of via the standard ``reasoning_content`` field.  This function
+    extracts those blocks so callers can route them correctly.
+
+    Args:
+        content: The raw content string that may contain <think>...</think> blocks.
+        existing_reasoning: Reasoning already extracted via the standard
+            ``reasoning_content`` field.  If present, the function skips
+            extraction to avoid duplicate work.
+
+    Returns:
+        A ``(clean_content, reasoning)`` tuple where *clean_content* has all
+        <think>...</think> blocks removed and *reasoning* is the extracted
+        thinking content (or *existing_reasoning* if it was already non-empty).
+        Returns ``(None, existing_reasoning)`` when *content* is empty or None.
+    """
+    if not content:
+        return None, existing_reasoning
+
+    # If reasoning was already provided through the standard field, no need
+    # to dig into content — return as-is to avoid redundant regex work.
+    if existing_reasoning:
+        return content, existing_reasoning
+
+    extracted = extract_think(content)
+    if not extracted:
+        return content, None
+
+    clean = strip_think(content)
+    return clean or None, extracted
 
 
 def detect_image_mime(data: bytes) -> str | None:

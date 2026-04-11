@@ -927,20 +927,31 @@ class WebAgentRuntimeService:
 
         progress_events: list[str] = []
 
-        async def _on_progress(progress: str, *, tool_hint: bool = False) -> None:
+        async def _on_progress(progress: str, *, tool_hint: bool = False, **kwargs: Any) -> None:
             if not progress:
                 return
             progress_events.append(progress)
+            event_payload: dict[str, Any] = {
+                "content": progress,
+                "toolHint": tool_hint,
+            }
+            if kwargs.get("tool_calls"):
+                event_payload["toolCalls"] = kwargs["tool_calls"]
+            if kwargs.get("tool_complete"):
+                event_payload["toolComplete"] = True
+                if kwargs.get("tool_name"):
+                    event_payload["toolName"] = kwargs["tool_name"]
+                if kwargs.get("tool_status"):
+                    event_payload["toolStatus"] = kwargs["tool_status"]
+                if kwargs.get("tool_call_id"):
+                    event_payload["toolCallId"] = kwargs["tool_call_id"]
             self.state.runs.append_event(
                 record.run_id,
                 "progress",
-                {
-                    "content": progress,
-                    "toolHint": tool_hint,
-                },
+                event_payload,
             )
             if on_progress is not None:
-                await on_progress(progress, tool_hint=tool_hint)
+                await on_progress(progress, tool_hint=tool_hint, **kwargs)
 
         chat_message: dict[str, Any] | None = None
         if display_content or attachments:

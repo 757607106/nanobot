@@ -148,9 +148,35 @@ export function collectProgressSteps(events: StreamEvent[], originMessage?: Chat
     if (event.type !== 'progress') {
       return steps
     }
+    if (event.toolHint && Array.isArray(event.toolCalls) && event.toolCalls.length > 0) {
+      let next = steps
+      for (const [toolIndex, toolCall] of event.toolCalls.entries()) {
+        const toolCallId = String(toolCall.id || '').trim()
+        const label = getToolCallName(toolCall)
+        const exists = toolCallId
+          ? next.some((step) => step.kind === 'tool' && step.toolCallId === toolCallId && !step.completed)
+          : hasProgressStep(next, label, 'tool')
+        if (exists) {
+          continue
+        }
+        next = [
+          ...next,
+          {
+            key: toolCallId ? `tool-start-${toolCallId}` : `tool-start-${index}-${toolIndex}-${label}`,
+            label,
+            kind: 'tool',
+            completed: false,
+            toolCallId: toolCallId || undefined,
+            createdAt: originMessage?.createdAt || new Date().toISOString(),
+          },
+        ]
+      }
+      return next
+    }
     if (event.toolComplete) {
       // Find the corresponding starting step for this tool and mark it completed,
       // rather than appending a duplicate 'completed' record.
+      const targetCallId = String(event.toolCallId || '').trim()
       const targetName = event.toolName || event.content
       
       // Find the LAST uncompleted tool step that matches the tool name.
@@ -159,6 +185,10 @@ export function collectProgressSteps(events: StreamEvent[], originMessage?: Chat
       for (let i = steps.length - 1; i >= 0; i--) {
         const s = steps[i]
         if (s.kind === 'tool' && !s.completed) {
+          if (targetCallId && s.toolCallId && s.toolCallId === targetCallId) {
+            existingStepIndex = i
+            break
+          }
           const sLabel = s.label as string
           if (sLabel === targetName || sLabel.includes(targetName)) {
             existingStepIndex = i
@@ -172,6 +202,7 @@ export function collectProgressSteps(events: StreamEvent[], originMessage?: Chat
         newSteps[existingStepIndex] = {
           ...newSteps[existingStepIndex],
           completed: true,
+          toolCallId: targetCallId || newSteps[existingStepIndex].toolCallId,
           label: event.toolStatus ? `${targetName}: ${event.toolStatus}` : targetName,
         }
         return newSteps
@@ -184,10 +215,11 @@ export function collectProgressSteps(events: StreamEvent[], originMessage?: Chat
       return [
         ...steps,
         {
-          key: `tool-complete-${index}-${label}`,
+          key: targetCallId ? `tool-complete-${targetCallId}` : `tool-complete-${index}-${label}`,
           label,
           kind: 'tool' as const,
           completed: true,
+          toolCallId: targetCallId || undefined,
           createdAt: originMessage?.createdAt || new Date().toISOString(),
         },
       ]

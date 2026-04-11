@@ -38,6 +38,7 @@ export interface ChatProgressStep {
   label: string
   kind: 'progress' | 'tool'
   completed?: boolean
+  toolCallId?: string
   createdAt?: string
 }
 
@@ -117,8 +118,17 @@ export interface ChatWorkspaceData {
 
 export type StreamEvent =
   | { type: 'start'; sessionId: string }
-  | { type: 'progress'; content: string; toolHint?: boolean; toolComplete?: boolean; toolName?: string; toolStatus?: string }
-  | { type: 'chunk'; content: string; reasoningContent?: string }
+  | {
+      type: 'progress'
+      content: string
+      toolHint?: boolean
+      toolComplete?: boolean
+      toolName?: string
+      toolStatus?: string
+      toolCalls?: ChatToolCall[]
+      toolCallId?: string
+    }
+  | { type: 'chunk'; content: string; reasoningContent?: string; toolCalls?: ChatToolCall[] }
   | { type: 'done'; content: string; message: ChatMessage | null }
   | { type: 'error'; message: string }
 

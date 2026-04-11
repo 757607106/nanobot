@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import React from 'react'
 import {
   ApiOutlined,
@@ -326,25 +326,6 @@ function getToolIcon(name: string) {
   return <ToolOutlined />
 }
 
-/* ── Shared code block style ── */
-function useCodeBlockStyle(): CSSProperties {
-  const { token } = theme.useToken()
-  return {
-    margin: 0,
-    padding: 10,
-    borderRadius: 8,
-    background: token.colorFillAlter,
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-all',
-    fontSize: 'var(--nb-text-xs)',
-    fontFamily: 'var(--nb-font-mono, monospace)',
-    maxHeight: 360,
-    overflow: 'auto',
-    border: `1px solid ${token.colorBorderSecondary}`,
-    lineHeight: 1.6,
-  }
-}
-
 /**
  * Automatically expands the 'Think' component while loading, and collapses it when finished.
  * This aligns with SOTA deep reasoning UX paradigms.
@@ -420,11 +401,9 @@ export function ChatMessageBody({
   showToolCalls?: boolean
 }) {
   const { token } = theme.useToken()
-  const codeStyle = useCodeBlockStyle()
   const message = normalizeChatMessage(info.message)
   const progressSteps = message.progressSteps ?? []
   const isStreaming = info.status === 'loading' || info.status === 'updating'
-  const toolResults = (message as any)._toolResults as ChatMessage[] | undefined
 
   if (message.role === 'tool') {
     return <div style={{ display: 'none' }} />
@@ -447,14 +426,64 @@ export function ChatMessageBody({
     }
   }
 
-  const showPlaceholderCopy =
-    !Boolean(String(message.content || '').trim()) &&
-    message.role === 'assistant' &&
-    isStreaming
+  // Build ONE unified ThoughtChain from ALL segments' tool calls
+  const toolChainItems: ThoughtChainItemType[] = []
+  if (showToolCalls) {
+    for (const [segIndex, seg] of segments.entries()) {
+      if (seg.toolCalls && seg.toolCalls.length > 0) {
+        seg.toolCalls.forEach((t, tIndex) => {
+          const name = getToolCallName(t)
+          const resultMsg = seg._toolResults.find(r => r.toolCallId === t.id) || seg._toolResults[tIndex]
+          const meta = getToolUIMeta(name, !!resultMsg)
 
-  // We rely on segments mapping for completed tools (which have rich outputs).
-  // For tools that are currently executing (loading), we retain them in progressSteps.
-  const generalProgressSteps = progressSteps.filter(step => step.kind !== 'tool' || !step.completed)
+          toolChainItems.push({
+            key: `tc-${segIndex}-${t.id || tIndex}`,
+            title: meta.title,
+            icon: meta.icon,
+            status: resultMsg ? 'success' : 'loading',
+            collapsible: true,
+            content: (
+              <Flex vertical gap="small">
+                <XMarkdown content={`**输入参数:**\n\`\`\`json\n${formatToolArgumentsBlock(t)}\n\`\`\``} />
+                {resultMsg && (
+                  <XMarkdown content={`**返回结果:**\n\`\`\`json\n${truncateContent(formatResultContent(String(resultMsg.content || '')))}\n\`\`\``} />
+                )}
+              </Flex>
+            ),
+          })
+        })
+      } else if (seg._toolResults.length > 0) {
+        seg._toolResults.forEach((r, rIndex) => {
+          const name = r.name || '未知工具'
+          const meta = getToolUIMeta(name, true)
+
+          toolChainItems.push({
+            key: `tr-orphan-${segIndex}-${rIndex}`,
+            title: meta.title,
+            icon: meta.icon,
+            status: 'success',
+            collapsible: true,
+            content: <XMarkdown content={`\`\`\`json\n${truncateContent(formatResultContent(String(r.content || '')))}\n\`\`\``} />,
+          })
+        })
+      }
+    }
+  }
+
+  const _dbg: string[] = (window as any).__NB_DEBUG_LOGS ??= []
+  _dbg.push(`[${new Date().toISOString()}] RENDER segments: ${JSON.stringify(segments.map(s => ({
+    role: s.role,
+    tcCount: s.toolCalls?.length || 0,
+    trCount: s._toolResults?.length || 0,
+    tcNames: s.toolCalls?.map((t: any) => t.function?.name || t.name) || [],
+  })))} toolChainItems: ${toolChainItems.length} _subMessages: ${((message as any)._subMessages || []).length}`)
+
+  const hasReasoning = Boolean(message.reasoningContent)
+  const finalContent = String(message.content || '').trim()
+  const showPlaceholder = !finalContent && message.role === 'assistant' && isStreaming
+
+  // Non-tool progress steps only (tools are in the unified ThoughtChain)
+  const generalProgressSteps = progressSteps.filter(step => step.kind !== 'tool')
   const generalChainItems = buildThoughtChainItems(generalProgressSteps, info.status).map(item => ({
     ...item,
     description: undefined,
@@ -462,76 +491,24 @@ export function ChatMessageBody({
 
   return (
     <Flex vertical gap={12}>
-      {segments.map((seg, index) => {
-        const hasReasoning = Boolean(seg.reasoningContent)
-        const hasToolCalls = Boolean(seg.toolCalls && seg.toolCalls.length > 0)
-        const isLastSegment = index === segments.length - 1
+      {hasReasoning && (
+        <AutoThinkBlock
+          loading={isStreaming && !finalContent}
+          content={String(message.reasoningContent)}
+        />
+      )}
 
-        const toolChainItems: ThoughtChainItemType[] = []
-
-        if (hasToolCalls) {
-          seg.toolCalls!.forEach((t, tIndex) => {
-            const name = getToolCallName(t)
-            const resultMsg = seg._toolResults.find(r => r.toolCallId === t.id) || seg._toolResults[tIndex]
-            
-            const meta = getToolUIMeta(name, !!resultMsg)
-
-            toolChainItems.push({
-              key: `tc-${index}-${t.id || tIndex}`,
-              title: meta.title,
-              icon: meta.icon,
-              status: resultMsg ? 'success' : 'loading',
-              collapsible: true, // Natively expand tool args & results using Ant Design X standard!
-              content: (
-                <Flex vertical gap="small">
-                  <XMarkdown content={`**输入参数:**\n\`\`\`json\n${formatToolArgumentsBlock(t)}\n\`\`\``} />
-                  {resultMsg && (
-                    <XMarkdown content={`**返回结果:**\n\`\`\`json\n${truncateContent(formatResultContent(String(resultMsg.content || '')))}\n\`\`\``} />
-                  )}
-                </Flex>
-              ),
-            })
-          })
-        } else if (seg._toolResults.length > 0) {
-          // Fallback if tools were executed without a matching toolCall entry
-          seg._toolResults.forEach((r, rIndex) => {
-            const name = r.name || '未知工具'
-            const meta = getToolUIMeta(name, true)
-
-            toolChainItems.push({
-              key: `tr-orphan-${index}-${rIndex}`,
-              title: meta.title,
-              icon: meta.icon,
-              status: 'success',
-              collapsible: true,
-              content: <XMarkdown content={`\`\`\`json\n${truncateContent(formatResultContent(String(r.content || '')))}\n\`\`\``} />,
-            })
-          })
-        }
-
-        return (
-          <React.Fragment key={`segment-${seg.id || index}`}>
-            {hasReasoning && (
-              <AutoThinkBlock
-                loading={isStreaming && isLastSegment}
-                content={String(seg.reasoningContent)}
-              />
-            )}
-
-            {toolChainItems.length > 0 && (
-              <ThoughtChain
-                items={toolChainItems}
-                style={{
-                  background: token.colorFillQuaternary,
-                  padding: '12px 16px',
-                  borderRadius: 10,
-                  marginTop: hasReasoning ? 4 : 0,
-                }}
-              />
-            )}
-          </React.Fragment>
-        )
-      })}
+      {toolChainItems.length > 0 && (
+        <ThoughtChain
+          items={toolChainItems}
+          style={{
+            background: token.colorFillQuaternary,
+            padding: '12px 16px',
+            borderRadius: 10,
+            marginTop: hasReasoning ? 4 : 0,
+          }}
+        />
+      )}
 
       {generalChainItems.length > 0 && (
         <ThoughtChain
@@ -546,22 +523,11 @@ export function ChatMessageBody({
 
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
 
-      {/* Aggregate any final actual text contents across segments */}
-      {(() => {
-        const fullContent = segments
-          .filter(s => s.role === 'assistant' || s.role === 'user')
-          .map(s => s.content)
-          .join('\n')
-          .trim()
-        
-        if (fullContent) {
-          return <MarkdownBubble content={fullContent} isStreaming={isStreaming} />
-        }
-        if (showPlaceholderCopy) {
-          return <Text type="secondary">{assistantLoadingCopy}</Text>
-        }
-        return null
-      })()}
+      {finalContent ? (
+        <MarkdownBubble content={finalContent} isStreaming={isStreaming} />
+      ) : showPlaceholder ? (
+        <Text type="secondary">{assistantLoadingCopy}</Text>
+      ) : null}
     </Flex>
   )
 }

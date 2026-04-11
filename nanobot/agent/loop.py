@@ -74,6 +74,7 @@ class _LoopHook(AgentHook):
         if self._on_progress is None:
             return
         tool_name = getattr(tool_call, "name", "tool")
+        tool_call_id = getattr(tool_call, "id", "") or ""
         status = event.get("status", "ok") if isinstance(event, dict) else "ok"
         detail = event.get("detail", "") if isinstance(event, dict) else ""
         summary = f"{tool_name}: {detail}" if detail else tool_name
@@ -83,6 +84,7 @@ class _LoopHook(AgentHook):
             tool_complete=True,
             tool_name=tool_name,
             tool_status=status,
+            tool_call_id=tool_call_id,
         )
 
     def wants_streaming(self) -> bool:
@@ -125,7 +127,11 @@ class _LoopHook(AgentHook):
                 if thought:
                     await self._on_progress(thought)
             tool_hint = self._loop._strip_think(self._loop._tool_hint(context.tool_calls))
-            await self._on_progress(tool_hint, tool_hint=True)
+            await self._on_progress(
+                tool_hint,
+                tool_hint=True,
+                tool_calls=[tc.to_openai_tool_call() for tc in context.tool_calls],
+            )
         for tc in context.tool_calls:
             args_str = json.dumps(tc.arguments, ensure_ascii=False)
             logger.info("Tool call: {}({})", tc.name, args_str[:200])
