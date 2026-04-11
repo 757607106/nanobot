@@ -14,8 +14,6 @@ import {
   parseStreamEvent,
 } from './chatMessageUtils'
 
-// Removed debug logger
-
 const API_BASE = '/api/v1'
 const XREQUEST_PLACEHOLDER_URL = `${API_BASE}/chat/messages?stream=1`
 
@@ -185,12 +183,10 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
       const doneEvent = parseStreamEvents(info.chunks).find(
         (event): event is Extract<StreamEvent, { type: 'done' }> => event.type === 'done',
       )
-      
       if (doneEvent?.message) {
         const finalMessage = normalizeChatMessage({
           ...baseMessage,
           ...doneEvent.message,
-          content: doneEvent.content || doneEvent.message.content || baseMessage.content,
           progressSteps:
             doneEvent.message.progressSteps
             ?? baseMessage.progressSteps

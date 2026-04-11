@@ -75,23 +75,13 @@ export function ChatMessages({
 
   // Pre-process messages to group all consecutive 'assistant' and 'tool' records into a single 'assistant' message.
   // This matches the live-streaming visual where an entire agent loop shares one unified Bubble.
-  // During streaming, transformMessage already builds _subMessages with segment data — preserve it.
   for (const info of messageInfos) {
     if (info.message.role === 'assistant') {
       if (currentAssistant) {
         // Instead of string concatenation, we preserve the distinct sub-messages
         ;(currentAssistant.message as any)._subMessages.push(info.message)
       } else {
-        const existingSubs = (info.message as any)._subMessages
-        currentAssistant = {
-          ...info,
-          message: {
-            ...info.message,
-            _subMessages: Array.isArray(existingSubs) && existingSubs.length > 0
-              ? existingSubs
-              : [info.message],
-          } as any,
-        }
+        currentAssistant = { ...info, message: { ...info.message, _subMessages: [info.message] } as any }
         groupedMessageInfos.push(currentAssistant)
       }
     } else if (info.message.role === 'tool') {
