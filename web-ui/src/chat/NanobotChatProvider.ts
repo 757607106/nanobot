@@ -10,6 +10,7 @@ import type { ChatMessage, ChatRequestInput, StreamEvent } from '../types'
 import {
   collectProgressSteps,
   dedupeAttachmentRefs,
+  getToolCallName,
   normalizeChatMessage,
   parseStreamEvent,
 } from './chatMessageUtils'
@@ -156,11 +157,87 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
         currentSegment.reasoningContent = `${currentSegment.reasoningContent || ''}${currentEvent.reasoningContent}`
       }
     } else if (currentEvent?.type === 'progress') {
+      // 增量更新 progressSteps（不再依赖 _progressEvents 批处理）
+      const steps = [...(baseMessage.progressSteps ?? [])]
       progressEvents.push(currentEvent)
+
       if (currentEvent.toolHint && Array.isArray(currentEvent.toolCalls) && currentEvent.toolCalls.length > 0) {
+        // 1. 在 tool 开始前，快照当前累积的 reasoning content
+        const prevSnapshotEnd = steps
+          .filter(s => s.kind === 'thinking')
+          .reduce((acc, s) => acc + (s.reasoningContent?.length || 0), 0)
+        const totalReasoning = baseMessage.reasoningContent || ''
+        const newThinking = totalReasoning.slice(prevSnapshotEnd)
+        if (newThinking) {
+          steps.push({
+            key: `thinking-${steps.length}-${Date.now()}`,
+            label: '深度思考',
+            kind: 'thinking',
+            reasoningContent: newThinking,
+            createdAt: baseMessage.createdAt || new Date().toISOString(),
+          })
+        }
+
+        // 2. 添加 tool 开始步骤
+        for (const toolCall of currentEvent.toolCalls) {
+          const toolCallId = String(toolCall.id || '').trim()
+          const label = getToolCallName(toolCall)
+          const exists = toolCallId
+            ? steps.some(s => s.kind === 'tool' && s.toolCallId === toolCallId && !s.completed)
+            : steps.some(s => s.label === label && s.kind === 'tool' && !s.completed)
+          if (!exists) {
+            steps.push({
+              key: toolCallId ? `tool-start-${toolCallId}` : `tool-start-${steps.length}-${label}`,
+              label,
+              kind: 'tool',
+              completed: false,
+              toolCallId: toolCallId || undefined,
+              createdAt: baseMessage.createdAt || new Date().toISOString(),
+            })
+          }
+        }
+
+        // 3. 设置 segment 的 toolCalls
         const currentSegment = getOrCreateAssistantSegment(subMessages, baseMessage.createdAt)
         currentSegment.toolCalls = currentEvent.toolCalls
       } else if (currentEvent.toolComplete) {
+        // 标记对应 tool 步骤为完成
+        const targetCallId = String(currentEvent.toolCallId || '').trim()
+        const targetName = currentEvent.toolName || currentEvent.content
+        let found = false
+        for (let i = steps.length - 1; i >= 0; i--) {
+          const s = steps[i]
+          if (s.kind === 'tool' && !s.completed) {
+            if ((targetCallId && s.toolCallId && s.toolCallId === targetCallId) ||
+                (s.label === targetName || (s.label && targetName && s.label.includes(targetName)))) {
+              steps[i] = {
+                ...s,
+                completed: true,
+                toolCallId: targetCallId || s.toolCallId,
+                label: currentEvent.toolStatus ? `${targetName}: ${currentEvent.toolStatus}` : targetName,
+                resultContent: currentEvent.content === undefined ? undefined : String(currentEvent.content),
+              }
+              found = true
+              break
+            }
+          }
+        }
+        if (!found) {
+          const label = currentEvent.toolName
+            ? `${currentEvent.toolName}${currentEvent.toolStatus ? `: ${currentEvent.toolStatus}` : ''}`
+            : currentEvent.content
+          steps.push({
+            key: targetCallId ? `tool-complete-${targetCallId}` : `tool-complete-${steps.length}-${label}`,
+            label,
+            kind: 'tool',
+            completed: true,
+            toolCallId: targetCallId || undefined,
+            resultContent: currentEvent.content === undefined ? undefined : String(currentEvent.content),
+            createdAt: baseMessage.createdAt || new Date().toISOString(),
+          })
+        }
+
+        // 推送 tool 消息到 subMessages
         subMessages.push({
           role: 'tool',
           name: currentEvent.toolName,
@@ -168,11 +245,21 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
           toolCallId: currentEvent.toolCallId || currentEvent.toolName,
           createdAt: new Date().toISOString(),
         })
+      } else {
+        // 其他 progress 事件（非 tool 的通用进度）
+        const kind: 'progress' | 'tool' = currentEvent.toolHint ? 'tool' : 'progress'
+        if (!steps.some(s => s.label === currentEvent.content && s.kind === kind)) {
+          steps.push({
+            key: `${kind}-${steps.length}-${currentEvent.content}`,
+            label: currentEvent.content,
+            kind,
+            createdAt: baseMessage.createdAt || new Date().toISOString(),
+          })
+        }
       }
-    }
 
-    if (progressEvents.length > 0) {
-      baseMessage.progressSteps = collectProgressSteps(progressEvents, info.originMessage)
+      baseMessage.progressSteps = steps
+      // 仍然保存 _progressEvents 供 done 事件使用（备用）
       ;(baseMessage as any)._progressEvents = progressEvents
     }
     if (subMessages.length > 0) {
@@ -180,17 +267,27 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
     }
 
     if (info.status === 'success') {
-      const doneEvent = parseStreamEvents(info.chunks).find(
+      const allParsed = parseStreamEvents(info.chunks)
+      const doneEvent = allParsed.find(
         (event): event is Extract<StreamEvent, { type: 'done' }> => event.type === 'done',
       )
       if (doneEvent?.message) {
+        const serverMsg = doneEvent.message
+        // Streaming accumulates content & reasoning across ALL LLM iterations.
+        // The server's last assistant message may only contain the final iteration's data,
+        // losing earlier iterations' reasoning and potentially content.
+        // Prefer the longer (more complete) version for text fields.
+        const streamContent = baseMessage.content || ''
+        const serverContent = typeof serverMsg.content === 'string' ? serverMsg.content : ''
+        const streamReasoning = baseMessage.reasoningContent || ''
+        const serverReasoning = serverMsg.reasoningContent || ''
+
         const finalMessage = normalizeChatMessage({
           ...baseMessage,
-          ...doneEvent.message,
-          progressSteps:
-            doneEvent.message.progressSteps
-            ?? baseMessage.progressSteps
-            ?? [],
+          ...serverMsg,
+          content: streamContent.length >= serverContent.length ? streamContent : serverContent,
+          reasoningContent: streamReasoning.length >= serverReasoning.length ? streamReasoning : serverReasoning,
+          progressSteps: baseMessage.progressSteps ?? serverMsg.progressSteps ?? [],
         })
         if (subMessages.length > 0) {
           ;(finalMessage as any)._subMessages = subMessages

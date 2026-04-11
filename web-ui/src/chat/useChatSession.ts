@@ -273,13 +273,52 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
     try {
       const history = inAgentMode && agentId ? await api.getAgentMessages(agentId, sessionId) : await api.getMessages(sessionId)
       if (currentSessionIdRef.current === sessionId) {
-        setMessages(
-          history.map((item, index) => ({
-            id: item.id ? `h_${item.id}` : `${inAgentMode ? 'agent' : 'history'}-${sessionId}-${index}`,
-            message: normalizeChatMessage(item),
-            status: 'success',
-          })),
-        )
+        // Preserve streaming-accumulated data that the server doesn't have:
+        // - progressSteps (tool/thinking chain, purely client-side)
+        // - reasoningContent (streaming accumulates ALL iterations; server may only have the last)
+        // - content (streaming accumulates ALL iterations)
+        const lastStreamingAssistant = [...messages].reverse().find(
+          (m) => m.message?.role === 'assistant'
+        )?.message
+
+        const serverItems = history.map((item, index) => ({
+          id: item.id ? `h_${item.id}` : `${inAgentMode ? 'agent' : 'history'}-${sessionId}-${index}`,
+          message: normalizeChatMessage(item),
+          status: 'success' as const,
+        }))
+
+        // Merge streaming enrichments into the FIRST server assistant message.
+        // ChatMessages.tsx groups consecutive assistant+tool messages into one Bubble,
+        // using the FIRST assistant as the primary (whose progressSteps/content/reasoning are rendered).
+        // Streaming accumulates everything into a single message; the server splits into per-iteration messages.
+        // We must put the accumulated data on the FIRST assistant so the grouping primary has it.
+        if (lastStreamingAssistant) {
+          for (let i = 0; i < serverItems.length; i++) {
+            if (serverItems[i].message.role === 'assistant') {
+              const serverMsg = serverItems[i].message
+              const streamSteps = lastStreamingAssistant.progressSteps || []
+              const streamReasoning = lastStreamingAssistant.reasoningContent || ''
+              const serverReasoning = serverMsg.reasoningContent || ''
+              const streamContent = lastStreamingAssistant.content || ''
+              const serverContent = serverMsg.content || ''
+
+              serverItems[i] = {
+                ...serverItems[i],
+                message: normalizeChatMessage({
+                  ...serverMsg,
+                  // Prefer the longer (more complete) version — streaming accumulates across all LLM iterations
+                  content: streamContent.length >= serverContent.length ? streamContent : serverContent,
+                  reasoningContent: streamReasoning.length >= serverReasoning.length ? streamReasoning : serverReasoning,
+                  // Server never has progressSteps; always use the streaming version
+                  progressSteps: streamSteps.length > 0 ? streamSteps : (serverMsg.progressSteps || []),
+                }),
+              }
+              break  // only merge into the first assistant message
+            }
+          }
+        }
+
+        setMessages(serverItems)
       }
       await Promise.all([loadSessions(sessionId), loadSessionFiles(sessionId), refreshWorkspaceData({ quiet: true })])
 

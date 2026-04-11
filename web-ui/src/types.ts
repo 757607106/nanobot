@@ -36,9 +36,11 @@ export interface ChatAttachmentRef {
 export interface ChatProgressStep {
   key: string
   label: string
-  kind: 'progress' | 'tool'
+  kind: 'progress' | 'tool' | 'thinking'
   completed?: boolean
   toolCallId?: string
+  reasoningContent?: string
+  resultContent?: string
   createdAt?: string
 }
 

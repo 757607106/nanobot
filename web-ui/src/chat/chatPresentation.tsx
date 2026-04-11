@@ -424,7 +424,6 @@ export function ChatMessageBody({
   const message = normalizeChatMessage(info.message)
   const progressSteps = message.progressSteps ?? []
   const isStreaming = info.status === 'loading' || info.status === 'updating'
-  const toolResults = (message as any)._toolResults as ChatMessage[] | undefined
 
   if (message.role === 'tool') {
     return <div style={{ display: 'none' }} />
@@ -432,118 +431,165 @@ export function ChatMessageBody({
 
   const subMessages: ChatMessage[] = (message as any)._subMessages || [message]
 
-  // Group tool results into their preceding assistant segment to form atomic turns
-  const segments: Array<ChatMessage & { _toolResults: ChatMessage[] }> = []
-  for (const subMsg of subMessages) {
-    if (subMsg.role === 'tool') {
-      const lastSeg = segments[segments.length - 1]
-      if (lastSeg) {
-        lastSeg._toolResults.push(subMsg)
-      } else {
-        segments.push({ role: 'assistant', content: '', _toolResults: [subMsg] })
+  // For grouped messages (loaded from server history), the primary message only has
+  // the first LLM iteration's data. Aggregate content/reasoning from all sub-messages.
+  let effectiveContent = message.content || ''
+  let effectiveReasoning = message.reasoningContent || ''
+
+  if (subMessages.length > 1) {
+    // Aggregate reasoning from all assistant sub-messages
+    const allReasoning = subMessages
+      .filter(m => m.role === 'assistant' && m.reasoningContent)
+      .map(m => m.reasoningContent!)
+      .join('')
+    if (allReasoning.length > effectiveReasoning.length) {
+      effectiveReasoning = allReasoning
+    }
+
+    // Find content from the last assistant sub-message (the final answer)
+    if (!effectiveContent.trim()) {
+      const lastAssistantWithContent = [...subMessages]
+        .reverse()
+        .find(m => m.role === 'assistant' && m.content?.trim())
+      if (lastAssistantWithContent) {
+        effectiveContent = lastAssistantWithContent.content || ''
       }
-    } else {
-      segments.push({ ...subMsg, _toolResults: [] })
     }
   }
 
   const showPlaceholderCopy =
-    !Boolean(String(message.content || '').trim()) &&
+    !Boolean(effectiveContent.trim()) &&
     message.role === 'assistant' &&
     isStreaming
 
-  // We rely on segments mapping for completed tools (which have rich outputs).
-  // For tools that are currently executing (loading), we retain them in progressSteps.
-  const generalProgressSteps = progressSteps.filter(step => step.kind !== 'tool' || !step.completed)
-  const generalChainItems = buildThoughtChainItems(generalProgressSteps, info.status).map(item => ({
-    ...item,
-    description: undefined,
-  }))
+  // 构建交替 ThoughtChain
+  const unifiedItems: ThoughtChainItemType[] = []
+
+  if (progressSteps.length > 0) {
+    // 路径 A: 从流式 progressSteps 构建（streaming / sync 后保留的数据）
+    for (const step of progressSteps) {
+      if (step.kind === 'thinking') {
+        unifiedItems.push({
+          key: step.key,
+          title: '深度思考',
+          icon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />,
+          status: 'success',
+          collapsible: true,
+          content: (
+            <MarkdownBubble content={step.reasoningContent || ''} isStreaming={false} />
+          ),
+        })
+      } else if (step.kind === 'tool') {
+        const toolBaseName = step.label?.split(':')[0]?.trim() || 'tool'
+        const meta = getToolUIMeta(toolBaseName, !!step.completed)
+        unifiedItems.push({
+          key: step.key,
+          title: meta.title,
+          icon: step.completed ? meta.icon : <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} />,
+          status: step.completed ? 'success' : 'loading',
+          ...(step.completed && step.resultContent ? {
+            collapsible: true,
+            content: (
+              <MarkdownBubble content={step.resultContent} isStreaming={false} />
+            ),
+          } : {}),
+        })
+      } else if (step.kind === 'progress') {
+        unifiedItems.push({
+          key: step.key,
+          title: step.label || '处理中',
+          icon: <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} />,
+          status: 'loading',
+        })
+      }
+    }
+
+    // 当前正在流式输出的思考（还没遇到 toolHint 快照）
+    const prevSnapshotEnd = progressSteps
+      .filter(s => s.kind === 'thinking')
+      .reduce((acc, s) => acc + (s.reasoningContent?.length || 0), 0)
+    const currentThinking = effectiveReasoning.slice(prevSnapshotEnd)
+    if (currentThinking) {
+      unifiedItems.push({
+        key: 'thinking-current',
+        title: '深度思考',
+        icon: isStreaming ? <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} /> : <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />,
+        status: isStreaming ? 'loading' : 'success',
+        collapsible: !isStreaming,
+        content: (
+          <MarkdownBubble content={currentThinking} isStreaming={isStreaming} />
+        ),
+      })
+    }
+  } else if (subMessages.length > 1) {
+    // 路径 B: 从 sub-messages 构建（页面刷新加载历史，无 progressSteps）
+    // Pre-collect tool results by toolCallId for matching
+    const toolResultMap = new Map<string, string>()
+    for (const subMsg of subMessages) {
+      if (subMsg.role === 'tool' && subMsg.toolCallId) {
+        toolResultMap.set(String(subMsg.toolCallId), String(subMsg.content || ''))
+      }
+    }
+
+    for (const subMsg of subMessages) {
+      if (subMsg.role !== 'assistant') continue
+      // 思考
+      if (subMsg.reasoningContent?.trim()) {
+        unifiedItems.push({
+          key: `hist-thinking-${unifiedItems.length}`,
+          title: '深度思考',
+          icon: <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />,
+          status: 'success',
+          collapsible: true,
+          content: (
+            <MarkdownBubble content={subMsg.reasoningContent} isStreaming={false} />
+          ),
+        })
+      }
+      // 工具调用 + 匹配返回结果
+      if (subMsg.toolCalls?.length) {
+        for (const toolCall of subMsg.toolCalls) {
+          const toolName = getToolCallName(toolCall)
+          const meta = getToolUIMeta(toolName, true)
+          const toolCallId = String(toolCall.id || '').trim()
+          const resultContent = toolCallId ? toolResultMap.get(toolCallId) : undefined
+
+          unifiedItems.push({
+            key: `hist-tool-${unifiedItems.length}`,
+            title: meta.title,
+            icon: meta.icon,
+            status: 'success',
+            ...(resultContent ? {
+              collapsible: true,
+              content: (
+                <MarkdownBubble content={resultContent} isStreaming={false} />
+              ),
+            } : {}),
+          })
+        }
+      }
+    }
+  } else {
+    // 路径 C: 单条消息，无 sub-messages，无 progressSteps（简单回复或无工具）
+    if (effectiveReasoning.trim()) {
+      unifiedItems.push({
+        key: 'thinking-current',
+        title: '深度思考',
+        icon: isStreaming ? <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} /> : <CheckCircleFilled style={{ color: 'var(--nb-success)' }} />,
+        status: isStreaming ? 'loading' : 'success',
+        collapsible: !isStreaming,
+        content: (
+          <MarkdownBubble content={effectiveReasoning} isStreaming={isStreaming} />
+        ),
+      })
+    }
+  }
 
   return (
     <Flex vertical gap={12}>
-      {segments.map((seg, index) => {
-        const hasReasoning = Boolean(seg.reasoningContent)
-        const hasToolCalls = Boolean(seg.toolCalls && seg.toolCalls.length > 0)
-        const isLastSegment = index === segments.length - 1
-
-        const toolChainItems: ThoughtChainItemType[] = []
-
-        if (hasToolCalls) {
-          seg.toolCalls!.forEach((t, tIndex) => {
-            const name = getToolCallName(t)
-            const resultMsg = seg._toolResults.find(r => r.toolCallId === t.id) || seg._toolResults[tIndex]
-            
-            const meta = getToolUIMeta(name, !!resultMsg)
-
-            toolChainItems.push({
-              key: `tc-${index}-${t.id || tIndex}`,
-              title: meta.title,
-              icon: meta.icon,
-              status: resultMsg ? 'success' : 'loading',
-              collapsible: true, // Natively expand tool args & results using Ant Design X standard!
-              content: (
-                <Flex vertical gap="small">
-                  <XMarkdown content={`**输入参数:**\n\`\`\`json\n${formatToolArgumentsBlock(t)}\n\`\`\``} />
-                  {resultMsg && (
-                    <XMarkdown content={`**返回结果:**\n\`\`\`json\n${truncateContent(formatResultContent(String(resultMsg.content || '')))}\n\`\`\``} />
-                  )}
-                </Flex>
-              ),
-            })
-          })
-        } else if (seg._toolResults.length > 0) {
-          // Fallback if tools were executed without a matching toolCall entry
-          seg._toolResults.forEach((r, rIndex) => {
-            const name = r.name || '未知工具'
-            const meta = getToolUIMeta(name, true)
-
-            toolChainItems.push({
-              key: `tr-orphan-${index}-${rIndex}`,
-              title: meta.title,
-              icon: meta.icon,
-              status: 'success',
-              collapsible: true,
-              content: <XMarkdown content={`\`\`\`json\n${truncateContent(formatResultContent(String(r.content || '')))}\n\`\`\``} />,
-            })
-          })
-        }
-
-        // Think loading: active only for the last segment while streaming,
-        // and only when the segment hasn't produced final content yet.
-        const segThinkLoading = isStreaming && isLastSegment && !seg.content?.trim()
-
-        return (
-          <React.Fragment key={`segment-${seg.id || index}`}>
-            {hasReasoning && (
-              <AutoThinkBlock
-                loading={segThinkLoading}
-                content={String(seg.reasoningContent)}
-              />
-            )}
-
-            {toolChainItems.length > 0 && (
-              <ThoughtChain
-                items={toolChainItems}
-                style={{
-                  background: token.colorFillQuaternary,
-                  padding: '12px 16px',
-                  borderRadius: 10,
-                  marginTop: hasReasoning ? 4 : 0,
-                }}
-              />
-            )}
-
-            {seg.content?.trim() && (
-              <MarkdownBubble content={seg.content.trim()} isStreaming={isStreaming && isLastSegment} />
-            )}
-          </React.Fragment>
-        )
-      })}
-
-      {generalChainItems.length > 0 && (
+      {unifiedItems.length > 0 && (
         <ThoughtChain
-          items={generalChainItems}
+          items={unifiedItems}
           style={{
             background: token.colorFillQuaternary,
             padding: '12px 16px',
@@ -552,9 +598,16 @@ export function ChatMessageBody({
         />
       )}
 
+      {effectiveContent.trim() && (
+        <MarkdownBubble
+          content={effectiveContent.trim()}
+          isStreaming={isStreaming}
+        />
+      )}
+
       {message.attachments?.length ? <AttachmentTags attachments={message.attachments} /> : null}
 
-      {showPlaceholderCopy && !segments.some(s => s.content?.trim()) && (
+      {showPlaceholderCopy && unifiedItems.length === 0 && (
         <Text type="secondary">{assistantLoadingCopy}</Text>
       )}
     </Flex>
