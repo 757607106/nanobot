@@ -532,33 +532,15 @@ export default function ChannelsPage() {
         {channels.length === 0 ? (
           <Empty description="无匹配项" />
         ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-              gap: designTokens.space.md,
-            }}
-          >
+          <div className="channel-card-grid">
             {channels.map((channel, index) => (
               <motion.div
                 key={channel.key}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04, duration: 0.2 }}
-                whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(99,102,241,0.1)' }}
-                whileTap={{ scale: 0.98 }}
                 onClick={() => openChannelDrawer(channel.name)}
-                style={{
-                  background: 'var(--nb-card-subtle-bg)',
-                  border: `1px solid ${selectedChannel === channel.name ? token.colorPrimary : 'var(--nb-card-subtle-border)'}`,
-                  borderRadius: 16,
-                  padding: '20px 18px 16px',
-                  cursor: 'pointer',
-                  transition: 'border-color 200ms ease',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                }}
+                className={`channel-card ${selectedChannel === channel.name ? 'is-selected' : ''}`}
               >
                 {/* 图标 + 状态 */}
                 <Flex align="flex-start" justify="space-between">

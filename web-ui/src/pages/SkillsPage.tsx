@@ -80,17 +80,8 @@ function SkillCard({
 
   return (
     <motion.div
-      whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)' }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '20px',
-        borderRadius: 16,
-        background: bg,
-        border: border,
-        height: '100%',
-        transition: 'all 0.2s ease',
-      }}
+      className={`skill-card ${type === 'marketplace' && installed ? 'is-installed-market' : ''}`}
+      whileHover={{ y: -2, boxShadow: 'var(--nb-surface-soft-shadow)' }}
     >
       <Flex justify="space-between" align="flex-start" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>

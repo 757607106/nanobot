@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState } from 'react'
-import { Alert, Button, Card, Space, Table, Tag, Typography, Select } from 'antd'
+import { Alert, Button, Card, Space, Table, Tag, Typography, Select, Skeleton } from 'antd'
 import type { TableProps } from 'antd'
 import { ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -178,14 +178,14 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
             <Alert
               type="error"
               showIcon
-              style={{ margin: '16px 24px 0' }}
+              className="page-alert"
               message="运行记录加载失败"
               description={error}
             />
           ) : null}
 
           {threadFilter && (
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--nb-border)' }}>
+            <div className="page-filter-bar">
               <Tag
                 closable
                 onClose={() => {
@@ -199,22 +199,28 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
             </div>
           )}
 
-          <Table
-            dataSource={runs}
-            columns={columns}
-            rowKey="runId"
-            loading={loading}
-            scroll={{ x: 'max-content' }}
-            pagination={{
-              pageSize: 15,
-              showTotal: (total) => `共 ${total} 条记录`,
-              showSizeChanger: false,
-            }}
-            onRow={(record) => ({
-              onClick: () => navigate(`/studio/runs/${record.runId}`),
-              style: { cursor: 'pointer' },
-            })}
-          />
+          {loading && !runs.length ? (
+            <div className="page-filter-bar">
+              <Skeleton active paragraph={{ rows: 3 }} />
+            </div>
+          ) : (
+            <Table
+              dataSource={runs}
+              columns={columns}
+              rowKey="runId"
+              loading={loading}
+              scroll={{ x: 'max-content' }}
+              pagination={{
+                pageSize: 15,
+                showTotal: (total) => `共 ${total} 条记录`,
+                showSizeChanger: false,
+              }}
+              onRow={(record) => ({
+                onClick: () => navigate(`/studio/runs/${record.runId}`),
+                style: { cursor: 'pointer' },
+              })}
+            />
+          )}
         </Card>
       </div>
     </div>

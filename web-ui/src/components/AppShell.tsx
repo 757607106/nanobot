@@ -190,24 +190,24 @@ export default function AppShell() {
 
   function renderNavigation() {
     return (
-      <Flex vertical style={{ height: '100%' }}>
+      <>
         {/* Logo 区域 */}
-        <Flex align="center" gap={12} style={{ padding: '16px 20px', cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
+        <div className="app-sidebar-header" onClick={() => navigate('/dashboard')}>
           <div style={{ flexShrink: 0 }}>
             <AnimatedLogo size={36} />
           </div>
           <div style={{ minWidth: 0 }}>
-            <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-md)' }}>
+            <Typography.Title level={5} className="app-sidebar-header-title">
               {PLATFORM_BRAND_NAME}
             </Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>
+            <Typography.Text type="secondary" className="app-sidebar-header-subtitle">
               Operations Console
             </Typography.Text>
           </div>
-        </Flex>
+        </div>
 
         {/* 菜单区域 */}
-        <Flex vertical gap={10} style={{ flex: 1, padding: '8px 12px 0' }}>
+        <div className="app-sidebar-menu-area">
           {routeSections.map((section) => {
             const selectedKey = section.routes.find((item) => routeIsActive(location.pathname, item.key))?.key
             const items: MenuProps['items'] = section.routes.map((item) => ({
@@ -218,48 +218,27 @@ export default function AppShell() {
 
             return (
               <div key={section.key}>
-                <Typography.Text
-                  type="secondary"
-                  style={{
-                    display: 'block',
-                    paddingInline: 12,
-                    marginBottom: 4,
-                    fontSize: 'var(--nb-text-xs)',
-                    fontWeight: 'var(--nb-font-weight-strong)',
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                  }}
-                >
+                <Typography.Text type="secondary" className="app-sidebar-section-title">
                   {section.label}
                 </Typography.Text>
                 <Menu
+                  className="app-sidebar-menu"
                   mode="inline"
                   selectedKeys={selectedKey ? [selectedKey] : []}
                   items={items}
                   onClick={({ key }) => navigate(String(key))}
-                  style={{
-                    background: 'transparent',
-                    borderInlineEnd: 'none',
-                  }}
                 />
               </div>
             )
           })}
-        </Flex>
+        </div>
 
         {/* 用户区域 */}
-        <Flex
-          vertical
-          gap={10}
-          style={{ padding: '16px 12px 12px', borderTop: `1px solid ${token.colorBorderSecondary}` }}
-        >
+        <div className="app-sidebar-footer">
           <Flex align="center" gap={12}>
             <Avatar
               icon={<UserOutlined />}
-              style={{
-                backgroundColor: token.colorPrimaryBg,
-                color: token.colorPrimary,
-              }}
+              style={{ backgroundColor: token.colorPrimaryBg, color: token.colorPrimary }}
             >
               {authStatus?.username?.slice(0, 1).toUpperCase()}
             </Avatar>
@@ -267,11 +246,7 @@ export default function AppShell() {
               <Typography.Text type="secondary" style={{ display: 'block', fontSize: 'var(--nb-text-2xs)', letterSpacing: '0.04em' }}>
                 Account
               </Typography.Text>
-              <Typography.Text
-                strong
-                style={{ display: 'block', maxWidth: 140 }}
-                ellipsis
-              >
+              <Typography.Text strong className="app-sidebar-user-name" ellipsis>
                 {authStatus?.username || '—'}
               </Typography.Text>
             </div>
@@ -287,33 +262,17 @@ export default function AppShell() {
           >
             退出登录
           </Button>
-        </Flex>
-      </Flex>
+        </div>
+      </>
     )
   }
 
   return (
     <div
       className={`app-shell theme-${resolvedTheme} ${isChatRoute ? 'app-shell-chat' : ''}`}
-      style={{ background: token.colorBgLayout, display: 'flex', height: '100vh' }}
     >
       {isDesktop ? (
-        <aside
-          style={{
-            position: 'sticky',
-            top: 16,
-            height: 'calc(100vh - 32px)',
-            marginLeft: 16,
-            borderRadius: 24,
-            overflow: 'auto',
-            width: designTokens.layout.siderWidth,
-            background: 'var(--nb-sider-bg)',
-            border: '1px solid var(--nb-sider-border)',
-            boxShadow: 'var(--nb-sider-shadow)',
-            backdropFilter: 'blur(32px) saturate(140%)',
-            zIndex: 100,
-          }}
-        >
+        <aside className="app-sidebar" style={{ '--nb-sider-width': designTokens.layout.siderWidth } as any}>
           {renderNavigation()}
         </aside>
       ) : (
@@ -323,34 +282,17 @@ export default function AppShell() {
           onClose={() => setMobileNavOpen(false)}
           width={designTokens.layout.siderWidth}
           closable={false}
-          styles={{
-            body: {
-              padding: 0,
-              background: token.colorBgContainer,
-            },
-          }}
+          styles={{ body: { padding: 0, background: token.colorBgContainer } }}
         >
-          {renderNavigation()}
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {renderNavigation()}
+          </div>
         </Drawer>
       )}
 
-      <div className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''}`} style={{ display: 'flex', flex: 1, flexDirection: 'column', minWidth: 0 }}>
+      <div className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''}`}>
         {!isDesktop && (
-          <header
-            style={{
-              position: 'sticky',
-              top: 0,
-              zIndex: 20,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              height: designTokens.layout.headerHeight,
-              paddingInline: 16,
-              background: 'color-mix(in srgb, var(--nb-body-bg) 70%, transparent)',
-              backdropFilter: 'blur(20px)',
-              borderBottom: `1px solid color-mix(in srgb, var(--nb-border) 60%, transparent)`,
-            }}
-          >
+          <header className="app-mobile-header" style={{ '--nb-header-height': designTokens.layout.headerHeight } as any}>
             <Flex align="center" gap={12} style={{ minWidth: 0, flex: 1 }}>
               <Button
                 type="text"
@@ -360,27 +302,10 @@ export default function AppShell() {
               />
 
               <div style={{ minWidth: 0 }}>
-                <Typography.Text
-                  type="secondary"
-                  style={{
-                    display: 'block',
-                    fontSize: 'var(--nb-text-2xs)',
-                    fontWeight: 'var(--nb-font-weight-strong)',
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                  }}
-                >
+                <Typography.Text type="secondary" className="app-sidebar-section-title" style={{ paddingInline: 0 }}>
                   {activeSection.label}
                 </Typography.Text>
-                <Typography.Text
-                  strong
-                  style={{
-                    display: 'block',
-                    marginTop: 2,
-                    fontSize: 'var(--nb-text-sm)',
-                    lineHeight: 1.2,
-                  }}
-                >
+                <Typography.Text strong style={{ display: 'block', marginTop: 2, fontSize: 'var(--nb-text-sm)', lineHeight: 1.2 }}>
                   {activeRoute.label}
                 </Typography.Text>
               </div>

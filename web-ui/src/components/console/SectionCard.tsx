@@ -21,10 +21,6 @@ export default function SectionCard({
       className="section-card"
       loading={loading}
       variant="borderless"
-      style={{
-        height: '100%',
-        background: 'transparent',
-      }}
       styles={{
         body: {
           padding: 'var(--nb-spacing-lg)',

@@ -1,7 +1,7 @@
 :root {
-  --nb-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-  --nb-font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
-  --nb-font-mono: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+  --nb-font-display: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --nb-font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --nb-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 :root,
@@ -33,36 +33,68 @@
   --nb-card-padding-mobile: 16px;
 
   /* Typography */
-  --nb-text-2xs: 11px;
-  --nb-text-xs: 12px;
-  --nb-text-sm: 14px;
-  --nb-text-md: 15px;
-  --nb-text-lg: 16px;
-  --nb-title-xs: 18px;
-  --nb-title-sm: 22px;
-  --nb-title-md: 26px;
-  --nb-title-lg: 32px;
-  --nb-title-xl: 40px;
-  --nb-title-hero: 52px;
+  --nb-text-2xs: 0.75rem; /* 12px */
+  --nb-text-xs: 0.8125rem; /* 13px */
+  --nb-text-sm: 0.875rem; /* 14px */
+  --nb-text-md: 0.9375rem; /* 15px */
+  --nb-text-lg: 1.0625rem; /* 17px */
+  --nb-title-xs: 1.25rem; /* 20px */
+  --nb-title-sm: 1.5rem; /* 24px */
+  --nb-title-md: 1.75rem; /* 28px */
+  --nb-title-lg: 1.75rem; /* 28px */
+  --nb-title-xl: 2.125rem; /* 34px */
+  --nb-title-hero: 2.625rem; /* 42px */
   --nb-font-weight-regular: 400;
   --nb-font-weight-medium: 500;
   --nb-font-weight-strong: 600;
   --nb-font-weight-title: 700;
-  --nb-metric-size: 28px;
-  --nb-line-tight: 1.2;
+  --nb-metric-size: 1.75rem;
+  --nb-line-tight: 1.15;
   --nb-line-body: 1.6;
-  --nb-line-relaxed: 1.6;
+  --nb-line-relaxed: 1.75;
 
   /* Layout */
   --nb-content-max-width: 100%;
-  --nb-layout-gutter: 20px;
+  --nb-layout-gutter: 24px;
   --nb-layout-gutter-mobile: 16px;
-  --nb-section-gap: 16px;
-  --nb-panel-padding: 16px;
+  --nb-section-gap: 20px;
+  --nb-panel-padding: 20px;
   --nb-panel-padding-mobile: 16px;
   --nb-card-body-padding: 24px;
   --nb-control-height: 48px;
   --nb-control-height-sm: 36px;
   --nb-control-radius: 14px;
   --nb-tag-height: 32px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --nb-body-bg: #090a0c;
+  --nb-body-overlay: transparent;
+  --nb-surface-strong: color-mix(in srgb, #13151a 98%, var(--nb-accent) 2%);
+  --nb-surface-elevated: #1a1d24;
+  --nb-card-border: color-mix(in srgb, #ffffff 6%, var(--nb-accent) 2%);
+  --nb-card-subtle-border: color-mix(in srgb, #ffffff 4%, var(--nb-accent) 1%);
+  --nb-card-subtle-bg: color-mix(in srgb, #111318 99%, var(--nb-accent) 1%);
+  --nb-page-hero-bg: color-mix(in srgb, #0c0e12 99%, var(--nb-accent) 1%);
+  --nb-page-hero-overlay: radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.03), transparent 50%);
+  --nb-page-hero-border: transparent;
+  --nb-page-hero-text: #ffffff;
+  --nb-page-hero-subtext: #a1a5b0;
+  --nb-border: color-mix(in srgb, #ffffff 8%, var(--nb-accent) 2%);
+  --nb-border-strong: color-mix(in srgb, #ffffff 16%, var(--nb-accent) 4%);
+  --nb-ink: #f0f2f6;
+  --nb-muted: #8b92a5;
+  --nb-accent: #6366f1;
+  --nb-shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --nb-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  --nb-scroll-thumb: rgba(255, 255, 255, 0.16);
+  --nb-scroll-thumb-hover: rgba(255, 255, 255, 0.24);
+  --nb-note-bg: rgba(255, 255, 255, 0.03);
+  
+  --nb-surface-panel-bg: color-mix(in srgb, #16181d 99%, var(--nb-accent) 1%);
+  --nb-surface-panel-border: color-mix(in srgb, #ffffff 8%, var(--nb-accent) 2%);
+  --nb-surface-panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --nb-surface-soft-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --nb-surface-row-border: color-mix(in srgb, #ffffff 4%, var(--nb-accent) 1%);
 }

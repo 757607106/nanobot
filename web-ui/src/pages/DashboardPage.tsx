@@ -190,20 +190,20 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 主体内容区 ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: 'var(--nb-spacing-lg)', alignItems: 'start' }}>
+      <div className="dashboard-main-grid">
 
         {/* 左半区：任务动作与会话阵列 */}
         <Flex vertical gap="var(--nb-spacing-lg)" style={{ minWidth: 0 }}>
           
           {/* 快捷按钮阵列 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--nb-spacing-md)' }}>
+          <div className="dashboard-quick-action-grid">
             <div 
               onClick={() => navigate('/studio')}
-              style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
+              className="dashboard-quick-action"
             >
-              <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(22, 119, 255, 0.1)', color: '#1677ff' }}>
-                <RobotOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />
-              </Flex>
+              <div className="dashboard-quick-action-icon" style={{ background: 'rgba(22, 119, 255, 0.1)', color: '#1677ff' }}>
+                <RobotOutlined />
+              </div>
               <div>
                 <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>创建智能体</Typography.Text>
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>配置并调试核心数字员工角色</Typography.Text>
@@ -212,11 +212,11 @@ export default function DashboardPage() {
             
             <div 
               onClick={() => navigate('/knowledge')}
-              style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
+              className="dashboard-quick-action"
             >
-              <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(250, 140, 22, 0.1)', color: '#fa8c16' }}>
-                <DatabaseOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />
-              </Flex>
+              <div className="dashboard-quick-action-icon" style={{ background: 'rgba(250, 140, 22, 0.1)', color: '#fa8c16' }}>
+                <DatabaseOutlined />
+              </div>
               <div>
                 <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>构建知识库</Typography.Text>
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>导入私有语料训练专属大脑</Typography.Text>
@@ -225,11 +225,11 @@ export default function DashboardPage() {
             
             <div 
               onClick={() => navigate('/channels')}
-              style={{ cursor: 'pointer', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--nb-surface)', borderRadius: 'var(--nb-radius-lg)', border: '1px solid var(--nb-border)' }}
+              className="dashboard-quick-action"
             >
-              <Flex align="center" justify="center" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(82, 196, 26, 0.1)', color: '#52c41a' }}>
-                <ApiOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />
-              </Flex>
+              <div className="dashboard-quick-action-icon" style={{ background: 'rgba(82, 196, 26, 0.1)', color: '#52c41a' }}>
+                <ApiOutlined />
+              </div>
               <div>
                 <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>连接发布渠道</Typography.Text>
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>将中枢系统接入办公平台或社群</Typography.Text>
@@ -256,31 +256,15 @@ export default function DashboardPage() {
               ))}
             </Flex>
           ) : recentSessions.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--nb-spacing-md)' }}>
+            <div className="dashboard-recent-sessions-grid">
               {recentSessions.map((session, i) => (
                 <motion.div
                   key={session.sessionId || session.id}
                   onClick={() => navigate(`/chat?session=${session.sessionId || session.id}`)}
-                  style={{
-                    padding: '16px',
-                    background: 'var(--nb-surface)',
-                    cursor: 'pointer',
-                    borderRadius: 'var(--nb-radius-md)',
-                    border: '1px solid var(--nb-border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    minHeight: 110,
-                  }}
+                  className="dashboard-recent-session-card"
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.2, delay: i * 0.05 }}
-                  whileHover={{ 
-                    borderColor: 'var(--nb-border-strong)',
-                    scale: 1.02,
-                    boxShadow: 'var(--nb-shadow-soft)'
-                  }}
-                  whileTap={{ scale: 0.98 }}
                 >
                   <Flex align="flex-start" gap={10} style={{ marginBottom: 12 }}>
                     <div style={{

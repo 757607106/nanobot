@@ -326,7 +326,7 @@ export default function SetupPage() {
 
   if (loading || !config || !configMeta || !setupStatus) {
     return (
-      <div className="page-stack" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="page-stack page-loading-state">
         <Spin size="large" />
       </div>
     )

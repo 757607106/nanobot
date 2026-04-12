@@ -38,10 +38,10 @@ export default function KnowledgeList({
               placeholder="搜索知识库、标签..."
               value={knowledgeSearch}
               onChange={(event) => onSearchChange(event.target.value)}
-              prefix={<SearchOutlined style={{ color: 'var(--nb-text-tertiary)', fontSize: 13 }} />}
+              prefix={<SearchOutlined style={{ color: 'var(--nb-text-tertiary)', fontSize: 'var(--nb-text-xs)' }} />}
               allowClear
               variant="filled"
-              style={{ borderRadius: 8, padding: '4px 12px', fontSize: 13 }}
+              style={{ borderRadius: 8, padding: '4px 12px', fontSize: 'var(--nb-text-xs)' }}
               aria-label="搜索知识库"
             />
           </div>
