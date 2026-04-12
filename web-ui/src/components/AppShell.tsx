@@ -21,7 +21,9 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { PLATFORM_BRAND_NAME } from '../branding'
 import { useDevMode } from '../devMode'
-import { shellSpring } from '../motionTokens'
+import { framerMotion } from '../ui/design/tokens'
+
+const shellSpring = framerMotion.spring
 import { testIds } from '../testIds'
 import { useThemeMode } from '../themeMode'
 import { designTokens } from '../ui/design/tokens'
@@ -235,33 +237,34 @@ export default function AppShell() {
 
         {/* 用户区域 */}
         <div className="app-sidebar-footer">
-          <Flex align="center" gap={12}>
-            <Avatar
-              icon={<UserOutlined />}
-              style={{ backgroundColor: token.colorPrimaryBg, color: token.colorPrimary }}
-            >
-              {authStatus?.username?.slice(0, 1).toUpperCase()}
-            </Avatar>
-            <div style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary" style={{ display: 'block', fontSize: 'var(--nb-text-2xs)', letterSpacing: '0.04em' }}>
-                Account
-              </Typography.Text>
-              <Typography.Text strong className="app-sidebar-user-name" ellipsis>
-                {authStatus?.username || '—'}
-              </Typography.Text>
-            </div>
-          </Flex>
+          <Flex align="center" gap={12} justify="space-between">
+            <Flex align="center" gap={12} style={{ minWidth: 0, flex: 1 }}>
+              <Avatar
+                icon={<UserOutlined />}
+                style={{ backgroundColor: token.colorPrimaryBg, color: token.colorPrimary, flexShrink: 0 }}
+              >
+                {authStatus?.username?.slice(0, 1).toUpperCase()}
+              </Avatar>
+              <div style={{ minWidth: 0 }}>
+                <Typography.Text type="secondary" style={{ display: 'block', fontSize: 'var(--nb-text-2xs)', letterSpacing: '0.04em' }}>
+                  Account
+                </Typography.Text>
+                <Typography.Text strong className="app-sidebar-user-name" ellipsis>
+                  {authStatus?.username || '—'}
+                </Typography.Text>
+              </div>
+            </Flex>
 
-          <Button
-            type="text"
-            icon={<LogoutOutlined />}
-            loading={submitting}
-            onClick={() => void handleLogout()}
-            data-testid={testIds.app.logout}
-            style={{ justifyContent: 'flex-start', paddingInline: 8 }}
-          >
-            退出登录
-          </Button>
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              loading={submitting}
+              onClick={() => void handleLogout()}
+              data-testid={testIds.app.logout}
+              title="退出登录"
+              style={{ color: 'var(--nb-muted)' }}
+            />
+          </Flex>
         </div>
       </>
     )

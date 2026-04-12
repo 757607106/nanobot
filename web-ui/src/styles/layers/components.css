@@ -9,10 +9,7 @@
     box-shadow 220ms ease;
 }
 
-.page-card:hover,
-.config-panel-card:hover {
-  box-shadow: var(--nb-shadow);
-}
+
 
 .app-shell {
   min-height: 100vh;
@@ -108,7 +105,6 @@
   background: var(--nb-sider-bg);
   border: 1px solid var(--nb-sider-border);
   box-shadow: var(--nb-sider-shadow);
-  backdrop-filter: blur(16px) saturate(112%);
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -139,32 +135,32 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 6px 12px 0;
+  gap: 24px; /* 增加区块之间的间距，形成视觉节奏 */
+  padding: 12px 12px 0;
   overflow-y: auto;
 }
 
 .app-sidebar-section-title {
   display: block;
-  padding-inline: 12px;
-  margin-bottom: 4px;
-  font-size: var(--nb-text-2xs);
-  font-weight: var(--nb-font-weight-strong);
-  letter-spacing: 0.03em;
-  text-transform: none;
-  color: color-mix(in srgb, var(--nb-muted) 88%, var(--nb-ink));
+  padding-inline: 16px; /* 和菜单项的图标对齐 */
+  margin-bottom: 8px; /* 增加标题和菜单项之间的呼吸感 */
+  font-size: var(--nb-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--nb-muted) 80%, transparent);
 }
 
 .app-sidebar-menu {
   background: transparent !important;
   border-inline-end: none !important;
+  margin-bottom: 0 !important; /* 消除默认 margin */
 }
 
 .app-sidebar-menu .ant-menu-item {
-  height: 38px;
-  line-height: 38px;
-  margin: 2px 0;
-  border-radius: 10px;
+  height: 36px;
+  line-height: 36px;
+  margin: 4px 0;
+  border-radius: 8px;
   font-size: var(--nb-text-sm);
   transition: background-color 140ms ease, color 140ms ease;
 }
@@ -176,6 +172,7 @@
 .app-sidebar-menu .ant-menu-item-selected {
   background: color-mix(in srgb, var(--nb-accent) 18%, transparent) !important;
   color: var(--nb-ink) !important;
+  font-weight: 600;
 }
 
 .app-sidebar-menu .ant-menu-item:hover {
@@ -183,12 +180,10 @@
 }
 
 .app-sidebar-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 12px 12px;
+  padding: 16px;
   border-top: 1px solid color-mix(in srgb, var(--nb-border) 60%, transparent);
   flex-shrink: 0;
+  margin-top: auto;
 }
 
 .app-sidebar-user-name {
@@ -248,7 +243,6 @@
   border: 1px solid var(--nb-card-border);
   border-radius: 14px;
   box-shadow: var(--nb-shadow-soft);
-  backdrop-filter: blur(14px) saturate(112%);
   min-width: 0;
   position: relative;
   overflow: hidden;
@@ -455,20 +449,6 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition:
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 160ms ease,
-    box-shadow 180ms ease;
-}
-
-.channel-card:hover {
-  border-color: var(--nb-border-strong);
-  box-shadow: var(--nb-surface-soft-shadow);
-  transform: translateY(-2px);
-}
-
-.channel-card:active {
-  transform: translateY(0);
 }
 
 .channel-card.is-selected {
@@ -483,16 +463,6 @@
   background: var(--nb-card-subtle-bg);
   border: 1px solid var(--nb-card-subtle-border);
   height: 100%;
-  transition:
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 160ms ease,
-    box-shadow 180ms ease;
-}
-
-.skill-card:hover {
-  border-color: var(--nb-border-strong);
-  box-shadow: var(--nb-surface-soft-shadow);
-  transform: translateY(-2px);
 }
 
 .skill-card.is-installed-market {
@@ -510,11 +480,7 @@
   align-items: center;
   justify-content: center;
 }
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: var(--nb-spacing-lg);
-  align-items: start;
-}
+
 
 .dashboard-quick-action-grid {
   display: grid;
@@ -531,20 +497,6 @@
   background: var(--nb-surface);
   border-radius: var(--nb-radius-lg);
   border: 1px solid var(--nb-border);
-  transition:
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 160ms ease,
-    box-shadow 180ms ease;
-}
-
-.dashboard-quick-action:hover {
-  border-color: var(--nb-border-strong);
-  box-shadow: var(--nb-surface-soft-shadow);
-  transform: translateY(-1px);
-}
-
-.dashboard-quick-action:active {
-  transform: translateY(0);
 }
 
 .dashboard-quick-action-icon {
@@ -573,19 +525,5 @@
   flex-direction: column;
   justify-content: space-between;
   min-height: 110px;
-  transition:
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 160ms ease,
-    box-shadow 180ms ease;
-}
-
-.dashboard-recent-session-card:hover {
-  border-color: var(--nb-border-strong);
-  box-shadow: var(--nb-surface-soft-shadow);
-  transform: translateY(-1px);
-}
-
-.dashboard-recent-session-card:active {
-  transform: translateY(0);
 }
 
