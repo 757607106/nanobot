@@ -532,7 +532,7 @@ export default function ChannelsPage() {
         {channels.length === 0 ? (
           <Empty description="无匹配项" />
         ) : (
-          <div className="channel-card-grid">
+          <div className="channel-card interactive-lift-grid">
             {channels.map((channel, index) => (
               <motion.div
                 key={channel.key}

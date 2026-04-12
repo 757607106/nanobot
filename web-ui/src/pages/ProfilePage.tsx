@@ -29,7 +29,7 @@ import { useAuth } from '../auth'
 import { testIds } from '../testIds'
 import type { ProfileData } from '../types'
 import { useToast } from '../toast'
-import { Button, Card, Input, Modal } from '../ui/kit'
+import { Button, Card, Input, Modal } from 'antd'
 
 type DialogMode = 'profile' | 'password' | 'avatar' | null
 

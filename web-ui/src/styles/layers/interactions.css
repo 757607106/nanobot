@@ -1,0 +1,64 @@
+/* ═══════════════════════════════════════════════════════════
+   Interactions (Hover, Active, Focus, Disabled, Loading)
+   ═══════════════════════════════════════════════════════════
+   Unified utilities for interaction states across the app. */
+
+/* Hover Lift */
+.interactive-lift {
+  transition: transform var(--nb-motion-fast) var(--nb-ease-decelerate),
+              box-shadow var(--nb-motion-normal) ease,
+              border-color var(--nb-motion-fast) ease;
+}
+
+.interactive-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--nb-shadow-md);
+  border-color: var(--nb-border-strong);
+}
+
+.interactive-lift:active {
+  transform: translateY(0);
+}
+
+/* Subtle Hover Lift (for smaller items like list rows) */
+.interactive-lift-sm {
+  transition: transform var(--nb-motion-fast) var(--nb-ease-decelerate),
+              background-color var(--nb-motion-fast) ease;
+}
+
+.interactive-lift-sm:hover {
+  transform: translateY(-1px);
+  background-color: var(--nb-surface-row-bg);
+}
+
+.interactive-lift-sm:active {
+  transform: translateY(0);
+}
+
+/* Focus Ring */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--nb-accent);
+  outline-offset: 2px;
+}
+
+/* Disabled */
+[disabled], .is-disabled {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+/* Loading */
+.is-loading {
+  opacity: 0.64;
+  pointer-events: none;
+}
+
+/* Base link / interactive text */
+.interactive-text {
+  transition: color var(--nb-motion-fast) ease;
+  cursor: pointer;
+}
+
+.interactive-text:hover {
+  color: var(--nb-accent);
+}

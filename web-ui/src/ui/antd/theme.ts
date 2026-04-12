@@ -5,235 +5,198 @@ import { designTokens } from '../design/tokens'
 export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
   const isDark = mode === 'dark'
   const palette = isDark ? designTokens.color.dark : designTokens.color.light
+  const shadows = isDark ? designTokens.shadow.dark : designTokens.shadow.light
 
   return {
     algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
     token: {
-      // === 品牌色 ===
+      // === Brand ===
       colorPrimary: palette.accent,
       colorInfo: palette.accent,
-      colorSuccess: palette.success,
-      colorWarning: palette.warning,
-      colorError: palette.error,
+      colorSuccess: isDark ? designTokens.color.dark.success : designTokens.color.light.success,
+      colorWarning: isDark ? designTokens.color.dark.warning : designTokens.color.light.warning,
+      colorError: isDark ? designTokens.color.dark.error : designTokens.color.light.error,
 
-      // === 背景色 ===
-      colorBgLayout: palette.bgLayout,
-      colorBgContainer: palette.bgContainer,
-      colorBgElevated: palette.bgElevated,
+      // === Background ===
+      colorBgLayout: palette.bodyBg,
+      colorBgContainer: palette.cardBg,
+      colorBgElevated: palette.surfaceElevated,
 
-      // === 文字色 ===
-      colorTextBase: palette.text,
-      colorText: palette.text,
-      colorTextSecondary: palette.textSecondary,
-      colorTextTertiary: isDark ? 'rgba(242, 242, 247, 0.58)' : 'rgba(17, 24, 39, 0.58)',
-      colorTextQuaternary: isDark ? 'rgba(242, 242, 247, 0.44)' : 'rgba(17, 24, 39, 0.44)',
-      colorTextDescription: palette.textSecondary,
-      colorTextPlaceholder: isDark ? 'rgba(242, 242, 247, 0.50)' : 'rgba(17, 24, 39, 0.50)',
-      colorTextDisabled: isDark ? 'rgba(242, 242, 247, 0.34)' : 'rgba(17, 24, 39, 0.34)',
+      // === Text ===
+      colorTextBase: palette.ink,
+      colorText: palette.ink,
+      colorTextSecondary: palette.muted,
+      colorTextTertiary: isDark ? 'rgba(238, 242, 251, 0.58)' : 'rgba(21, 24, 33, 0.58)',
+      colorTextQuaternary: palette.quaternary,
+      colorTextDescription: palette.muted,
+      colorTextPlaceholder: isDark ? 'rgba(238, 242, 251, 0.50)' : 'rgba(21, 24, 33, 0.50)',
+      colorTextDisabled: isDark ? 'rgba(238, 242, 251, 0.34)' : 'rgba(21, 24, 33, 0.34)',
       colorTextLightSolid: '#ffffff',
 
-      // === 边框与分割线 ===
-      colorBorderSecondary: palette.border,
+      // === Border ===
+      colorBorderSecondary: palette.surfacePanelBorder,
 
+      // === Radius ===
       borderRadius: designTokens.radius.md,
       borderRadiusLG: designTokens.radius.lg,
       borderRadiusSM: designTokens.radius.sm,
       borderRadiusXS: designTokens.radius.xs,
 
-      // === 字体体系 ===
-      fontSize: 14,
-      fontSizeSM: 12,
-      fontSizeLG: 16,
-      fontSizeXL: 24,
-      fontSizeHeading1: 30,
-      fontSizeHeading2: 26,
-      fontSizeHeading3: 18,
-      fontSizeHeading4: 16,
-      fontSizeHeading5: 16,
-      fontWeightStrong: 600,
-      lineHeight: 1.5,
-      fontFamily: designTokens.font.family,
+      // === Typography ===
+      fontSize: designTokens.fontSize.sm,
+      fontSizeSM: designTokens.fontSize['2xs'],
+      fontSizeLG: designTokens.fontSize.md,
+      fontSizeXL: designTokens.fontSize.titleSm,
+      fontSizeHeading1: designTokens.fontSize.titleLg,
+      fontSizeHeading2: designTokens.fontSize.titleMd,
+      fontSizeHeading3: designTokens.fontSize.titleXs,
+      fontSizeHeading4: designTokens.fontSize.lg,
+      fontSizeHeading5: designTokens.fontSize.lg,
+      fontWeightStrong: designTokens.fontWeight.semibold,
+      lineHeight: designTokens.lineHeight.body,
+      fontFamily: designTokens.font.body,
 
-      // === 间距体系 ===
+      // === Spacing ===
       paddingXS: designTokens.space.xs,
       paddingSM: designTokens.space.sm,
       padding: designTokens.space.md,
       paddingLG: designTokens.space.lg,
       paddingXL: designTokens.space.xl,
-      // 注意: paddingXXL 不是标准 AliasToken，通过 paddingXL 扩展
 
-      // === 控制组件尺寸 ===
-      controlHeight: 40,
-      controlHeightSM: 32,
-      controlHeightLG: 48,
+      // === Controls ===
+      controlHeight: designTokens.control.height,
+      controlHeightSM: designTokens.control.heightSm,
+      controlHeightLG: designTokens.control.heightLg,
 
-      // === 阴影 ===
-      boxShadow: (isDark ? designTokens.shadow.dark : designTokens.shadow.light).sm,
-      boxShadowSecondary: (isDark ? designTokens.shadow.dark : designTokens.shadow.light).md,
+      // === Shadows ===
+      boxShadow: shadows.sm,
+      boxShadowSecondary: shadows.md,
     },
     components: {
-      // === Card 组件 ===
       Card: {
         borderRadiusLG: designTokens.radius.lg,
         bodyPadding: designTokens.space.xl,
         bodyPaddingSM: designTokens.space.lg,
         headerHeight: 52,
         headerHeightSM: 44,
-        headerFontSize: 16,
+        headerFontSize: designTokens.fontSize.lg,
         headerPadding: designTokens.space.lg,
       },
-
-      // === Layout 组件 ===
       Layout: {
         headerBg: 'transparent',
         siderBg: 'transparent',
         bodyBg: 'transparent',
       },
-
-      // === Menu 组件 ===
       Menu: {
         itemBorderRadius: designTokens.radius.md,
         itemMarginInline: designTokens.space.xs,
         itemMarginBlock: designTokens.space.xs,
         itemSelectedBg: palette.selectedBg,
-        itemSelectedColor: palette.text,
+        itemSelectedColor: palette.ink,
         itemHoverBg: palette.hoverBg,
-        itemHoverColor: palette.text,
-        itemColor: palette.textSecondary,
+        itemHoverColor: palette.ink,
+        itemColor: palette.muted,
         itemHeight: 44,
         iconSize: 18,
         iconMarginInlineEnd: designTokens.space.sm,
-        // 深色模式专用
         darkItemBg: 'transparent',
         darkItemSelectedBg: palette.selectedBg,
-        darkItemSelectedColor: palette.text,
+        darkItemSelectedColor: palette.ink,
         darkItemHoverBg: palette.hoverBg,
-        darkItemHoverColor: palette.text,
-        darkItemColor: palette.textSecondary,
+        darkItemHoverColor: palette.ink,
+        darkItemColor: palette.muted,
       },
-
-      // === Button 组件 ===
       Button: {
         borderRadius: designTokens.radius.md,
-        controlHeight: 40,
-        controlHeightSM: 32,
-        controlHeightLG: 48,
-        fontWeight: 'var(--nb-font-weight-strong)',
+        controlHeight: designTokens.control.height,
+        controlHeightSM: designTokens.control.heightSm,
+        controlHeightLG: designTokens.control.heightLg,
+        fontWeight: designTokens.fontWeight.semibold,
         paddingInline: designTokens.space.lg,
         paddingInlineSM: designTokens.space.md,
         paddingInlineLG: designTokens.space.xl,
         primaryColor: '#ffffff',
-        defaultBg: palette.bgContainer,
-        defaultBorderColor: palette.border,
-        defaultColor: palette.text,
+        defaultBg: palette.cardBg,
+        defaultBorderColor: palette.surfacePanelBorder,
+        defaultColor: palette.ink,
       },
-
-      // === Input 组件 ===
       Input: {
         borderRadius: designTokens.radius.md,
         paddingInline: designTokens.space.lg,
         paddingBlock: 10,
-        activeShadow: `0 0 0 2px ${isDark ? 'rgba(10, 132, 255, 0.22)' : 'rgba(0, 122, 255, 0.18)'}`,
+        activeShadow: `0 0 0 2px ${isDark ? 'rgba(142, 166, 255, 0.22)' : 'rgba(63, 108, 255, 0.18)'}`,
       },
-
-      // === InputNumber 组件 ===
       InputNumber: {
         borderRadius: designTokens.radius.md,
       },
-
-      // === Select 组件 ===
       Select: {
         borderRadius: designTokens.radius.md,
       },
-
-      // === Segmented 组件 ===
       Segmented: {
         itemActiveBg: palette.hoverBg,
         itemSelectedBg: palette.selectedBg,
-        trackBg: palette.bgLayout,
+        trackBg: palette.bodyBg,
       },
-
-      // === Tabs 组件 ===
       Tabs: {
         itemSelectedColor: palette.accent,
         itemHoverColor: palette.accent,
         inkBarColor: palette.accent,
-        itemColor: palette.textSecondary,
-        titleFontSize: 14,
-        titleFontSizeLG: 16,
-        titleFontSizeSM: 12,
+        itemColor: palette.muted,
+        titleFontSize: designTokens.fontSize.sm,
+        titleFontSizeLG: designTokens.fontSize.lg,
+        titleFontSizeSM: designTokens.fontSize['2xs'],
         horizontalItemPadding: '12px 0',
       },
-
-      // === Tag 组件 ===
       Tag: {
-        borderRadiusSM: 999,
+        borderRadiusSM: designTokens.radius.full,
         defaultBg: palette.selectedBg,
         defaultColor: palette.accent,
       },
-
-      // === Drawer 组件 ===
       Drawer: {
-        colorBgElevated: palette.bgContainer,
+        colorBgElevated: palette.cardBg,
         paddingLG: designTokens.space.xl,
       },
-
-      // === Modal 组件 ===
       Modal: {
-        contentBg: palette.bgContainer,
-        headerBg: palette.bgContainer,
-        footerBg: palette.bgContainer,
-        titleColor: palette.text,
-        titleFontSize: 18,
-        titleLineHeight: 1.4,
+        contentBg: palette.cardBg,
+        headerBg: palette.cardBg,
+        footerBg: palette.cardBg,
+        titleColor: palette.ink,
+        titleFontSize: designTokens.fontSize.titleXs,
+        titleLineHeight: designTokens.lineHeight.snug,
         borderRadiusLG: designTokens.radius.lg,
       },
-
-      // === Table 组件 ===
       Table: {
-        headerBg: palette.bgLayout,
-        headerColor: palette.text,
+        headerBg: palette.bodyBg,
+        headerColor: palette.ink,
         rowHoverBg: palette.hoverBg,
         rowSelectedBg: palette.selectedBg,
         borderRadiusLG: designTokens.radius.md,
         cellPaddingBlock: designTokens.space.md,
         cellPaddingInline: designTokens.space.lg,
       },
-
-      // === Form 组件 ===
       Form: {
-        labelColor: palette.textSecondary,
-        labelFontSize: 14,
-        labelHeight: 32,
+        labelColor: palette.muted,
+        labelFontSize: designTokens.fontSize.sm,
+        labelHeight: designTokens.control.heightSm,
         itemMarginBottom: designTokens.space.xl,
       },
-
-      // === Tooltip 组件 ===
       Tooltip: {
-        colorBgSpotlight: palette.bgElevated,
+        colorBgSpotlight: palette.surfaceElevated,
         colorTextLightSolid: '#ffffff',
       },
-
-      // === Dropdown 组件 ===
       Dropdown: {
-        colorBgElevated: palette.bgElevated,
+        colorBgElevated: palette.surfaceElevated,
         controlItemBgHover: palette.hoverBg,
         controlItemBgActive: palette.selectedBg,
       },
-
-      // === Popover 组件 ===
       Popover: {
-        colorBgElevated: palette.bgElevated,
+        colorBgElevated: palette.surfaceElevated,
       },
-
-      // === Message 组件 ===
       Message: {
-        contentBg: palette.bgElevated,
+        contentBg: palette.surfaceElevated,
       },
-
-      // === Notification 组件 ===
       Notification: {
-        colorBgElevated: palette.bgElevated,
+        colorBgElevated: palette.surfaceElevated,
       },
     },
   }

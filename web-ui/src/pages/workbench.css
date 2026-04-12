@@ -105,7 +105,7 @@
   min-height: 36px;
   padding-inline: 13px;
   border-radius: 10px;
-  box-shadow: none !important;
+  box-shadow: none;
   font-weight: 600;
 }
 
@@ -593,10 +593,10 @@
 }
 
 .commercial-tabs .ant-tabs-tab {
-  margin: 0 22px 0 0 !important;
-  padding: 8px 0 12px !important;
-  background: transparent !important;
-  border: 0 !important;
+  margin: 0 22px 0 0;
+  padding: 8px 0 12px;
+  background: transparent;
+  border: 0;
 }
 
 .commercial-tabs .ant-tabs-tab-btn {
@@ -605,7 +605,7 @@
 }
 
 .commercial-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: var(--nb-ink) !important;
+  color: var(--nb-ink);
 }
 
 .commercial-tabs .ant-tabs-ink-bar {
@@ -640,7 +640,7 @@
 }
 
 .runs-page-alert {
-  margin-bottom: 0 !important;
+  margin-bottom: 0;
 }
 
 .studio-run-pre {

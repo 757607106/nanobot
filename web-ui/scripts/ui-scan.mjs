@@ -34,6 +34,10 @@ function hasTailwindImport(text) {
   return /@import\s+["']tailwindcss["']|@tailwind\s+/.test(text)
 }
 
+function hasUiKitImport(text) {
+  return /from\s+["']@\/ui\/kit["']/.test(text)
+}
+
 const issues = []
 
 for await (const file of walk(srcRoot)) {
@@ -44,6 +48,7 @@ for await (const file of walk(srcRoot)) {
     if (hasTailwindImport(content)) issues.push({ file: rel, rule: 'no-tailwind-import' })
   } else {
     if (hasTailwindLikeClassName(content)) issues.push({ file: rel, rule: 'no-tailwind-like-classname' })
+    if (hasUiKitImport(content)) issues.push({ file: rel, rule: 'no-ui-kit-import' })
   }
 }
 

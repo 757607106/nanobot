@@ -199,7 +199,7 @@ export default function DashboardPage() {
           <div className="dashboard-quick-action-grid">
             <div 
               onClick={() => navigate('/studio')}
-              className="dashboard-quick-action"
+              className="dashboard-quick-action interactive-lift"
             >
               <div className="dashboard-quick-action-icon" style={{ background: 'rgba(22, 119, 255, 0.1)', color: '#1677ff' }}>
                 <RobotOutlined />
@@ -212,7 +212,7 @@ export default function DashboardPage() {
             
             <div 
               onClick={() => navigate('/knowledge')}
-              className="dashboard-quick-action"
+              className="dashboard-quick-action interactive-lift"
             >
               <div className="dashboard-quick-action-icon" style={{ background: 'rgba(250, 140, 22, 0.1)', color: '#fa8c16' }}>
                 <DatabaseOutlined />
@@ -225,7 +225,7 @@ export default function DashboardPage() {
             
             <div 
               onClick={() => navigate('/channels')}
-              className="dashboard-quick-action"
+              className="dashboard-quick-action interactive-lift"
             >
               <div className="dashboard-quick-action-icon" style={{ background: 'rgba(82, 196, 26, 0.1)', color: '#52c41a' }}>
                 <ApiOutlined />
@@ -261,7 +261,7 @@ export default function DashboardPage() {
                 <motion.div
                   key={session.sessionId || session.id}
                   onClick={() => navigate(`/chat?session=${session.sessionId || session.id}`)}
-                  className="dashboard-recent-session-card"
+                  className="dashboard-recent-session-card interactive-lift"
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.2, delay: i * 0.05 }}

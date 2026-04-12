@@ -108,8 +108,8 @@ export function ChatMessages({
     let color = token.colorText
 
     if (isUser) {
-      background = `linear-gradient(135deg, var(--nb-accent) 0%, var(--nb-accent-2) 100%)`
-      borderColor = 'transparent'
+      background = 'var(--nb-surface-soft)'
+      borderColor = 'var(--nb-border)'
       color = 'var(--nb-ink)'
     } else if (isTool) {
       background = 'transparent'
@@ -157,7 +157,7 @@ export function ChatMessages({
       styles: {
         content: {
           borderRadius: isTool ? 12 : 20,
-          padding: isTool ? '4px 0' : isDesktopLayout ? '16px 20px' : '14px 18px',
+          padding: isTool ? '4px 0' : isUser ? '10px 16px' : (isDesktopLayout ? '16px 20px' : '14px 18px'),
           background,
           border: isTool ? 'none' : `1px solid ${borderColor}`,
           color,

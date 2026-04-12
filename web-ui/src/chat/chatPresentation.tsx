@@ -121,7 +121,7 @@ function MarkdownBubble({ content, isStreaming }: { content: string; isStreaming
     <div className="markdown-bubble">
       <XMarkdown
         content={content}
-        streaming={isStreaming ? { hasNextChunk: true } : undefined}
+        streaming={{ hasNextChunk: !!isStreaming }}
         components={XMARKDOWN_COMPONENTS}
         paragraphTag="div"
       />

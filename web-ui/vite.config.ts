@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -8,27 +9,13 @@ const sharedRuntimePackages = new Set([
   'tslib',
 ])
 const heavyPackageNames = new Set([
-  'bubblesets-js',
   'd3',
   'dagre',
   'gl-matrix',
-  'highlight.js',
   'html2canvas',
-  'katex',
   'lodash',
-  'markmap-common',
-  'markmap-html-parser',
-  'markmap-lib',
-  'markmap-view',
-  'markdown-it',
-  'markdown-it-ins',
-  'markdown-it-mark',
-  'markdown-it-sub',
-  'markdown-it-sup',
   'ml-matrix',
-  'prismjs',
   'yaml',
-  '@vscode/markdown-it-katex',
 ])
 const markdownPackages = new Set([
   'react-markdown',
@@ -45,6 +32,15 @@ const markdownPackages = new Set([
   'comma-separated-tokens',
   'space-separated-tokens',
   'decode-named-character-reference',
+  'highlight.js',
+  'katex',
+  'markdown-it',
+  'markdown-it-ins',
+  'markdown-it-mark',
+  'markdown-it-sub',
+  'markdown-it-sup',
+  'prismjs',
+  '@vscode/markdown-it-katex',
 ])
 
 function getPackageName(id: string) {
@@ -89,24 +85,19 @@ function manualChunks(id: string) {
     return 'shared-runtime'
   }
 
-  if (
-    markdownPackages.has(pkg) ||
-    pkg.startsWith('remark-') ||
-    pkg.startsWith('rehype-') ||
-    pkg.startsWith('micromark') ||
-    pkg.startsWith('mdast-') ||
-    pkg.startsWith('hast-') ||
-    pkg.startsWith('unist-') ||
-    pkg.startsWith('vfile')
-  ) {
-    return 'vendor'
+  if (markdownPackages.has(pkg)) {
+    return 'chunk-markdown'
   }
 
   if (
     pkg.startsWith('@antv/') ||
     pkg.startsWith('markmap-') ||
-    heavyPackageNames.has(pkg)
+    pkg === 'bubblesets-js'
   ) {
+    return 'chunk-graph'
+  }
+
+  if (heavyPackageNames.has(pkg)) {
     return getPackageChunkName(pkg)
   }
 

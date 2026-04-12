@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { interactiveLift, interactiveTap, panelReveal, shellSpring, staggerChildren } from '../motionTokens'
+import { framerMotion } from '../ui/design/tokens'
+
+const { spring: shellSpring, panelReveal, staggerChildren, interactiveLift, interactiveTap } = framerMotion
 
 interface MotionGroupProps {
   className?: string

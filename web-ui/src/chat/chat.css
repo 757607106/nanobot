@@ -1,25 +1,26 @@
 .chat-conversation-list {
-  background: transparent !important;
+  background: transparent;
 }
 
 .chat-conversation-list .ant-x-conversations-item,
 .chat-conversation-item {
-  min-height: auto !important;
-  align-items: flex-start !important;
-  padding: 8px 12px !important;
+  min-height: auto;
+  align-items: flex-start;
+  padding: 8px 12px;
   margin-bottom: 2px;
-  border-radius: 8px !important;
-  border: none !important;
+  border-radius: var(--nb-radius-md);
+  border: none;
   background: transparent;
 }
 
-.chat-conversation-list .ant-x-conversations-item:hover {
-  background: var(--nb-card-subtle-bg) !important;
+.chat-conversation-list .ant-x-conversations-item:hover,
+.chat-conversation-item:hover {
+  background: var(--nb-card-subtle-bg);
 }
 
 .chat-conversation-list .ant-x-conversations-item-active {
-  background: var(--nb-conversation-active-bg) !important;
-  box-shadow: var(--nb-conversation-active-shadow);
+  background: var(--nb-conversation-active-bg);
+  box-shadow: inset 0 0 0 1px var(--nb-conversation-active-border);
 }
 
 .chat-conversation-list .ant-x-conversations-menu-icon {
@@ -49,6 +50,14 @@
 }
 
 /* Force tool bubble content to stretch full width — align with assistant */
+.chat-bubble-list .ant-x-bubble-content-wrapper {
+  max-width: min(100%, 720px);
+}
+
+.chat-bubble-list .ant-x-bubble-start .ant-x-bubble-content-wrapper {
+  max-width: min(100%, 960px);
+}
+
 .chat-bubble-list .ant-x-bubble:has(.chat-bubble-content-tool) .ant-x-bubble-content-wrapper {
   flex: 1;
   max-width: none;
@@ -62,20 +71,9 @@
   width: 100%;
 }
 
-/* Clean up Collapse panels inside tool bubbles */
-.chat-bubble-content-tool .ant-collapse-header {
-  padding: 8px 12px !important;
-}
-
+.chat-bubble-content-tool .ant-collapse-header,
 .chat-bubble-content-tool .ant-collapse-content-box {
-  padding: 8px 12px !important;
-}
-.chat-bubble-list .ant-x-bubble-start .ant-x-bubble-content-wrapper {
-  max-width: min(100%, 960px);
-}
-
-.chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper {
-  max-width: min(100%, 720px);
+  padding: 8px 12px;
 }
 
 .chat-bubble-content {
@@ -87,103 +85,22 @@
     opacity: 0;
     transform: translateY(8px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.chat-bubble-content-user .markdown-bubble,
-.chat-bubble-content-user .markdown-bubble p,
-.chat-bubble-content-user .markdown-bubble li,
-.chat-bubble-content-user .markdown-bubble code,
-.chat-bubble-content-user .ant-typography {
-  color: rgba(255, 255, 255, 0.96);
-}
-
 .chat-bubble-content-user .chat-attachment-tag {
-  color: rgba(255, 255, 255, 0.96);
-  border-color: rgba(255, 255, 255, 0.22) !important;
-  background: rgba(255, 255, 255, 0.14) !important;
+  color: var(--nb-ink);
+  border-color: var(--nb-card-border);
+  background: var(--nb-card-subtle-bg);
 }
 
 .markdown-bubble {
   min-width: 0;
   font-size: var(--nb-text-md);
-  line-height: 1.72;
-}
-
-.markdown-bubble h1,
-.markdown-bubble h2,
-.markdown-bubble h3,
-.markdown-bubble h4 {
-  margin: 0.45em 0 0.5em;
-  line-height: 1.3;
-}
-
-.markdown-bubble h1 {
-  font-size: 1.35em;
-}
-
-.markdown-bubble h2 {
-  font-size: 1.2em;
-}
-
-.markdown-bubble h3,
-.markdown-bubble h4 {
-  font-size: 1.05em;
-}
-
-.markdown-bubble p:first-child,
-.markdown-bubble ul:first-child,
-.markdown-bubble ol:first-child {
-  margin-top: 0;
-}
-
-.markdown-bubble p:last-child,
-.markdown-bubble ul:last-child,
-.markdown-bubble ol:last-child {
-  margin-bottom: 0;
-}
-
-.markdown-bubble ul,
-.markdown-bubble ol {
-  margin: 0.55em 0;
-  padding-inline-start: 1.35em;
-}
-
-.markdown-bubble li + li {
-  margin-top: 0.25em;
-}
-
-.markdown-bubble blockquote {
-  margin: 0.8em 0;
-  padding: 0.65em 0.85em;
-  border: 1px solid color-mix(in srgb, var(--nb-border) 60%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--nb-card-subtle-bg) 82%, transparent);
-  color: color-mix(in srgb, var(--nb-ink) 86%, var(--nb-muted));
-}
-
-.markdown-bubble code {
-  padding: 0.14em 0.42em;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--nb-card-subtle-bg) 88%, transparent);
-  font-size: 0.92em;
-}
-
-.markdown-bubble pre {
-  margin: 0.8em 0;
-}
-
-.markdown-bubble pre code {
-  display: block;
-  padding: 14px;
-  border-radius: 16px;
-  background: var(--nb-code-bg);
-  color: var(--nb-code-text);
-  overflow: auto;
+  line-height: var(--nb-line-relaxed);
 }
 
 .chat-attachment-tag {
@@ -194,34 +111,21 @@
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+  font-family: var(--nb-font-mono);
   font-size: var(--nb-text-xs);
-  line-height: 1.6;
-}
-
-@media (max-width: 768px) {
-  .chat-bubble-list .ant-x-bubble-start .ant-x-bubble-content-wrapper,
-  .chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper {
-    max-width: 100%;
-  }
+  line-height: var(--nb-line-relaxed);
 }
 
 .chat-workspace-panel {
   height: 100%;
   min-height: 0;
-  border-radius: var(--nb-radius-modal);
+  border-radius: var(--nb-radius-lg);
   background: var(--nb-card-bg);
-  border: 1px solid var(--nb-surface-panel-border);
-  box-shadow: var(--nb-surface-panel-shadow);
+  border: 1px solid var(--nb-card-border);
+  box-shadow: var(--nb-shadow-sm);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-@media (max-width: 991px) {
-  .chat-workspace-panel {
-    min-height: 680px;
-  }
 }
 
 .chat-workspace-header {
@@ -231,21 +135,14 @@
   background: var(--nb-card-bg);
 }
 
-@media (max-width: 991px) {
-  .chat-workspace-header {
-    padding: 12px 16px;
-  }
-}
-
 .chat-agent-select {
   min-width: 140px;
   max-width: 220px;
 }
 
 .chat-agent-select .ant-select-selector {
-  border-radius: 20px !important;
+  border-radius: var(--nb-radius-xl) !important;
   background: var(--nb-card-subtle-bg) !important;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.03) !important;
 }
 
 .chat-agent-select .ant-select-selection-item {
@@ -259,12 +156,12 @@
 
 /* ── ThoughtChain 增强样式 ── */
 .ant-x-thought-chain-item {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--nb-motion-normal) ease, transform var(--nb-motion-normal) ease;
 }
 
 /* ThoughtChain 容器平滑过渡 + 高度限制 */
 .ant-x-thought-chain {
-  animation: thoughtChainFadeIn 0.2s ease;
+  animation: thoughtChainFadeIn var(--nb-motion-normal) ease;
   max-height: 480px;
   overflow-y: auto;
 }
@@ -282,7 +179,7 @@
 
 /* 防止消息高度突变 */
 .chat-bubble-list .ant-x-bubble-content {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity 150ms ease, transform 150ms ease;
 }
 
 /* Think 组件折叠内容高度限制 */

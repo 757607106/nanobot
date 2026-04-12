@@ -6,7 +6,7 @@ const root = path.resolve(import.meta.dirname, '..')
 const srcRoot = path.join(root, 'src')
 
 const ignoreDirs = new Set(['node_modules', 'dist', 'public', '.git'])
-const allowedExt = new Set(['.ts', '.tsx'])
+const allowedExt = new Set(['.ts', '.tsx', '.css'])
 
 async function* walk(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true })
