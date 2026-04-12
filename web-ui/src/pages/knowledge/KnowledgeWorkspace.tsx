@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   Alert,
   Badge,
+  Breadcrumb,
   Button,
   Collapse,
   Dropdown,
@@ -37,7 +38,6 @@ import {
 import { startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SectionCard from '../../components/console/SectionCard'
-import MetricCard from '../../components/console/MetricCard'
 import { formatDateTimeZh } from '../../locale'
 import { api } from '../../api'
 import { KNOWLEDGE_ARCHITECTURE_LABEL, canDeleteKnowledgeFile, canParseKnowledgeFile, canIndexKnowledgeFile, statusColor, statusLabel, LANGUAGE_OPTIONS, CHUNK_PRESET_OPTIONS } from './shared'
@@ -162,7 +162,11 @@ export default function KnowledgeWorkspace() {
       width: 260,
       render: (_value, item) => (
         <Flex gap={12} align="center">
-          <Tag color={item.isFolder ? 'warning' : 'default'} bordered={false}>{item.isFolder ? 'DIR' : 'DOC'}</Tag>
+          <Badge
+            color={item.isFolder ? 'var(--ant-color-warning)' : 'var(--nb-ink-light)'}
+            text={null}
+            style={{ marginTop: 2 }}
+          />
           <Flex vertical gap={4} style={{ minWidth: 0, justifyContent: 'center' }}>
             <Typography.Text strong style={{ marginTop: 2 }}>{item.filename}</Typography.Text>
             <Typography.Text type="secondary">{item.title || item.originalFilename || '未命名条目'}</Typography.Text>
@@ -235,7 +239,19 @@ export default function KnowledgeWorkspace() {
                   </Button>
                 ) : null}
               </>
-            ) : null}
+            ) : (
+              <Button
+                size="small"
+                type="dashed"
+                icon={<UploadOutlined />}
+                onClick={() => {
+                  onSetUrlParentId(item.fileId)
+                  onOpenModal('url')
+                }}
+              >
+                传至此目录
+              </Button>
+            )}
             <Button
               size="small"
               danger
@@ -256,28 +272,19 @@ export default function KnowledgeWorkspace() {
   }
 
   const renderFilesTab = () => (
-    <Flex vertical gap={16} style={{ minWidth: 0 }}>
-      <div className="knowledge-tab-content-borderless" style={{ minWidth: 0 }}>
-        <Flex vertical gap={16} style={{ minWidth: 0 }}>
-          <div className="knowledge-metrics-grid" style={{ marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-            <MetricCard label="文件记录" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
-            <MetricCard label="已索引" value={filesState.stats.indexedCount} icon={<BranchesOutlined />} tone="success" />
-            <MetricCard label="待处理" value={pendingParseCount + pendingIndexCount} icon={<RetweetOutlined />} tone={pendingParseCount + pendingIndexCount > 0 ? 'warning' : 'neutral'} />
-            <MetricCard label="异常" value={filesState.stats.errorCount} icon={<FileSearchOutlined />} tone={filesState.stats.errorCount > 0 ? 'error' : 'neutral'} />
-            <MetricCard label="当前选择" value={selectedFileIds.length} icon={<CheckSquareOutlined />} tone={selectedFileIds.length > 0 ? 'primary' : 'neutral'} />
-          </div>
-
-          <Flex justify="space-between" align="center" gap={12} wrap="wrap">
-            <div className="knowledge-file-search">
-              <Input
-                placeholder="搜索文件名、标题或路径"
-                value={fileSearch}
-                onChange={(event) => onFileSearchChange(event.target.value)}
-                prefix={<SearchOutlined />}
-                allowClear
-                aria-label="搜索文件"
-              />
-            </div>
+    <Flex vertical gap={12} style={{ minWidth: 0 }}>
+      {/* File Action Top Bar */}
+      <Flex justify="space-between" align="center" gap={12} wrap="wrap" style={{ marginBottom: 8 }}>
+        <div className="knowledge-file-search">
+          <Input
+            placeholder="搜索文件名、标题或路径"
+            value={fileSearch}
+            onChange={(event) => onFileSearchChange(event.target.value)}
+            prefix={<SearchOutlined />}
+            allowClear
+            aria-label="搜索文件"
+          />
+        </div>
 
             <Flex gap={12} wrap="wrap" align="center">
               <Button
@@ -347,37 +354,7 @@ export default function KnowledgeWorkspace() {
               emptyText: <Empty image={false} className="minimal-empty" description="暂无数据" />,
             }}
           />
-        </Flex>
-      </div>
 
-      <SectionCard
-        title="最近任务"
-        description=""
-      >
-        {jobs.slice(0, 6).length === 0 ? (
-          <Empty image={false} className="minimal-empty" description="暂无后台任务" />
-        ) : (
-          <Flex vertical gap={12}>
-            {jobs.slice(0, 6).map((item) => (
-              <div
-                key={item.jobId}
-                className={`knowledge-job-item ${['pending', 'processing', 'parsing', 'indexing'].includes(item.status) ? 'is-processing' : ''}`}
-              >
-                <Flex justify="space-between" align="center" gap={12} wrap="wrap" style={{ position: 'relative', zIndex: 1 }}>
-                  <Space wrap size={[8, 8]}>
-                    <Tag color={statusColor(item.status)}>{statusLabel(item.status)}</Tag>
-                    <Typography.Text strong>{item.jobKind}</Typography.Text>
-                    <Typography.Text type="secondary">{item.targetFileIds.length} 个文件</Typography.Text>
-                  </Space>
-                  <Typography.Text type="secondary">
-                    {item.updatedAt ? formatDateTimeZh(item.updatedAt) : '--'}
-                  </Typography.Text>
-                </Flex>
-              </div>
-            ))}
-          </Flex>
-        )}
-      </SectionCard>
 
       <AnimatePresence>
         {hasSelectedFiles && (
@@ -392,10 +369,9 @@ export default function KnowledgeWorkspace() {
               left: '50%',
               transform: 'translateX(-50%)',
               zIndex: 1000,
-              background: 'var(--nb-surface-strong)',
-              backdropFilter: 'blur(32px) saturate(150%)',
-              boxShadow: 'var(--nb-shadow-hover)',
-              border: '1px solid var(--nb-border)',
+              background: 'var(--nb-surface)',
+              boxShadow: 'var(--nb-shadow-lg)',
+              border: '1px solid var(--nb-border-strong)',
               padding: '12px 24px',
               borderRadius: '20px',
               display: 'flex',
@@ -448,6 +424,46 @@ export default function KnowledgeWorkspace() {
     </Flex>
   )
 
+  const renderTasksTab = () => (
+    <Flex vertical gap={16} style={{ minWidth: 0 }}>
+      <Flex justify="space-between" align="center">
+        <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-base)', color: 'var(--nb-ink-main)' }}>当前知识库任务 ({jobs.length})</Typography.Title>
+      </Flex>
+      {jobs.length === 0 ? (
+        <Empty image={false} className="minimal-empty" description="暂无后台任务" style={{ padding: '64px 0' }} />
+      ) : (
+        <Flex vertical gap={16}>
+          {jobs.map((item) => (
+            <div
+              key={item.jobId}
+              className={`knowledge-job-item ${['pending', 'processing', 'parsing', 'indexing'].includes(item.status) ? 'is-processing' : ''}`}
+              style={{
+                background: 'var(--nb-layout-bg)',
+                border: '1px solid var(--nb-border)',
+                borderRadius: 'var(--nb-radius-lg)',
+                padding: '16px 20px',
+              }}
+            >
+              <Flex justify="space-between" align="center" gap={12} wrap="wrap" style={{ position: 'relative', zIndex: 1 }}>
+                <Space wrap size={[12, 12]}>
+                  <Badge 
+                    status={statusColor(item.status) as 'success' | 'processing' | 'default' | 'error' | 'warning'} 
+                    text={statusLabel(item.status)} 
+                  />
+                  <Typography.Text strong>{item.jobKind}</Typography.Text>
+                  <Typography.Text type="secondary">{item.targetFileIds.length} 个受影响文档</Typography.Text>
+                </Space>
+                <Typography.Text type="secondary">
+                  {item.updatedAt ? formatDateTimeZh(item.updatedAt) : (item.createdAt ? formatDateTimeZh(item.createdAt) : '--')}
+                </Typography.Text>
+              </Flex>
+            </div>
+          ))}
+        </Flex>
+      )}
+    </Flex>
+  )
+
   const workspaceTabItems = [
     {
       key: 'files',
@@ -460,6 +476,18 @@ export default function KnowledgeWorkspace() {
         </span>
       ),
       children: renderFilesTab(),
+    },
+    {
+      key: 'tasks',
+      label: (
+        <span>
+          任务列表
+          {jobs.filter(j => ['pending', 'processing', 'parsing', 'indexing'].includes(j.status)).length > 0 && (
+            <Badge dot color="blue" offset={[4, 0]} />
+          )}
+        </span>
+      ),
+      children: renderTasksTab(),
     },
     {
       key: 'query',
@@ -816,44 +844,47 @@ export default function KnowledgeWorkspace() {
 
   if (loading.detail) {
     return (
-      <div className="knowledge-workspace-container">
-        <SectionCard title="知识库">
-          <Flex justify="center" align="center" className="knowledge-workspace-loading">
-            <Spin tip="正在加载知识库详情..." size="large" />
-          </Flex>
-        </SectionCard>
+      <div className="knowledge-workspace-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Flex justify="center" align="center" className="knowledge-workspace-loading">
+          <Spin tip="正在加载知识库详情..." size="large" />
+        </Flex>
       </div>
     )
   }
 
   if (!currentKb) {
     return (
-      <div className="knowledge-workspace-container">
-        <SectionCard title="知识库">
-          <Empty
-            image={false} className="minimal-empty"
-            description="未选择知识库"
+      <div className="knowledge-workspace-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Empty
+          image={false} className="minimal-empty"
+          description="未选择知识库"
+        >
+          <Button
+            type="primary"
+            icon={<UploadOutlined />}
+            onClick={() => startTransition(() => navigate('/knowledge/new'))}
           >
-            <Button
-              type="primary"
-              icon={<UploadOutlined />}
-              onClick={() => startTransition(() => navigate('/knowledge/new'))}
-            >
-              新建知识库
-            </Button>
-          </Empty>
-        </SectionCard>
+            新建知识库
+          </Button>
+        </Empty>
       </div>
     )
   }
 
   return (
-    <div className="knowledge-workspace-container">
-      <Flex vertical gap={20}>
+    <div className="knowledge-detail-page">
+      <Flex vertical gap={16} style={{ height: '100%' }}>
         <div className="knowledge-page-header">
+          <Breadcrumb 
+            items={[
+              { title: <a onClick={() => startTransition(() => navigate('/knowledge'))}>知识库目录</a> },
+              { title: currentKb.name }
+            ]}
+            style={{ marginBottom: 12 }}
+          />
           <Flex justify="space-between" align="flex-start" gap={16}>
             <div>
-              <h1 className="knowledge-page-title" style={{ marginBottom: 8 }}>{currentKb.name}</h1>
+              <h1 className="knowledge-page-title">{currentKb.name}</h1>
               <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{currentKb.description || '暂无描述'}</Typography.Text>
               <div>
                 <Space wrap size={[8, 8]}>
@@ -903,11 +934,13 @@ export default function KnowledgeWorkspace() {
             activeKey={activeTab}
             onChange={handleTabChange}
             size="large"
-            tabBarGutter={24}
+            tabBarGutter={32}
             items={workspaceTabItems.map(({ key, label }) => ({ key, label }))}
-            style={{ marginBottom: 0 }}
+            style={{ marginBottom: 4, padding: '0 8px' }}
           />
-          <div className="knowledge-tab-content-borderless" style={{ background: 'var(--nb-card-bg)', borderRadius: '0 8px 8px 8px', padding: '16px' }}>
+          
+          {/* Pristine White Full-Width Canvas for workspace body */}
+          <div className="knowledge-workspace-container">
             {workspaceTabItems.find((item) => item.key === activeTab)?.children}
           </div>
         </div>

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Card, Flex, Statistic, Typography, theme } from 'antd'
+import { Flex, Typography, theme } from 'antd'
 
 type MetricTone = 'primary' | 'success' | 'warning' | 'error' | 'neutral'
 
@@ -41,78 +41,67 @@ export default function MetricCard({
   const toneColor = resolveToneColor(token, tone)
 
   return (
-    <Card
-      className={`metric-card metric-card-${tone}`}
-      variant="borderless"
-      hoverable
-      styles={{
-        body: {
-          padding: 'var(--nb-spacing-md) var(--nb-spacing-lg)',
-          position: 'static',
-        },
+    <div
+      className={`metric-item metric-item-${tone}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        minWidth: 100,
+        padding: 'var(--nb-spacing-sm) 0',
       }}
     >
-      <Flex vertical gap={6} style={{ position: 'relative', zIndex: 1 }}>
-        <Flex justify="space-between" align="center" gap={8} className="metric-card-head">
-          <Typography.Text
-            className="metric-card-label"
-            type="secondary"
+      <Flex align="center" gap={8} className="metric-item-head">
+        {icon ? (
+          <div
             style={{
-              fontSize: 'var(--nb-text-xs)',
-              fontWeight: 'var(--nb-font-weight-title)',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
+              color: toneColor,
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: 'var(--nb-text-sm)',
             }}
           >
-            {label}
-          </Typography.Text>
-
-          {icon ? (
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 'var(--nb-radius-sm)',
-                color: toneColor,
-                background: `${toneColor}18`,
-                flexShrink: 0,
-              }}
-            >
             {icon}
-            </div>
-          ) : null}
-        </Flex>
-
-        <Statistic
-          className="metric-card-statistic"
-          value={typeof value === 'number' || typeof value === 'string' ? value : 0}
-          formatter={() => value}
-          valueStyle={{
-            margin: 0,
-            lineHeight: 1.05,
-            fontSize: 'var(--nb-scale-xl)',
-            fontWeight: 'var(--nb-font-weight-title)',
-            color: token.colorText,
-            wordBreak: 'break-word',
-          }}
-        />
-
-        {helper ? (
-          <Typography.Paragraph
-            className="metric-card-helper"
-            type="secondary"
-            style={{
-              margin: 0,
-              lineHeight: 1.45,
-            }}
-          >
-            {helper}
-          </Typography.Paragraph>
+          </div>
         ) : null}
+        <Typography.Text
+          className="metric-item-label"
+          type="secondary"
+          style={{
+            fontSize: 'var(--nb-text-xs)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+        >
+          {label}
+        </Typography.Text>
       </Flex>
-    </Card>
+
+      <div
+        className="metric-item-value"
+        style={{
+          fontSize: 'var(--nb-scale-xl)',
+          fontWeight: 'var(--nb-font-weight-strong)',
+          lineHeight: 1.1,
+          color: tone === 'neutral' ? 'inherit' : toneColor,
+          wordBreak: 'break-word',
+        }}
+      >
+        {value}
+      </div>
+
+      {helper ? (
+        <Typography.Text
+          className="metric-item-helper"
+          type="secondary"
+          style={{
+            fontSize: 'var(--nb-text-xs)',
+            marginTop: 4,
+          }}
+        >
+          {helper}
+        </Typography.Text>
+      ) : null}
+    </div>
   )
 }

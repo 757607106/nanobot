@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import {
   Button,
-  Card,
   Empty,
+  Flex,
   Input,
   InputNumber,
   List,
@@ -14,9 +14,8 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { SaveOutlined, SearchOutlined, MessageOutlined, FileTextOutlined, ApartmentOutlined, LinkOutlined } from '@ant-design/icons'
+import { SaveOutlined, SearchOutlined } from '@ant-design/icons'
 import SectionCard from '../../components/console/SectionCard'
-import MetricCard from '../../components/console/MetricCard'
 import type { KnowledgeQueryChunk, KnowledgeQueryParams, KnowledgeRetrieveResult } from '../../types'
 
 const { Paragraph, Text } = Typography
@@ -212,148 +211,133 @@ export function KnowledgeQueryTab({
       >
         {queryResult ? (
           <>
-            <div className="knowledge-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-              <MetricCard
-                label="回答状态"
-                value={answerMessage ? '已返回回答' : '无直接回答'}
-                icon={<MessageOutlined />}
-                tone={answerMessage ? 'success' : 'neutral'}
-              />
-              <MetricCard
-                label="文档片段"
-                value={resultStats.chunkCount}
-                icon={<FileTextOutlined />}
-                tone="neutral"
-              />
-              <MetricCard
-                label="实体与关系"
-                value={resultStats.entityCount + resultStats.relationshipCount}
-                icon={<ApartmentOutlined />}
-                tone="neutral"
-              />
-              <MetricCard
-                label="引用"
-                value={resultStats.referenceCount}
-                icon={<LinkOutlined />}
-                tone="neutral"
-              />
-            </div>
+            {/* Console-style inline summary bar - Replacing heavy metric cards */}
+            <Flex className="knowledge-summary-bar" align="center" gap={32} wrap="wrap" style={{ marginBottom: 32, paddingBottom: 16, borderBottom: '1px solid var(--nb-border)' }}>
+              <Flex vertical gap={4} style={{ minWidth: 100 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>回答状态</Typography.Text>
+                <Typography.Text style={{ fontSize: 'var(--nb-scale-xl)', fontWeight: 'var(--nb-font-weight-strong)', color: answerMessage ? 'var(--ant-color-success)' : 'inherit' }}>{answerMessage ? '就绪' : '--'}</Typography.Text>
+              </Flex>
+              <Flex vertical gap={4} style={{ minWidth: 100 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>文档片段</Typography.Text>
+                <Typography.Text style={{ fontSize: 'var(--nb-scale-xl)', fontWeight: 'var(--nb-font-weight-strong)' }}>{resultStats.chunkCount}</Typography.Text>
+              </Flex>
+              <Flex vertical gap={4} style={{ minWidth: 100 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>实体与关系</Typography.Text>
+                <Typography.Text style={{ fontSize: 'var(--nb-scale-xl)', fontWeight: 'var(--nb-font-weight-strong)' }}>{resultStats.entityCount + resultStats.relationshipCount}</Typography.Text>
+              </Flex>
+              <Flex vertical gap={4} style={{ minWidth: 100 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>引用源</Typography.Text>
+                <Typography.Text style={{ fontSize: 'var(--nb-scale-xl)', fontWeight: 'var(--nb-font-weight-strong)' }}>{resultStats.referenceCount}</Typography.Text>
+              </Flex>
+            </Flex>
 
             {resultView === 'raw' ? (
               <pre className="knowledge-result-raw">{JSON.stringify(queryResult, null, 2)}</pre>
             ) : (
-              <div className="knowledge-result-grid">
-                {answerMessage ? (
-                  <Card size="small" title="回答" className="knowledge-result-wide">
-                    <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
-                      {answerMessage}
-                    </Paragraph>
-                  </Card>
-                ) : null}
-                <Card size="small" title="元数据">
-                  <div className="knowledge-metadata-list">
-                    {Object.entries(queryResult.metadata || {}).map(([key, value]) => (
-                      <div key={key} className="knowledge-metadata-item">
-                        <Text type="secondary">{key}</Text>
-                        <span>{Array.isArray(value) ? value.join(', ') : String(value)}</span>
-                      </div>
-                    ))}
-                    {queryResult.message ? (
-                      <div className="knowledge-metadata-item">
-                        <Text type="secondary">message</Text>
-                        <span>{queryResult.message}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                </Card>
-                <Card size="small" title={`实体 (${queryResult.data?.entities?.length || 0})`}>
-                  <List
-                    size="small"
-                    dataSource={queryResult.data?.entities || []}
-                    locale={{ emptyText: '暂无实体' }}
-                    renderItem={(item) => (
-                      <List.Item>
-                        <div>
-                          <Text strong>{String(item.entity_name || item.entity_type || 'Entity')}</Text>
-                          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                            {String(item.description || '') || '无描述'}
-                          </Paragraph>
-                        </div>
-                      </List.Item>
-                    )}
-                  />
-                </Card>
-                <Card size="small" title={`关系 (${queryResult.data?.relationships?.length || 0})`}>
-                  <List
-                    size="small"
-                    dataSource={queryResult.data?.relationships || []}
-                    locale={{ emptyText: '暂无关系' }}
-                    renderItem={(item) => (
-                      <List.Item>
-                        <div>
-                          <Text strong>{String(item.src_id || '')} → {String(item.tgt_id || '')}</Text>
-                          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                            {String(item.description || '') || '无描述'}
-                          </Paragraph>
-                        </div>
-                      </List.Item>
-                    )}
-                  />
-                </Card>
-                <Card size="small" title={`文档块 (${queryResult.data?.chunks?.length || 0})`} className="knowledge-result-wide">
-                  {groupedChunks.length > 0 ? (
-                    <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                      <Text type="secondary">
-                        找到 {queryResult.data?.chunks?.length || 0} 个相关文档片段，来自 {groupedChunks.length} 个文件
-                      </Text>
-                      {groupedChunks.map((group) => (
-                        <Card key={group.source} type="inner" size="small" title={`${group.source} (${group.chunks.length} chunks)`}>
-                          <List
-                            size="small"
-                            dataSource={group.chunks}
-                            renderItem={(item, index) => (
-                              <List.Item>
-                                <button
-                                  type="button"
-                                  className="knowledge-chunk-row"
-                                  onClick={() => setSelectedChunk(item)}
-                                >
-                                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                                    <Space wrap size={8}>
-                                      <TagLabel label={`#${index + 1}`} />
-                                      {typeof item.score === 'number' ? (
-                                        <TagLabel label={`相似度 ${(item.score * 100).toFixed(0)}%`} />
-                                      ) : null}
-                                      {typeof item.rerank_score === 'number' ? (
-                                        <TagLabel label={`重排 ${(item.rerank_score * 100).toFixed(0)}%`} />
-                                      ) : null}
-                                    </Space>
-                                    <Paragraph ellipsis={{ rows: 2 }} style={{ marginBottom: 0 }}>
-                                      {getChunkPreview(String(item.content || ''))}
-                                    </Paragraph>
+              <Flex className="knowledge-result-asymmetric" gap={48} wrap="wrap" align="flex-start">
+                <div style={{ flex: '1 1 500px', maxWidth: '75ch', display: 'flex', flexDirection: 'column', gap: 40 }}>
+                  {answerMessage ? (
+                    <section>
+                      <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>分析流回答</Typography.Title>
+                      <Paragraph style={{ whiteSpace: 'pre-wrap', fontSize: 'var(--nb-text-md)', lineHeight: 1.6, margin: 0 }}>
+                        {answerMessage}
+                      </Paragraph>
+                    </section>
+                  ) : null}
+
+                  <section>
+                    <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>文档片段溯源 ({queryResult.data?.chunks?.length || 0})</Typography.Title>
+                    {groupedChunks.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+                        {groupedChunks.map((group) => (
+                          <div key={group.source} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-primary)' }}>{group.source}</Typography.Text>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                              {group.chunks.map((item, index) => (
+                                <div key={index} className="knowledge-chunk-inline" style={{ padding: '12px 16px', background: 'var(--nb-surface-soft)', borderRadius: 'var(--nb-radius-md)' }}>
+                                  <Space wrap size={8} style={{ marginBottom: 8 }}>
+                                    <TagLabel label={`#${index + 1}`} />
+                                    {typeof item.score === 'number' ? (
+                                      <TagLabel label={`相似度 ${(item.score * 100).toFixed(0)}%`} />
+                                    ) : null}
+                                    {typeof item.rerank_score === 'number' ? (
+                                      <TagLabel label={`重排 ${(item.rerank_score * 100).toFixed(0)}%`} />
+                                    ) : null}
+                                    <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setSelectedChunk(item)}>详情</Button>
                                   </Space>
-                                </button>
-                              </List.Item>
-                            )}
-                          />
-                        </Card>
-                      ))}
-                    </Space>
-                  ) : (
-                    <Empty description="暂无文档块" image={false} className="minimal-empty" />
-                  )}
-                </Card>
-                <Card size="small" title={`引用 (${queryResult.data?.references?.length || 0})`}>
-                  <List
-                    size="small"
-                    dataSource={queryResult.data?.references || []}
-                    locale={{ emptyText: '暂无引用' }}
-                    renderItem={(item) => (
-                      <List.Item>{String(item.file_path || item.reference_id || '')}</List.Item>
+                                  <Paragraph ellipsis={{ rows: 3 }} style={{ marginBottom: 0, color: 'var(--ant-color-text-secondary)', fontSize: 'var(--nb-text-sm)' }}>
+                                    {getChunkPreview(String(item.content || ''), 160)}
+                                  </Paragraph>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Empty description="暂无文档块" image={false} className="minimal-empty" />
                     )}
-                  />
-                </Card>
-              </div>
+                  </section>
+                </div>
+                
+                <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: 32 }}>
+                  <section>
+                    <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>元数据</Typography.Title>
+                    <div className="knowledge-metadata-list">
+                      {Object.entries(queryResult.metadata || {}).map(([key, value]) => (
+                        <div key={key} className="knowledge-metadata-item" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                          <Text type="secondary">{key}</Text>
+                          <span style={{ textAlign: 'right' }}>{Array.isArray(value) ? value.join(', ') : String(value)}</span>
+                        </div>
+                      ))}
+                      {queryResult.message ? (
+                        <div className="knowledge-metadata-item" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                          <Text type="secondary">message</Text>
+                          <span style={{ textAlign: 'right' }}>{queryResult.message}</span>
+                        </div>
+                      ) : null}
+                      {(!queryResult.metadata || Object.keys(queryResult.metadata).length === 0) && !queryResult.message && (
+                        <Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>无</Text>
+                      )}
+                    </div>
+                  </section>
+
+                  <section>
+                    <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>实体关联 ({queryResult.data?.entities?.length || 0})</Typography.Title>
+                    <List
+                      size="small"
+                      split={false}
+                      dataSource={queryResult.data?.entities || []}
+                      locale={{ emptyText: <Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>暂无实体</Text> }}
+                      renderItem={(item) => (
+                        <List.Item style={{ padding: '4px 0' }}>
+                          <div style={{ width: '100%' }}>
+                            <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{String(item.entity_name || item.entity_type || 'Entity')}</Text>
+                            <Paragraph type="secondary" ellipsis={{ rows: 1 }} style={{ marginBottom: 0, fontSize: '13px' }}>
+                              {String(item.description || '') || '无描述'}
+                            </Paragraph>
+                          </div>
+                        </List.Item>
+                      )}
+                    />
+                  </section>
+
+                  <section>
+                    <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>路径引用 ({queryResult.data?.references?.length || 0})</Typography.Title>
+                    <List
+                      size="small"
+                      split={false}
+                      dataSource={queryResult.data?.references || []}
+                      locale={{ emptyText: <Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>暂无引用</Text> }}
+                      renderItem={(item) => (
+                        <List.Item style={{ padding: '4px 0', fontSize: 'var(--nb-text-sm)' }}>
+                          {String(item.file_path || item.reference_id || '')}
+                        </List.Item>
+                      )}
+                    />
+                  </section>
+                </div>
+              </Flex>
             )}
           </>
         ) : (

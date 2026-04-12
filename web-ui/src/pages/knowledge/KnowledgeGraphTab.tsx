@@ -500,8 +500,8 @@ export function KnowledgeGraphTab({
         const { Graph } = await import('@antv/g6')
         if (disposed || !containerRef.current) return
 
-        const width = Math.max(containerRef.current.clientWidth, 540)
-        const height = Math.max(containerRef.current.clientHeight, 520)
+        const width = Math.max(containerRef.current.clientWidth, 200)
+        const height = Math.max(containerRef.current.clientHeight, 300)
 
         // Zero-dimension retry (inspired by Yuxi GraphCanvas)
         if (width <= 0 || height <= 0) {
@@ -569,8 +569,8 @@ export function KnowledgeGraphTab({
         resizeObserverRef.current = new ResizeObserver((entries) => {
           const entry = entries[0]
           if (!entry || !graphRef.current) return
-          const nextWidth = Math.max(entry.contentRect.width, 540)
-          const nextHeight = Math.max(entry.contentRect.height, 520)
+          const nextWidth = Math.max(entry.contentRect.width, 200)
+          const nextHeight = Math.max(entry.contentRect.height, 300)
           graphRef.current.setSize(nextWidth, nextHeight)
           void graphRef.current.fitView?.()
         })
@@ -677,32 +677,7 @@ export function KnowledgeGraphTab({
         </Button>
       </div>
 
-      <div className="knowledge-metrics-grid" style={{ marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-        <MetricCard
-          label="实体"
-          value={baseGraphPayload.nodes.length || graphStats?.nodeCount || 0}
-          icon={<ApartmentOutlined />}
-          tone="neutral"
-        />
-        <MetricCard
-          label="关系"
-          value={baseGraphPayload.edges.length || graphStats?.edgeCount || 0}
-          icon={<ShareAltOutlined />}
-          tone="neutral"
-        />
-        <MetricCard
-          label="渲染模式"
-          value={focusState.active ? `${getGraphLayoutLabel(layoutMode)} · 焦点` : getGraphLayoutLabel(layoutMode)}
-          icon={<DesktopOutlined />}
-          tone="primary"
-        />
-        <MetricCard
-          label={focusState.active ? '邻接关系' : '隐藏噪音'}
-          value={focusState.active ? selectedTypeCount || '0' : (viewMode === 'core' ? filteredGraphData.hiddenNodeCount : 0)}
-          icon={<EyeInvisibleOutlined />}
-          tone={focusState.active ? 'primary' : 'neutral'}
-        />
-      </div>
+
 
       {!graphLoading && hasGraph && viewMode === 'core' && !focusState.active && (filteredGraphData.hiddenNodeCount > 0 || filteredGraphData.hiddenEdgeCount > 0) ? (
         <Alert

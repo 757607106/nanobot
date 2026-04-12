@@ -3329,10 +3329,12 @@ describe('web app smoke pages', () => {
     )
 
     expect(await screen.findByText('Support KB')).toBeInTheDocument()
-    expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
+    
+    // Click the card to navigate into the knowledge base workspace
+    const kbCard = await screen.findByRole('button', { name: /进入 Support KB 知识库/ })
+    fireEvent.click(kbCard)
 
-    expect(screen.getAllByText('Support KB').length).toBeGreaterThan(0)
-    expect(screen.getByRole('tab', { name: '文件' })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: '文件' })).toBeInTheDocument()
     expect(screen.getByText('检索测试')).toBeInTheDocument()
     expect(screen.getByText('知识导图')).toBeInTheDocument()
 

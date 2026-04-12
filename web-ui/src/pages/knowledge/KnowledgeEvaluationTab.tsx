@@ -41,7 +41,7 @@ export function KnowledgeEvaluationTab({
           </Button>
         )}
       >
-        <div className="knowledge-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--nb-border)' }}>
           <MetricCard
             label="当前基准"
             value={selectedBenchmark?.name || '未选择'}

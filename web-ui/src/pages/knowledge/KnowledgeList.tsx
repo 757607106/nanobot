@@ -3,7 +3,7 @@ import { Empty, Flex, Input, Spin, Tag, Typography, theme } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import { startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
-import SectionCard from '../../components/console/SectionCard'
+
 import type { KnowledgeBaseDefinition } from '../../types'
 
 interface KnowledgeListProps {
@@ -28,11 +28,14 @@ export default function KnowledgeList({
 
   return (
     <div className="knowledge-list-container">
-      <SectionCard
-        title="知识库目录"
-        action={<span className="console-inline-code">{`${visibleKnowledgeBases.length}/${knowledgeBases.length}`}</span>}
-      >
         <Flex vertical gap={16}>
+          <Flex justify="space-between" align="center" style={{ padding: '0 8px' }}>
+            <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-sm)', color: 'var(--nb-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              知识库目录
+            </Typography.Title>
+            <span className="console-inline-code" style={{ fontSize: 'var(--nb-text-xs)' }}>{`${visibleKnowledgeBases.length}/${knowledgeBases.length}`}</span>
+          </Flex>
+
           <div style={{ padding: '0 4px' }}>
             <Input
               placeholder="搜索知识库、标签..."
@@ -66,44 +69,57 @@ export default function KnowledgeList({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.04 }}
                     onClick={() => startTransition(() => navigate(`/knowledge/${item.kbId}`))}
-                    className={`knowledge-nav-item ${isSelected ? 'active' : ''}`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        startTransition(() => navigate(`/knowledge/${item.kbId}`))
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    className={`knowledge-card ${isSelected ? 'is-selected' : ''}`}
+                    aria-label={`进入 ${item.name} 知识库`}
                   >
-                    <div className="knowledge-nav-item-head" style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div className="knowledge-card-header">
                       <div
+                        className="knowledge-card-avatar"
                         style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 10,
                           background: `hsl(${(item.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#fff',
-                          fontSize: 'var(--nb-text-lg)',
-                          fontWeight: 'var(--nb-font-weight-strong)',
-                          flexShrink: 0,
                         }}
                       >
                         {item.name.charAt(0).toUpperCase()}
                       </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <Typography.Text
-                          strong
-                          className="knowledge-nav-item-title"
-                          style={{ color: isSelected ? token.colorPrimary : undefined, fontSize: 'var(--nb-text-sm)', display: 'block' }}
-                        >
-                          {item.name}
-                        </Typography.Text>
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
-                          {item.enabled ? '检索可用' : '已停用'} · {item.stats?.fileCount || 0} 文件 · {item.stats?.indexedCount || 0} 已索引
-                        </Typography.Text>
-                      </div>
                       <Tag
                         color={item.enabled ? 'success' : 'default'}
-                        style={{ margin: 0, fontSize: 'var(--nb-text-2xs)' }}
+                        bordered={false}
+                        className="knowledge-card-status"
                       >
-                        {item.enabled ? '启用' : '停用'}
+                        {item.enabled ? '已启用' : '已停用'}
                       </Tag>
+                    </div>
+                    
+                    <div className="knowledge-card-body">
+                      <Typography.Text
+                        strong
+                        className="knowledge-card-title"
+                        style={{ color: isSelected ? token.colorPrimary : undefined }}
+                      >
+                        {item.name}
+                      </Typography.Text>
+                      <Typography.Paragraph type="secondary" className="knowledge-card-desc" ellipsis={{ rows: 2 }} style={{ margin: 0 }}>
+                        {item.description || '暂无描述'}
+                      </Typography.Paragraph>
+                    </div>
+                    
+                    <div className="knowledge-card-footer">
+                      <div className="knowledge-card-stat">
+                        <span className="stat-value">{item.stats?.fileCount || 0}</span>
+                        <span className="stat-label">文件</span>
+                      </div>
+                      <div className="knowledge-card-stat">
+                        <span className="stat-value">{item.stats?.indexedCount || 0}</span>
+                        <span className="stat-label">已索引</span>
+                      </div>
                     </div>
                   </motion.div>
                 )
@@ -111,7 +127,6 @@ export default function KnowledgeList({
             </div>
           )}
         </Flex>
-      </SectionCard>
     </div>
   )
 }

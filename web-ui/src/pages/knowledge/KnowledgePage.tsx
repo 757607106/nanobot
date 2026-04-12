@@ -312,12 +312,7 @@ export default function KnowledgePage() {
     void loadKnowledgeDetail(selectedKbId)
   }, [selectedKbId, defaultEmbeddingBindingName, defaultLlmBindingName])
 
-  useEffect(() => {
-    if (loading.workspace || shouldOpenCreateModal || selectedKbId || knowledgeBases.length === 0) {
-      return
-    }
-    startTransition(() => navigate(`/knowledge/${knowledgeBases[0].kbId}`, { replace: true }))
-  }, [knowledgeBases, loading.workspace, navigate, selectedKbId, shouldOpenCreateModal])
+
 
   useEffect(() => {
     if (activeTab === 'graph' && currentKb) {
@@ -1104,42 +1099,44 @@ export default function KnowledgePage() {
   return (
     <ErrorBoundary>
     <Flex vertical gap={16} className="page-stack">
-      <PageHeader
-        title="知识库"
-        actions={(
-          <>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadKnowledgeBases()}>
-              刷新目录
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setFormState(createKnowledgeForm())
-                setIndexConfig(createIndexConfigState())
-                startTransition(() => navigate('/knowledge/new'))
-              }}
-            >
-              新建知识库
-            </Button>
-          </>
-        )}
-      />
-
-
-      <Splitter className="console-workspace-splitter" style={{ flex: 1 }}>
-        <Splitter.Panel defaultSize={320} min={280} max={440}>
-          <KnowledgeList
-            knowledgeBases={knowledgeBases}
-            visibleKnowledgeBases={visibleKnowledgeBases}
-            selectedKbId={selectedKbId}
-            knowledgeSearch={knowledgeSearch}
-            loading={loading.workspace}
-            onSearchChange={setKnowledgeSearch}
+      {(!currentKb && !shouldOpenCreateModal && !loading.detail) ? (
+        <>
+          <PageHeader
+            title="知识引擎"
+            actions={(
+              <>
+                <Button icon={<ReloadOutlined />} onClick={() => void loadKnowledgeBases()}>
+                  刷新目录
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setFormState(createKnowledgeForm())
+                    setIndexConfig(createIndexConfigState())
+                    startTransition(() => navigate('/knowledge/new'))
+                  }}
+                >
+                  新建知识库
+                </Button>
+              </>
+            )}
           />
-        </Splitter.Panel>
 
-        <Splitter.Panel>
+          <div className="knowledge-master-container" style={{ maxWidth: 1200, margin: '0 auto', width: '100%', paddingBottom: 40 }}>
+            <KnowledgeList
+              knowledgeBases={knowledgeBases}
+              visibleKnowledgeBases={visibleKnowledgeBases}
+              selectedKbId={selectedKbId}
+              knowledgeSearch={knowledgeSearch}
+              loading={loading.workspace}
+              onSearchChange={setKnowledgeSearch}
+            />
+          </div>
+        </>
+      ) : null}
+
+      {(currentKb || shouldOpenCreateModal || loading.detail) ? (
           <KnowledgeProvider value={{
             currentKb,
             filesState,
@@ -1225,8 +1222,7 @@ export default function KnowledgePage() {
           }}>
             <KnowledgeWorkspace />
           </KnowledgeProvider>
-        </Splitter.Panel>
-      </Splitter>
+      ) : null}
 
       {/* Modals */}
       <Modal
