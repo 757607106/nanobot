@@ -48,7 +48,7 @@ import {
   inferCapabilityType,
 } from './utils'
 import type { AddModelDraft, BindingRow, TestDraft } from './types'
-import { SPACING } from '../../ui/tokens'
+import { designTokens } from '../../ui/design/tokens'
 import { useToast } from '../../toast'
 
 export default function ModelsPage() {
@@ -59,7 +59,7 @@ export default function ModelsPage() {
   const [configMeta, setConfigMeta] = useState<ConfigMeta | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  
+
   const [searchQuery, setSearchQuery] = useState('')
   const deferredQuery = useDeferredValue(searchQuery)
   const [viewMode, setViewMode] = useState<'models' | 'providers'>('models')
@@ -182,8 +182,8 @@ export default function ModelsPage() {
       delete nextBindings[bindingToDelete]
       const fallbackBindingName = bindingToDelete === defaultBindingName
         ? Object.entries(nextBindings).find(([, binding]) => resolveBindingCapabilityType(binding) !== 'embedding')?.[0]
-          ?? Object.keys(nextBindings)[0]
-          ?? null
+        ?? Object.keys(nextBindings)[0]
+        ?? null
         : current.agents.defaults.binding ?? null
       const fallbackBinding = fallbackBindingName ? nextBindings[fallbackBindingName] : null
       return normalizeModelConfig({
@@ -446,7 +446,7 @@ export default function ModelsPage() {
         )}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: SPACING.md }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: designTokens.space.md }}>
         <MetricCard
           label="已注册模型"
           value={totalBindingCount}
@@ -540,7 +540,7 @@ export default function ModelsPage() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                gap: SPACING.md,
+                gap: designTokens.space.md,
               }}
             >
               {providerCards.map((provider, index) => (

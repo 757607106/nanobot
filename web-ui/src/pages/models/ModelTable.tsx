@@ -13,21 +13,7 @@ import {
 import ProviderAvatar from './ProviderAvatar'
 import { capabilityLabel } from './utils'
 import type { BindingRow, CapabilityType } from './types'
-
-const CAPABILITY_TABS = [
-  { label: '全部', value: 'all' },
-  { label: '文本对话', value: 'text_chat' },
-  { label: '向量嵌入', value: 'embedding' },
-  { label: '多模态', value: 'multimodal' },
-  { label: '重排序', value: 'rerank' },
-]
-
-function capabilityColor(type: CapabilityType) {
-  if (type === 'embedding') return 'gold'
-  if (type === 'rerank') return 'cyan'
-  if (type === 'multimodal') return 'purple'
-  return 'blue'
-}
+import { CAPABILITY_TABS, capabilityColor } from './capabilities'
 
 interface ModelTableProps {
   bindings: BindingRow[]
@@ -118,7 +104,7 @@ export default function ModelTable({
                   ellipsis={{ tooltip: record.model || '未配置' }}
                   style={{
                     fontSize: 'var(--nb-text-sm)',
-                    fontFamily: hasModel ? 'var(--font-mono, monospace)' : undefined,
+                    fontFamily: hasModel ? 'var(--nb-font-mono)' : undefined,
                     color: hasModel ? undefined : token.colorTextQuaternary,
                   }}
                 >

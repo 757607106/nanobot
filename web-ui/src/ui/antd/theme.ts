@@ -1,79 +1,44 @@
 import { theme as antdTheme, type ThemeConfig } from 'antd'
 import type { ResolvedTheme } from '../../themeMode'
-
-const CONSOLE_FONT_FAMILY = '"Outfit", "IBM Plex Sans", "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif'
-
-// 基础设计常量
-const BORDER_RADIUS = {
-  xs: 2,
-  sm: 4,
-  md: 6,
-  lg: 8,
-  xl: 12,
-} as const
-
-const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
-} as const
+import { designTokens } from '../design/tokens'
 
 export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
   const isDark = mode === 'dark'
-
-  // 核心色板
-  const colors = {
-    // 主色
-    primary: isDark ? '#8CB8FF' : '#1457D9',
-    // 成功色
-    success: isDark ? '#4FD1A2' : '#18795B',
-    // 警告色
-    warning: isDark ? '#F2C572' : '#B97824',
-    // 错误色
-    error: isDark ? '#FF9E93' : '#C84C35',
-    // 背景色
-    bgLayout: isDark ? '#0E1826' : '#EEF2F6',
-    bgContainer: isDark ? '#152131' : '#FFFFFF',
-    bgElevated: isDark ? '#1A2B40' : '#FFFFFF',
-    // 文字色
-    textBase: isDark ? '#E7EDF6' : '#152131',
-    textSecondary: isDark ? '#A0B0C6' : '#5A6B7C',
-    // 边框色
-    borderSecondary: isDark ? '#25374B' : '#D7DFEA',
-    // 交互状态背景
-    itemSelectedBg: isDark ? '#1A2B40' : '#EAF1FE',
-    itemHoverBg: isDark ? '#182639' : '#F5F8FC',
-  } as const
+  const palette = isDark ? designTokens.color.dark : designTokens.color.light
 
   return {
     algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
     token: {
       // === 品牌色 ===
-      colorPrimary: colors.primary,
-      colorInfo: colors.primary,
-      colorSuccess: colors.success,
-      colorWarning: colors.warning,
-      colorError: colors.error,
+      colorPrimary: palette.accent,
+      colorInfo: palette.accent,
+      colorSuccess: palette.success,
+      colorWarning: palette.warning,
+      colorError: palette.error,
 
       // === 背景色 ===
-      colorBgLayout: colors.bgLayout,
-      colorBgContainer: colors.bgContainer,
-      colorBgElevated: colors.bgElevated,
+      colorBgLayout: palette.bgLayout,
+      colorBgContainer: palette.bgContainer,
+      colorBgElevated: palette.bgElevated,
 
       // === 文字色 ===
-      colorTextBase: colors.textBase,
+      colorTextBase: palette.text,
+      colorText: palette.text,
+      colorTextSecondary: palette.textSecondary,
+      colorTextTertiary: isDark ? 'rgba(242, 242, 247, 0.58)' : 'rgba(17, 24, 39, 0.58)',
+      colorTextQuaternary: isDark ? 'rgba(242, 242, 247, 0.44)' : 'rgba(17, 24, 39, 0.44)',
+      colorTextDescription: palette.textSecondary,
+      colorTextPlaceholder: isDark ? 'rgba(242, 242, 247, 0.50)' : 'rgba(17, 24, 39, 0.50)',
+      colorTextDisabled: isDark ? 'rgba(242, 242, 247, 0.34)' : 'rgba(17, 24, 39, 0.34)',
       colorTextLightSolid: '#ffffff',
 
       // === 边框与分割线 ===
-      colorBorderSecondary: colors.borderSecondary,
+      colorBorderSecondary: palette.border,
 
-      borderRadius: BORDER_RADIUS.md,
-      borderRadiusLG: BORDER_RADIUS.lg,
-      borderRadiusSM: BORDER_RADIUS.sm,
-      borderRadiusXS: BORDER_RADIUS.xs,
+      borderRadius: designTokens.radius.md,
+      borderRadiusLG: designTokens.radius.lg,
+      borderRadiusSM: designTokens.radius.sm,
+      borderRadiusXS: designTokens.radius.xs,
 
       // === 字体体系 ===
       fontSize: 14,
@@ -87,14 +52,14 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       fontSizeHeading5: 16,
       fontWeightStrong: 600,
       lineHeight: 1.5,
-      fontFamily: CONSOLE_FONT_FAMILY,
+      fontFamily: designTokens.font.family,
 
       // === 间距体系 ===
-      paddingXS: SPACING.xs,
-      paddingSM: SPACING.sm,
-      padding: SPACING.md,
-      paddingLG: SPACING.lg,
-      paddingXL: SPACING.xl,
+      paddingXS: designTokens.space.xs,
+      paddingSM: designTokens.space.sm,
+      padding: designTokens.space.md,
+      paddingLG: designTokens.space.lg,
+      paddingXL: designTokens.space.xl,
       // 注意: paddingXXL 不是标准 AliasToken，通过 paddingXL 扩展
 
       // === 控制组件尺寸 ===
@@ -103,19 +68,19 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       controlHeightLG: 48,
 
       // === 阴影 ===
-      boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.06)',
-      boxShadowSecondary: '0 20px 40px -10px rgba(99, 102, 241, 0.08), 0 10px 20px -5px rgba(0, 0, 0, 0.04)',
+      boxShadow: (isDark ? designTokens.shadow.dark : designTokens.shadow.light).sm,
+      boxShadowSecondary: (isDark ? designTokens.shadow.dark : designTokens.shadow.light).md,
     },
     components: {
       // === Card 组件 ===
       Card: {
-        borderRadiusLG: BORDER_RADIUS.lg,
-        bodyPadding: SPACING.xl,
-        bodyPaddingSM: SPACING.lg,
+        borderRadiusLG: designTokens.radius.lg,
+        bodyPadding: designTokens.space.xl,
+        bodyPaddingSM: designTokens.space.lg,
         headerHeight: 52,
         headerHeightSM: 44,
         headerFontSize: 16,
-        headerPadding: SPACING.lg,
+        headerPadding: designTokens.space.lg,
       },
 
       // === Layout 组件 ===
@@ -127,73 +92,73 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
 
       // === Menu 组件 ===
       Menu: {
-        itemBorderRadius: BORDER_RADIUS.md,
-        itemMarginInline: SPACING.xs,
-        itemMarginBlock: SPACING.xs,
-        itemSelectedBg: colors.itemSelectedBg,
-        itemSelectedColor: colors.primary,
-        itemHoverBg: colors.itemHoverBg,
-        itemHoverColor: isDark ? colors.textBase : colors.primary,
-        itemColor: colors.textSecondary,
+        itemBorderRadius: designTokens.radius.md,
+        itemMarginInline: designTokens.space.xs,
+        itemMarginBlock: designTokens.space.xs,
+        itemSelectedBg: palette.selectedBg,
+        itemSelectedColor: palette.text,
+        itemHoverBg: palette.hoverBg,
+        itemHoverColor: palette.text,
+        itemColor: palette.textSecondary,
         itemHeight: 44,
         iconSize: 18,
-        iconMarginInlineEnd: SPACING.sm,
+        iconMarginInlineEnd: designTokens.space.sm,
         // 深色模式专用
         darkItemBg: 'transparent',
-        darkItemSelectedBg: colors.itemSelectedBg,
-        darkItemSelectedColor: colors.primary,
-        darkItemHoverBg: colors.itemHoverBg,
-        darkItemHoverColor: colors.textBase,
-        darkItemColor: colors.textSecondary,
+        darkItemSelectedBg: palette.selectedBg,
+        darkItemSelectedColor: palette.text,
+        darkItemHoverBg: palette.hoverBg,
+        darkItemHoverColor: palette.text,
+        darkItemColor: palette.textSecondary,
       },
 
       // === Button 组件 ===
       Button: {
-        borderRadius: BORDER_RADIUS.md,
+        borderRadius: designTokens.radius.md,
         controlHeight: 40,
         controlHeightSM: 32,
         controlHeightLG: 48,
         fontWeight: 'var(--nb-font-weight-strong)',
-        paddingInline: SPACING.lg,
-        paddingInlineSM: SPACING.md,
-        paddingInlineLG: SPACING.xl,
+        paddingInline: designTokens.space.lg,
+        paddingInlineSM: designTokens.space.md,
+        paddingInlineLG: designTokens.space.xl,
         primaryColor: '#ffffff',
-        defaultBg: colors.bgContainer,
-        defaultBorderColor: colors.borderSecondary,
-        defaultColor: colors.textBase,
+        defaultBg: palette.bgContainer,
+        defaultBorderColor: palette.border,
+        defaultColor: palette.text,
       },
 
       // === Input 组件 ===
       Input: {
-        borderRadius: BORDER_RADIUS.md,
-        paddingInline: SPACING.lg,
+        borderRadius: designTokens.radius.md,
+        paddingInline: designTokens.space.lg,
         paddingBlock: 10,
-        activeShadow: `0 0 0 2px ${isDark ? 'rgba(140, 184, 255, 0.15)' : 'rgba(20, 87, 217, 0.15)'}`,
+        activeShadow: `0 0 0 2px ${isDark ? 'rgba(10, 132, 255, 0.22)' : 'rgba(0, 122, 255, 0.18)'}`,
       },
 
       // === InputNumber 组件 ===
       InputNumber: {
-        borderRadius: BORDER_RADIUS.md,
+        borderRadius: designTokens.radius.md,
       },
 
       // === Select 组件 ===
       Select: {
-        borderRadius: BORDER_RADIUS.md,
+        borderRadius: designTokens.radius.md,
       },
 
       // === Segmented 组件 ===
       Segmented: {
-        itemActiveBg: isDark ? '#182639' : '#FFFFFF',
-        itemSelectedBg: colors.itemSelectedBg,
-        trackBg: isDark ? '#0E1826' : '#D7DFEA',
+        itemActiveBg: palette.hoverBg,
+        itemSelectedBg: palette.selectedBg,
+        trackBg: palette.bgLayout,
       },
 
       // === Tabs 组件 ===
       Tabs: {
-        itemSelectedColor: colors.primary,
-        itemHoverColor: colors.primary,
-        inkBarColor: colors.primary,
-        itemColor: colors.textSecondary,
+        itemSelectedColor: palette.accent,
+        itemHoverColor: palette.accent,
+        inkBarColor: palette.accent,
+        itemColor: palette.textSecondary,
         titleFontSize: 14,
         titleFontSizeLG: 16,
         titleFontSizeSM: 12,
@@ -203,72 +168,72 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       // === Tag 组件 ===
       Tag: {
         borderRadiusSM: 999,
-        defaultBg: isDark ? '#1A2B40' : '#EAF1FE',
-        defaultColor: colors.primary,
+        defaultBg: palette.selectedBg,
+        defaultColor: palette.accent,
       },
 
       // === Drawer 组件 ===
       Drawer: {
-        colorBgElevated: colors.bgContainer,
-        paddingLG: SPACING.xl,
+        colorBgElevated: palette.bgContainer,
+        paddingLG: designTokens.space.xl,
       },
 
       // === Modal 组件 ===
       Modal: {
-        contentBg: colors.bgContainer,
-        headerBg: colors.bgContainer,
-        footerBg: colors.bgContainer,
-        titleColor: colors.textBase,
+        contentBg: palette.bgContainer,
+        headerBg: palette.bgContainer,
+        footerBg: palette.bgContainer,
+        titleColor: palette.text,
         titleFontSize: 18,
         titleLineHeight: 1.4,
-        borderRadiusLG: BORDER_RADIUS.lg,
+        borderRadiusLG: designTokens.radius.lg,
       },
 
       // === Table 组件 ===
       Table: {
-        headerBg: isDark ? '#1A2B40' : '#F5F8FC',
-        headerColor: colors.textBase,
-        rowHoverBg: colors.itemHoverBg,
-        rowSelectedBg: colors.itemSelectedBg,
-        borderRadiusLG: BORDER_RADIUS.md,
-        cellPaddingBlock: SPACING.md,
-        cellPaddingInline: SPACING.lg,
+        headerBg: palette.bgLayout,
+        headerColor: palette.text,
+        rowHoverBg: palette.hoverBg,
+        rowSelectedBg: palette.selectedBg,
+        borderRadiusLG: designTokens.radius.md,
+        cellPaddingBlock: designTokens.space.md,
+        cellPaddingInline: designTokens.space.lg,
       },
 
       // === Form 组件 ===
       Form: {
-        labelColor: colors.textSecondary,
+        labelColor: palette.textSecondary,
         labelFontSize: 14,
         labelHeight: 32,
-        itemMarginBottom: SPACING.xl,
+        itemMarginBottom: designTokens.space.xl,
       },
 
       // === Tooltip 组件 ===
       Tooltip: {
-        colorBgSpotlight: isDark ? '#1A2B40' : '#152131',
+        colorBgSpotlight: palette.bgElevated,
         colorTextLightSolid: '#ffffff',
       },
 
       // === Dropdown 组件 ===
       Dropdown: {
-        colorBgElevated: colors.bgElevated,
-        controlItemBgHover: colors.itemHoverBg,
-        controlItemBgActive: colors.itemSelectedBg,
+        colorBgElevated: palette.bgElevated,
+        controlItemBgHover: palette.hoverBg,
+        controlItemBgActive: palette.selectedBg,
       },
 
       // === Popover 组件 ===
       Popover: {
-        colorBgElevated: colors.bgElevated,
+        colorBgElevated: palette.bgElevated,
       },
 
       // === Message 组件 ===
       Message: {
-        contentBg: colors.bgElevated,
+        contentBg: palette.bgElevated,
       },
 
       // === Notification 组件 ===
       Notification: {
-        colorBgElevated: colors.bgElevated,
+        colorBgElevated: palette.bgElevated,
       },
     },
   }

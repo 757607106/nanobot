@@ -159,7 +159,7 @@ export default function RunDetail({
                     {formatDateTimeZh(run.createdAt)}
                   </Descriptions.Item>
                   <Descriptions.Item label="执行耗时">
-                    <Text style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--nb-text-sm)' }}>
+                    <Text style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 'var(--nb-text-sm)' }}>
                       {formatDuration(run.createdAt ?? '', run.finishedAt)}
                     </Text>
                   </Descriptions.Item>

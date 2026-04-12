@@ -1,0 +1,320 @@
+.app-shell,
+.page-card, /* @deprecated: Use SectionCard component instead */
+.page-hero,
+.config-panel-card {
+  transition:
+    background 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    transform 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.page-card:hover,
+.config-panel-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+}
+
+.app-shell {
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+.app-main-layout {
+  min-width: 0;
+  min-height: 100vh;
+  height: 100vh;
+  background: transparent !important;
+}
+
+.page-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  grid-auto-rows: 1fr;
+}
+
+.page-meta-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: var(--nb-card-stat-min-height);
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--nb-card-subtle-bg);
+  border: 1px solid var(--nb-card-subtle-border);
+}
+
+.page-meta-card span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-xs);
+}
+
+.page-meta-card strong {
+  display: block;
+  font-size: var(--nb-text-lg);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.app-content {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  padding: 12px var(--nb-layout-gutter) 18px;
+  background: transparent !important;
+}
+
+.app-content-chat {
+  padding-top: 6px;
+  padding-bottom: 8px;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+.app-content-chat .app-content-motion {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+}
+
+.app-content-chat .app-content-motion > .page-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none;
+}
+
+.app-content > .page-stack,
+.app-content > .page-card {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+}
+
+.app-content-motion {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+}
+
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-section-gap);
+  min-width: 0;
+  animation: rise-in 220ms ease;
+}
+
+.page-card, /* @deprecated: Use SectionCard component instead */
+.page-hero,
+.config-panel-card {
+  background: var(--nb-surface-strong);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--nb-radius-lg);
+  box-shadow: var(--nb-shadow-soft);
+  backdrop-filter: blur(28px) saturate(138%);
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.page-card /* @deprecated: Use SectionCard component instead */ {
+  padding: var(--nb-panel-padding);
+}
+
+.page-card > .ant-space {
+  width: 100%;
+}
+
+.page-card .ant-table-wrapper,
+.config-panel-card .ant-table-wrapper {
+  min-width: 0;
+}
+
+.page-card .ant-table-content,
+.config-panel-card .ant-table-content {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+
+.page-hero-compact {
+  padding: 16px 18px;
+  gap: 12px;
+}
+
+.page-hero-compact .page-hero-copy h2.ant-typography {
+  max-width: 19ch;
+  font-size: var(--nb-title-lg);
+  line-height: 1.08;
+}
+
+.page-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  background: var(--nb-page-hero-bg);
+  border-color: var(--nb-page-hero-border);
+  box-shadow: var(--nb-shadow-soft);
+}
+
+.page-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--nb-page-hero-overlay);
+  pointer-events: none;
+}
+
+.page-hero-copy,
+.page-hero-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.page-hero-copy {
+  min-width: 0;
+  max-width: min(100%, 1100px);
+}
+
+.page-hero-copy .ant-typography {
+  display: block;
+  color: var(--nb-page-hero-text) !important;
+}
+
+.page-hero-copy h2.ant-typography {
+  margin-top: 0;
+  margin-bottom: 0;
+  max-width: none;
+  font-size: var(--nb-title-lg);
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.page-hero-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.page-hero-actions .ant-space {
+  justify-content: flex-end;
+}
+
+.page-hero-actions .ant-btn {
+  min-height: var(--nb-control-height);
+  padding-inline: 16px;
+  border-radius: var(--nb-control-radius);
+  font-weight: 600;
+}
+
+.page-hero-actions .ant-btn:not(.ant-btn-primary) {
+  background: var(--nb-page-hero-action-bg);
+  color: var(--nb-page-hero-action-text);
+  border-color: var(--nb-page-hero-action-border);
+}
+
+.page-hero-actions .ant-btn-primary {
+  box-shadow: 0 16px 28px rgba(123, 111, 100, 0.16);
+}
+
+.page-hero-actions .ant-btn.danger {
+  color: var(--nb-page-hero-danger-text);
+  border-color: var(--nb-page-hero-danger-border);
+}
+
+.page-grid {
+  display: grid;
+  gap: var(--nb-section-gap);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.page-grid > * {
+  min-width: 0;
+}
+
+.page-grid > .page-card, /* @deprecated */
+.page-grid > .config-panel-card {
+  height: 100%;
+}
+
+.validation-page-grid {
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  align-items: start;
+}
+
+.skills-page-grid {
+  grid-template-columns: minmax(340px, 0.88fr) minmax(0, 1.12fr);
+  align-items: start;
+}
+
+.channel-detail-grid {
+  grid-template-columns: minmax(0, 1.14fr) minmax(360px, 0.86fr);
+  align-items: stretch;
+}
+
+.channels-overview-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+}
+
+.prompt-workspace-grid {
+  grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.profile-page-grid {
+  grid-template-columns: minmax(0, 1.12fr) minmax(300px, 0.82fr) minmax(360px, 0.9fr);
+  align-items: start;
+}
+
+.preferences-page-grid {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.section-kicker {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 6px;
+  color: var(--nb-accent);
+  font-size: var(--nb-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.config-panel-card {
+  background: var(--nb-surface-strong);
+  box-shadow: var(--nb-shadow-soft);
+  border-color: var(--nb-card-border);
+}
+
+.config-panel-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  padding: var(--nb-card-body-padding);
+}
+
+.config-section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

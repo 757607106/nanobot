@@ -359,7 +359,7 @@ export function TestConnectionDialog({
                     borderRadius: token.borderRadius,
                     overflowX: 'auto',
                     background: token.colorBgContainer,
-                    fontFamily: 'var(--font-mono)',
+                    fontFamily: 'var(--nb-font-mono)',
                     fontSize: 'var(--nb-text-xs)',
                   }}
                 >

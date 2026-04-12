@@ -81,7 +81,7 @@ export default function SystemPage() {
     return (
       <Flex vertical gap={24}>
         <Skeleton active paragraph={{ rows: 2 }} title={{ width: '32%' }} />
-        <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} active paragraph={{ rows: 2 }} title={{ width: '45%' }} />
           ))}
@@ -95,7 +95,7 @@ export default function SystemPage() {
     return (
       <Flex vertical gap={24}>
         <PageHeader
-          title="系统状态"
+          title="实例健康与环境"
           subtitle="无法连接服务"
           actions={(
             <Button icon={<ReloadOutlined />} onClick={() => void loadStatus()}>
@@ -112,7 +112,7 @@ export default function SystemPage() {
     <div className="page-stack">
     <Flex vertical gap={24}>
       <PageHeader
-        title="系统状态"
+        title="实例健康与环境"
         actions={(
           <Button icon={<ReloadOutlined />} onClick={() => void loadStatus()} loading={loading}>
             刷新
@@ -122,7 +122,7 @@ export default function SystemPage() {
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
-      <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+      <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <MetricCard
           label="健康状态"
           value="在线"
@@ -153,13 +153,13 @@ export default function SystemPage() {
         />
       </div>
 
-      <div className="grid gap-6 grid-cols-[minmax(0,1.12fr)_minmax(320px,0.88fr)]">
+      <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'minmax(0, 1.12fr) minmax(320px, 0.88fr)' }}>
         <SectionCard
           title="运行清单"
           action={<Tag color="blue">v{status.web.version}</Tag>}
         >
           <Flex vertical gap={20}>
-            <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <DetailRow label="工作区" value={status.web.workspace} />
               <DetailRow label="配置文件" value={status.web.configPath} />
               <DetailRow label="Provider" value={status.web.provider} />
@@ -170,11 +170,11 @@ export default function SystemPage() {
               {devMode ? <DetailRow label="平台" value={status.environment.platform} /> : null}
             </div>
 
-            <div className="pt-5 border-t" style={{ borderTopColor: token.colorBorderSecondary }}>
-              <Typography.Title level={5} className="!mb-0 !text-sm">
+            <div style={{ paddingTop: 20, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+              <Typography.Title level={5} style={{ marginBottom: 0, fontSize: 14 }}>
                 已启用渠道
               </Typography.Title>
-              <Flex gap={8} wrap="wrap" className="mt-3">
+              <Flex gap={8} wrap="wrap" style={{ marginTop: 12 }}>
                 {(status.stats.enabledChannels.length > 0 ? status.stats.enabledChannels : ['—']).map((item) => (
                   <Tag key={item} color="blue">
                     {item}

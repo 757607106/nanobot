@@ -130,7 +130,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       key: 'duration',
       width: 100,
       render: (_, record) => (
-        <Text type="secondary" style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--nb-text-sm)' }}>
+        <Text type="secondary" style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 'var(--nb-text-sm)' }}>
           {formatDuration(record.createdAt ?? '', record.finishedAt)}
         </Text>
       ),

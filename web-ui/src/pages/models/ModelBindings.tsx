@@ -4,20 +4,7 @@ import { motion } from 'framer-motion'
 import SectionCard from '../../components/console/SectionCard'
 import { capabilityLabel } from './utils'
 import type { BindingRow, CapabilityType } from './types'
-
-const CAPABILITY_OPTIONS = [
-  { label: '文本对话', value: 'text_chat' },
-  { label: '向量嵌入', value: 'embedding' },
-  { label: '多模态', value: 'multimodal' },
-  { label: '重排序', value: 'rerank' },
-]
-
-function capabilityColor(type: CapabilityType) {
-  if (type === 'embedding') return 'gold'
-  if (type === 'rerank') return 'cyan'
-  if (type === 'multimodal') return 'purple'
-  return 'blue'
-}
+import { CAPABILITY_OPTIONS, capabilityColor } from './capabilities'
 
 interface ModelBindingsProps {
   bindings: BindingRow[]
@@ -96,7 +83,7 @@ export default function ModelBindings({
                         style={{
                           fontSize: 'var(--nb-text-lg)',
                           letterSpacing: '-0.01em',
-                          fontFamily: hasModel ? 'var(--font-mono, monospace)' : undefined,
+                          fontFamily: hasModel ? 'var(--nb-font-mono)' : undefined,
                           color: hasModel ? undefined : 'var(--ant-color-text-quaternary)',
                         }}
                       >

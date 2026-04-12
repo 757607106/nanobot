@@ -52,7 +52,7 @@ export default function RunTimeline({ run, devMode }: RunTimelineProps) {
             <Text
               type="secondary"
               style={{
-                fontFamily: 'var(--font-mono)',
+                fontFamily: 'var(--nb-font-mono)',
                 fontSize: 'var(--nb-text-xs)',
                 display: 'block',
                 padding: '4px 8px',

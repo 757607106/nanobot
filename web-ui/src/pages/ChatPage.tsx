@@ -284,6 +284,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
               onChange={handleSwitchAgent}
               loading={loadingAgents || loadingActiveAgent}
               options={agentSelectOptions}
+              aria-label="选择 Agent"
               suffixIcon={<SwapOutlined />}
               popupMatchSelectWidth={false}
               variant="filled"

@@ -326,7 +326,7 @@ export default function SetupPage() {
 
   if (loading || !config || !configMeta || !setupStatus) {
     return (
-      <div className="page-stack h-full flex items-center justify-center">
+      <div className="page-stack" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Spin size="large" />
       </div>
     )
@@ -339,7 +339,7 @@ export default function SetupPage() {
         subtitle="初始化配置"
       />
 
-      <div className="page-content-wrapper px-[var(--nb-layout-gutter)] pb-12">
+      <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)', paddingBottom: 48 }}>
         <Flex vertical gap={24}>
           {error ? <Alert type="error" showIcon message={error} style={{ borderRadius: 16 }} /> : null}
 
@@ -417,7 +417,13 @@ export default function SetupPage() {
             </div>
           </SectionCard>
 
-          <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+          <div
+            style={{
+              display: 'grid',
+              gap: 24,
+              gridTemplateColumns: screens.lg ? 'minmax(0, 1fr) 400px' : 'minmax(0, 1fr)',
+            }}
+          >
              {/* Agent 默认值 */}
             <SectionCard
               title="2. Agent 工作参数"
@@ -441,25 +447,29 @@ export default function SetupPage() {
                   </Form.Item>
 
                   <Form.Item label="高级运行参数">
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 16,
+                        gridTemplateColumns: screens.sm ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)',
+                      }}
+                    >
                        <Flex vertical gap={6}>
                         <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>最大回复长度</Typography.Text>
                         <InputNumber
                           min={1}
-                          className="w-full"
                           value={Number(config.agents.defaults.maxTokens || 0)}
                           onChange={(value) => updateDefaults('maxTokens', value ?? 0)}
-                          style={{ borderRadius: 10 }}
+                          style={{ borderRadius: 10, width: '100%' }}
                         />
                       </Flex>
                       <Flex vertical gap={6}>
                         <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>记忆上下文窗口</Typography.Text>
                         <InputNumber
                           min={1}
-                          className="w-full"
                           value={Number(config.agents.defaults.contextWindowTokens || 0)}
                           onChange={(value) => updateDefaults('contextWindowTokens', value ?? 0)}
-                          style={{ borderRadius: 10 }}
+                          style={{ borderRadius: 10, width: '100%' }}
                         />
                       </Flex>
                       <Flex vertical gap={6}>
@@ -468,10 +478,9 @@ export default function SetupPage() {
                           min={0}
                           max={2}
                           step={0.1}
-                          className="w-full"
                           value={Number(config.agents.defaults.temperature || 0)}
                           onChange={(value) => updateDefaults('temperature', value ?? 0)}
-                          style={{ borderRadius: 10 }}
+                          style={{ borderRadius: 10, width: '100%' }}
                         />
                       </Flex>
                       <Flex vertical gap={6}>
@@ -566,7 +575,7 @@ export default function SetupPage() {
                   </Form>
                 ) : (
                   <Empty
-                    image={false} className="minimal-empty"
+                    image={false}
                     description="暂不接入"
                     style={{ margin: '24px 0' }}
                   />

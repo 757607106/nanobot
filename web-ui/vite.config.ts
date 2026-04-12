@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 
 const reactCorePackages = new Set(['react', 'react-dom', 'scheduler'])
 const routerPackages = new Set(['react-router', 'react-router-dom', '@remix-run/router'])
@@ -100,7 +99,7 @@ function manualChunks(id: string) {
     pkg.startsWith('unist-') ||
     pkg.startsWith('vfile')
   ) {
-    return 'markdown'
+    return 'vendor'
   }
 
   if (
@@ -117,7 +116,7 @@ function manualChunks(id: string) {
     pkg.startsWith('@rc-component/') ||
     pkg.startsWith('rc-')
   ) {
-    return undefined
+    return 'antd'
   }
 
   return 'vendor'
@@ -129,7 +128,7 @@ export default defineConfig(({ mode }) => {
   const port = Number(env.NANOBOT_WEB_UI_PORT || '5173')
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react()],
     ssr: {
       noExternal: [
         'antd',

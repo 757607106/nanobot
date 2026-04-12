@@ -67,8 +67,8 @@ function ValidationQueue({
             return (
               <div
                 key={item.key}
-                className="p-[var(--nb-spacing-md)]"
                 style={{
+                  padding: 'var(--nb-spacing-md)',
                   borderRadius: 'var(--nb-radius-md)',
                   border: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorBgLayout,
@@ -76,16 +76,16 @@ function ValidationQueue({
               >
                 <Flex vertical gap={12}>
                   <Flex justify="space-between" align="flex-start" gap={12} wrap="wrap">
-                    <Flex vertical gap={6} className="min-w-0">
+                    <Flex vertical gap={6} style={{ minWidth: 0 }}>
                       <Typography.Text strong>{item.label}</Typography.Text>
-                      <Typography.Paragraph type="secondary" className="!mb-0">
+                      <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
                         {item.summary}
                       </Typography.Paragraph>
                     </Flex>
                     <Tag color={statusTagColor(item.status)}>{meta.label}</Tag>
                   </Flex>
 
-                  <Typography.Paragraph type="secondary" className="!mb-0 leading-relaxed">
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 0, lineHeight: 1.6 }}>
                     {item.detail}
                   </Typography.Paragraph>
 
@@ -104,14 +104,16 @@ function ValidationQueue({
         </Flex>
       ) : (
         <div
-          className="min-h-[120px] grid place-items-center"
           style={{
+            minHeight: 120,
+            display: 'grid',
+            placeItems: 'center',
             borderRadius: 'var(--nb-radius-md)',
             border: `1px dashed ${token.colorBorderSecondary}`,
             background: token.colorBgLayout,
           }}
         >
-          <Empty description={emptyText} image={false} className="minimal-empty" />
+          <Empty description={emptyText} image={false} />
         </div>
       )}
     </SectionCard>
@@ -199,7 +201,13 @@ export default function ValidationPage() {
         description={summary.description}
       />
 
-      <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+      <div
+        style={{
+          display: 'grid',
+          gap: 24,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        }}
+      >
         <MetricCard
           label="当前状态"
           value={summary.label}
@@ -242,7 +250,13 @@ export default function ValidationPage() {
         />
       </div>
 
-      <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">
+      <div
+        style={{
+          display: 'grid',
+          gap: 24,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        }}
+      >
         <ValidationQueue
           title="核心检查"
           description=""

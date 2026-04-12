@@ -3,12 +3,8 @@ import type { ReactNode } from 'react'
 import {
   Alert,
   Avatar,
-  Button,
-  Card,
   Descriptions,
   Flex,
-  Input,
-  Modal,
   Progress,
   Space,
   Tag,
@@ -33,6 +29,7 @@ import { useAuth } from '../auth'
 import { testIds } from '../testIds'
 import type { ProfileData } from '../types'
 import { useToast } from '../toast'
+import { Button, Card, Input, Modal } from '../ui/kit'
 
 type DialogMode = 'profile' | 'password' | 'avatar' | null
 
@@ -83,7 +80,7 @@ function FieldGroup({
 }) {
   return (
     <Flex vertical gap={8}>
-      <Typography.Text strong className="text-[13px]">
+      <Typography.Text strong style={{ fontSize: 13 }}>
         {label}
       </Typography.Text>
       {children}
@@ -298,9 +295,9 @@ export default function ProfilePage() {
     return (
       <div className="page-stack">
         <PageHeader title="账户" subtitle="加载中..." />
-        <div className="page-content-wrapper px-[var(--nb-layout-gutter)]">
+        <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)' }}>
           <Flex vertical gap={24}>
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
               <SectionCard loading />
               <SectionCard loading />
             </div>
@@ -349,11 +346,11 @@ export default function ProfilePage() {
         )}
       />
 
-      <div className="page-content-wrapper px-[var(--nb-layout-gutter)] pb-10">
-        <div className="flex flex-col gap-6">
+      <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)', paddingBottom: 40 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {profileError && dialogMode !== 'profile' ? <Alert type="error" showIcon message={profileError} /> : null}
 
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-[1fr_360px]">
+          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }}>
             <SectionCard title="当前管理员" description="账户身份与识别。">
               <Flex align="center" gap={32} wrap="wrap">
                 <div style={{ position: 'relative' }}>
@@ -385,7 +382,7 @@ export default function ProfilePage() {
                   />
                 </div>
 
-                <div className="min-w-0 flex-1">
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <Flex vertical gap={12}>
                     <Flex gap={8} wrap="wrap" align="center">
                       <Typography.Title level={2} style={{ margin: 0, fontSize: 28, letterSpacing: '-0.02em' }}>
@@ -438,7 +435,7 @@ export default function ProfilePage() {
             </SectionCard>
           </div>
 
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
             <SectionCard title="基本账户信息">
               <Descriptions
                 colon={false}
@@ -503,7 +500,7 @@ export default function ProfilePage() {
         onOk={() => void handleSaveProfile()}
         onCancel={() => setDialogMode(null)}
       >
-        <Flex vertical gap={16} className="mt-2">
+        <Flex vertical gap={16} style={{ marginTop: 8 }}>
           {profileError ? <Alert type="error" showIcon message={profileError} /> : null}
 
           <FieldGroup label="用户名">
@@ -548,7 +545,7 @@ export default function ProfilePage() {
         onOk={() => void handleRotatePassword()}
         onCancel={() => setDialogMode(null)}
       >
-        <Flex vertical gap={16} className="mt-2">
+        <Flex vertical gap={16} style={{ marginTop: 8 }}>
           {passwordError ? <Alert type="error" showIcon message={passwordError} /> : null}
 
           <FieldGroup label="当前密码">
@@ -570,13 +567,14 @@ export default function ProfilePage() {
           </FieldGroup>
 
           <div
-            className="p-3.5 rounded-[14px]"
             style={{
+              padding: 14,
+              borderRadius: 14,
               border: `1px solid ${token.colorBorderSecondary}`,
               background: token.colorBgLayout,
             }}
           >
-            <Flex justify="space-between" align="center" gap={12} wrap="wrap" className="mb-2">
+            <Flex justify="space-between" align="center" gap={12} wrap="wrap" style={{ marginBottom: 8 }}>
               <Typography.Text type="secondary">密码强度</Typography.Text>
               <Tag color={passwordStrength.color === 'success' ? 'green' : passwordStrength.color === 'error' ? 'red' : 'gold'}>
                 {passwordStrength.label}
@@ -633,7 +631,7 @@ export default function ProfilePage() {
         )}
         onCancel={() => setDialogMode(null)}
       >
-        <Flex vertical gap={16} className="mt-2">
+        <Flex vertical gap={16} style={{ marginTop: 8 }}>
           {avatarError ? <Alert type="error" showIcon message={avatarError} /> : null}
 
           <div
@@ -650,8 +648,9 @@ export default function ProfilePage() {
               setDraggingOver(false)
               handleAvatarFile(event.dataTransfer.files?.[0] || null)
             }}
-            className="p-6 rounded-5"
             style={{
+              padding: 24,
+              borderRadius: 20,
               border: `1px dashed ${draggingOver ? token.colorPrimary : token.colorBorderSecondary}`,
               background: draggingOver ? `${token.colorPrimary}12` : token.colorBgLayout,
             }}
@@ -705,7 +704,7 @@ export default function ProfilePage() {
         onOk={() => void handleDeleteAvatar()}
         onCancel={() => setConfirmDeleteAvatarOpen(false)}
       >
-        <Typography.Paragraph type="secondary" className="!mt-2 leading-relaxed">
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, lineHeight: 1.6 }}>
           确定要移除当前头像吗？移除后将显示默认占位头像。
         </Typography.Paragraph>
       </Modal>

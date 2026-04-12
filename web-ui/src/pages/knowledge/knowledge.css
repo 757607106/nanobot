@@ -22,7 +22,7 @@
   padding: 18px;
   border: 1px solid var(--nb-card-subtle-border);
   border-radius: var(--nb-radius-lg);
-  background: linear-gradient(180deg, var(--nb-surface-strong), var(--nb-surface));
+  background: var(--nb-surface);
 }
 
 .knowledge-query-compose {
@@ -49,7 +49,7 @@
   color: #eef4ef;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-family: var(--nb-font-mono);
   font-size: 12px;
 }
 
@@ -132,13 +132,13 @@
   padding: 18px;
   border: 1px solid var(--nb-card-border);
   border-radius: var(--nb-radius-lg);
-  background: linear-gradient(180deg, var(--nb-surface-strong), var(--nb-surface));
+  background: var(--nb-surface);
 }
 
 @keyframes upload-pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(36, 88, 198, 0.25); }
-  70% { box-shadow: 0 0 0 10px rgba(36, 88, 198, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(36, 88, 198, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.05); }
+  70% { box-shadow: 0 0 0 4px rgba(0, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
 }
 
 .knowledge-upload-dropzone {
@@ -147,17 +147,16 @@
   align-items: center;
   gap: 16px;
   padding: 18px;
-  border-radius: 20px;
+  border-radius: var(--nb-radius-lg);
   border: 1px dashed var(--nb-border-strong);
-  background: linear-gradient(180deg, var(--nb-surface), var(--nb-card-subtle-bg));
+  background: var(--nb-surface);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .knowledge-upload-dropzone:hover {
-  border-color: var(--nb-accent);
-  background: linear-gradient(180deg, rgba(36, 88, 198, 0.03), rgba(36, 88, 198, 0.08));
-  animation: upload-pulse-glow 2s infinite;
+  border-color: var(--nb-warm);
+  background: var(--nb-surface-strong);
 }
 
 /* Graph Visualization Styles */
@@ -208,7 +207,7 @@
 
 .knowledge-graph-browser-shell {
   min-height: 560px;
-  background: radial-gradient(circle at center, var(--nb-surface-strong), var(--nb-surface));
+  background: var(--nb-surface-strong);
 }
 
 .knowledge-graph-canvas-shell,
@@ -417,13 +416,12 @@
   border-radius: var(--nb-radius-md);
   border: 1px solid var(--nb-border);
   background: var(--nb-surface);
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .knowledge-graph-relation-row:hover {
-  transform: translateY(-1px);
   border-color: var(--nb-border-strong);
-  box-shadow: var(--nb-shadow-soft);
+  background-color: var(--nb-surface-strong);
 }
 
 .knowledge-graph-relation-row.is-active {
@@ -575,11 +573,11 @@
 .knowledge-job-item {
   position: relative;
   padding: var(--nb-spacing-md);
-  border-radius: 16px;
+  border-radius: var(--nb-radius-lg);
   border: 1px solid var(--nb-border);
   background: var(--nb-surface);
   overflow: hidden;
-  transition: all 0.22s ease;
+  transition: border-color 0.2s ease;
 }
 
 @keyframes stripe-flow {
@@ -593,17 +591,18 @@
   inset: 0;
   background: linear-gradient(
     45deg,
-    rgba(36, 88, 198, 0.04) 25%,
+    var(--nb-surface-strong) 25%,
     transparent 25%,
     transparent 50%,
-    rgba(36, 88, 198, 0.04) 50%,
-    rgba(36, 88, 198, 0.04) 75%,
+    var(--nb-surface-strong) 50%,
+    var(--nb-surface-strong) 75%,
     transparent 75%,
     transparent
   );
   background-size: 40px 40px;
   animation: stripe-flow 1.5s linear infinite;
   pointer-events: none;
+  opacity: 0.5;
 }
 
 /* Settings Grid */
@@ -682,7 +681,7 @@
   padding: 12px 14px;
   border-radius: var(--nb-radius-lg);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
   background: transparent;
   border: 1px solid transparent;
   position: relative;
@@ -694,20 +693,8 @@
 }
 
 .knowledge-nav-item.active {
-  background: rgba(22, 119, 255, 0.08); /* Primary color ultra light */
-  border-color: rgba(22, 119, 255, 0.2);
-}
-
-.knowledge-nav-item.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 60%;
-  width: 3px;
-  background: #1677ff; /* token.colorPrimary equivalent */
-  border-radius: 0 4px 4px 0;
+  background: var(--nb-surface-strong, #f8f9fa);
+  border-color: var(--nb-border);
 }
 
 .knowledge-nav-item-head {
@@ -727,7 +714,7 @@
   border-radius: var(--nb-radius-lg);
   border: 1px solid var(--nb-border);
   background: var(--nb-surface);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 6px rgba(0,0,0,0.02);
   padding: 8px 12px;
   display: flex !important;
@@ -738,8 +725,7 @@
 }
 
 .ai-chat-compose:focus-within {
-  border-color: var(--nb-primary);
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15);
+  border-color: var(--nb-border-strong);
 }
 
 .ai-chat-input {
@@ -760,31 +746,32 @@
 }
 
 .ai-chat-send-btn {
-  background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%) !important;
-  border: none !important;
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.35) !important;
+  background: var(--nb-surface-strong) !important;
+  color: var(--nb-text) !important;
+  border: 1px solid var(--nb-border) !important;
+  box-shadow: none !important;
   height: 36px !important;
   font-weight: 500;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .ai-chat-send-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.45) !important;
+  background: var(--nb-surface-element) !important;
+  border-color: var(--nb-border-strong) !important;
 }
 
 
 /* ── Metric Card Enhancement ── */
 .knowledge-metrics-grid .metric-card {
   background: var(--nb-surface) !important;
-  border-radius: var(--nb-radius-xl) !important;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.02), 0 2px 4px rgba(0,0,0,0.01) !important;
-  border: 1px solid rgba(0,0,0,0.03) !important;
-  transition: all 0.3s ease;
+  border-radius: var(--nb-radius-lg) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--nb-border) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .knowledge-metrics-grid .metric-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.04), 0 4px 8px rgba(0,0,0,0.02) !important;
-  border-color: rgba(22, 119, 255, 0.1) !important;
+  background-color: var(--nb-surface-strong) !important;
+  border-color: var(--nb-border-strong) !important;
 }
 
 /* ── Knowledge Workspace Layout Enhancements ── */
@@ -794,7 +781,7 @@
 
 .knowledge-workspace-container .ant-tabs-tab {
   padding: 12px 16px !important;
-  transition: all 0.2s;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
 .knowledge-workspace-container .ant-tabs-tab:hover {
@@ -843,10 +830,6 @@
   background: transparent;
   background-color: rgba(22, 119, 255, 0.04);
 }
-.knowledge-nav-item.active::before {
-  height: 100%;
-}
-
 /* ── Minimal Data Tiles ── */
 .resource-summary-tile {
   background: var(--nb-card-bg);

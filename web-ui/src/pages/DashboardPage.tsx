@@ -144,7 +144,14 @@ export default function DashboardPage() {
       {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 'var(--nb-spacing-lg)' }} /> : null}
 
       {/* ── 核心指标卡 ── */}
-      <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]" style={{ marginBottom: 'var(--nb-spacing-xl)' }}>
+      <div
+        style={{
+          display: 'grid',
+          gap: 24,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          marginBottom: 'var(--nb-spacing-xl)',
+        }}
+      >
         <MetricCard
           label="智能体"
           value={loading ? cardSkeleton() : agents.length}

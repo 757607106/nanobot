@@ -91,6 +91,9 @@ export function ChatSidebar({
       height: '100%',
       padding: '16px 8px 16px 12px',
       borderRadius: surfaceRadius,
+      background: 'var(--nb-card-bg)',
+      border: '1px solid var(--nb-surface-panel-border)',
+      boxShadow: 'var(--nb-surface-panel-shadow)',
     }}>
       <Button
         type="primary"
@@ -110,7 +113,6 @@ export function ChatSidebar({
       </Button>
 
       <Text
-        type="secondary"
         style={{
           fontSize: 'var(--nb-text-2xs)',
           fontWeight: 'var(--nb-font-weight-title)',
@@ -118,6 +120,7 @@ export function ChatSidebar({
           textTransform: 'uppercase',
           paddingLeft: 8,
           marginBottom: 8,
+          color: token.colorText,
         }}
       >
         历史会话
@@ -130,7 +133,7 @@ export function ChatSidebar({
           </Flex>
         ) : filteredSessions.length === 0 ? (
           <Flex align="center" justify="center" style={{ minHeight: 220 }}>
-            <Empty description={sessionQuery ? '无匹配项' : '暂无会话'} />
+            <Empty description={<Text style={{ color: token.colorText }}>{sessionQuery ? '无匹配项' : '暂无会话'}</Text>} />
           </Flex>
         ) : (
           <Conversations
@@ -141,7 +144,7 @@ export function ChatSidebar({
             classNames={{ item: 'chat-conversation-item' }}
             tabIndex={0}
             groupable={{
-              label: (group: string) => <Text type="secondary">{group}</Text>,
+              label: (group: string) => <Text style={{ color: token.colorText }}>{group}</Text>,
             }}
             onActiveChange={(key) => {
               startTransition(() => {

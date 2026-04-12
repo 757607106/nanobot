@@ -1,0 +1,68 @@
+:root {
+  --nb-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --nb-font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  --nb-font-mono: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+}
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Radii */
+  --nb-radius-xl: 16px;
+  --nb-radius-lg: 12px;
+  --nb-radius-md: 12px;
+  --nb-radius-sm: 8px;
+
+  /* Unified Spacing Scale (8px grid) */
+  --nb-spacing-xs: 8px;
+  --nb-spacing-sm: 12px;
+  --nb-spacing-md: 16px;
+  --nb-spacing-lg: 16px;
+  --nb-spacing-xl: 24px;
+  --nb-spacing-2xl: 32px;
+
+  /* Unified Component Radii */
+  --nb-radius-card: 12px;
+  --nb-radius-button: 12px;
+  --nb-radius-input: 12px;
+  --nb-radius-modal: 16px;
+
+  /* Unified Card Padding */
+  --nb-card-padding: 16px;
+  --nb-card-padding-mobile: 16px;
+
+  /* Typography */
+  --nb-text-2xs: 11px;
+  --nb-text-xs: 12px;
+  --nb-text-sm: 14px;
+  --nb-text-md: 15px;
+  --nb-text-lg: 16px;
+  --nb-title-xs: 18px;
+  --nb-title-sm: 22px;
+  --nb-title-md: 26px;
+  --nb-title-lg: 32px;
+  --nb-title-xl: 40px;
+  --nb-title-hero: 52px;
+  --nb-font-weight-regular: 400;
+  --nb-font-weight-medium: 500;
+  --nb-font-weight-strong: 600;
+  --nb-font-weight-title: 700;
+  --nb-metric-size: 28px;
+  --nb-line-tight: 1.2;
+  --nb-line-body: 1.6;
+  --nb-line-relaxed: 1.6;
+
+  /* Layout */
+  --nb-content-max-width: 100%;
+  --nb-layout-gutter: 20px;
+  --nb-layout-gutter-mobile: 16px;
+  --nb-section-gap: 16px;
+  --nb-panel-padding: 16px;
+  --nb-panel-padding-mobile: 16px;
+  --nb-card-body-padding: 24px;
+  --nb-control-height: 48px;
+  --nb-control-height-sm: 36px;
+  --nb-control-radius: 14px;
+  --nb-tag-height: 32px;
+}

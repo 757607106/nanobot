@@ -11,6 +11,9 @@
     "test:e2e:critical": "playwright test --config=playwright.config.ts --grep @critical",
     "test:e2e:a11y": "playwright test --config=playwright.config.ts --grep @a11y",
     "typecheck": "tsc --noEmit",
+    "ui:scan": "node scripts/ui-scan.mjs",
+    "ui:dup": "node scripts/dup-scan.mjs",
+    "ui:report": "node scripts/perf-report.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -33,7 +36,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.58.2",
-    "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
@@ -41,7 +44,6 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.4.1",
     "jsdom": "^26.1.0",
-    "tailwindcss": "^4.2.2",
     "typescript": "^5.7.2",
     "vite": "^6.2.0",
     "vitest": "^3.2.4"

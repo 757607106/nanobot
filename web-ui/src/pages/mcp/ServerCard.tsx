@@ -97,7 +97,7 @@ export default function ServerCard({ entry, loading, onToggle, onDelete }: Serve
               style={{
                 fontSize: token.fontSizeSM,
                 color: token.colorTextDescription,
-                fontFamily: 'var(--font-mono, "IBM Plex Mono", monospace)',
+                fontFamily: 'var(--nb-font-mono)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -114,7 +114,7 @@ export default function ServerCard({ entry, loading, onToggle, onDelete }: Serve
       <div
         style={{
           marginBottom: 'var(--nb-spacing-sm)',
-          fontFamily: 'var(--font-mono, "IBM Plex Mono", monospace)',
+          fontFamily: 'var(--nb-font-mono)',
           fontSize: 'var(--nb-text-sm)',
           color: token.colorTextSecondary,
           overflow: 'hidden',
@@ -171,7 +171,7 @@ export default function ServerCard({ entry, loading, onToggle, onDelete }: Serve
                 paddingBlock: 2,
                 borderRadius: 'var(--nb-radius-full, 999px)',
                 fontSize: 'var(--nb-text-xs)',
-                fontFamily: 'var(--font-mono, "IBM Plex Mono", monospace)',
+                fontFamily: 'var(--nb-font-mono)',
                 background: token.colorBgContainerDisabled,
                 color: token.colorTextSecondary,
               }}

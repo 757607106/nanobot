@@ -258,7 +258,7 @@ export default function KnowledgeWorkspace() {
   const renderFilesTab = () => (
     <Flex vertical gap={16} style={{ minWidth: 0 }}>
       <div className="knowledge-tab-content-borderless" style={{ minWidth: 0 }}>
-        <Flex vertical gap={24} style={{ minWidth: 0 }}>
+        <Flex vertical gap={16} style={{ minWidth: 0 }}>
           <div className="knowledge-metrics-grid" style={{ marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
             <MetricCard label="文件记录" value={filesState.stats.fileCount} icon={<FileTextOutlined />} tone="neutral" />
             <MetricCard label="已索引" value={filesState.stats.indexedCount} icon={<BranchesOutlined />} tone="success" />
@@ -302,7 +302,6 @@ export default function KnowledgeWorkspace() {
                   onSetUrlParentId(hasSingleSelection && selectedFiles[0].isFolder ? selectedFiles[0].fileId : null)
                   onOpenModal('url')
                 }}
-                style={{ boxShadow: '0 8px 24px rgba(22, 119, 255, 0.4)' }}
               >
                 添加文件
               </Button>

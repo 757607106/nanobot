@@ -403,7 +403,7 @@ export default function ChannelDetailPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title={meta.label}
+        title={`配置 ${meta.label}`}
         subtitle={meta.description}
         actions={(
           <Space wrap size={[8, 8]}>
@@ -425,6 +425,7 @@ export default function ChannelDetailPage() {
       />
 
       <Flex align="center" gap={12} style={{ marginBottom: 8 }}>
+        <Typography.Text type="secondary">当前状态</Typography.Text>
         <Tag color={getChannelStatusColor(detail.channel.status)} style={{ borderRadius: 8, fontSize: 'var(--nb-text-sm)' }}>
           {detail.channel.statusLabel}
         </Tag>
@@ -452,7 +453,7 @@ export default function ChannelDetailPage() {
                 const content = (
                   <SectionCard
                     key={section.key}
-                    title={section.title}
+                    title={section.title === '接入凭据' ? '接入字段' : section.title}
                     action={<Tag>{section.fields.length} 项</Tag>}
                   >
                     <Row gutter={[12, 0]}>
@@ -600,7 +601,7 @@ export default function ChannelDetailPage() {
                     </Space>
                     {whatsappBinding.qrCode ? (
                       <Flex vertical gap={8}>
-                        <Typography.Text strong>扫码绑定</Typography.Text>
+                        <Typography.Text strong>扫码完成绑定</Typography.Text>
                         <QRCode value={whatsappBinding.qrCode} size={180} />
                       </Flex>
                     ) : (

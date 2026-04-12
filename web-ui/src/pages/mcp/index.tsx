@@ -126,7 +126,7 @@ export default function McpPage() {
       <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
         <PageHeader title="MCP 扩展" />
         <SectionCard title="服务器清单">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3" style={{ gap: 'var(--nb-spacing-md)' }}>
+          <div style={{ display: 'grid', gap: 'var(--nb-spacing-md)', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
             {[1, 2, 3].map((key) => (
               <Card
                 key={key}
@@ -157,7 +157,7 @@ export default function McpPage() {
 
       <SectionCard title={`服务器清单 (${servers.length})`}>
         {servers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3" style={{ gap: 'var(--nb-spacing-md)' }}>
+          <div style={{ display: 'grid', gap: 'var(--nb-spacing-md)', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
             {servers.map((entry) => (
               <ServerCard
                 key={entry.name}

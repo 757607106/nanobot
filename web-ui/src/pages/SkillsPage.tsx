@@ -556,7 +556,14 @@ export default function SkillsPage() {
       />
 
       {/* 动态显示的头部 Metric 卡片 */}
-      <div className="console-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: 16,
+          marginBottom: 16,
+        }}
+      >
         {activeTab === 'installed' ? (
           <>
             <MetricCard label="已安装合计" value={skills.length} icon={<AppstoreOutlined />} tone="neutral" />
@@ -572,7 +579,7 @@ export default function SkillsPage() {
         )}
       </div>
 
-      <div className="page-content-wrapper px-[var(--nb-layout-gutter)]">
+      <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)' }}>
         <Tabs
           className="skills-page-tabs"
           activeKey={activeTab}

@@ -10,7 +10,7 @@
   background: var(--nb-mono-bg);
   color: var(--nb-mono-color);
   border: 1px solid var(--nb-mono-border);
-  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: var(--nb-font-mono);
   overflow-wrap: anywhere;
 }
 

@@ -1,7 +1,7 @@
 import type { ComponentProps, ComponentRef } from 'react'
 import React, { forwardRef } from 'react'
 import { Attachments, Sender } from '@ant-design/x'
-import { Badge, Button, Divider, Flex, Select, Switch, Typography, theme } from 'antd'
+import { Badge, Button, Divider, Flex, Segmented, Switch, Typography, theme } from 'antd'
 import { CloudUploadOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { AttachmentTags } from './chatPresentation'
 import { testIds } from '../testIds'
@@ -177,6 +177,7 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
                       <Button 
                         type="text" 
                         size="small"
+                        aria-label="添加附件"
                         onClick={() => setHeaderOpen(!headerOpen)} 
                         icon={<LinkOutlined />} 
                         disabled={uploadingFiles}
@@ -192,31 +193,39 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
                       transition: 'color 0.2s',
                     }} />
                     <Text
+                      id="chat-thinking-label"
                       style={{
                         fontSize: 'var(--nb-text-xs)',
-                        color: thinkingEnabled ? token.colorText : token.colorTextTertiary,
+                        color: token.colorText,
                         cursor: 'pointer',
                         userSelect: 'none',
                         transition: 'color 0.2s',
                       }}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onReasoningEffortChange(thinkingEnabled ? null : 'medium')}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          onReasoningEffortChange(thinkingEnabled ? null : 'medium')
+                        }
+                      }}
                     >
                       深度思考
                     </Text>
                     <Switch
                       size="small"
                       checked={thinkingEnabled}
+                      aria-labelledby="chat-thinking-label"
                       onChange={(checked) => onReasoningEffortChange(checked ? 'medium' : null)}
                     />
                     {thinkingEnabled && (
-                      <Select
+                      <Segmented
                         size="small"
-                        variant="borderless"
                         value={reasoningEffort!}
-                        onChange={(val) => onReasoningEffortChange(val)}
                         options={EFFORT_OPTIONS}
-                        popupMatchSelectWidth={false}
-                        style={{ width: 72 }}
+                        onChange={(val) => onReasoningEffortChange(val as ReasoningEffortLevel)}
+                        aria-label="思考强度"
                       />
                     )}
                   </Flex>

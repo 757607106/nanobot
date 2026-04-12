@@ -24,7 +24,7 @@ import { useDevMode } from '../devMode'
 import { shellSpring } from '../motionTokens'
 import { testIds } from '../testIds'
 import { useThemeMode } from '../themeMode'
-import { LAYOUT } from '../ui/tokens'
+import { designTokens } from '../ui/design/tokens'
 import { AnimatedLogo } from './AnimatedLogo'
 
 const DESKTOP_BREAKPOINT = '(min-width: 992px)'
@@ -194,7 +194,7 @@ export default function AppShell() {
         {/* Logo 区域 */}
         <Flex align="center" gap={12} style={{ padding: '16px 20px', cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
           <div style={{ flexShrink: 0 }}>
-             <AnimatedLogo size={36} />
+            <AnimatedLogo size={36} />
           </div>
           <div style={{ minWidth: 0 }}>
             <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-md)' }}>
@@ -306,7 +306,7 @@ export default function AppShell() {
             marginLeft: 16,
             borderRadius: 24,
             overflow: 'auto',
-            width: LAYOUT.siderWidth,
+            width: designTokens.layout.siderWidth,
             background: 'var(--nb-sider-bg)',
             border: '1px solid var(--nb-sider-border)',
             boxShadow: 'var(--nb-sider-shadow)',
@@ -321,7 +321,7 @@ export default function AppShell() {
           placement="left"
           open={mobileNavOpen}
           onClose={() => setMobileNavOpen(false)}
-          width={LAYOUT.siderWidth}
+          width={designTokens.layout.siderWidth}
           closable={false}
           styles={{
             body: {
@@ -344,7 +344,7 @@ export default function AppShell() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              height: LAYOUT.headerHeight,
+              height: designTokens.layout.headerHeight,
               paddingInline: 16,
               background: 'color-mix(in srgb, var(--nb-body-bg) 70%, transparent)',
               backdropFilter: 'blur(20px)',

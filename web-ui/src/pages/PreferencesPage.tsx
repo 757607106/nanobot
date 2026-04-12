@@ -28,7 +28,7 @@ export default function PreferencesPage() {
         subtitle="显示 · 主题 · 开发"
       />
 
-      <div className="page-content-wrapper px-[var(--nb-layout-gutter)]">
+      <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)' }}>
         <div 
           style={{
             display: 'grid',

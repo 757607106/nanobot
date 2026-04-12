@@ -82,7 +82,7 @@ export default function OperationsPage() {
         )}
       />
 
-      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <MetricCard
           label="日志文件"
           value={logs?.items.length ?? 0}
@@ -113,21 +113,20 @@ export default function OperationsPage() {
         />
       </div>
 
-      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
         <SectionCard title="日志尾部">
           {logs?.items.length ? (
             <Flex vertical gap={12}>
               {logs.items.slice(0, 3).map((item) => (
                 <div
                   key={item.path}
-                  className="overflow-hidden"
-                  style={{ borderRadius: 'var(--nb-radius-sm)', border: `1px solid ${token.colorBorderSecondary}` }}
+                  style={{ overflow: 'hidden', borderRadius: 'var(--nb-radius-sm)', border: `1px solid ${token.colorBorderSecondary}` }}
                 >
-                  <Flex vertical gap={12} className="p-[18px]">
+                  <Flex vertical gap={12} style={{ padding: 18 }}>
                     <Flex justify="space-between" align="flex-start" gap={12} wrap="wrap">
-                      <Flex vertical gap={4} className="min-w-0">
+                      <Flex vertical gap={4} style={{ minWidth: 0 }}>
                         <Typography.Text strong>{item.name}</Typography.Text>
-                        <Typography.Text type="secondary" className="break-all">
+                        <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
                           {item.path}
                         </Typography.Text>
                       </Flex>
@@ -135,8 +134,10 @@ export default function OperationsPage() {
                     </Flex>
 
                     <pre
-                      className="m-0 p-[var(--nb-spacing-md)] overflow-auto"
                       style={{
+                        margin: 0,
+                        padding: 'var(--nb-spacing-md)',
+                        overflow: 'auto',
                         borderRadius: 'var(--nb-radius-sm)',
                         background: token.colorBgLayout,
                         color: token.colorText,
@@ -164,8 +165,8 @@ export default function OperationsPage() {
               {actions.map((item) => (
                 <div
                   key={item.name}
-                  className="p-[var(--nb-spacing-md)]"
                   style={{
+                    padding: 'var(--nb-spacing-md)',
                     borderRadius: 'var(--nb-radius-sm)',
                     border: `1px solid ${token.colorBorderSecondary}`,
                     background: token.colorBgLayout,
@@ -173,9 +174,9 @@ export default function OperationsPage() {
                 >
                   <Flex vertical gap={12}>
                     <Flex justify="space-between" align="flex-start" gap={12} wrap="wrap">
-                      <Flex vertical gap={6} className="min-w-0">
+                      <Flex vertical gap={6} style={{ minWidth: 0 }}>
                         <Typography.Text strong>{item.label}</Typography.Text>
-                        <Typography.Paragraph type="secondary" className="!mb-0">
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
                           {item.caution}
                         </Typography.Paragraph>
                       </Flex>

@@ -323,8 +323,9 @@ export default function McpServerDetailDrawer({
             {/* Row 1: name + enable */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>展示名称</label>
+                <label htmlFor="mcp-detail-display-name" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>展示名称</label>
                 <Input
+                  id="mcp-detail-display-name"
                   value={draft.displayName}
                   onChange={(e) => applyDraftPatch({ displayName: e.target.value })}
                   data-testid={testIds.mcp.detailDisplayName}
@@ -346,6 +347,7 @@ export default function McpServerDetailDrawer({
                   checked={draft.enabled}
                   onChange={(checked) => applyDraftPatch({ enabled: checked })}
                   size="small"
+                  aria-label="聊天中启用"
                 />
               </div>
             </div>
@@ -353,10 +355,12 @@ export default function McpServerDetailDrawer({
             {/* Row 2: transport + timeout */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>传输方式</label>
+                <label htmlFor="mcp-detail-transport" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>传输方式</label>
                 <Select
+                  id="mcp-detail-transport"
                   value={draft.type}
                   onChange={(value) => applyDraftPatch({ type: value })}
+                  aria-label="传输方式"
                   options={[
                     { label: 'stdio（本地进程）', value: 'stdio' },
                     { label: 'SSE', value: 'sse' },
@@ -365,12 +369,14 @@ export default function McpServerDetailDrawer({
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>超时时间（秒）</label>
+                <label htmlFor="mcp-detail-timeout" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>超时时间（秒）</label>
                 <InputNumber
+                  id="mcp-detail-timeout"
                   min={1}
                   style={{ width: '100%' }}
                   value={draft.toolTimeout}
                   onChange={(value) => applyDraftPatch({ toolTimeout: Number(value || 30) })}
+                  aria-label="超时时间（秒）"
                 />
               </div>
             </div>
@@ -379,26 +385,31 @@ export default function McpServerDetailDrawer({
             {draft.type === 'stdio' ? (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>命令</label>
+                  <label htmlFor="mcp-detail-command" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>命令</label>
                   <Input
+                    id="mcp-detail-command"
                     value={draft.command}
                     onChange={(e) => applyDraftPatch({ command: e.target.value })}
                     placeholder="例：uvx mcp-server-name"
                     style={{ fontFamily: 'monospace' }}
+                    aria-label="命令"
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>参数（每行一个）</label>
+                  <label htmlFor="mcp-detail-args" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>参数（每行一个）</label>
                   <Input.TextArea
+                    id="mcp-detail-args"
                     rows={3}
                     value={draft.argsText}
                     onChange={(e) => applyDraftPatch({ argsText: e.target.value })}
                     style={{ fontFamily: 'monospace' }}
+                    aria-label="参数（每行一个）"
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>环境变量（JSON）</label>
+                  <label htmlFor="mcp-detail-env" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>环境变量（JSON）</label>
                   <Input.TextArea
+                    id="mcp-detail-env"
                     rows={5}
                     value={showSensitive ? draft.envText : maskMappingText(draft.envText)}
                     onChange={(e) => applyDraftPatch({ envText: e.target.value })}
@@ -406,6 +417,7 @@ export default function McpServerDetailDrawer({
                     data-testid={testIds.mcp.detailEnv}
                     readOnly={!showSensitive}
                     placeholder='{"KEY": "VALUE"}'
+                    aria-label="环境变量（JSON）"
                   />
                 </div>
                 {Object.keys(visibleEnv).length > 0 && (
@@ -415,7 +427,7 @@ export default function McpServerDetailDrawer({
                       borderRadius: 8,
                       background: 'var(--nb-card-subtle-bg)',
                       border: '1px solid var(--nb-card-subtle-border)',
-                      fontFamily: 'IBM Plex Mono, monospace',
+                      fontFamily: 'var(--nb-font-mono)',
                       fontSize: 'var(--nb-text-2xs)',
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
@@ -429,22 +441,26 @@ export default function McpServerDetailDrawer({
             ) : (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>URL</label>
+                  <label htmlFor="mcp-detail-url" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>URL</label>
                   <Input
+                    id="mcp-detail-url"
                     value={draft.url}
                     onChange={(e) => applyDraftPatch({ url: e.target.value })}
                     placeholder="https://example.com/mcp"
+                    aria-label="URL"
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>请求头（JSON）</label>
+                  <label htmlFor="mcp-detail-headers" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>请求头（JSON）</label>
                   <Input.TextArea
+                    id="mcp-detail-headers"
                     rows={5}
                     value={showSensitive ? draft.headersText : maskMappingText(draft.headersText)}
                     onChange={(e) => applyDraftPatch({ headersText: e.target.value })}
                     style={{ fontFamily: 'monospace', fontSize: 'var(--nb-text-xs)' }}
                     readOnly={!showSensitive}
                     placeholder='{"Authorization": "Bearer ..."}'
+                    aria-label="请求头（JSON）"
                   />
                 </div>
                 {Object.keys(visibleHeaders).length > 0 && (
@@ -454,7 +470,7 @@ export default function McpServerDetailDrawer({
                       borderRadius: 8,
                       background: 'var(--nb-card-subtle-bg)',
                       border: '1px solid var(--nb-card-subtle-border)',
-                      fontFamily: 'IBM Plex Mono, monospace',
+                      fontFamily: 'var(--nb-font-mono)',
                       fontSize: 'var(--nb-text-2xs)',
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',

@@ -56,7 +56,7 @@ import {
   getFieldValue,
   updateNestedValue,
 } from './shared'
-import { SPACING } from '../../ui/tokens'
+import { designTokens } from '../../ui/design/tokens'
 import { useToast } from '../../toast'
 
 interface ChannelRow {
@@ -450,7 +450,7 @@ export default function ChannelsPage() {
     >
       <Flex vertical gap="var(--nb-spacing-md)">
         <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
-          投递设置
+          消息投递设置
         </Typography.Text>
         <Flex justify="space-between" align="center">
           <Typography.Text type="secondary">执行进度</Typography.Text>
@@ -491,7 +491,7 @@ export default function ChannelsPage() {
           <Space>
             <Dropdown popupRender={() => deliverySettingsMenu} trigger={['click']} placement="bottomRight">
               <Button icon={<SettingOutlined />}>
-                投递设置
+                消息投递设置
               </Button>
             </Dropdown>
             <Button
@@ -506,7 +506,7 @@ export default function ChannelsPage() {
       />
 
       {/* 统计卡片 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: SPACING.md }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: designTokens.space.md }}>
         <MetricCard
           label="已接入"
           value={channels.filter((c) => c.configured).length}
@@ -536,7 +536,7 @@ export default function ChannelsPage() {
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-              gap: SPACING.md,
+              gap: designTokens.space.md,
             }}
           >
             {channels.map((channel, index) => (
@@ -661,7 +661,7 @@ export default function ChannelsPage() {
                       padding: '10px 14px',
                       background: `${token.colorWarning}10`,
                       borderRadius: 10,
-                      marginBottom: SPACING.md,
+                      marginBottom: designTokens.space.md,
                       border: `1px solid ${token.colorWarning}30`,
                     }}
                   >
@@ -690,9 +690,9 @@ export default function ChannelsPage() {
                         </Flex>
                       ),
                       children: activeProbe.checks.length > 0 ? (
-                        <Flex vertical gap={SPACING.xs}>
+                        <Flex vertical gap={designTokens.space.xs}>
                           {activeProbe.checks.map((check) => (
-                            <Flex key={check.key} justify="space-between" align="center" gap={SPACING.xs}>
+                            <Flex key={check.key} justify="space-between" align="center" gap={designTokens.space.xs}>
                               <Typography.Text type="secondary">{check.label}</Typography.Text>
                               <Tag color={getProbeCheckColor(check.status)}>
                                 {check.status === 'pass' ? '通过' : check.status === 'warn' ? '警告' : '失败'}
@@ -702,7 +702,7 @@ export default function ChannelsPage() {
                         </Flex>
                       ) : null,
                     }]}
-                    style={{ marginBottom: SPACING.md }}
+                    style={{ marginBottom: designTokens.space.md }}
                   />
                 )}
 
@@ -711,7 +711,7 @@ export default function ChannelsPage() {
                   <div
                     style={{
                       display: 'grid',
-                      gap: SPACING.sm,
+                      gap: designTokens.space.sm,
                       gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                     }}
                   >
@@ -726,7 +726,7 @@ export default function ChannelsPage() {
                   <Card
                     size="small"
                     style={{
-                      marginTop: SPACING.md,
+                      marginTop: designTokens.space.md,
                       borderRadius: 12,
                       border: '1px solid var(--nb-card-subtle-border)',
                     }}

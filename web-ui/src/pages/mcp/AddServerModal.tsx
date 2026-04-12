@@ -142,7 +142,7 @@ export default function AddServerModal({
                 value={draft.headersText}
                 onChange={(e) => onDraftChange({ ...draft, headersText: e.target.value })}
                 placeholder="Authorization: Bearer <token>"
-                style={{ fontFamily: 'var(--font-mono, "IBM Plex Mono", monospace)' }}
+                style={{ fontFamily: 'var(--nb-font-mono)' }}
               />
             </div>
           </>
@@ -171,7 +171,7 @@ export default function AddServerModal({
                 value={draft.envText}
                 onChange={(e) => onDraftChange({ ...draft, envText: e.target.value })}
                 placeholder="KEY=value&#10;API_KEY=xxx"
-                style={{ fontFamily: 'var(--font-mono, "IBM Plex Mono", monospace)' }}
+                style={{ fontFamily: 'var(--nb-font-mono)' }}
               />
             </div>
           </>

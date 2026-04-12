@@ -20,7 +20,7 @@ interface KnowledgeGraphTabProps {
 }
 
 type GraphViewMode = 'core' | 'all'
-type GraphLayoutMode = 'circular' | 'circlepack' | 'random' | 'noverlap' | 'force' | 'forceAtlas'
+type GraphLayoutMode = 'circular' | 'circlepack' | 'random' | 'noverlap' | 'force' | 'forceAtlas' | 'dendrogram'
 
 interface GraphRelationRecord {
   id: string
@@ -64,11 +64,12 @@ function getGraphColors(token: ReturnType<typeof theme.useToken>['token']) {
 const LOW_SIGNAL_TYPES = new Set(['data', 'date', 'time', 'number', 'version'])
 const LOW_SIGNAL_LABELS = ['markdown file', 'jsonl session', 'txt file', 'md file', 'docx file']
 const GRAPH_LAYOUT_OPTIONS: Array<{ label: string; value: GraphLayoutMode }> = [
+  { label: '力导向', value: 'force' },
+  { label: '径向树', value: 'dendrogram' },
   { label: '圆形', value: 'circular' },
   { label: '圆形包装', value: 'circlepack' },
   { label: '随机', value: 'random' },
   { label: '不重叠', value: 'noverlap' },
-  { label: '力导向', value: 'force' },
   { label: '强制圈集', value: 'forceAtlas' },
 ]
 
@@ -183,93 +184,94 @@ function getGraphLayoutLabel(layoutMode: GraphLayoutMode) {
   return GRAPH_LAYOUT_OPTIONS.find((option) => option.value === layoutMode)?.label || '力导向'
 }
 
-function buildGraphLayout(
-  layoutMode: GraphLayoutMode,
-  focusActive: boolean,
-  nodeCount: number,
-  width: number,
-  height: number,
-) {
-  const circleRadius = Math.max(Math.min(width, height) * (focusActive ? 0.24 : 0.34), focusActive ? 120 : 190)
-  const ringSpacing = focusActive ? 18 : 24
-  const gridCount = Math.max(1, Math.ceil(Math.sqrt(nodeCount)))
-  const nodeSize = (datum: any) => Number(datum?.data?.size || 26)
-
-  switch (layoutMode) {
+function getGraphLayoutConfig(mode: GraphLayoutMode, width: number, height: number) {
+  switch (mode) {
     case 'circular':
       return {
-        type: 'circular' as const,
-        ordering: 'degree' as const,
-        radius: circleRadius,
-        startAngle: -Math.PI / 2,
-        clockwise: true,
-        divisions: focusActive ? 1 : 2,
-        nodeSpacing: ringSpacing,
-        nodeSize,
+        type: 'circular',
+      }
+    case 'dendrogram':
+      return {
+        type: 'dendrogram',
+        radial: true,
+        nodeSep: 40,
+        rankSep: 140,
       }
     case 'circlepack':
-      return {
-        type: 'concentric' as const,
-        sortBy: 'degree',
-        preventOverlap: true,
-        nodeSize,
-        nodeSpacing: ringSpacing + 4,
-        equidistant: false,
-        startAngle: -Math.PI / 2,
-        clockwise: true,
-        maxLevelDiff: 1,
-        width,
-        height,
-      }
+      return { type: 'concentric', sortBy: 'degree', preventOverlap: true }
     case 'random':
-      return {
-        type: 'random' as const,
-        width: Math.max(width - 64, 480),
-        height: Math.max(height - 64, 420),
-      }
+      return { type: 'random' }
     case 'noverlap':
-      return {
-        type: 'grid' as const,
-        preventOverlap: true,
-        nodeSize,
-        preventOverlapPadding: 18,
-        rows: gridCount,
-        cols: Math.max(1, Math.ceil(nodeCount / gridCount)),
-        sortBy: 'degree',
-        condense: false,
-        begin: [48, 48] as [number, number],
-        width: Math.max(width - 96, 420),
-        height: Math.max(height - 96, 360),
-      }
+      return { type: 'grid', preventOverlap: true }
     case 'forceAtlas':
+      return { type: 'force-atlas2', preventOverlap: true }
+    case 'force':
+    default:
       return {
-        type: 'force-atlas2' as const,
-        preventOverlap: true,
-        nodeSize,
-        kr: focusActive ? 95 : 78,
-        kg: focusActive ? 10 : 7,
-        ks: 0.08,
-        tao: 0.12,
-        mode: 'linlog' as const,
-        width,
-        height,
+        type: 'force',
+        linkDistance: 50,
+        clustering: true,
+        nodeClusterBy: 'cluster',
+        clusterNodeStrength: 70,
+      }
+  }
+}
+
+function getGraphNodeConfig(mode: GraphLayoutMode, token: any): any {
+  const commonState = {
+    active: { opacity: 1, shadowColor: 'rgba(0,0,0,0.1)', shadowBlur: 10 },
+    inactive: { opacity: 0.2 },
+    neighbor: { opacity: 0.9, lineWidth: 2, stroke: token.colorPrimary },
+    selected: { opacity: 1, lineWidth: 3, stroke: token.colorPrimary },
+    dimmed: { opacity: 0.1 }
+  }
+
+  switch (mode) {
+    case 'circular':
+      return {
+        style: {
+          labelText: (d: any) => d.data?.label || d.id,
+          labelFill: '#fff',
+          labelPlacement: 'center',
+        },
+        state: commonState,
+      }
+    case 'dendrogram':
+      return {
+        style: {
+          labelText: (d: any) => d.data?.label || d.id,
+          labelBackground: true,
+        },
+        animation: {
+          enter: false,
+        },
+        state: commonState,
       }
     case 'force':
     default:
       return {
-        type: 'd3-force' as const,
-        preventOverlap: true,
-        alphaDecay: 0.1,
-        alphaMin: 0.01,
-        velocityDecay: 0.6,
-        iterations: 150,
-        force: {
-          center: { x: width / 2, y: height / 2, strength: 0.1 },
-          charge: { strength: -400, distanceMax: 800 },
-          link: { distance: 180, strength: 0.8 }
+        style: {
+          labelText: (d: any) => d.data?.label || d.id,
+          ports: [],
         },
-        collide: { radius: 36, strength: 0.8, iterations: 3 }
+        palette: {
+          type: 'group',
+          field: 'cluster',
+        },
+        state: commonState,
       }
+  }
+}
+
+function getGraphBehaviorsConfig(mode: GraphLayoutMode) {
+  switch (mode) {
+    case 'circular':
+      return ['drag-canvas', 'drag-element']
+    case 'dendrogram':
+      return ['drag-canvas', 'zoom-canvas', 'drag-element']
+    case 'force':
+    default:
+      return ['zoom-canvas', 'drag-canvas']
   }
 }
 
@@ -423,6 +425,15 @@ export function KnowledgeGraphTab({
 
   const baseGraphPayload = useMemo(() => {
     const degreeMap = new Map<string, number>()
+    const childrenMap = new Map<string, Set<string>>()
+    
+    for (const edge of filteredGraphData.edges) {
+      if (!childrenMap.has(edge.source)) {
+        childrenMap.set(edge.source, new Set<string>())
+      }
+      childrenMap.get(edge.source)!.add(edge.target)
+    }
+
     for (const node of filteredGraphData.nodes) {
       degreeMap.set(node.id, relationCountByNode.get(node.id) || 0)
     }
@@ -440,13 +451,10 @@ export function KnowledgeGraphTab({
         return {
           id: node.id,
           data: {
-            color: getColorForType(getNodeType(node), graphColors),
-            degree,
+            cluster: getNodeType(node),
             label: truncateText(getNodeLabel(node), 36),
-            isTopNode: topDegreeNodeIds.has(node.id),
-            size: Math.min(18 + degree * 2.4, 48),
-            isLowSignal: isLowSignalNode(node)
           },
+          children: Array.from(childrenMap.get(node.id) || []),
         }
       }),
       edges: filteredGraphData.edges.map((edge) => {
@@ -510,112 +518,25 @@ export function KnowledgeGraphTab({
           graphRef.current = null
         }
 
-        const layout = buildGraphLayout(layoutMode, focusState.active, baseGraphPayload.nodes.length, width, height)
-
         const instance = new Graph({
           container: containerRef.current,
           width,
           height,
           data: baseGraphPayload,
           autoFit: 'view',
-          layout,
-          node: {
-            type: 'circle',
-            style: {
-              size: (datum: any) => Number(datum.data?.size || 28),
-              fill: (datum: any) => datum.data?.color || graphColors.default,
-              stroke: '#ffffff', // Clean white border for everything
-              lineWidth: 1.5,
-              opacity: 0.95,
-              labelText: (datum: any) => datum.data?.label || '',
-              labelFill: token.colorText,
-              labelFontSize: 11,
-              labelWordWrap: true,
-              labelMaxWidth: '260%',
-              labelPosition: 'bottom',
-              labelOffsetY: 5,
-              shadowColor: 'rgba(0,0,0,0.06)',
-              shadowBlur: 8,
-            },
-            state: {
-              active: {
-                opacity: 1,
-                labelText: (datum: any) => datum.data?.label,
-                labelFontSize: 13,
-                labelPosition: 'bottom',
-                labelOffsetY: 8,
-                labelBackground: true,
-                labelBackgroundFill: '#ffffff',
-                labelBackgroundOpacity: 0.9,
-                labelBackgroundRadius: 4,
-                shadowColor: (datum: any) => datum.data?.color || graphColors.default,
-                shadowBlur: 14,
-              },
-              inactive: {
-                opacity: 0.15,
-                lineWidth: 1,
-                labelText: '',
-              },
-              selected: {
-                opacity: 1,
-                stroke: '#ffffff',
-                lineWidth: 2,
-                labelText: (datum: any) => datum.data?.label,
-                labelFontSize: 14,
-                labelPosition: 'bottom',
-                labelOffsetY: 8,
-                labelBackground: true,
-                labelBackgroundFill: '#ffffff',
-                labelBackgroundOpacity: 0.95,
-                labelBackgroundRadius: 6,
-                size: (datum: any) => Number(datum.data?.size || 28) + 4,
-                shadowColor: (datum: any) => datum.data?.color || graphColors.default,
-                shadowBlur: 24,
-              }
-            }
-          },
+          layout: getGraphLayoutConfig(layoutMode, width, height),
+          node: getGraphNodeConfig(layoutMode, token),
           edge: {
-            type: 'quadratic',
-            style: {
-              stroke: token.colorBorderSecondary,
-              opacity: 0.5,
-              lineWidth: 1,
-              endArrow: true, // we leave this as standard antv might still resolve it
-              labelText: '', 
-            },
+            // Keep edge incredibly clean, just provide state targets so selection highlights work!
             state: {
-              active: {
-                opacity: 0.8,
-                lineWidth: 2,
-                labelText: (datum: any) => datum.data?.label,
-                labelFill: token.colorTextSecondary,
-                labelFontSize: 10,
-                labelAutoRotate: true,
-                labelBackground: true,
-                labelBackgroundFill: '#ffffff',
-                labelBackgroundOpacity: 0.85,
-                labelBackgroundRadius: 3,
-                stroke: token.colorTextSecondary,
-              },
-              inactive: {
-                opacity: 0.08,
-              },
-              selected: {
-                stroke: token.colorPrimary,
-                lineWidth: 2.5,
-                opacity: 0.9,
-                labelText: (datum: any) => datum.data?.label,
-                labelFill: token.colorPrimary,
-                labelFontSize: 11,
-                labelAutoRotate: true,
-                labelBackground: true,
-                labelBackgroundFill: '#ffffff',
-                labelBackgroundOpacity: 0.95,
-                labelBackgroundRadius: 3,
-              }
+              active: { opacity: 0.9, lineWidth: 2, stroke: token.colorTextSecondary },
+              inactive: { opacity: 0.2 },
+              neighbor: { opacity: 0.8, lineWidth: 2, stroke: token.colorPrimaryText },
+              selected: { stroke: token.colorPrimary, lineWidth: 2.5, opacity: 1 },
+              dimmed: { opacity: 0.05 }
             }
           },
-          behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas', 'hover-activate'],
+          behaviors: getGraphBehaviorsConfig(layoutMode),
         })
 
         instance.on('node:click', (event: any) => {
@@ -678,13 +599,11 @@ export function KnowledgeGraphTab({
       }
     }
   }, [baseGraphPayload, layoutMode, token])
-  // State management effect
   useEffect(() => {
     if (!graphRef.current || !hasGraph) return
     const graph = graphRef.current
 
     if (!focusState.active) {
-       // Clear all states
        const updates: Record<string, string[]> = {}
        for (const node of baseGraphPayload.nodes) updates[node.id] = []
        for (const edge of baseGraphPayload.edges) updates[edge.id] = []
@@ -695,27 +614,26 @@ export function KnowledgeGraphTab({
     const updates: Record<string, string[]> = {}
     for (const node of baseGraphPayload.nodes) {
        if (node.id === selectedNodeId) {
-           updates[node.id] = ['selected', 'active']
+           updates[node.id] = ['selected']
        } else if (focusState.nodeIds.has(node.id)) {
-           updates[node.id] = ['active']
+           updates[node.id] = ['neighbor']
        } else {
-           updates[node.id] = ['inactive']
+           updates[node.id] = ['dimmed']
        }
     }
     for (const edge of baseGraphPayload.edges) {
        if (edge.id === selectedEdgeId) {
-           updates[edge.id] = ['selected', 'active']
+           updates[edge.id] = ['selected']
        } else if (focusState.edgeIds.has(edge.id)) {
-           updates[edge.id] = ['active']
+           updates[edge.id] = ['neighbor']
        } else {
-           updates[edge.id] = ['inactive']
+           updates[edge.id] = ['dimmed']
        }
     }
     try {
         graph.setElementState(updates)
     } catch (e) {}
   }, [focusState, selectedNodeId, selectedEdgeId, baseGraphPayload, hasGraph])
-
 
   const selectedTypeCount = useMemo(() => {
     if (!selectedNode) return ''
