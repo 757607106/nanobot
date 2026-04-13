@@ -45,7 +45,7 @@ async def test_composite_fans_out_all_async_methods():
         async def before_iteration(self, context: AgentHookContext) -> None:
             events.append("before_iteration")
 
-        async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+        async def on_stream(self, context: AgentHookContext, delta: str, reasoning_delta: str | None = None) -> None:
             events.append(f"on_stream:{delta}")
 
         async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
@@ -102,11 +102,11 @@ async def test_composite_error_isolation_on_stream():
     calls: list[str] = []
 
     class Bad(AgentHook):
-        async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+        async def on_stream(self, context: AgentHookContext, delta: str, reasoning_delta: str | None = None) -> None:
             raise RuntimeError("stream-boom")
 
     class Good(AgentHook):
-        async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+        async def on_stream(self, context: AgentHookContext, delta: str, reasoning_delta: str | None = None) -> None:
             calls.append(delta)
 
     hook = CompositeHook([Bad(), Good()])

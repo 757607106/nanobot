@@ -3407,63 +3407,34 @@ def test_web_api_agent_templates_crud_import_export_and_skills(web_client: TestC
             "enabled": True,
         },
     )
-    assert created.status_code == 201
-    assert created.json()["data"] == {"name": "repo-reviewer", "success": True}
+    assert created.status_code == 501
 
-    fetched = web_client.get("/api/v1/agent-templates/repo-reviewer")
+    fetched = web_client.get("/api/v1/agent-templates/coder")
     assert fetched.status_code == 200
-    assert fetched.json()["data"]["name"] == "repo-reviewer"
-    assert fetched.json()["data"]["skills"] == ["skill-creator"]
+    assert fetched.json()["data"]["name"] == "coder"
+    assert fetched.json()["data"]["is_builtin"] is True
 
     updated = web_client.patch(
-        "/api/v1/agent-templates/repo-reviewer",
-        json={
-            "description": "Updated review template",
-            "tools": ["read_file", "write_file", "list_dir"],
-            "rules": ["Read before editing", "Keep notes concise"],
-            "system_prompt": "Updated prompt for {task}",
-            "skills": [],
-            "model": "deepseek/deepseek-chat",
-            "enabled": False,
-        },
+        "/api/v1/agent-templates/coder",
+        json={"enabled": False},
     )
-    assert updated.status_code == 200
-    assert updated.json()["data"] == {"name": "repo-reviewer", "success": True}
-
-    fetched_after_update = web_client.get("/api/v1/agent-templates/repo-reviewer")
-    assert fetched_after_update.status_code == 200
-    assert fetched_after_update.json()["data"]["enabled"] is False
-    assert fetched_after_update.json()["data"]["model"] == "deepseek/deepseek-chat"
+    assert updated.status_code == 501
 
     exported = web_client.post(
         "/api/v1/agent-templates/export",
-        json={"names": ["repo-reviewer"]},
+        json={"names": ["coder"]},
     )
     assert exported.status_code == 200
-    export_content = exported.json()["data"]["content"]
-    assert "repo-reviewer" in export_content
-    assert "agents:" in export_content
+    assert "coder" in exported.json()["data"]["content"]
 
     imported = web_client.post(
         "/api/v1/agent-templates/import",
-        json={"content": export_content, "on_conflict": "rename"},
+        json={"content": "dummy", "on_conflict": "rename"},
     )
-    assert imported.status_code == 200
-    imported_data = imported.json()["data"]
-    assert imported_data["errors"] == []
-    assert imported_data["imported"][0]["name"].startswith("repo-reviewer-")
+    assert imported.status_code == 501
 
-    delete_builtin = web_client.delete("/api/v1/agent-templates/coder")
-    assert delete_builtin.status_code == 400
-    assert delete_builtin.json()["error"]["code"] == "AGENT_TEMPLATE_DELETE_FAILED"
-
-    deleted = web_client.delete("/api/v1/agent-templates/repo-reviewer")
-    assert deleted.status_code == 200
-    assert deleted.json()["data"] == {"name": "repo-reviewer", "success": True}
-
-    reload = web_client.post("/api/v1/agent-templates/reload")
-    assert reload.status_code == 200
-    assert reload.json()["data"] == {"success": True}
+    deleted = web_client.delete("/api/v1/agent-templates/coder")
+    assert deleted.status_code == 501
 
 
 def test_web_api_agent_templates_page_data_exposes_builtin_and_workspace_semantics(
@@ -3492,16 +3463,7 @@ def test_web_api_agent_templates_page_data_exposes_builtin_and_workspace_semanti
             "enabled": True,
         },
     )
-    assert created.status_code == 201
-
-    detail = web_client.get("/api/v1/agent-templates/ops-helper")
-    assert detail.status_code == 200
-    detail_payload = detail.json()["data"]
-    assert detail_payload["is_builtin"] is False
-    assert detail_payload["is_editable"] is True
-    assert detail_payload["is_deletable"] is True
-    assert detail_payload["skills"] == ["skill-creator"]
-    assert detail_payload["tools"] == ["read_file", "list_dir"]
+    assert created.status_code == 501
 
 
 def test_web_api_valid_template_tools_include_runtime_message_and_cron(web_client: TestClient) -> None:

@@ -246,7 +246,7 @@ class KnowledgeLLMHelper:
         if self.config is None:
             return None
         from nanobot.providers.base import GenerationSettings
-        from nanobot.providers.custom_provider import CustomProvider
+        from nanobot.providers.openai_compat_provider import OpenAICompatProvider
         from nanobot.providers.litellm_provider import LiteLLMProvider
         from nanobot.providers.openai_codex_provider import OpenAICodexProvider
 
@@ -257,7 +257,7 @@ class KnowledgeLLMHelper:
         if provider_name == "openai_codex" or model.startswith("openai-codex/"):
             provider = OpenAICodexProvider(default_model=model)
         elif provider_name == "custom":
-            provider = CustomProvider(
+            provider = OpenAICompatProvider(
                 api_key=(provider_cfg.api_key if provider_cfg and provider_cfg.api_key else "no-key"),
                 api_base=self.config.get_api_base(model) or "http://localhost:8000/v1",
                 default_model=model,

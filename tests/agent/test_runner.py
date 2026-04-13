@@ -768,7 +768,7 @@ async def test_loop_stream_filter_handles_think_only_prefix_without_crashing(tmp
     )
 
     assert final_content == "Hello"
-    assert deltas == ["Hello"]
+    assert [d for d in deltas if d] == ["Hello"]
     assert endings == [False]
 
 

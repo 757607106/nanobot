@@ -581,8 +581,15 @@ class TestWebAPIChannelBindings:
         resp = session.open(req)
         return json.loads(resp.read().decode())
 
+    def _ensure_agent(self, session, agent_id: str) -> None:
+        try:
+            self._api(session, "POST", "/api/v1/agents", {"name": agent_id, "systemPrompt": "Hello", "agentId": agent_id})
+        except Exception as e:
+            pass
+
     def test_create_and_resolve_binding(self, session) -> None:
         """Create a binding via API, resolve it, then delete it."""
+        self._ensure_agent(session, "agent-13")
         # Create
         result = self._api(session, "POST", "/api/v1/channel-bindings", {
             "channelName": "test_e2e",
@@ -623,6 +630,8 @@ class TestWebAPIChannelBindings:
 
     def test_update_binding(self, session) -> None:
         """Create, update target, verify, then delete."""
+        self._ensure_agent(session, "agent-13")
+        self._ensure_agent(session, "agent-12")
         result = self._api(session, "POST", "/api/v1/channel-bindings", {
             "channelName": "test_update",
             "channelChatId": "*",
@@ -644,6 +653,8 @@ class TestWebAPIChannelBindings:
 
     def test_exact_match_wins_over_wildcard_via_api(self, session) -> None:
         """Two bindings for same channel: exact chat_id should win in resolve."""
+        self._ensure_agent(session, "agent-13")
+        self._ensure_agent(session, "agent-12")
         wild = self._api(session, "POST", "/api/v1/channel-bindings", {
             "channelName": "test_priority",
             "channelChatId": "*",
