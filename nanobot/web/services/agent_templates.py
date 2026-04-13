@@ -14,7 +14,6 @@ import yaml
 from loguru import logger
 
 from nanobot.agent.skills import SkillsLoader
-from nanobot.storage.agent_template_repository import get_agent_template_repository
 
 FALLBACK_TOOL_CATALOG: dict[str, str] = {
     "read_file": "Read a file from the workspace.",
@@ -215,7 +214,6 @@ class AgentTemplateManager:
         tool_catalog_provider: Callable[[], list[dict[str, str]]] | None = None,
     ):
         self.workspace = workspace.expanduser().resolve()
-        self._repo = get_agent_template_repository(self.workspace)
         self._tool_catalog_provider = tool_catalog_provider
         self._templates: dict[str, AgentTemplateConfig] = {}
         self._lock = threading.RLock()
@@ -225,16 +223,10 @@ class AgentTemplateManager:
         with self._lock:
             self._templates.clear()
             self._init_builtin_templates()
-            for row in self._repo.list_all():
-                template = AgentTemplateConfig.from_record(row)
-                self._templates[template.name] = template
-            logger.info("Loaded {} agent templates", len(self._templates))
+            logger.info("Loaded {} built-in agent templates", len(self._templates))
 
     def _init_builtin_templates(self) -> None:
-        existing = {row["name"] for row in self._repo.list_all() if row.get("is_system")}
         for name, payload in DEFAULT_BUILTIN_TEMPLATES.items():
-            if name in existing:
-                continue
             template = AgentTemplateConfig(
                 name=name,
                 description=payload["description"],
@@ -247,14 +239,10 @@ class AgentTemplateManager:
                 source="builtin",
                 is_system=True,
                 enabled=True,
+                created_at=datetime.now().isoformat(),
+                updated_at=datetime.now().isoformat(),
             )
-            self._repo.create(
-                template.name,
-                template.to_storage_json(),
-                source="builtin",
-                enabled=True,
-                is_system=True,
-            )
+            self._templates[template.name] = template
 
     def reload(self) -> bool:
         try:
@@ -273,149 +261,16 @@ class AgentTemplateManager:
             return self._templates.get(name)
 
     def create_template(self, payload: dict[str, Any]) -> AgentTemplateConfig:
-        data = self._validate_template_payload(payload)
-        template = AgentTemplateConfig(
-            name=data["name"],
-            description=data["description"],
-            tools=data["tools"],
-            rules=data["rules"],
-            system_prompt=data["system_prompt"],
-            skills=data["skills"],
-            model=data.get("model"),
-            backend=data.get("backend"),
-            source="user",
-            is_system=False,
-            enabled=bool(data["enabled"]),
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
-        )
-        with self._lock:
-            if template.name in self._templates:
-                raise ValueError(f"Template '{template.name}' already exists.")
-            self._repo.create(
-                template.name,
-                template.to_storage_json(),
-                source="user",
-                enabled=template.enabled,
-                is_system=False,
-            )
-            record = self._repo.get(template.name)
-            if record is None:
-                raise RuntimeError(f"Failed to load created template '{template.name}'.")
-            self._templates[template.name] = AgentTemplateConfig.from_record(record)
-            return self._templates[template.name]
+        raise NotImplementedError("Custom templates are unified as instances. Please create an Agent directly.")
 
     def update_template(self, name: str, payload: dict[str, Any]) -> AgentTemplateConfig | None:
-        with self._lock:
-            existing = self._templates.get(name)
-            if existing is None:
-                return None
-            if existing.is_system:
-                raise ValueError("Built-in templates are read-only in the current Web UI.")
-
-        data = self._validate_template_payload(payload, existing=existing)
-        updated = AgentTemplateConfig(
-            name=name,
-            description=data["description"],
-            tools=data["tools"],
-            rules=data["rules"],
-            system_prompt=data["system_prompt"],
-            skills=data["skills"],
-            model=data.get("model"),
-            backend=data.get("backend"),
-            source=existing.source,
-            is_system=existing.is_system,
-            enabled=bool(data.get("enabled", existing.enabled)),
-            created_at=existing.created_at,
-            updated_at=datetime.now().isoformat(),
-        )
-
-        record = self._repo.update(
-            name,
-            updated.to_storage_json(),
-            enabled=updated.enabled,
-            source=updated.source,
-        )
-        if record is None:
-            return None
-
-        with self._lock:
-            self._templates[name] = AgentTemplateConfig.from_record(record)
-            return self._templates[name]
+        raise NotImplementedError("Custom templates are unified as instances. Please create an Agent directly.")
 
     def delete_template(self, name: str) -> bool:
-        with self._lock:
-            existing = self._templates.get(name)
-            if existing is None:
-                return False
-            if existing.is_system:
-                raise ValueError("Built-in templates cannot be deleted.")
-
-        deleted = self._repo.delete(name)
-        if deleted:
-            with self._lock:
-                self._templates.pop(name, None)
-        return deleted
+        raise NotImplementedError("Custom templates are unified as instances. Please delete the Agent directly.")
 
     def import_from_yaml(self, content: str, on_conflict: str = "skip") -> dict[str, Any]:
-        result: dict[str, Any] = {"imported": [], "skipped": [], "errors": []}
-        if on_conflict not in {"skip", "replace", "rename"}:
-            result["errors"].append("on_conflict must be one of: skip, replace, rename.")
-            return result
-
-        try:
-            data = yaml.safe_load(content)
-        except yaml.YAMLError as exc:
-            result["errors"].append(f"YAML parse error: {exc}")
-            return result
-
-        if not isinstance(data, dict) or not isinstance(data.get("agents"), list):
-            result["errors"].append("Invalid format: expected a top-level 'agents' list.")
-            return result
-
-        for raw_template in data["agents"]:
-            if not isinstance(raw_template, dict):
-                result["errors"].append("Template entry must be an object.")
-                continue
-
-            original_name = str(raw_template.get("name") or "").strip()
-            if not original_name:
-                result["errors"].append("Template missing 'name' field.")
-                continue
-
-            with self._lock:
-                existing = self._templates.get(original_name)
-
-            target_name = original_name
-            replace_existing = False
-
-            if existing is not None:
-                if on_conflict == "skip":
-                    result["skipped"].append(original_name)
-                    continue
-                if on_conflict == "rename":
-                    target_name = self._unique_name(original_name)
-                elif existing.is_system:
-                    result["errors"].append(
-                        f"{original_name}: built-in templates cannot be replaced."
-                    )
-                    continue
-                else:
-                    replace_existing = True
-
-            try:
-                payload = dict(raw_template)
-                payload["name"] = target_name
-                if replace_existing:
-                    self.update_template(original_name, payload)
-                    result["imported"].append({"name": original_name, "action": "replaced"})
-                else:
-                    self.create_template(payload)
-                    result["imported"].append({"name": target_name, "action": "created"})
-            except Exception as exc:  # noqa: BLE001
-                result["errors"].append(f"{original_name}: {exc}")
-
-        return result
+        raise NotImplementedError("Template import is disabled. Please import Agents directly.")
 
     def export_to_yaml(self, names: list[str] | None = None) -> str:
         with self._lock:
