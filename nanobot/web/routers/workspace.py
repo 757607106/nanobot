@@ -63,6 +63,8 @@ def create_agent_template(
         data = request.app.state.web.create_agent_template(payload.model_dump())
     except ValueError as exc:
         raise APIError(400, "AGENT_TEMPLATE_VALIDATION_ERROR", str(exc)) from exc
+    except NotImplementedError as exc:
+        raise APIError(501, "NOT_IMPLEMENTED", str(exc)) from exc
     return _json_response(201, _ok(data))
 
 
@@ -71,15 +73,18 @@ def import_agent_templates(
     request: Request,
     payload: AgentTemplateImportRequest,
 ) -> JSONResponse:
-    return _json_response(
-        200,
-        _ok(
-            request.app.state.web.import_agent_templates(
-                payload.content,
-                payload.on_conflict,
-            )
-        ),
-    )
+    try:
+        return _json_response(
+            200,
+            _ok(
+                request.app.state.web.import_agent_templates(
+                    payload.content,
+                    payload.on_conflict,
+                )
+            ),
+        )
+    except NotImplementedError as exc:
+        raise APIError(501, "NOT_IMPLEMENTED", str(exc)) from exc
 
 
 @router.post("/api/v1/agent-templates/export")
@@ -122,6 +127,8 @@ def update_agent_template(
         raise APIError(404, "AGENT_TEMPLATE_NOT_FOUND", "Agent template not found.") from exc
     except ValueError as exc:
         raise APIError(400, "AGENT_TEMPLATE_VALIDATION_ERROR", str(exc)) from exc
+    except NotImplementedError as exc:
+        raise APIError(501, "NOT_IMPLEMENTED", str(exc)) from exc
     return _json_response(200, _ok(data))
 
 
@@ -133,6 +140,8 @@ def delete_agent_template(request: Request, template_name: str) -> JSONResponse:
         raise APIError(404, "AGENT_TEMPLATE_NOT_FOUND", "Agent template not found.") from exc
     except ValueError as exc:
         raise APIError(400, "AGENT_TEMPLATE_DELETE_FAILED", str(exc)) from exc
+    except NotImplementedError as exc:
+        raise APIError(501, "NOT_IMPLEMENTED", str(exc)) from exc
     return _json_response(200, _ok(data))
 
 
