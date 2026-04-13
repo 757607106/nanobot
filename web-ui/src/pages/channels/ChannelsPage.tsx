@@ -357,8 +357,9 @@ export default function ChannelsPage() {
       switch (field.kind) {
         case 'switch':
           return (
-            <Form.Item key={key} label={field.label} valuePropName="checked" extra={field.description} style={{ marginBottom: 14 }}>
+            <Form.Item key={key} label={field.label} htmlFor={key} valuePropName="checked" extra={field.description} style={{ marginBottom: 14 }}>
               <Switch
+                id={key}
                 checked={Boolean(value)}
                 onChange={(checked) => updateDraft(channelName, field.path, checked)}
               />
@@ -366,8 +367,9 @@ export default function ChannelsPage() {
           )
         case 'select':
           return (
-            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+            <Form.Item key={key} label={field.label} htmlFor={key} extra={field.description} style={{ marginBottom: 14 }}>
               <Select
+                id={key}
                 value={typeof value === 'string' ? value : undefined}
                 onChange={(val) => updateDraft(channelName, field.path, val)}
                 options={field.options}
@@ -378,8 +380,9 @@ export default function ChannelsPage() {
           )
         case 'number':
           return (
-            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+            <Form.Item key={key} label={field.label} htmlFor={key} extra={field.description} style={{ marginBottom: 14 }}>
               <InputNumber
+                id={key}
                 value={typeof value === 'number' ? value : null}
                 onChange={(val) => updateDraft(channelName, field.path, val ?? 0)}
                 min={field.min}
@@ -391,8 +394,9 @@ export default function ChannelsPage() {
           )
         case 'list':
           return (
-            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+            <Form.Item key={key} label={field.label} htmlFor={key} extra={field.description} style={{ marginBottom: 14 }}>
               <Input.TextArea
+                id={key}
                 value={Array.isArray(value) ? value.join('\n') : ''}
                 onChange={(e) => updateDraft(channelName, field.path, parseListValue(e.target.value))}
                 placeholder={field.placeholder}
@@ -402,8 +406,9 @@ export default function ChannelsPage() {
           )
         case 'textarea':
           return (
-            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+            <Form.Item key={key} label={field.label} htmlFor={key} extra={field.description} style={{ marginBottom: 14 }}>
               <Input.TextArea
+                id={key}
                 value={String(value ?? '')}
                 onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
                 placeholder={field.placeholder}
@@ -413,8 +418,9 @@ export default function ChannelsPage() {
           )
         case 'password':
           return (
-            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+            <Form.Item key={key} label={field.label} htmlFor={key} extra={field.description} style={{ marginBottom: 14 }}>
               <Input.Password
+                id={key}
                 value={String(value ?? '')}
                 onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
                 placeholder={field.placeholder}
@@ -423,8 +429,9 @@ export default function ChannelsPage() {
           )
         default:
           return (
-            <Form.Item key={key} label={field.label} extra={field.description} style={{ marginBottom: 14 }}>
+            <Form.Item key={key} label={field.label} htmlFor={key} extra={field.description} style={{ marginBottom: 14 }}>
               <Input
+                id={key}
                 value={String(value ?? '')}
                 onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
                 placeholder={field.placeholder}

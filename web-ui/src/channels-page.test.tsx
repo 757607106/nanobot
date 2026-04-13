@@ -138,7 +138,7 @@ describe('ChannelsPage', () => {
     renderPage()
 
     expect(await screen.findByText('消息投递设置')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /保存设置/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /消息投递设置/ })).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
     expect(screen.getByText('Discord')).toBeInTheDocument()
   })
@@ -148,10 +148,11 @@ describe('ChannelsPage', () => {
     renderPage()
 
     expect(await screen.findByText('Discord')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /Discord/ }))
-    expect(await screen.findByText('Discord 渠道仍缺少必要字段。')).toBeInTheDocument()
-    await user.type(screen.getByLabelText('机器人 Token'), 'discord-token')
-    await user.click(screen.getByRole('button', { name: /保存配置/ }))
+    await user.click(screen.getByText('Discord'))
+    expect(await screen.findByText('还需填写 1 个必填项')).toBeInTheDocument()
+    // Wait for the Drawer to open and display form
+    await user.type(await screen.findByLabelText('机器人 Token'), 'discord-token')
+    await user.click(screen.getByText('保存配置'))
 
     await waitFor(() => {
       expect(mockApi.updateChannel).toHaveBeenCalledTimes(1)

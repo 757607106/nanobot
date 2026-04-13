@@ -79,10 +79,10 @@ describe('ProfilePage', () => {
     expect(await screen.findByText('账户管理')).toBeInTheDocument()
     expect(screen.getByText('当前管理员')).toBeInTheDocument()
     expect(screen.getByText('安全摘要')).toBeInTheDocument()
-    expect(screen.getByText('账号资料')).toBeInTheDocument()
+    expect(screen.getByText('基本账户信息')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /编辑资料/ }).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('button', { name: /修改密码/ }).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('button', { name: /头像管理/ }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /轮换登录密码/ }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /管理头像/ }).length).toBeGreaterThan(0)
     expect(screen.getAllByText('owner@example.com').length).toBeGreaterThan(0)
   })
 

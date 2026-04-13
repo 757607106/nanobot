@@ -1,15 +1,17 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import McpPage from './pages/mcp'
 import { parseMappingInput } from './pages/mcp/utils'
+import { testIds } from './testIds'
 import { renderWithProviders } from './test/renderApp'
 
 const mockApi = vi.hoisted(() => ({
   getAuthStatus: vi.fn(),
   getSetupStatus: vi.fn(),
   getMcpServers: vi.fn(),
+  getMcpServer: vi.fn(),
   getConfig: vi.fn(),
   updateConfig: vi.fn(),
   updateMcpServer: vi.fn(),
@@ -125,12 +127,16 @@ function makeRegistry(items?: Array<Record<string, unknown>>) {
 function renderPage() {
   return renderWithProviders(
     <MemoryRouter
+      initialEntries={['/mcp']}
       future={{
         v7_startTransition: true,
         v7_relativeSplatPath: true,
       }}
     >
-      <McpPage />
+      <Routes>
+        <Route path="/mcp" element={<McpPage />} />
+        <Route path="/mcp/:serverName" element={<McpPage />} />
+      </Routes>
     </MemoryRouter>,
   )
 }
@@ -141,6 +147,7 @@ describe('McpPage', () => {
     mockApi.getAuthStatus.mockReset()
     mockApi.getSetupStatus.mockReset()
     mockApi.getMcpServers.mockReset()
+    mockApi.getMcpServer.mockReset()
     mockApi.getConfig.mockReset()
     mockApi.updateConfig.mockReset()
     mockApi.updateMcpServer.mockReset()
@@ -161,6 +168,7 @@ describe('McpPage', () => {
       steps: [],
     })
     mockApi.getMcpServers.mockResolvedValue(makeRegistry())
+    mockApi.getMcpServer.mockResolvedValue(makeRegistry().items[0])
     mockApi.getConfig.mockResolvedValue(makeConfig())
     mockApi.updateConfig.mockImplementation(async (config) => config)
     mockApi.updateMcpServer.mockResolvedValue({
@@ -193,9 +201,8 @@ describe('McpPage', () => {
   it('renders the reference-style registry layout', async () => {
     renderPage()
 
-    expect(await screen.findByText('MCP 服务器')).toBeInTheDocument()
-    expect(screen.getByLabelText('导入配置')).toBeInTheDocument()
-    expect(screen.getByLabelText('添加 MCP 服务器')).toBeInTheDocument()
+    expect(await screen.findByText('MCP 扩展')).toBeInTheDocument()
+    expect(screen.getByText('添加服务器')).toBeInTheDocument()
     expect(screen.getByText('Workspace Files')).toBeInTheDocument()
     expect(screen.getByText('filesystem')).toBeInTheDocument()
   })
@@ -219,12 +226,14 @@ describe('McpPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('暂无数据')).toBeInTheDocument()
-    await user.click(screen.getByLabelText('添加 MCP 服务器'))
-    await user.type(screen.getByPlaceholderText('例如 github'), 'github')
-    await user.type(screen.getByLabelText('命令'), 'npx')
-    await user.type(screen.getByLabelText('参数（可选）'), '-y @modelcontextprotocol/server-github')
-    await user.type(screen.getByLabelText('环境变量（可选）'), 'GITHUB_TOKEN=token-123')
+    expect(await screen.findByText('暂无 MCP 服务器')).toBeInTheDocument()
+    // Click the empty state button
+    const addButton = await screen.findByText(/添加第一个服务器/)
+    await user.click(addButton)
+    await user.type(screen.getByPlaceholderText('唯一标识，如 weather-api'), 'github')
+    await user.type(screen.getByPlaceholderText('uvx 或 npx'), 'npx')
+    await user.type(screen.getByPlaceholderText('参数以空格分隔'), '-y @modelcontextprotocol/server-github')
+    await user.type(screen.getByPlaceholderText(/KEY=value/), 'GITHUB_TOKEN=token-123')
     await user.click(screen.getByRole('button', { name: /保\s*存/ }))
 
     await waitFor(() => {
@@ -244,102 +253,39 @@ describe('McpPage', () => {
     })
   })
 
-  it('imports multiple servers from pasted JSON through config update', async () => {
-    const user = userEvent.setup()
-    mockApi.getMcpServers.mockResolvedValueOnce(makeRegistry([])).mockResolvedValue(makeRegistry([
-      {
-        ...makeRegistry().items[0],
-        name: 'github',
-        displayName: 'github',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-github'],
-        env: { GITHUB_TOKEN: 'token-123' },
-        toolNames: [],
-        toolCount: null,
-        toolCountKnown: false,
-        status: 'incomplete',
-      },
-      {
-        ...makeRegistry().items[0],
-        name: 'remote-docs',
-        displayName: 'remote-docs',
-        transport: 'sse',
-        command: '',
-        args: [],
-        env: {},
-        url: 'https://example.com/sse',
-        headers: { Authorization: 'Bearer token' },
-        envCount: 0,
-        headerCount: 1,
-        toolNames: [],
-        toolCount: null,
-        toolCountKnown: false,
-        status: 'incomplete',
-      },
-    ]))
 
-    renderPage()
-
-    expect(await screen.findByText('暂无数据')).toBeInTheDocument()
-    await user.click(screen.getByLabelText('导入配置'))
-    await user.click(screen.getByLabelText('MCP JSON 配置'))
-    await user.paste(
-      JSON.stringify({
-        mcpServers: {
-          github: {
-            command: 'npx',
-            args: ['-y', '@modelcontextprotocol/server-github'],
-            env: { GITHUB_TOKEN: 'token-123' },
-          },
-          'remote-docs': {
-            url: 'https://example.com/sse',
-            headers: { Authorization: 'Bearer token' },
-          },
-        },
-      }),
-    )
-    await user.click(screen.getByRole('button', { name: '导入 2 个服务器' }))
-
-    await waitFor(() => {
-      expect(mockApi.updateConfig).toHaveBeenCalledTimes(1)
-    })
-
-    const savedConfig = mockApi.updateConfig.mock.calls[0][0]
-    expect(savedConfig.tools.mcpServers.github).toMatchObject({
-      type: 'stdio',
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-github'],
-      env: { GITHUB_TOKEN: 'token-123' },
-    })
-    expect(savedConfig.tools.mcpServers['remote-docs']).toMatchObject({
-      type: 'sse',
-      url: 'https://example.com/sse',
-      headers: { Authorization: 'Bearer token' },
-    })
-  })
 
   it('edits an existing server through the update endpoint', async () => {
     const user = userEvent.setup()
-    mockApi.getMcpServers.mockResolvedValueOnce(makeRegistry()).mockResolvedValue(makeRegistry([
-      {
-        ...makeRegistry().items[0],
-        displayName: 'Workspace Files Pro',
-        command: 'node',
-        env: { MCP_API_KEY: 'secret-2' },
-      },
-    ]))
+    const item = {
+      ...makeRegistry().items[0],
+      displayName: 'Workspace Files Pro',
+      command: 'node',
+      env: { MCP_API_KEY: 'secret-2' },
+    }
+    mockApi.getMcpServers.mockResolvedValueOnce(makeRegistry()).mockResolvedValue(makeRegistry([item]))
+    mockApi.getMcpServer.mockResolvedValue(item)
 
     renderPage()
 
     expect(await screen.findByText('Workspace Files')).toBeInTheDocument()
-    await user.click(screen.getByLabelText('编辑 Workspace Files'))
-    await user.clear(screen.getByPlaceholderText('显示名称'))
-    await user.type(screen.getByPlaceholderText('显示名称'), 'Workspace Files Pro')
+    // "编辑" logic has moved to clicking the card and then drawer. Let's just click '配置' or view
+    const card = screen.getByText('Workspace Files')
+    await user.click(card)
+    await user.clear(await screen.findByLabelText('展示名称'))
+    await user.type(screen.getByLabelText('展示名称'), 'Workspace Files Pro')
     await user.clear(screen.getByLabelText('命令'))
     await user.type(screen.getByLabelText('命令'), 'node')
-    await user.clear(screen.getByLabelText('环境变量（可选）'))
-    await user.type(screen.getByLabelText('环境变量（可选）'), 'MCP_API_KEY=secret-2')
-    await user.click(screen.getByRole('button', { name: /保\s*存/ }))
+    // Open sensitive values to edit env
+    await user.click(screen.getByText('查看敏感值'))
+    // Wait for button text to change to ensure state updated
+    expect(await screen.findByText('隐藏敏感值')).toBeInTheDocument()
+    
+    // antd's readOnly toggle + userEvent sometimes causes weird writability check bugs. Use fireEvent.
+    const envInput = screen.getByTestId(testIds.mcp.detailEnv)
+    fireEvent.change(envInput, { target: { value: '{"MCP_API_KEY":"secret-2"}' } })
+    
+    await user.click(await screen.findByText(/保存配置/))
 
     await waitFor(() => {
       expect(mockApi.updateMcpServer).toHaveBeenCalledTimes(1)

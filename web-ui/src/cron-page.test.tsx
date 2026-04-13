@@ -101,7 +101,7 @@ describe('CronPage', () => {
   it('renders the reference-style cron registry layout', async () => {
     renderPage()
 
-    expect(await screen.findByText('定时任务')).toBeInTheDocument()
+    expect(await screen.findByText('任务列表')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /新建任务/ })).toBeInTheDocument()
     expect(screen.getByText('daily recap')).toBeInTheDocument()
     expect(screen.getByText('summarize the latest changes')).toBeInTheDocument()

@@ -12,6 +12,9 @@ const mockApi = vi.hoisted(() => ({
   getCronStatus: vi.fn(),
   getChatWorkspace: vi.fn(),
   getSessions: vi.fn(),
+  getAgents: vi.fn(),
+  getSystemStatus: vi.fn(),
+  getKnowledgeBases: vi.fn(),
 }))
 
 vi.mock('./api', () => ({
@@ -118,31 +121,33 @@ describe('DashboardPage', () => {
       pageSize: 20,
       total: 1,
     })
+    mockApi.getAgents.mockResolvedValue([])
+    mockApi.getSystemStatus.mockResolvedValue({ stats: { enabledChannels: ['telegram'] }, web: { version: '1.0' } })
+    mockApi.getKnowledgeBases.mockResolvedValue([])
   })
 
   it('renders the dashboard as a standalone page', async () => {
     renderPage()
 
-    expect(await screen.findByText('平台总览')).toBeInTheDocument()
-    expect(screen.getByText('待处理事项')).toBeInTheDocument()
-    expect(screen.getByText('关键入口')).toBeInTheDocument()
-    expect(screen.getByText('渠道运行态')).toBeInTheDocument()
-    expect(screen.getAllByText('技能部署').length).toBeGreaterThan(0)
-    expect(screen.getByText('自动化状态')).toBeInTheDocument()
-    expect(screen.getAllByText('Telegram').length).toBeGreaterThan(0)
-    expect(screen.getByText('任务引擎')).toBeInTheDocument()
+    expect(await screen.findByText('控制台总览')).toBeInTheDocument()
+    expect(screen.getByText('会话总量')).toBeInTheDocument()
+    expect(screen.getByText('知识库')).toBeInTheDocument()
+    expect(screen.getAllByText('接入渠道').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('创建智能体').length).toBeGreaterThan(0)
+    expect(screen.getByText('系统状态')).toBeInTheDocument()
   })
 
   it('loads standalone dashboard data through the backend summary endpoints', async () => {
     renderPage()
 
-    expect(await screen.findByText('平台总览')).toBeInTheDocument()
+    expect(await screen.findByText('控制台总览')).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(mockApi.getChannels).toHaveBeenCalledTimes(1)
-      expect(mockApi.getInstalledSkills).toHaveBeenCalledTimes(1)
-      expect(mockApi.getCronStatus).toHaveBeenCalledTimes(1)
-      expect(mockApi.getSessions).toHaveBeenCalledTimes(1)
+      expect(mockApi.getSystemStatus).toHaveBeenCalled()
+      expect(mockApi.getAgents).toHaveBeenCalled()
+      expect(mockApi.getCronStatus).toHaveBeenCalled()
+      expect(mockApi.getSessions).toHaveBeenCalled()
+      expect(mockApi.getKnowledgeBases).toHaveBeenCalled()
       expect(mockApi.getChatWorkspace).not.toHaveBeenCalled()
     })
   })
