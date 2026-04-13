@@ -36,3 +36,15 @@ web-ui/tmp-capture_ui_review.mjs
 web-ui/tmp_copy_avatars.py
 .DS_Store
 uv.lock
+
+# Agent workspace template copies (maintained in nanobot/templates/)
+/AGENTS.md
+/SOUL.md
+/USER.md
+/TOOLS.md
+/HEARTBEAT.md
+/memory/
+
+# IDE
+.trae/
+web-ui/.trae/
