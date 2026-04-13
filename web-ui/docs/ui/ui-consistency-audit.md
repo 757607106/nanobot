@@ -4,31 +4,31 @@
 
 | 文件 | 体积 |
 |---|---:|
-| vendor-eZTIO0Dl.js | 3.80 MB |
-| pkg-highlight.js-D7w-B5v9.js | 1.68 MB |
-| antd-CZBpgseB.js | 1.37 MB |
-| pkg-katex-CI6QwN2a.js | 508.8 KB |
-| pkg-antv-g6-GqqavU0D.js | 306.4 KB |
+| vendor-C7f6oGNY.js | 3.66 MB |
+| chunk-markdown-BBPfqN3K.js | 2.38 MB |
+| antd-y-c1aDfp.js | 1.37 MB |
+| chunk-graph-CQdp2uUk.js | 1.05 MB |
 | worker-B9qc9nkC.js | 303.5 KB |
-| pkg-antv-g-lite-Detss3Lo.js | 216.7 KB |
 | pkg-html2canvas-Bxw5drDI.js | 179.3 KB |
-| pkg-antv-component-CC2m-8p-.js | 153.2 KB |
 | react-core-DMX3MsSR.js | 140.7 KB |
-| pkg-markmap-html-parser-D4r4liOa.js | 114.3 KB |
 | pkg-yaml-RrwvUN8j.js | 95.9 KB |
-| pkg-antv-layout-BoCstAjP.js | 87.0 KB |
-| index-Bz8CkrER.js | 84.9 KB |
-| index-CkVsEAii.css | 80.3 KB |
-| pkg-ml-matrix-dYPophus.js | 66.2 KB |
-| index-DFGFCbOg.js | 51.4 KB |
-| pkg-markdown-it-Bw58a35I.js | 48.1 KB |
+| index-BCVnwG1J.js | 84.7 KB |
+| pkg-ml-matrix-CUTErpyz.js | 66.2 KB |
+| index-CtfJMTzN.js | 51.1 KB |
 | pkg-lodash-Cs9jqwOn.js | 45.9 KB |
-| index-DusCnS5J.js | 42.3 KB |
-| index-FwJfJ2vI.js | 39.8 KB |
-| pkg-antv-g-canvas-DArFp-zU.js | 37.5 KB |
-| pkg-antv-g-fl64iGll.js | 35.5 KB |
-| ChatPage-cOqYzLte.js | 35.2 KB |
-| index-DQzGf7h2.js | 30.8 KB |
+| index-Chfojq3Z.js | 42.0 KB |
+| index-BHpqTOrM.js | 39.8 KB |
+| ChatPage-Dy01wQuJ.js | 35.2 KB |
+| index-rn_y-Ss9.js | 30.8 KB |
+| pkg-dagre-B39qPlnq.js | 29.7 KB |
+| index-BOY6ZZjT.js | 25.2 KB |
+| index-CXZr_Tf9.js | 24.9 KB |
+| index-B8CU4x0r.css | 24.9 KB |
+| AutomationPage-IaeGHZll.js | 23.9 KB |
+| pkg-gl-matrix-DFc-l9Mq.js | 23.0 KB |
+| shared-runtime-NS7l3Vzw.js | 22.7 KB |
+| router-DfmdXw1s.js | 19.1 KB |
+| KnowledgeGraphTab-MnPiDsAg.js | 16.5 KB |
 
 - >500KB 文件数：4
 
