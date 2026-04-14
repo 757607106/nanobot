@@ -11,6 +11,7 @@ import httpx
 from nanobot.agent.loop import AgentLoop
 from nanobot.config.schema import Config, ModelBindingConfig, normalize_api_base_url
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
+from nanobot.platform.knowledge.store import create_knowledge_store
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.factory import make_provider_from_config
 from nanobot.providers.registry import PROVIDERS, find_by_name
@@ -103,13 +104,27 @@ class WebConfigRuntimeService:
 
     def update_config(self, payload: dict[str, Any]) -> dict[str, Any]:
         config = Config.model_validate(payload)
+        knowledge_store = None
+        rag_engine = None
+        if self.state.app_knowledge is not None:
+            knowledge_store = create_knowledge_store(config, self.state.instance)
+            try:
+                rag_engine = create_rag_engine_from_config(config, self.state.instance.data_dir)
+            except Exception:
+                close_store = getattr(knowledge_store, "close", None)
+                if callable(close_store):
+                    close_store()
+                raise
+
         self.state.instance.save_config(config)
         old_agent = self.state.agent
         if old_agent is not None:
             asyncio.run(old_agent.close_mcp())
         self.rebuild_runtime(config)
         if self.state.app_knowledge is not None:
-            rag_engine = create_rag_engine_from_config(config, self.state.instance.data_dir)
+            if knowledge_store is None:
+                raise RuntimeError("Knowledge store initialization failed.")
+            self.state.app_knowledge.set_store(knowledge_store)
             self.state.app_knowledge.set_rag_engine(rag_engine)
             self.state.app_knowledge.set_config(config)
         self.state.channel_runtime.restart()

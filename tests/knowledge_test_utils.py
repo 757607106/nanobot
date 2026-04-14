@@ -43,6 +43,9 @@ class FakeRAGEngine:
     async def health_check(self) -> bool:
         return True
 
+    def set_kb_runtime_resolver(self, _resolver) -> None:
+        return None
+
     # -- indexing (matches new RAGEngine.insert_text) -------------------------
 
     async def insert_text(
@@ -85,8 +88,10 @@ class FakeRAGEngine:
         only_need_context: bool = False,
         only_need_prompt: bool = False,
         enable_rerank: bool = False,
+        rerank_model: str | None = None,
+        extra_query_params: dict | None = None,
     ) -> dict:
-        del chunk_top_k, response_type, only_need_context, only_need_prompt, enable_rerank
+        del chunk_top_k, response_type, only_need_context, only_need_prompt, enable_rerank, rerank_model, extra_query_params
         query_tokens = _tokenize(query_text)
         results: list[dict] = []
 
@@ -170,7 +175,7 @@ class FakeRAGEngine:
             "nodes": nodes,
             "edges": edges,
             "labels": ["Document"] if nodes else [],
-            "isTruncated": False,
+            "is_truncated": False,
         }
 
     # -- document management --------------------------------------------------

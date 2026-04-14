@@ -1,5 +1,5 @@
 # Docker services for Nanobot knowledge base infrastructure
-# Neo4j (knowledge graph) + Milvus standalone (vector storage)
+# PostgreSQL (metadata + KV + doc status) + Neo4j (knowledge graph) + Milvus standalone (vector storage)
 #
 # Milvus standalone on Mac uses external etcd + minio (official architecture).
 # ARM64 native images are used (no Rosetta emulation needed).
@@ -8,6 +8,25 @@
 #   docker compose -f docker-compose.services.yml up -d
 
 services:
+  # ─── PostgreSQL (metadata + LightRAG KV/DocStatus) ────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nanobot-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: nanobot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nanobot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # ─── Neo4j (knowledge graph) ───────────────────────────────────────────────
   neo4j:
     image: neo4j:5-community
@@ -97,6 +116,7 @@ services:
       start_period: 60s
 
 volumes:
+  postgres_data:
   neo4j_data:
   neo4j_logs:
   etcd_data:

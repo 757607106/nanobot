@@ -42,8 +42,6 @@ export const testIds = {
     sessionSearch: 'chat-session-search',
     composer: 'chat-composer',
     bubbleList: 'chat-bubble-list',
-    fileInput: 'chat-file-input',
-    uploadFile: 'chat-upload-file',
     switchAgent: 'chat-switch-agent',
   },
   channels: {

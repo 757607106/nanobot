@@ -17,32 +17,6 @@ const heavyPackageNames = new Set([
   'ml-matrix',
   'yaml',
 ])
-const markdownPackages = new Set([
-  'react-markdown',
-  'remark-gfm',
-  'unified',
-  'devlop',
-  'hast-util-to-jsx-runtime',
-  'html-url-attributes',
-  'mdast-util-to-hast',
-  'remark-parse',
-  'remark-rehype',
-  'unist-util-visit',
-  'property-information',
-  'comma-separated-tokens',
-  'space-separated-tokens',
-  'decode-named-character-reference',
-  'highlight.js',
-  'katex',
-  'markdown-it',
-  'markdown-it-ins',
-  'markdown-it-mark',
-  'markdown-it-sub',
-  'markdown-it-sup',
-  'prismjs',
-  '@vscode/markdown-it-katex',
-])
-
 function getPackageName(id: string) {
   const normalized = id.replace(/\\/g, '/').split('?')[0]
   const nodeModulesPath = normalized.split('/node_modules/').pop()
@@ -83,10 +57,6 @@ function manualChunks(id: string) {
 
   if (sharedRuntimePackages.has(pkg)) {
     return 'shared-runtime'
-  }
-
-  if (markdownPackages.has(pkg)) {
-    return 'chunk-markdown'
   }
 
   if (

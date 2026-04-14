@@ -189,10 +189,10 @@ class KnowledgeEvaluationService:
         text: str,
     ) -> list[str]:
         params = {**(kb.additional_params or {}), **(file.processing_params or {})}
-        chunk_size = max(200, int(params.get("chunk_size") or params.get("chunkSize") or DEFAULT_KNOWLEDGE_CHUNK_SIZE))
-        chunk_overlap = max(0, int(params.get("chunk_overlap") or params.get("chunkOverlap") or DEFAULT_KNOWLEDGE_CHUNK_OVERLAP))
-        qa_separator = str(params.get("qa_separator") or params.get("qaSeparator") or "").strip()
-        chunk_preset_id = str(params.get("chunk_preset_id") or params.get("chunkPresetId") or "general").strip().lower()
+        chunk_size = max(200, int(params.get("chunk_size") or DEFAULT_KNOWLEDGE_CHUNK_SIZE))
+        chunk_overlap = max(0, int(params.get("chunk_overlap") or DEFAULT_KNOWLEDGE_CHUNK_OVERLAP))
+        qa_separator = str(params.get("qa_separator") or "").strip()
+        chunk_preset_id = str(params.get("chunk_preset_id") or "general").strip().lower()
         faq_items = file.processing_params.get("faqItems")
 
         chunk_texts: list[str] = []
@@ -242,7 +242,11 @@ class KnowledgeEvaluationService:
     def generate_mindmap(self, kb_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         kb = self.require_kb(kb_id)
         payload = payload or {}
-        file_ids = self._normalize_string_list(payload.get("fileIds"), field_name="fileIds") if isinstance(payload.get("fileIds"), list) else []
+        file_ids = (
+            self._normalize_string_list(payload.get("file_ids"), field_name="file_ids")
+            if isinstance(payload.get("file_ids"), list)
+            else []
+        )
         files = [item for item in self.store.list_files(kb_id) if not file_ids or item.file_id in set(file_ids)]
         fallback = self._build_mindmap_fallback(kb, files)
         outlines = [self._load_outline(item) for item in files if not item.is_folder][:12]
@@ -380,7 +384,7 @@ class KnowledgeEvaluationService:
             return {"labels": []}
         return {"labels": labels}
 
-    _EMPTY_GRAPH: dict[str, Any] = {"nodes": [], "edges": [], "labels": [], "isTruncated": False}
+    _EMPTY_GRAPH: dict[str, Any] = {"nodes": [], "edges": [], "labels": [], "is_truncated": False}
 
     def get_graph(self, kb_id: str, *, node_label: str = "*", max_depth: int = 2, max_nodes: int = 50) -> dict[str, Any]:
         self.require_kb(kb_id)
@@ -403,10 +407,10 @@ class KnowledgeEvaluationService:
     def get_graph_stats(self, kb_id: str) -> dict[str, Any]:
         graph = self.get_graph(kb_id, node_label="*", max_depth=2, max_nodes=200)
         return {
-            "nodeCount": len(graph.get("nodes") or []),
-            "edgeCount": len(graph.get("edges") or []),
+            "node_count": len(graph.get("nodes") or []),
+            "edge_count": len(graph.get("edges") or []),
             "labels": list(graph.get("labels") or []),
-            "isTruncated": bool(graph.get("isTruncated")),
+            "is_truncated": bool(graph.get("is_truncated")),
         }
 
     # ── Benchmarks ─────────────────────────────────────────────────────────
@@ -672,8 +676,8 @@ class KnowledgeEvaluationService:
         task_id = short_id("eval")
         retrieval_config = {
             **kb.query_params.to_dict(),
-            "onlyNeedContext": False,
-            "onlyNeedPrompt": False,
+            "only_need_context": False,
+            "only_need_prompt": False,
         }
         result = {
             "taskId": task_id,

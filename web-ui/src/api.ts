@@ -609,9 +609,9 @@ export const api = {
       method: 'DELETE',
     }),
   deleteKnowledgeFiles: (kbId: string, fileIds: string[]) =>
-    request<{ deletedCount: number; fileIds: string[] }>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/delete`, {
+    request<{ deleted_count: number; file_ids: string[] }>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/delete`, {
       method: 'POST',
-      body: JSON.stringify({ fileIds }),
+      body: JSON.stringify({ file_ids: fileIds }),
     }),
   getKnowledgeJobs: (kbId: string) =>
     request<KnowledgeIngestJob[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/jobs`),
@@ -648,7 +648,7 @@ export const api = {
       `/knowledge-bases/${encodeURIComponent(kbId)}/files/parse`,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ file_ids: payload.fileIds }),
       },
     ),
   indexKnowledgeFiles: (
@@ -656,10 +656,10 @@ export const api = {
     payload: {
       fileIds: string[]
       params?: {
-        chunkSize?: number
-        chunkOverlap?: number
-        chunkPresetId?: string
-        qaSeparator?: string
+        chunk_size?: number
+        chunk_overlap?: number
+        chunk_preset_id?: string
+        qa_separator?: string
       }
     },
   ) =>
@@ -667,15 +667,10 @@ export const api = {
       `/knowledge-bases/${encodeURIComponent(kbId)}/files/index`,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
-      },
-    ),
-  reindexKnowledgeBase: (kbId: string, payload?: { docIds?: string[] }) =>
-    request<{ job: KnowledgeIngestJob; items: KnowledgeDocument[] }>(
-      `/knowledge-bases/${encodeURIComponent(kbId)}/reindex`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ docIds: payload?.docIds ?? [] }),
+        body: JSON.stringify({
+          file_ids: payload.fileIds,
+          params: payload.params ?? {},
+        }),
       },
     ),
   getKnowledgeQueryParams: (kbId: string) =>
@@ -692,10 +687,10 @@ export const api = {
     payload: Record<string, unknown> & {
       query: string
       mode?: string
-      topK?: number
-      chunkTopK?: number
-      fileIds?: string[]
-      fileName?: string
+      top_k?: number
+      chunk_top_k?: number
+      file_ids?: string[]
+      file_name?: string
     },
   ) =>
     request<KnowledgeRetrieveResult>(`/knowledge-bases/${encodeURIComponent(kbId)}/query`, {
@@ -707,10 +702,10 @@ export const api = {
     payload: Record<string, unknown> & {
       query: string
       mode?: string
-      topK?: number
-      chunkTopK?: number
-      fileIds?: string[]
-      fileName?: string
+      top_k?: number
+      chunk_top_k?: number
+      file_ids?: string[]
+      file_name?: string
     },
   ) =>
     request<KnowledgeRetrieveResult>(`/knowledge-bases/${encodeURIComponent(kbId)}/query`, {

@@ -581,7 +581,7 @@ class DocumentPipeline:
         self.require_kb(kb_id)
         files = self.store.list_files(kb_id)
         if file_ids:
-            wanted = set(normalize_string_list(file_ids, field_name="fileIds"))
+            wanted = set(normalize_string_list(file_ids, field_name="file_ids"))
             selected = [item for item in files if item.file_id in wanted and not item.is_folder]
         else:
             selected = [item for item in files if not item.is_folder]
@@ -628,10 +628,9 @@ class DocumentPipeline:
     def _extract_requested_file_ids(payload: dict[str, Any] | None) -> list[str] | None:
         if not isinstance(payload, dict):
             return None
-        for key in ("fileIds", "file_ids", "docIds", "doc_ids"):
-            value = payload.get(key)
-            if isinstance(value, list):
-                return normalize_string_list(value, field_name=key)
+        value = payload.get("file_ids")
+        if isinstance(value, list):
+            return normalize_string_list(value, field_name="file_ids")
         return None
 
     @staticmethod
@@ -639,28 +638,27 @@ class DocumentPipeline:
         if not isinstance(payload, dict):
             return {}
         normalized: dict[str, Any] = {}
-        raw_chunk_size = payload.get("chunk_size") if "chunk_size" in payload else payload.get("chunkSize")
+        raw_chunk_size = payload.get("chunk_size")
         if raw_chunk_size is not None:
             normalized["chunk_size"] = max(200, int(raw_chunk_size))
-        raw_chunk_overlap = payload.get("chunk_overlap") if "chunk_overlap" in payload else payload.get("chunkOverlap")
+        raw_chunk_overlap = payload.get("chunk_overlap")
         if raw_chunk_overlap is not None:
             overlap = max(0, int(raw_chunk_overlap))
             chunk_size = int(
                 normalized.get("chunk_size")
                 or payload.get("chunk_size")
-                or payload.get("chunkSize")
                 or DEFAULT_KNOWLEDGE_CHUNK_SIZE
             )
             normalized["chunk_overlap"] = min(overlap, max(0, chunk_size - 1))
         chunk_preset = normalize_text(
-            payload.get("chunk_preset_id") if "chunk_preset_id" in payload else payload.get("chunkPresetId"),
-            field_name="chunkPresetId",
+            payload.get("chunk_preset_id"),
+            field_name="chunk_preset_id",
         )
         if chunk_preset:
             normalized["chunk_preset_id"] = chunk_preset
         qa_separator = normalize_text(
-            payload.get("qa_separator") if "qa_separator" in payload else payload.get("qaSeparator"),
-            field_name="qaSeparator",
+            payload.get("qa_separator"),
+            field_name="qa_separator",
         )
         if qa_separator:
             normalized["qa_separator"] = qa_separator
@@ -672,7 +670,7 @@ class DocumentPipeline:
         self.require_kb(kb_id)
         requested_file_ids = self._extract_requested_file_ids(payload)
         if not requested_file_ids:
-            raise KnowledgeBaseValidationError("fileIds is required for parse operations.")
+            raise KnowledgeBaseValidationError("file_ids is required for parse operations.")
         selected = self._select_target_files(kb_id, requested_file_ids)
         job = self._create_job(kb_id, "parse", [item.file_id for item in selected])
         self._submit_background_job(self.run_parse_job, job.job_id)
@@ -685,7 +683,7 @@ class DocumentPipeline:
         self.require_kb(kb_id)
         requested_file_ids = self._extract_requested_file_ids(payload)
         if not requested_file_ids:
-            raise KnowledgeBaseValidationError("fileIds is required for index operations.")
+            raise KnowledgeBaseValidationError("file_ids is required for index operations.")
         selected = self._select_target_files(kb_id, requested_file_ids)
         index_params = self._normalize_index_params(payload.get("params"))
         if index_params:
@@ -730,8 +728,7 @@ class DocumentPipeline:
                 raise KnowledgeBaseValidationError("No uploaded items matched the requested ingest payload.")
 
         parent_id = (
-            normalize_text(params.get("parentId"), field_name="parentId")
-            or normalize_text(params.get("parent_id"), field_name="parent_id")
+            normalize_text(params.get("parent_id"), field_name="parent_id")
             or None
         )
         if parent_id:
@@ -741,7 +738,7 @@ class DocumentPipeline:
                     kb_id,
                     {
                         "fileId": item.file_id,
-                        "parentId": parent_id,
+                        "targetParentId": parent_id,
                     },
                 )
                 refreshed.append(self._require_file(kb_id, str(moved.get("fileId") or item.file_id)))
@@ -751,7 +748,7 @@ class DocumentPipeline:
         self._store_job_options(
             job.job_id,
             {
-                "auto_index": bool(params.get("auto_index") or params.get("autoIndex")),
+                "auto_index": bool(params.get("auto_index")),
                 "index_params": params,
             },
         )

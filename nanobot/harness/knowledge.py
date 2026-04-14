@@ -326,7 +326,7 @@ class KnowledgeBindingMiddleware:
             else list(base_tool_allowlist or [])
         )
 
-        knowledge_result: dict[str, Any] = {"hits": [], "requestedMode": "naive", "effectiveMode": "naive"}
+        knowledge_result: dict[str, Any] = {"hits": [], "requestedMode": "auto", "effectiveMode": "mixed"}
         prompt_sections: list[str] = []
         if binding_context is not None and binding_context.has_bindings:
             prompt_sections.append(build_knowledge_policy_block())
@@ -335,7 +335,7 @@ class KnowledgeBindingMiddleware:
                 kb_ids=list(binding_context.bound_kb_ids),
                 query=str(task or ""),
                 limit=6,
-                requested_mode="naive",
+                requested_mode=None,
             )
 
         knowledge_hits = list(knowledge_result.get("hits") or [])

@@ -19,7 +19,7 @@ from nanobot.platform.knowledge.service import (
     KnowledgeSourceNotFoundError,
     KnowledgeBaseValidationError,
 )
-from nanobot.platform.knowledge.store import KnowledgeBaseStore
+from nanobot.platform.knowledge.store import KnowledgeBaseStore, create_knowledge_store
 
 __all__ = [
     "KnowledgeBaseConflictError",
@@ -38,4 +38,5 @@ __all__ = [
     "KnowledgeRetrievalProfile",
     "KnowledgeSource",
     "KnowledgeSourceNotFoundError",
+    "create_knowledge_store",
 ]

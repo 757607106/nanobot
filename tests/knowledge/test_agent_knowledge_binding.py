@@ -33,7 +33,7 @@ class _FakeKnowledgeService:
         assert kb_ids == ["kb-ops"]
         assert "restart" in query.lower()
         assert limit == 6
-        assert requested_mode == "naive"
+        assert requested_mode is None
         self.retrieve_calls.append(
             {
                 "kb_ids": kb_ids,
@@ -53,8 +53,8 @@ class _FakeKnowledgeService:
                     },
                 }
             ],
-            "requestedMode": "naive",
-            "effectiveMode": "naive",
+            "requestedMode": "auto",
+            "effectiveMode": "mix",
         }
 
     def query_kb_for_agent(
@@ -90,14 +90,14 @@ def test_knowledge_binding_middleware_builds_tools_prompt_and_allowlist() -> Non
     assert [tool.name for tool in result.extra_tools] == ["list_kbs", "get_mindmap", "query_kb"]
     assert result.effective_tool_allowlist == ["read_file", "list_kbs", "get_mindmap", "query_kb"]
     assert result.event_payload["knowledgeNames"] == ["Ops KB"]
-    assert result.event_payload["requestedMode"] == "naive"
+    assert result.event_payload["requestedMode"] == "auto"
     assert result.event_payload["hitCount"] == 1
     assert len(result.knowledge_hits) == 1
     assert result.prompt_sections
     assert "# Knowledge Policy" in result.prompt_sections[0]
     assert "# Retrieved Knowledge" in result.prompt_sections[1]
     assert "runbook.md" in result.prompt_sections[1]
-    assert knowledge_service.retrieve_calls[0]["requested_mode"] == "naive"
+    assert knowledge_service.retrieve_calls[0]["requested_mode"] is None
 
 
 @pytest.mark.asyncio

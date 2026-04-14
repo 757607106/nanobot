@@ -245,52 +245,12 @@ class KnowledgeLLMHelper:
         """Build a disposable provider instance from the global config."""
         if self.config is None:
             return None
-        from nanobot.providers.base import GenerationSettings
-        from nanobot.providers.openai_compat_provider import OpenAICompatProvider
-        from nanobot.providers.litellm_provider import LiteLLMProvider
-        from nanobot.providers.openai_codex_provider import OpenAICodexProvider
+        from nanobot.providers.factory import make_provider_from_config
 
-        model = self.config.agents.defaults.model
-        provider_name = self.config.get_provider_name(model)
-        provider_cfg = self.config.get_provider(model)
-
-        if provider_name == "openai_codex" or model.startswith("openai-codex/"):
-            provider = OpenAICodexProvider(default_model=model)
-        elif provider_name == "custom":
-            provider = OpenAICompatProvider(
-                api_key=(provider_cfg.api_key if provider_cfg and provider_cfg.api_key else "no-key"),
-                api_base=self.config.get_api_base(model) or "http://localhost:8000/v1",
-                default_model=model,
-            )
-        elif provider_name == "azure_openai":
-            if provider_cfg and provider_cfg.api_key and provider_cfg.api_base:
-                from nanobot.providers.azure_openai_provider import AzureOpenAIProvider
-
-                provider = AzureOpenAIProvider(
-                    api_key=provider_cfg.api_key,
-                    api_base=provider_cfg.api_base,
-                    default_model=model,
-                )
-            else:
-                provider = LiteLLMProvider(
-                    api_key=None,
-                    api_base=None,
-                    default_model=model,
-                    provider_name=provider_name,
-                )
-        else:
-            provider = LiteLLMProvider(
-                api_key=provider_cfg.api_key if provider_cfg and provider_cfg.api_key else None,
-                api_base=self.config.get_api_base(model),
-                default_model=model,
-                extra_headers=provider_cfg.extra_headers if provider_cfg else None,
-                provider_name=provider_name,
-            )
-
-        defaults = self.config.agents.defaults
-        provider.generation = GenerationSettings(
+        provider = make_provider_from_config(
+            self.config,
             temperature=0.2,
-            max_tokens=min(defaults.max_tokens, 2000),
-            reasoning_effort=defaults.reasoning_effort,
+            max_tokens=min(self.config.agents.defaults.max_tokens, 2000),
         )
         return provider
+

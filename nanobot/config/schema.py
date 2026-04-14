@@ -355,17 +355,33 @@ class RagGraphStoreConfig(Base):
     database: str = "neo4j"
 
 
-class RAGConfig(Base):
-    """RAG engine configuration — embeds LightRAG Core for GraphRAG.
+class RagPostgresConfig(Base):
+    """PostgreSQL settings shared by LightRAG KV/DocStatus and KB metadata store."""
 
-    LLM and Embedding models are injected from nanobot's modelBindings.
-    Storage backends (Neo4j for graph, Milvus for vectors) run as Docker
-    services configured here.
+    enabled: bool = True
+    host: str = "127.0.0.1"
+    port: int = 5432
+    user: str = "postgres"
+    password: str = "postgres"
+    database: str = "nanobot"
+    max_connections: int = 50
+    ssl_mode: str | None = None
+    ssl_cert: str | None = None
+    ssl_key: str | None = None
+    ssl_root_cert: str | None = None
+    ssl_crl: str | None = None
+
+
+class RAGConfig(Base):
+    """RAG integration configuration.
+
+    Nanobot uses embedded LightRAG Core (Python API) and RAG-Anything runtime.
     """
 
     # Model bindings (reference keys from Config.model_bindings)
     llm_binding: str | None = None       # LLM for indexing + query; None = use default agent binding
     embedding_binding: str | None = None  # Embedding model; None = auto-detect from bindings
+    rerank_binding: str | None = None  # Rerank model; None = disable by default unless KB-level override is set
 
     # Timeouts
     llm_timeout: int = 180       # seconds per LightRAG LLM/VLM request
@@ -377,13 +393,25 @@ class RAGConfig(Base):
     embedding_func_max_async: int = 4   # EMBEDDING_FUNC_MAX_ASYNC — concurrent embedding requests (keep low to avoid provider rate limits)
 
     # LightRAG chunking & batching
-    chunk_token_size: int = 2400        # Tokens per chunk — larger = fewer chunks = fewer LLM calls (default 1200 in LightRAG)
+    chunk_token_size: int = 1200        # Tokens per chunk — larger = fewer chunks = fewer LLM calls (default 1200 in LightRAG)
     chunk_overlap_token_size: int = 100 # Overlap tokens between chunks for context preservation
-    embedding_batch_num: int = 32       # Texts per embedding API call — larger = fewer requests = less rate limiting
+    embedding_batch_num: int = 10       # Texts per embedding API call — keep ≤10 for DashScope/Volcengine compatibility
+
+    # Runtime cache / memory tuning
+    max_cached_instances: int = 5
+    enable_llm_cache: bool = True
+    enable_llm_cache_for_entity_extract: bool = True
+    embedding_cache_enabled: bool = False
+    embedding_cache_similarity_threshold: float = 0.95
+    embedding_cache_use_llm_check: bool = False
+
+    # Rerank tuning
+    min_rerank_score: float = 0.0
 
     # Storage backends
     milvus: RagMilvusConfig = Field(default_factory=RagMilvusConfig)
     graph_store: RagGraphStoreConfig = Field(default_factory=RagGraphStoreConfig)
+    postgres: RagPostgresConfig = Field(default_factory=RagPostgresConfig)
 
 # Multimodal model keywords used by capability type inference (module-level to
 # avoid Pydantic treating it as a ModelPrivateAttr inside the Config class).

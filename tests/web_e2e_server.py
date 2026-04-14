@@ -226,13 +226,18 @@ def _patch_runtime(app) -> None:
         *,
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        on_stream=None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
+        del reasoning_effort
         session = state.sessions.get_or_create(state._session_key(session_id))
         if not session.metadata.get("title"):
             session.metadata["title"] = state._default_title(display_content or content)
         session.add_message("user", display_content or content, attachments=attachments or [])
         await on_progress("正在读取 E2E 固定回复")
         reply = f"E2E mock 已收到：{content}"
+        if on_stream is not None:
+            await on_stream(reply)
         session.add_message("assistant", reply)
         state.sessions.save(session)
         return {
@@ -249,7 +254,10 @@ def _patch_runtime(app) -> None:
         tenant_id: str | None = None,
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        on_stream=None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
+        del reasoning_effort
         session_key = state.agent_chat_runtime.session_key(agent_id, session_id)
         session = state.sessions.get_or_create(session_key)
         if not session.metadata.get("title"):
@@ -258,6 +266,8 @@ def _patch_runtime(app) -> None:
         session.add_message("user", display_content or content, attachments=attachments or [])
         await on_progress("正在读取 E2E 固定回复")
         reply = f"E2E mock 已收到：{content}"
+        if on_stream is not None:
+            await on_stream(reply)
         session.add_message("assistant", reply)
         state.sessions.save(session)
         assistant_message = state.get_last_agent_assistant_message(agent_id, session_id, tenant_id=tenant_id)

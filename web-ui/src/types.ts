@@ -620,13 +620,13 @@ export interface MemorySourceDetail {
 
 export interface KnowledgeQueryParams {
   mode: 'local' | 'global' | 'hybrid' | 'naive' | 'mix' | string
-  topK: number
-  chunkTopK: number
-  responseType: string
-  onlyNeedContext: boolean
-  onlyNeedPrompt: boolean
-  enableRerank: boolean
-  rerankModel?: string | null
+  top_k: number
+  chunk_top_k: number
+  response_type: string
+  only_need_context: boolean
+  only_need_prompt: boolean
+  enable_rerank: boolean
+  rerank_model?: string | null
   options: Record<string, unknown>
 }
 
@@ -678,8 +678,7 @@ export interface KnowledgeBaseDefinition {
   kbType: 'lightrag'
   embedInfo: Record<string, unknown>
   llmInfo: Record<string, unknown>
-  queryParams: KnowledgeQueryParams
-  retrievalProfile: KnowledgeQueryParams
+  query_params: KnowledgeQueryParams
   additionalParams: Record<string, unknown>
   shareConfig: Record<string, unknown>
   mindmap?: KnowledgeMindmapNode | null
@@ -697,7 +696,7 @@ export interface KnowledgeBaseMutationInput {
   kbType?: 'lightrag'
   embedInfo?: Record<string, unknown>
   llmInfo?: Record<string, unknown>
-  queryParams?: Partial<KnowledgeQueryParams>
+  query_params?: Partial<KnowledgeQueryParams>
   additionalParams?: Record<string, unknown>
   shareConfig?: Record<string, unknown>
   tags?: string[]
@@ -849,7 +848,7 @@ export interface KnowledgeQueryResult {
     [key: string]: unknown
   }
   metadata?: Record<string, unknown>
-  queryParams?: KnowledgeQueryParams
+  query_params?: KnowledgeQueryParams
 }
 
 export type KnowledgeRetrieveResult = KnowledgeQueryResult
@@ -873,14 +872,14 @@ export interface KnowledgeGraphData {
   nodes: KnowledgeGraphNode[]
   edges: KnowledgeGraphEdge[]
   labels: string[]
-  isTruncated?: boolean
+  is_truncated?: boolean
 }
 
 export interface KnowledgeGraphStats {
-  nodeCount: number
-  edgeCount: number
+  node_count: number
+  edge_count: number
   labels: string[]
-  isTruncated: boolean
+  is_truncated: boolean
 }
 
 export interface KnowledgeBenchmarkQuestion {

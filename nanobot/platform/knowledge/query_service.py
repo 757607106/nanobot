@@ -326,7 +326,7 @@ class KnowledgeQueryService:
                     ],
                 },
                 {
-                    "key": "topK",
+                    "key": "top_k",
                     "label": "TopK",
                     "type": "number",
                     "default": 10,
@@ -334,7 +334,7 @@ class KnowledgeQueryService:
                     "max": 100,
                 },
                 {
-                    "key": "chunkTopK",
+                    "key": "chunk_top_k",
                     "label": "Chunk TopK",
                     "type": "number",
                     "default": 12,
@@ -342,7 +342,7 @@ class KnowledgeQueryService:
                     "max": 100,
                 },
                 {
-                    "key": "responseType",
+                    "key": "response_type",
                     "label": "回答格式",
                     "type": "select",
                     "default": "Multiple Paragraphs",
@@ -353,19 +353,19 @@ class KnowledgeQueryService:
                     ],
                 },
                 {
-                    "key": "onlyNeedContext",
+                    "key": "only_need_context",
                     "label": "只返回上下文",
                     "type": "boolean",
                     "default": True,
                 },
                 {
-                    "key": "onlyNeedPrompt",
+                    "key": "only_need_prompt",
                     "label": "只返回提示词",
                     "type": "boolean",
                     "default": False,
                 },
                 {
-                    "key": "enableRerank",
+                    "key": "enable_rerank",
                     "label": "启用重排",
                     "type": "boolean",
                     "default": False,
@@ -387,19 +387,12 @@ class KnowledgeQueryService:
                 continue
             if key in {
                 "mode",
-                "topK",
                 "top_k",
-                "chunkTopK",
                 "chunk_top_k",
-                "responseType",
                 "response_type",
-                "onlyNeedContext",
                 "only_need_context",
-                "onlyNeedPrompt",
                 "only_need_prompt",
-                "enableRerank",
                 "enable_rerank",
-                "rerankModel",
                 "rerank_model",
             }:
                 merged_payload[key] = value
@@ -433,14 +426,14 @@ class KnowledgeQueryService:
             except (TypeError, ValueError):
                 query_timeout = None
         query_text = normalize_text(
-            merged_payload.get("query") or merged_payload.get("queryText"),
+            merged_payload.get("query"),
             required=True,
             field_name="query",
         )
         file_ids = self._extract_requested_file_ids(merged_payload) or []
         file_name = normalize_text(
-            merged_payload.get("fileName") or merged_payload.get("file_name"),
-            field_name="fileName",
+            merged_payload.get("file_name"),
+            field_name="file_name",
         ) or None
         params = KnowledgeQueryParams.from_dict(
             {
@@ -465,6 +458,8 @@ class KnowledgeQueryService:
                 only_need_context=params.only_need_context,
                 only_need_prompt=params.only_need_prompt,
                 enable_rerank=params.enable_rerank,
+                rerank_model=params.rerank_model,
+                extra_query_params=params.options,
             ),
             timeout=query_timeout,
         )
@@ -472,18 +467,18 @@ class KnowledgeQueryService:
         # Extract structured data
         lr_data = lightrag_result.get("data") or {}
         chunks = list(lr_data.get("chunks") or [])
-        references_map: dict[str, dict[str, Any]] = {}
-        for ref in lr_data.get("references") or []:
-            ref_id = str(ref.get("reference_id") or "")
-            if ref_id:
-                references_map[ref_id] = ref
+        references = list(lr_data.get("references") or [])
+        entities = list(lr_data.get("entities") or [])
+        relationships = list(lr_data.get("relationships") or [])
 
         # Enrich and filter
         tokens = self._matching_file_tokens(kb_id, file_ids=file_ids or None, file_name=file_name)
         raw = {
             "data": {
                 "chunks": chunks,
-                "references": list(references_map.values()),
+                "references": references,
+                "entities": entities,
+                "relationships": relationships,
             },
             "message": str(lightrag_result.get("message") or ""),
         }
@@ -491,6 +486,12 @@ class KnowledgeQueryService:
         data = dict(filtered.get("data") or {})
         enriched_chunks = self._enrich_query_chunks(kb_id, list(data.get("chunks") or []))
         data["chunks"] = enriched_chunks
+        references_map: dict[str, dict[str, Any]] = {}
+        for ref in list(data.get("references") or []):
+            ref_id = str(ref.get("reference_id") or "").strip()
+            if ref_id:
+                references_map[ref_id] = ref
+
         # Re-build references from enriched chunks
         for chunk in enriched_chunks:
             reference_id = str(chunk.get("reference_id") or chunk.get("file_id") or chunk.get("chunk_id") or "").strip()
@@ -505,6 +506,8 @@ class KnowledgeQueryService:
                 },
             )
         data["references"] = list(references_map.values())
+        data["entities"] = list(data.get("entities") or [])
+        data["relationships"] = list(data.get("relationships") or [])
         filtered["data"] = data
         if (
             not self._has_meaningful_query_message(filtered.get("message"))
@@ -519,7 +522,7 @@ class KnowledgeQueryService:
         metadata["graphEnhanced"] = True
         filtered["metadata"] = metadata
         filtered["query"] = query_text
-        filtered["queryParams"] = params.to_dict()
+        filtered["query_params"] = params.to_dict()
         return filtered
 
     def retrieve(
@@ -561,8 +564,8 @@ class KnowledgeQueryService:
                     {
                         "query": query,
                         "mode": resolved_mode,
-                        "topK": max(1, int(limit or 8)),
-                        "onlyNeedContext": True,
+                        "top_k": max(1, int(limit or 8)),
+                        "only_need_context": True,
                         _BEST_EFFORT_QUERY_TIMEOUT_KEY: self._best_effort_retrieve_timeout_seconds,
                     },
                 )
@@ -624,13 +627,15 @@ class KnowledgeQueryService:
         file_name: str | None = None,
         limit: int = 6,
     ) -> dict[str, Any]:
+        kb = self.require_kb(kb_id)
+        resolved_mode = str(kb.query_params.mode or "mix").strip() or "mix"
         payload: dict[str, Any] = {
             "query": query_text,
-            "topK": limit,
-            "chunkTopK": max(12, limit),
-            "mode": "naive",
-            "onlyNeedContext": True,
+            "top_k": limit,
+            "chunk_top_k": max(12, limit),
+            "mode": resolved_mode,
+            "only_need_context": True,
         }
         if file_name:
-            payload["fileName"] = file_name
+            payload["file_name"] = file_name
         return self.query_database(kb_id, payload)

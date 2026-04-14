@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from nanobot.config.schema import Config
 from nanobot.platform.instances import PlatformInstance
-from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore, KnowledgeBaseValidationError
+from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseValidationError, create_knowledge_store
 from tests.knowledge_test_utils import FakeRAGEngine
 
 
@@ -28,11 +29,16 @@ class _LlmErrorMessageRAGEngine(FakeRAGEngine):
 
 
 def _make_instance(tmp_path: Path) -> PlatformInstance:
+    unique_id = f"instance-{tmp_path.parent.name}-{tmp_path.name}"
     return PlatformInstance(
-        id="instance-test",
+        id=unique_id,
         label="Test Instance",
         config_path=tmp_path / "instance" / "config.json",
     )
+
+
+def _make_store(instance: PlatformInstance):
+    return create_knowledge_store(Config(), instance)
 
 
 def _wait_for_job(service: KnowledgeBaseService, kb_id: str, job_id: str) -> dict[str, object]:
@@ -58,7 +64,7 @@ def _wait_for_evaluation(service: KnowledgeBaseService, kb_id: str, task_id: str
 def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=FakeRAGEngine(),
@@ -76,9 +82,9 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
     kb_id = created["kbId"]
     schema = service.get_query_param_schema(kb_id)
     assert schema["type"] == "lightrag"
-    assert any(item["key"] == "chunkTopK" for item in schema["options"])
+    assert any(item["key"] == "chunk_top_k" for item in schema["options"])
     assert created["kbType"] == "lightrag"
-    assert created["queryParams"]["mode"] == "mix"
+    assert created["query_params"]["mode"] == "mix"
 
     uploaded = service.upload_files(
         kb_id,
@@ -101,11 +107,11 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
     with pytest.raises(KnowledgeBaseValidationError):
         service.index_files(kb_id, {})
 
-    parse_result = service.parse_files(kb_id, {"fileIds": [file_id]})
+    parse_result = service.parse_files(kb_id, {"file_ids": [file_id]})
     parse_job = _wait_for_job(service, kb_id, parse_result["job"]["jobId"])
     assert parse_job["status"] == "succeeded"
 
-    index_result = service.index_files(kb_id, {"fileIds": [file_id]})
+    index_result = service.index_files(kb_id, {"file_ids": [file_id]})
     index_job = _wait_for_job(service, kb_id, index_result["job"]["jobId"])
     assert index_job["status"] == "succeeded"
     indexed_file = next(item for item in service.list_files(kb_id)["items"] if item["fileId"] == file_id)
@@ -119,8 +125,8 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
         {
             "query": "How do we restart the worker and handle the token cache?",
             "mode": "mix",
-            "topK": 4,
-            "onlyNeedContext": False,
+            "top_k": 4,
+            "only_need_context": False,
         },
     )
     assert queried["metadata"]["kbType"] == "lightrag"
@@ -144,9 +150,9 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
             ],
         },
     )
-    faq_parse_job = service.parse_files(kb_id, {"fileIds": [faq_file["fileId"]]})["job"]["jobId"]
+    faq_parse_job = service.parse_files(kb_id, {"file_ids": [faq_file["fileId"]]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, faq_parse_job)["status"] == "succeeded"
-    faq_index_job = service.index_files(kb_id, {"fileIds": [faq_file["fileId"]]})["job"]["jobId"]
+    faq_index_job = service.index_files(kb_id, {"file_ids": [faq_file["fileId"]]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, faq_index_job)["status"] == "succeeded"
 
     faq_query = service.query_database(kb_id, {"query": "How do we clear the token cache?"})
@@ -168,16 +174,16 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
         ],
     )
     qa_file_id = qa_upload["items"][0]["fileId"]
-    qa_parse_job = service.parse_files(kb_id, {"fileIds": [qa_file_id]})["job"]["jobId"]
+    qa_parse_job = service.parse_files(kb_id, {"file_ids": [qa_file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, qa_parse_job)["status"] == "succeeded"
     qa_index_job = service.index_files(
         kb_id,
         {
-            "fileIds": [qa_file_id],
+            "file_ids": [qa_file_id],
             "params": {
-                "chunkPresetId": "qa",
-                "chunkSize": 400,
-                "chunkOverlap": 50,
+                "chunk_preset_id": "qa",
+                "chunk_size": 400,
+                "chunk_overlap": 50,
             },
         },
     )["job"]["jobId"]
@@ -197,13 +203,13 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
     updated_query_params = service.update_query_params(
         kb_id,
         {
-            "chunkTopK": 8,
-            "enableRerank": True,
+            "chunk_top_k": 8,
+            "enable_rerank": True,
         },
     )
     assert updated_query_params["mode"] == "mix"
-    assert updated_query_params["chunkTopK"] == 8
-    assert updated_query_params["enableRerank"] is True
+    assert updated_query_params["chunk_top_k"] == 8
+    assert updated_query_params["enable_rerank"] is True
 
     description = service.generate_description({"name": "Ops Milvus KB", "fileList": ["/runbook.md", "/faq.md"]})
     assert description["description"]
@@ -225,7 +231,7 @@ def test_milvus_workspace_supports_index_query_benchmark_and_evaluation(tmp_path
 def test_evaluation_uses_saved_retrieval_config_snapshot(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=FakeRAGEngine(),
@@ -284,14 +290,14 @@ def test_evaluation_uses_saved_retrieval_config_snapshot(tmp_path: Path) -> None
             "completed_questions": 0,
             "retrievalConfig": {
                 "mode": "keyword",
-                "topK": 2,
+                "top_k": 2,
                 "options": {
                     "legacy_search_mode": "keyword",
                 },
             },
             "retrieval_config": {
                 "mode": "keyword",
-                "topK": 2,
+                "top_k": 2,
                 "options": {
                     "legacy_search_mode": "keyword",
                 },
@@ -312,13 +318,13 @@ def test_evaluation_uses_saved_retrieval_config_snapshot(tmp_path: Path) -> None
     assert captured_payloads
     assert captured_payloads[0]["query"] == "How do we restart the worker?"
     assert captured_payloads[0]["mode"] == "keyword"
-    assert captured_payloads[0]["topK"] == 2
+    assert captured_payloads[0]["top_k"] == 2
 
 
 def test_query_database_replaces_generic_success_message_with_grounded_answer(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=_GenericMessageRAGEngine(),
@@ -341,17 +347,17 @@ def test_query_database_replaces_generic_success_message_with_grounded_answer(tm
     )
     file_id = uploaded["items"][0]["fileId"]
 
-    parse_job_id = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    parse_job_id = service.parse_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, parse_job_id)["status"] == "succeeded"
-    index_job_id = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    index_job_id = service.index_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, index_job_id)["status"] == "succeeded"
 
     result = service.query_database(
         kb_id,
         {
             "query": "How do we restart nanobot?",
-            "onlyNeedContext": False,
-            "onlyNeedPrompt": False,
+            "only_need_context": False,
+            "only_need_prompt": False,
         },
     )
 
@@ -362,7 +368,7 @@ def test_query_database_replaces_generic_success_message_with_grounded_answer(tm
 def test_query_database_replaces_llm_error_message_with_grounded_answer(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=_LlmErrorMessageRAGEngine(),
@@ -385,17 +391,17 @@ def test_query_database_replaces_llm_error_message_with_grounded_answer(tmp_path
     )
     file_id = uploaded["items"][0]["fileId"]
 
-    parse_job_id = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    parse_job_id = service.parse_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, parse_job_id)["status"] == "succeeded"
-    index_job_id = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    index_job_id = service.index_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, index_job_id)["status"] == "succeeded"
 
     result = service.query_database(
         kb_id,
         {
             "query": "How do we clear the cache?",
-            "onlyNeedContext": False,
-            "onlyNeedPrompt": False,
+            "only_need_context": False,
+            "only_need_prompt": False,
         },
     )
 

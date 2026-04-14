@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 import time
 from pathlib import Path
 
@@ -11,18 +10,23 @@ from nanobot.config.schema import Config
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge import (
     KnowledgeBaseService,
-    KnowledgeBaseStore,
     KnowledgeBaseValidationError,
+    create_knowledge_store,
 )
 from tests.knowledge_test_utils import FakeRAGEngine
 
 
 def _make_instance(tmp_path: Path) -> PlatformInstance:
+    unique_id = f"instance-{tmp_path.parent.name}-{tmp_path.name}"
     return PlatformInstance(
-        id="instance-test",
+        id=unique_id,
         label="Test Instance",
         config_path=tmp_path / "instance" / "config.json",
     )
+
+
+def _make_store(instance: PlatformInstance, config: Config | None = None):
+    return create_knowledge_store(config or Config(), instance)
 
 
 def _wait_for_job(service: KnowledgeBaseService, kb_id: str, job_id: str) -> dict[str, object]:
@@ -55,7 +59,7 @@ class _SlowQueryFakeRAGEngine(FakeRAGEngine):
 def test_knowledge_base_service_file_and_source_flow(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=FakeRAGEngine(),
@@ -96,10 +100,10 @@ def test_knowledge_base_service_file_and_source_flow(tmp_path: Path) -> None:
         },
     )
 
-    parse_job = service.parse_files(kb_id, {"fileIds": [file_id, faq_source["fileId"]]})["job"]["jobId"]
+    parse_job = service.parse_files(kb_id, {"file_ids": [file_id, faq_source["fileId"]]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, parse_job)["status"] == "succeeded"
 
-    index_job = service.index_files(kb_id, {"fileIds": [file_id, faq_source["fileId"]]})["job"]["jobId"]
+    index_job = service.index_files(kb_id, {"file_ids": [file_id, faq_source["fileId"]]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, index_job)["status"] == "succeeded"
 
     listed_files = service.list_files(kb_id)
@@ -118,7 +122,7 @@ def test_knowledge_base_service_file_and_source_flow(tmp_path: Path) -> None:
 def test_knowledge_base_service_delete_files(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=FakeRAGEngine(),
@@ -150,7 +154,7 @@ def test_knowledge_base_service_delete_files(tmp_path: Path) -> None:
 
     file_ids = [first["items"][0]["fileId"], second["items"][0]["fileId"]]
     deleted = service.delete_files(kb_id, file_ids)
-    assert deleted == {"deletedCount": 2, "fileIds": file_ids}
+    assert deleted == {"deleted_count": 2, "file_ids": file_ids}
     assert service.list_files(kb_id)["items"] == []
     assert service.list_jobs(kb_id) == []
 
@@ -158,7 +162,7 @@ def test_knowledge_base_service_delete_files(tmp_path: Path) -> None:
 def test_query_kb_for_agent_uses_fast_context_only_mode(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=FakeRAGEngine(),
@@ -178,22 +182,22 @@ def test_query_kb_for_agent_uses_fast_context_only_mode(tmp_path: Path) -> None:
         ],
     )
     file_id = uploaded["items"][0]["fileId"]
-    parse_job = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    parse_job = service.parse_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, parse_job)["status"] == "succeeded"
-    index_job = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    index_job = service.index_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, index_job)["status"] == "succeeded"
 
     result = service.query_kb_for_agent(kb_id, "How do we restart nanobot?", limit=4)
 
-    assert result["metadata"]["mode"] == "naive"
-    assert result["queryParams"]["onlyNeedContext"] is True
-    assert result["queryParams"]["topK"] == 4
+    assert result["metadata"]["mode"] == "mix"
+    assert result["query_params"]["only_need_context"] is True
+    assert result["query_params"]["top_k"] == 4
 
 
 def test_query_database_honors_internal_best_effort_timeout(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=_SlowQueryFakeRAGEngine(),
@@ -251,7 +255,7 @@ def test_knowledge_base_service_resolves_kb_model_bindings_for_rag_runtime(tmp_p
         }
     )
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance, config),
         instance=instance,
         instance_id=instance.id,
         rag_engine=rag_engine,
@@ -284,7 +288,7 @@ def test_knowledge_base_service_blocks_embedding_change_when_indexed(tmp_path: P
     instance = _make_instance(tmp_path)
     rag_engine = _RuntimeAwareFakeRAGEngine()
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=rag_engine,
@@ -304,9 +308,9 @@ def test_knowledge_base_service_blocks_embedding_change_when_indexed(tmp_path: P
         ],
     )
     file_id = uploaded["items"][0]["fileId"]
-    parse_job = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    parse_job = service.parse_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, parse_job)["status"] == "succeeded"
-    index_job = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    index_job = service.index_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, index_job)["status"] == "succeeded"
 
     with pytest.raises(KnowledgeBaseValidationError):
@@ -322,25 +326,39 @@ def test_knowledge_base_service_blocks_embedding_change_when_indexed(tmp_path: P
 
 
 def test_knowledge_base_store_initializes_current_schema(tmp_path: Path) -> None:
-    db_path = tmp_path / "knowledge.db"
-    KnowledgeBaseStore(db_path)
+    instance = _make_instance(tmp_path)
+    store = _make_store(instance)
 
-    conn = sqlite3.connect(str(db_path))
-    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-    indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()}
-    conn.close()
+    with store._connection() as conn:  # noqa: SLF001 - integration-level schema verification
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT tablename
+                FROM pg_tables
+                WHERE schemaname = 'public'
+                AND tablename IN ('knowledge_bases', 'knowledge_files', 'knowledge_jobs')
+                """
+            )
+            tables = {str(row["tablename"]) for row in cur.fetchall()}
 
-    assert "knowledge_bases" in tables
-    assert "knowledge_files" in tables
-    assert "knowledge_jobs" in tables
-    assert "idx_knowledge_files_kb" in indexes
-    assert "idx_knowledge_jobs_kb" in indexes
+            cur.execute(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                AND indexname IN ('idx_knowledge_files_kb', 'idx_knowledge_jobs_kb')
+                """
+            )
+            indexes = {str(row["indexname"]) for row in cur.fetchall()}
+
+    assert {"knowledge_bases", "knowledge_files", "knowledge_jobs"} <= tables
+    assert {"idx_knowledge_files_kb", "idx_knowledge_jobs_kb"} <= indexes
 
 
 def test_knowledge_base_service_uses_smaller_default_chunks(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=FakeRAGEngine(),

@@ -66,6 +66,49 @@
       "extraHeaders": null
     }
   },
+  "rag": {
+    "llmBinding": null,
+    "embeddingBinding": null,
+    "llmTimeout": 180,
+    "embeddingTimeout": 60,
+    "maxAsync": 16,
+    "maxParallelInsert": 4,
+    "embeddingFuncMaxAsync": 4,
+    "chunkTokenSize": 2400,
+    "chunkOverlapTokenSize": 100,
+    "embeddingBatchNum": 32,
+    "milvus": {
+      "uri": "http://127.0.0.1:19530",
+      "dbName": "nanobot",
+      "user": "",
+      "password": "",
+      "token": "root:Milvus",
+      "indexType": "AUTOINDEX",
+      "metricType": "COSINE"
+    },
+    "graphStore": {
+      "enabled": true,
+      "provider": "neo4j",
+      "uri": "bolt://127.0.0.1:7687",
+      "username": "neo4j",
+      "password": "password",
+      "database": "neo4j"
+    },
+    "postgres": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 5432,
+      "user": "postgres",
+      "password": "postgres",
+      "database": "nanobot",
+      "maxConnections": 50,
+      "sslMode": null,
+      "sslCert": null,
+      "sslKey": null,
+      "sslRootCert": null,
+      "sslCrl": null
+    }
+  },
   "gateway": {
     "host": "0.0.0.0",
     "port": 18790,

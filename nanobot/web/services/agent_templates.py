@@ -292,14 +292,17 @@ class AgentTemplateManager:
         items: dict[str, str] = {}
         for entry in catalog:
             name = str(entry.get("name") or "").strip()
-            if not name or name not in FALLBACK_TOOL_CATALOG:
+            if not name:
                 continue
-            items[name] = str(entry.get("description") or FALLBACK_TOOL_CATALOG[name]).strip()
+            desc = str(entry.get("description") or "").strip()
+            if not desc and name in FALLBACK_TOOL_CATALOG:
+                desc = FALLBACK_TOOL_CATALOG[name]
+            items[name] = desc
 
         for name, description in FALLBACK_TOOL_CATALOG.items():
             items.setdefault(name, description)
 
-        return [{"name": name, "description": items[name]} for name in FALLBACK_TOOL_CATALOG]
+        return [{"name": name, "description": desc} for name, desc in items.items()]
 
     def list_installed_skills(self) -> list[dict[str, Any]]:
         loader = SkillsLoader(self.workspace)

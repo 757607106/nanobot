@@ -22,7 +22,7 @@ from nanobot.harness import QueryKnowledgeBaseTool, build_knowledge_binding_cont
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.knowledge.service import KnowledgeBaseService
-from nanobot.platform.knowledge.store import KnowledgeBaseStore
+from nanobot.platform.knowledge.store import create_knowledge_store
 
 
 def _normalize_milvus_config(config: Any) -> dict[str, Any]:
@@ -210,7 +210,7 @@ def main() -> int:
         if rag_engine is None:
             raise RuntimeError("LightRAG is not installed in this environment.")
 
-        store = KnowledgeBaseStore(instance.knowledge_db_path())
+        store = create_knowledge_store(config, instance)
         service = KnowledgeBaseService(
             store,
             instance=instance,
@@ -230,13 +230,13 @@ def main() -> int:
             {
                 "name": kb_name,
                 "description": "Live smoke knowledge base for external Milvus validation.",
-                "queryParams": {
+                "query_params": {
                     "mode": "mix",
-                    "topK": 6,
-                    "chunkTopK": 8,
-                    "onlyNeedContext": False,
-                    "onlyNeedPrompt": False,
-                    "enableRerank": False,
+                    "top_k": 6,
+                    "chunk_top_k": 8,
+                    "only_need_context": False,
+                    "only_need_prompt": False,
+                    "enable_rerank": False,
                 },
             }
         )
@@ -268,11 +268,11 @@ def main() -> int:
         ingest = service.ingest_files(
             kb_id,
             {
-                "fileIds": [file_id],
+                "file_ids": [file_id],
                 "params": {
-                    "autoIndex": True,
-                    "chunkSize": 500,
-                    "chunkOverlap": 50,
+                    "auto_index": True,
+                    "chunk_size": 500,
+                    "chunk_overlap": 50,
                 },
             },
         )
@@ -353,10 +353,10 @@ def main() -> int:
             kb_id,
             {
                 "query": query_text,
-                "topK": 4,
-                "chunkTopK": 6,
+                "top_k": 4,
+                "chunk_top_k": 6,
                 "mode": "mix",
-                "onlyNeedContext": True,
+                "only_need_context": True,
             },
         )
         answer_query: dict[str, Any] | None = None
@@ -366,11 +366,11 @@ def main() -> int:
                 kb_id,
                 {
                     "query": query_text,
-                    "topK": 4,
-                    "chunkTopK": 6,
+                    "top_k": 4,
+                    "chunk_top_k": 6,
                     "mode": "mix",
-                    "onlyNeedContext": False,
-                    "onlyNeedPrompt": False,
+                    "only_need_context": False,
+                    "only_need_prompt": False,
                 },
             )
         except Exception as exc:

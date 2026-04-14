@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -58,19 +58,12 @@ class KnowledgeQueryParams:
         known_keys = {
             "mode",
             "top_k",
-            "topK",
             "chunk_top_k",
-            "chunkTopK",
             "response_type",
-            "responseType",
             "only_need_context",
-            "onlyNeedContext",
             "only_need_prompt",
-            "onlyNeedPrompt",
             "enable_rerank",
-            "enableRerank",
             "rerank_model",
-            "rerankModel",
             "options",
         }
         extra_options = {
@@ -91,39 +84,27 @@ class KnowledgeQueryParams:
         }.get(raw_mode.lower(), raw_mode)
         return cls(
             mode=normalized_mode,
-            top_k=max(1, int(data.get("top_k") or data.get("topK") or 10)),
-            chunk_top_k=max(1, int(data.get("chunk_top_k") or data.get("chunkTopK") or 12)),
-            response_type=str(data.get("response_type") or data.get("responseType") or "Multiple Paragraphs").strip()
+            top_k=max(1, int(data.get("top_k") or 10)),
+            chunk_top_k=max(1, int(data.get("chunk_top_k") or 12)),
+            response_type=str(data.get("response_type") or "Multiple Paragraphs").strip()
             or "Multiple Paragraphs",
-            only_need_context=bool(
-                data.get("only_need_context")
-                if "only_need_context" in data
-                else data.get("onlyNeedContext", True)
-            ),
-            only_need_prompt=bool(
-                data.get("only_need_prompt")
-                if "only_need_prompt" in data
-                else data.get("onlyNeedPrompt", False)
-            ),
-            enable_rerank=bool(
-                data.get("enable_rerank")
-                if "enable_rerank" in data
-                else data.get("enableRerank", False)
-            ),
-            rerank_model=str(data.get("rerank_model") or data.get("rerankModel") or "").strip() or None,
+            only_need_context=bool(data.get("only_need_context", True)),
+            only_need_prompt=bool(data.get("only_need_prompt", False)),
+            enable_rerank=bool(data.get("enable_rerank", False)),
+            rerank_model=str(data.get("rerank_model") or "").strip() or None,
             options=options,
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "mode": self.mode,
-            "topK": self.top_k,
-            "chunkTopK": self.chunk_top_k,
-            "responseType": self.response_type,
-            "onlyNeedContext": self.only_need_context,
-            "onlyNeedPrompt": self.only_need_prompt,
-            "enableRerank": self.enable_rerank,
-            "rerankModel": self.rerank_model,
+            "top_k": self.top_k,
+            "chunk_top_k": self.chunk_top_k,
+            "response_type": self.response_type,
+            "only_need_context": self.only_need_context,
+            "only_need_prompt": self.only_need_prompt,
+            "enable_rerank": self.enable_rerank,
+            "rerank_model": self.rerank_model,
             "options": dict(self.options),
         }
 
@@ -137,12 +118,12 @@ KNOWLEDGE_ARCHITECTURE_TYPE = "lightrag"
 def default_query_params_payload() -> dict[str, Any]:
     return {
         "mode": "mix",
-        "topK": 10,
-        "chunkTopK": 12,
-        "responseType": "Multiple Paragraphs",
-        "onlyNeedContext": True,
-        "onlyNeedPrompt": False,
-        "enableRerank": False,
+        "top_k": 10,
+        "chunk_top_k": 12,
+        "response_type": "Multiple Paragraphs",
+        "only_need_context": True,
+        "only_need_prompt": False,
+        "enable_rerank": False,
         "options": {},
     }
 @dataclass(slots=True)
@@ -197,10 +178,7 @@ class KnowledgeBaseDefinition:
             embed_info=dict(stored.get("embed_info") or stored.get("embedInfo") or {}),
             llm_info=dict(stored.get("llm_info") or stored.get("llmInfo") or {}),
             query_params=KnowledgeQueryParams.from_dict(
-                stored.get("query_params")
-                or stored.get("queryParams")
-                or stored.get("retrieval_profile")
-                or stored.get("retrievalProfile"),
+                stored.get("query_params"),
                 defaults=default_query_params_payload(),
             ),
             additional_params=dict(
@@ -226,8 +204,7 @@ class KnowledgeBaseDefinition:
             "kbType": KNOWLEDGE_ARCHITECTURE_TYPE,
             "embedInfo": dict(self.embed_info),
             "llmInfo": dict(self.llm_info),
-            "queryParams": self.query_params.to_dict(),
-            "retrievalProfile": self.query_params.to_dict(),
+            "query_params": self.query_params.to_dict(),
             "additionalParams": dict(self.additional_params),
             "shareConfig": dict(self.share_config),
             "mindmap": self.mindmap,

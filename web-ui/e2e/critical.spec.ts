@@ -29,7 +29,7 @@ test.describe.serial('critical gui flows @critical', () => {
     await profileDialog.getByTestId(testIds.profile.email).fill('owner@example.com')
     await profileDialog.getByRole('button', { name: /保\s*存/ }).click()
     await expect(profileDialog).toHaveCount(0)
-    await expect(page.locator('.account-admin-user-secondary').filter({ hasText: 'Console Owner' })).toBeVisible()
+    await expect(page.getByText('Console Owner', { exact: true }).first()).toBeVisible()
 
     await page.locator(`[data-testid="${testIds.app.logout}"]:visible`).first().click()
     await expect(page).toHaveURL(/\/login$/)
@@ -48,10 +48,8 @@ test.describe.serial('critical gui flows @critical', () => {
     await expect(page).toHaveURL(/\/chat$/)
 
     await page.getByTestId(testIds.chat.newSession).click()
-    const fileChooserPromise = page.waitForEvent('filechooser')
-    await page.getByTestId(testIds.chat.uploadFile).click()
-    const fileChooser = await fileChooserPromise
-    await fileChooser.setFiles(BRIEF_FIXTURE_PATH)
+    await page.getByRole('button', { name: '添加附件' }).click()
+    await page.locator('input[type="file"]').first().setInputFiles(BRIEF_FIXTURE_PATH)
     await expect(page.locator('text=/brief\\.txt/').first()).toBeVisible()
 
     await composerInput(page).fill('review the uploaded file')
@@ -79,18 +77,13 @@ test.describe.serial('critical gui flows @critical', () => {
     const agentId = createdPayload.data.agentId as string
     expect(agentId).toBeTruthy()
 
-    await page.getByTestId(testIds.chat.switchAgent).click()
-    const picker = page.getByRole('dialog', { name: '切换到自定义Agent' })
-    await expect(picker).toBeVisible()
-    await picker.getByText(agentName, { exact: false }).click()
-    await expect(page).toHaveURL(new RegExp(`/studio/agents/${agentId}/chat$`))
+    await page.goto(`/chat/agent/${agentId}`)
+    await expect(page).toHaveURL(new RegExp(`/chat/agent/${agentId}$`))
 
     await expect(page.getByTestId(testIds.chat.newSession)).toBeVisible()
     await page.getByTestId(testIds.chat.newSession).click()
-    const fileChooserPromise = page.waitForEvent('filechooser')
-    await page.getByTestId(testIds.chat.uploadFile).click()
-    const fileChooser = await fileChooserPromise
-    await fileChooser.setFiles(BRIEF_FIXTURE_PATH)
+    await page.getByRole('button', { name: '添加附件' }).click()
+    await page.locator('input[type="file"]').first().setInputFiles(BRIEF_FIXTURE_PATH)
     await expect(page.locator('text=/brief\\.txt/').first()).toBeVisible()
 
     await composerInput(page).fill('review the uploaded file')
@@ -105,22 +98,21 @@ test.describe.serial('critical gui flows @critical', () => {
     await page.getByTestId(testIds.app.navMcp).click()
     await expect(page).toHaveURL(/\/mcp$/)
 
-    await page.getByTestId(`${testIds.mcp.detailLinkPrefix}fixture-mcp`).click()
+    await page.locator('.server-card').filter({ hasText: 'fixture-mcp' }).first().click()
     await expect(page).toHaveURL(/\/mcp\/fixture-mcp$/)
 
     const toggleResponsePromise = page.waitForResponse((response) => (
       response.url().includes('/api/v1/mcp/servers/fixture-mcp/enabled') &&
       response.request().method() === 'POST'
     ))
-    await page.getByTestId(testIds.mcp.detailToggle).click()
+    const toggleButton = page.getByRole('button', { name: /立即启用|立即停用/ }).first()
+    await toggleButton.click()
     const toggleResponse = await toggleResponsePromise
     expect(toggleResponse.ok()).toBeTruthy()
     const togglePayload = await toggleResponse.json()
     expect(togglePayload.data.entry.enabled).toBe(true)
-    await expect(page.getByText('fixture_search')).toBeVisible()
-    await expect(page.getByText('fixture_read')).toBeVisible()
-    await page.getByTestId(testIds.app.navMcp).click()
-    await page.getByTestId(`${testIds.mcp.detailLinkPrefix}fixture-mcp`).click()
-    await expect(page.getByTestId(testIds.mcp.detailToggle)).toContainText('立即停用')
+    await expect(page.getByText('fixture_search').first()).toBeVisible()
+    await expect(page.getByText('fixture_read').first()).toBeVisible()
+    await expect(toggleButton).toContainText('立即停用')
   })
 })

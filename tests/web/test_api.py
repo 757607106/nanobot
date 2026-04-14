@@ -30,7 +30,9 @@ AUTH_PASSWORD = "bootstrap-pass-123"
 
 
 def _make_test_config(tmp_path, monkeypatch) -> Config:
-    config_path = tmp_path / "config.json"
+    # Keep instance_id unique across pytest runs and test cases.
+    config_path = tmp_path / f"{tmp_path.parent.name}-{tmp_path.name}" / "config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     workspace = tmp_path / "workspace"
     config = Config()
     config.agents.defaults.workspace = str(workspace)
@@ -111,16 +113,23 @@ def _wait_for_knowledge_ingest(
     last_document = None
     last_job = None
     while time.monotonic() < deadline:
-        documents = web_client.get(f"/api/v1/knowledge-bases/{kb_id}/documents")
+        documents = web_client.get(f"/api/v1/knowledge-bases/{kb_id}/files")
         jobs = web_client.get(f"/api/v1/knowledge-bases/{kb_id}/jobs")
         assert documents.status_code == 200
         assert jobs.status_code == 200
-        last_document = next((item for item in documents.json()["data"] if item["docId"] == doc_id), None)
+        last_document = next(
+            (
+                item
+                for item in documents.json()["data"]["items"]
+                if item["fileId"] == doc_id or item.get("docId") == doc_id
+            ),
+            None,
+        )
         last_job = next((item for item in jobs.json()["data"] if item["jobId"] == job_id), None)
         if (
             last_document
             and last_job
-            and last_document["docStatus"] in {"indexed", "error_parsing", "error_indexing", "error_kg"}
+            and (last_document.get("status") or last_document.get("docStatus")) in {"indexed", "error_parsing", "error_indexing"}
             and last_job["status"] in {"succeeded", "failed"}
         ):
             return last_document, last_job
@@ -129,6 +138,25 @@ def _wait_for_knowledge_ingest(
         f"Knowledge ingest did not finish within {timeout}s. "
         f"Last document={last_document!r}, last job={last_job!r}"
     )
+
+
+def _wait_for_knowledge_job(
+    web_client: TestClient,
+    *,
+    kb_id: str,
+    job_id: str,
+    timeout: float = 5.0,
+) -> dict:
+    deadline = time.monotonic() + timeout
+    last_job = None
+    while time.monotonic() < deadline:
+        jobs = web_client.get(f"/api/v1/knowledge-bases/{kb_id}/jobs")
+        assert jobs.status_code == 200
+        last_job = next((item for item in jobs.json()["data"] if item["jobId"] == job_id), None)
+        if last_job and last_job["status"] in {"succeeded", "failed"}:
+            return last_job
+        time.sleep(0.05)
+    raise AssertionError(f"Knowledge job did not finish within {timeout}s. Last job={last_job!r}")
 
 
 @pytest.fixture
@@ -547,7 +575,7 @@ def test_web_api_whatsapp_bind_endpoints_accept_status_start_and_stop(tmp_path, 
 
 def test_web_api_weixin_bind_status_uses_saved_runtime_token(tmp_path, monkeypatch) -> None:
     config = _make_test_config(tmp_path, monkeypatch)
-    runtime_state_dir = tmp_path / "weixin"
+    runtime_state_dir = config_loader._current_config_path.parent / "weixin"
     runtime_state_dir.mkdir(parents=True, exist_ok=True)
     (runtime_state_dir / "account.json").write_text(
         json.dumps(
@@ -1161,7 +1189,7 @@ def test_web_api_validation_separates_dangerous_options_and_recovery_actions(tmp
     config.tools.restrict_to_workspace = False
     config.tools.mcp_servers["broken-local"] = MCPServerConfig()
 
-    (tmp_path / "web-mcp-registry.json").write_text(
+    (config_loader._current_config_path.parent / "web-mcp-registry.json").write_text(
         json.dumps(
             {
                 "version": 1,
@@ -1286,10 +1314,12 @@ def test_web_api_chat_upload_and_dispatch(web_client: TestClient, monkeypatch) -
         *,
         display_content: str | None = None,
         attachments: list[dict[str, object]] | None = None,
+        reasoning_effort: str | None = None,
     ):
         assert session_id_arg == session_id
         assert content == "[附加文件]\n- uploads/brief.txt\n\n[用户问题]\nreview the uploaded file"
         assert display_content == "review the uploaded file"
+        assert reasoning_effort is None
         assert attachments == [
             {
                 "name": upload_data["name"],
@@ -1876,14 +1906,14 @@ def test_web_api_agent_test_run_executes_and_persists_recent_run(web_client: Tes
         "/api/v1/knowledge-bases",
         json={
             "name": "Ops KB",
-            "retrievalProfile": {"mode": "hybrid", "chunkSize": 400, "chunkOverlap": 40},
+            "query_params": {"mode": "hybrid", "top_k": 10, "chunk_top_k": 12, "chunk_size": 400, "chunk_overlap": 40},
         },
     )
     assert kb_created.status_code == 201
     kb_id = kb_created.json()["data"]["kbId"]
 
-    faq_ingest = web_client.post(
-        f"/api/v1/knowledge-bases/{kb_id}/documents",
+    faq_source = web_client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/sources",
         json={
             "sourceType": "faq_table",
             "title": "Ops FAQ",
@@ -1895,15 +1925,20 @@ def test_web_api_agent_test_run_executes_and_persists_recent_run(web_client: Tes
             ],
         },
     )
-    assert faq_ingest.status_code == 202
-    faq_payload = faq_ingest.json()["data"]
-    faq_document, faq_job = _wait_for_knowledge_ingest(
-        web_client,
-        kb_id=kb_id,
-        doc_id=faq_payload["documents"][0]["docId"],
-        job_id=faq_payload["jobs"][0]["jobId"],
+    assert faq_source.status_code == 201
+    faq_file_id = faq_source.json()["data"]["fileId"]
+    faq_parse = web_client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/files/parse",
+        json={"file_ids": [faq_file_id]},
     )
-    assert faq_document["docStatus"] == "indexed"
+    assert faq_parse.status_code == 202
+    assert _wait_for_knowledge_job(web_client, kb_id=kb_id, job_id=faq_parse.json()["data"]["job"]["jobId"])["status"] == "succeeded"
+    faq_index = web_client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/files/index",
+        json={"file_ids": [faq_file_id]},
+    )
+    assert faq_index.status_code == 202
+    faq_job = _wait_for_knowledge_job(web_client, kb_id=kb_id, job_id=faq_index.json()["data"]["job"]["jobId"])
     assert faq_job["status"] == "succeeded"
 
     patched = web_client.put(
@@ -2782,71 +2817,70 @@ def test_web_api_knowledge_base_crud_upload_and_retrieve(web_client: TestClient)
         json={
             "name": "Support KB",
             "description": "Customer support knowledge base",
-            "retrievalProfile": {"mode": "hybrid", "chunkSize": 400, "chunkOverlap": 40},
+            "query_params": {"mode": "hybrid", "top_k": 10, "chunk_top_k": 12, "chunk_size": 400, "chunk_overlap": 40},
         },
     )
     assert created.status_code == 201
     kb = created.json()["data"]
-    assert kb["kbId"] == "support-kb"
+    assert str(kb["kbId"]).startswith("support-kb")
 
     uploaded = web_client.post(
-        f"/api/v1/knowledge-bases/{kb['kbId']}/documents",
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files",
         files={"file": ("runbook.md", b"# Runbook\n\nReset the token cache before restarting the worker.\n", "text/markdown")},
     )
-    assert uploaded.status_code == 202
-    upload_payload = uploaded.json()["data"]
-    assert upload_payload["documents"][0]["docStatus"] == "uploaded"
-    assert upload_payload["jobs"][0]["status"] == "queued"
+    assert uploaded.status_code == 201
+    file_id = uploaded.json()["data"]["items"][0]["fileId"]
 
-    uploaded_document, uploaded_job = _wait_for_knowledge_ingest(
-        web_client,
-        kb_id=kb["kbId"],
-        doc_id=upload_payload["documents"][0]["docId"],
-        job_id=upload_payload["jobs"][0]["jobId"],
+    parsed = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/parse",
+        json={"file_ids": [file_id]},
     )
+    assert parsed.status_code == 202
+    parse_job = _wait_for_knowledge_job(web_client, kb_id=kb["kbId"], job_id=parsed.json()["data"]["job"]["jobId"])
+    assert parse_job["status"] == "succeeded"
+
+    indexed = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/index",
+        json={"file_ids": [file_id]},
+    )
+    assert indexed.status_code == 202
+    index_job = _wait_for_knowledge_job(web_client, kb_id=kb["kbId"], job_id=indexed.json()["data"]["job"]["jobId"])
+    assert index_job["status"] == "succeeded"
+
+    files = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/files")
+    assert files.status_code == 200
+    uploaded_document = next(item for item in files.json()["data"]["items"] if item["fileId"] == file_id)
     assert uploaded_document["title"] == "runbook.md"
-    assert uploaded_document["docStatus"] == "indexed"
-    assert uploaded_job["status"] == "succeeded"
+    assert uploaded_document["status"] == "indexed"
 
     retrieved = web_client.post(
-        f"/api/v1/knowledge-bases/{kb['kbId']}/retrieve-test",
-        json={"query": "restart the worker", "mode": "hybrid"},
+        f"/api/v1/knowledge-bases/{kb['kbId']}/query",
+        json={"query": "restart the worker", "mode": "hybrid", "only_need_context": True},
     )
     assert retrieved.status_code == 200
     data = retrieved.json()["data"]
-    assert data["effectiveMode"] == "hybrid"
-    assert len(data["hits"]) >= 1
-    assert "runbook.md" == data["hits"][0]["citation"]["title"]
+    assert data["metadata"]["mode"] == "hybrid"
+    assert len(data["data"]["chunks"]) >= 1
 
     semantic = web_client.post(
-        f"/api/v1/knowledge-bases/{kb['kbId']}/retrieve-test",
-        json={"query": "restarting workers", "mode": "semantic"},
+        f"/api/v1/knowledge-bases/{kb['kbId']}/query",
+        json={"query": "restarting workers", "mode": "semantic", "only_need_context": True},
     )
     assert semantic.status_code == 200
     semantic_payload = semantic.json()["data"]
-    assert semantic_payload["effectiveMode"] == "semantic"
-    assert len(semantic_payload["hits"]) >= 1
+    assert semantic_payload["metadata"]["mode"] == "local"
+    assert len(semantic_payload["data"]["chunks"]) >= 1
 
     reindexed = web_client.post(
-        f"/api/v1/knowledge-bases/{kb['kbId']}/reindex",
-        json={"docIds": [upload_payload["documents"][0]["docId"]]},
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/index",
+        json={"file_ids": [file_id]},
     )
     assert reindexed.status_code == 202
-    reindex_payload = reindexed.json()["data"]
-    assert reindex_payload["documents"][0]["docStatus"] == "uploaded"
-    assert reindex_payload["jobs"][0]["status"] == "queued"
-
-    reindexed_document, reindex_job = _wait_for_knowledge_ingest(
-        web_client,
-        kb_id=kb["kbId"],
-        doc_id=reindex_payload["documents"][0]["docId"],
-        job_id=reindex_payload["jobs"][0]["jobId"],
-    )
-    assert reindexed_document["docStatus"] == "indexed"
+    reindex_job = _wait_for_knowledge_job(web_client, kb_id=kb["kbId"], job_id=reindexed.json()["data"]["job"]["jobId"])
     assert reindex_job["status"] == "succeeded"
 
     deleted_doc = web_client.delete(
-        f"/api/v1/knowledge-bases/{kb['kbId']}/documents/{upload_payload['documents'][0]['docId']}"
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/{file_id}"
     )
     assert deleted_doc.status_code == 200
     assert deleted_doc.json()["data"] == {"deleted": True}
@@ -2864,39 +2898,41 @@ def test_web_api_knowledge_base_batch_delete_documents(web_client: TestClient) -
     kb = created.json()["data"]
 
     upload = web_client.post(
-        f"/api/v1/knowledge-bases/{kb['kbId']}/documents",
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files",
         files=[
             ("file", ("runbook.md", b"# Runbook\n\nRestart the worker after draining the queue.\n", "text/markdown")),
             ("file", ("faq.md", b"# FAQ\n\nReset the token cache before retrying login.\n", "text/markdown")),
         ],
     )
-    assert upload.status_code == 202
+    assert upload.status_code == 201
     upload_payload = upload.json()["data"]
-    doc_ids = [item["docId"] for item in upload_payload["documents"]]
-    job_ids = [item["jobId"] for item in upload_payload["jobs"]]
+    file_ids = [item["fileId"] for item in upload_payload["items"]]
 
-    for doc_id, job_id in zip(doc_ids, job_ids, strict=True):
-        document, job = _wait_for_knowledge_ingest(
-            web_client,
-            kb_id=kb["kbId"],
-            doc_id=doc_id,
-            job_id=job_id,
-        )
-        assert document["docStatus"] == "indexed"
-        assert job["status"] == "succeeded"
+    parse = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/parse",
+        json={"file_ids": file_ids},
+    )
+    assert parse.status_code == 202
+    assert _wait_for_knowledge_job(web_client, kb_id=kb["kbId"], job_id=parse.json()["data"]["job"]["jobId"])["status"] == "succeeded"
+    index = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/index",
+        json={"file_ids": file_ids},
+    )
+    assert index.status_code == 202
+    assert _wait_for_knowledge_job(web_client, kb_id=kb["kbId"], job_id=index.json()["data"]["job"]["jobId"])["status"] == "succeeded"
 
     deleted = web_client.post(
-        f"/api/v1/knowledge-bases/{kb['kbId']}/documents/delete",
-        json={"docIds": doc_ids},
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/delete",
+        json={"file_ids": file_ids},
     )
     assert deleted.status_code == 200
     deleted_payload = deleted.json()["data"]
-    assert deleted_payload["deletedCount"] == 2
-    assert deleted_payload["docIds"] == doc_ids
+    assert deleted_payload["deleted_count"] == 2
+    assert deleted_payload["file_ids"] == file_ids
 
-    listed_docs = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/documents")
+    listed_docs = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/files")
     assert listed_docs.status_code == 200
-    assert listed_docs.json()["data"] == []
+    assert listed_docs.json()["data"]["items"] == []
 
 
 def test_web_api_knowledge_sources_list_and_sync(web_client: TestClient) -> None:
@@ -2911,7 +2947,7 @@ def test_web_api_knowledge_sources_list_and_sync(web_client: TestClient) -> None
     kb = created.json()["data"]
 
     faq_created = web_client.post(
-        f"/api/v1/knowledge-bases/{kb['kbId']}/documents",
+        f"/api/v1/knowledge-bases/{kb['kbId']}/sources",
         json={
             "sourceType": "faq_table",
             "title": "Support FAQ",
@@ -2923,16 +2959,31 @@ def test_web_api_knowledge_sources_list_and_sync(web_client: TestClient) -> None
             ],
         },
     )
-    assert faq_created.status_code == 202
+    assert faq_created.status_code == 201
     faq_payload = faq_created.json()["data"]
-    document, job = _wait_for_knowledge_ingest(
+    source_file_id = str(faq_payload["fileId"])
+
+    parse = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/parse",
+        json={"file_ids": [source_file_id]},
+    )
+    assert parse.status_code == 202
+    assert _wait_for_knowledge_job(
         web_client,
         kb_id=kb["kbId"],
-        doc_id=faq_payload["documents"][0]["docId"],
-        job_id=faq_payload["jobs"][0]["jobId"],
+        job_id=parse.json()["data"]["job"]["jobId"],
+    )["status"] == "succeeded"
+
+    index = web_client.post(
+        f"/api/v1/knowledge-bases/{kb['kbId']}/files/index",
+        json={"file_ids": [source_file_id]},
     )
-    assert document["docStatus"] == "indexed"
-    assert job["status"] == "succeeded"
+    assert index.status_code == 202
+    assert _wait_for_knowledge_job(
+        web_client,
+        kb_id=kb["kbId"],
+        job_id=index.json()["data"]["job"]["jobId"],
+    )["status"] == "succeeded"
 
     sources = web_client.get(f"/api/v1/knowledge-bases/{kb['kbId']}/sources")
     assert sources.status_code == 200
@@ -2942,7 +2993,7 @@ def test_web_api_knowledge_sources_list_and_sync(web_client: TestClient) -> None
     assert source["sourceType"] == "faq_table"
     assert source["syncSupported"] is True
     assert source["docCount"] == 1
-    assert source["latestDocument"]["docId"] == faq_payload["documents"][0]["docId"]
+    assert source["latestDocument"]["fileId"] == source_file_id
 
     updated = web_client.put(
         f"/api/v1/knowledge-bases/{kb['kbId']}/sources/{source['sourceId']}",
@@ -2974,16 +3025,16 @@ def test_web_api_knowledge_sources_list_and_sync(web_client: TestClient) -> None
     assert synced.status_code == 202
     synced_payload = synced.json()["data"]
     assert synced_payload["source"]["syncCount"] == 2
-    assert synced_payload["document"]["docStatus"] == "uploaded"
+    assert synced_payload["document"]["status"] == "uploaded"
     assert synced_payload["job"]["status"] == "queued"
 
     synced_document, synced_job = _wait_for_knowledge_ingest(
         web_client,
         kb_id=kb["kbId"],
-        doc_id=synced_payload["document"]["docId"],
+        doc_id=synced_payload["document"]["fileId"],
         job_id=synced_payload["job"]["jobId"],
     )
-    assert synced_document["docStatus"] == "indexed"
+    assert synced_document["status"] == "indexed"
     assert synced_job["status"] == "succeeded"
 
 

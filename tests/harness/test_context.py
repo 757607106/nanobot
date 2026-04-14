@@ -76,8 +76,8 @@ def test_prepare_agent_execution_builds_explicit_policy_objects() -> None:
         event_payload={
             "knowledgeBindingIds": [],
             "knowledgeNames": [],
-            "requestedMode": "naive",
-            "effectiveMode": "naive",
+            "requestedMode": "auto",
+            "effectiveMode": "mixed",
             "hitCount": 0,
         },
     )

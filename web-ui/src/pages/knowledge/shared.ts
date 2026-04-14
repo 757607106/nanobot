@@ -13,13 +13,13 @@ export const DEFAULT_KNOWLEDGE_CHUNK_OVERLAP = 200
 
 export const DEFAULT_QUERY_PARAMS: KnowledgeQueryParams = {
   mode: 'mix',
-  topK: 10,
-  chunkTopK: 12,
-  responseType: 'Multiple Paragraphs',
-  onlyNeedContext: true,
-  onlyNeedPrompt: false,
-  enableRerank: false,
-  rerankModel: null,
+  top_k: 10,
+  chunk_top_k: 12,
+  response_type: 'Multiple Paragraphs',
+  only_need_context: true,
+  only_need_prompt: false,
+  enable_rerank: false,
+  rerank_model: null,
   options: {},
 }
 
@@ -370,9 +370,9 @@ export function buildIndexParams(
   qaSeparator: string,
 ) {
   return {
-    chunkPresetId,
-    chunkSize,
-    chunkOverlap,
-    qaSeparator: qaSeparator.trim() || undefined,
+    chunk_preset_id: chunkPresetId,
+    chunk_size: chunkSize,
+    chunk_overlap: chunkOverlap,
+    qa_separator: qaSeparator.trim() || undefined,
   }
 }

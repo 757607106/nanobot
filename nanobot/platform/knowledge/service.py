@@ -219,10 +219,20 @@ class KnowledgeBaseService:
         if self._loop_thread.is_alive():
             self._loop_thread.join(timeout=1.0)
         self._executor.shutdown(wait=False, cancel_futures=True)
+        close_store = getattr(self.store, "close", None)
+        if callable(close_store):
+            try:
+                close_store()
+            except Exception:
+                logger.exception("Failed to close knowledge metadata store")
 
     def set_rag_engine(self, rag_engine: RAGEngine | None) -> None:
         with self._rag_engine_lock:
             previous = self.rag_engine
+            if rag_engine is not None:
+                resolver_setter = getattr(rag_engine, "set_kb_runtime_resolver", None)
+                if callable(resolver_setter):
+                    resolver_setter(self._resolve_kb_runtime_overrides)
             self.rag_engine = rag_engine
             self.file_manager.rag_engine = rag_engine
             self.doc_pipeline.rag_engine = rag_engine
@@ -230,6 +240,21 @@ class KnowledgeBaseService:
             self.eval_service.rag_engine = rag_engine
             if previous is not None and previous is not rag_engine:
                 self._retired_rag_engines.append(previous)
+
+    def set_store(self, store: KnowledgeBaseStore) -> None:
+        previous = self.store
+        self.store = store
+        self.file_manager.store = store
+        self.doc_pipeline.store = store
+        self.query_service.store = store
+        self.eval_service.store = store
+        if previous is not None and previous is not store:
+            close_previous = getattr(previous, "close", None)
+            if callable(close_previous):
+                try:
+                    close_previous()
+                except Exception:
+                    logger.exception("Failed to close previous knowledge metadata store")
 
     def set_config(self, config: Config | None) -> None:
         self.config = config
@@ -272,7 +297,7 @@ class KnowledgeBaseService:
 
     def _resolve_kb_runtime_overrides(self, kb_id: str) -> dict[str, Any]:
         kb = self.store.get_kb(kb_id)
-        if kb is None or kb.instance_id != self.instance_id or kb.tenant_id != self.tenant_id:
+        if kb is None or kb.instance_id != self.instance_id:
             return {}
 
         llm_runtime = self._resolve_binding_runtime(
@@ -318,8 +343,9 @@ class KnowledgeBaseService:
                 "embedding_api_key": embedding_runtime["api_key"],
                 "embedding_api_base": embedding_runtime["api_base"],
                 "embedding_extra_headers": embedding_runtime["extra_headers"],
-                "embedding_dim": embedding_runtime["embedding_dim"],
             })
+            if "embedding_dim" in embedding_runtime:
+                overrides["embedding_dim"] = embedding_runtime["embedding_dim"]
         if vision_runtime:
             overrides.update({
                 "vision_model": vision_runtime["model"],
@@ -336,6 +362,9 @@ class KnowledgeBaseService:
                 "rerank_api_base": rerank_runtime["api_base"],
                 "rerank_extra_headers": rerank_runtime["extra_headers"],
             })
+        rerank_model = str(kb.query_params.rerank_model or "").strip()
+        if rerank_model and not str(overrides.get("rerank_model") or "").strip():
+            overrides["rerank_model"] = rerank_model
         return overrides
 
     @staticmethod
@@ -584,7 +613,7 @@ class KnowledgeBaseService:
         self._ensure_unique_name(name)
         now = now_iso()
         kb_type = self._normalize_kb_type(self._get_value(payload, "kbType", "kb_type"))
-        query_payload = self._get_value(payload, "queryParams", "query_params", "retrievalProfile", "retrieval_profile")
+        query_payload = self._get_value(payload, "query_params")
         kb = self.store.create_kb(
             KnowledgeBaseDefinition(
                 kb_id=self._next_kb_id(name),
@@ -655,12 +684,7 @@ class KnowledgeBaseService:
                     "因为 LightRAG 要求索引和查询阶段使用同一套 embedding 维度。"
                 )
         next_kb_type = KNOWLEDGE_ARCHITECTURE_TYPE
-        has_query_params_update = (
-            "queryParams" in payload
-            or "query_params" in payload
-            or "retrievalProfile" in payload
-            or "retrieval_profile" in payload
-        )
+        has_query_params_update = "query_params" in payload
         updated = replace(
             existing,
             name=name,
@@ -675,7 +699,7 @@ class KnowledgeBaseService:
             llm_info=next_llm_info,
             query_params=(
                 KnowledgeQueryParams.from_dict(
-                    self._get_value(payload, "queryParams", "query_params", "retrievalProfile", "retrieval_profile"),
+                    self._get_value(payload, "query_params"),
                     defaults=default_query_params_payload(),
                 )
             ) if has_query_params_update else (

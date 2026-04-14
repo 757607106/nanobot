@@ -340,7 +340,7 @@ def run_all(username: str = "admin", password: str = "admin123") -> None:
 
     try:
         r = PUT(f"/api/v1/knowledge-bases/{kb_id}/query-params", json_body={
-            "mode": "mix", "topK": 5,
+            "mode": "mix", "top_k": 5,
         })
         assert r.status_code == 200
         _pass("Update query params")
@@ -386,26 +386,26 @@ def run_all(username: str = "admin", password: str = "admin123") -> None:
     except Exception as e:
         _fail("Upload file", str(e))
 
-    # 5b. Upload via /documents (multipart)
+    # 5b. Upload second file via /files (legacy /documents removed)
     doc_file_id = None
     try:
         doc_content = (
-            b"Document endpoint test: Natural language processing (NLP).\n"
+            b"Second file upload test: Natural language processing (NLP).\n"
             b"NLP allows computers to understand human language.\n"
         )
         r = POST(
-            f"/api/v1/knowledge-bases/{kb_id}/documents",
+            f"/api/v1/knowledge-bases/{kb_id}/files",
             files={"file": ("doc-test.txt", io.BytesIO(doc_content), "text/plain")},
         )
-        assert r.status_code == 202, f"status={r.status_code}, body={r.text[:300]}"
+        assert r.status_code == 201, f"status={r.status_code}, body={r.text[:300]}"
         doc_data = ok_data(r)
-        docs = doc_data.get("documents") or []
+        docs = doc_data.get("items") or []
         if docs:
             doc_file_id = docs[0].get("fileId")
             state["doc_file_id"] = doc_file_id
-        _pass(f"Upload via /documents (fileId={doc_file_id})")
+        _pass(f"Upload second file via /files (fileId={doc_file_id})")
     except Exception as e:
-        _fail("Upload via /documents", str(e))
+        _fail("Upload second file via /files", str(e))
 
     # 5c. List files
     try:
@@ -417,15 +417,13 @@ def run_all(username: str = "admin", password: str = "admin123") -> None:
     except Exception as e:
         _fail("List files", str(e))
 
-    # 5d. List documents alias
+    # 5d. Legacy /documents alias removed
     try:
         r = GET(f"/api/v1/knowledge-bases/{kb_id}/documents")
-        assert r.status_code == 200
-        docs_data = ok_data(r)
-        count = len(docs_data) if isinstance(docs_data, list) else "obj"
-        _pass(f"List documents alias ({count})")
+        assert r.status_code == 404
+        _pass("Legacy /documents alias removed (404)")
     except Exception as e:
-        _fail("List documents alias", str(e))
+        _fail("Legacy /documents alias removed", str(e))
 
     # 5e. File detail
     if file_id:
@@ -501,11 +499,11 @@ def run_all(username: str = "admin", password: str = "admin123") -> None:
             _fail("Update source", str(e))
 
     # ── 7. Ingest Pipeline ────────────────────────────────────────────────
-    _log("\n▶ Phase 7: Ingest Pipeline (parse / index / reindex)")
+    _log("\n▶ Phase 7: Ingest Pipeline (parse / index)")
 
     if file_id:
         try:
-            r = POST(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json_body={"fileIds": [file_id]})
+            r = POST(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json_body={"file_ids": [file_id]})
             assert r.status_code == 202, f"status={r.status_code}, body={r.text[:300]}"
             _pass("Parse files")
         except Exception as e:
@@ -514,22 +512,14 @@ def run_all(username: str = "admin", password: str = "admin123") -> None:
         time.sleep(3)
 
         try:
-            r = POST(f"/api/v1/knowledge-bases/{kb_id}/files/index", json_body={"fileIds": [file_id]})
+            r = POST(f"/api/v1/knowledge-bases/{kb_id}/files/index", json_body={"file_ids": [file_id]})
             assert r.status_code == 202, f"status={r.status_code}, body={r.text[:300]}"
             _pass("Index files")
         except Exception as e:
             _fail("Index files", str(e))
 
-        time.sleep(3)
-
-        try:
-            r = POST(f"/api/v1/knowledge-bases/{kb_id}/reindex", json_body={"fileIds": [file_id]})
-            assert r.status_code == 202, f"status={r.status_code}, body={r.text[:300]}"
-            _pass("Reindex files")
-        except Exception as e:
-            _fail("Reindex files", str(e))
     else:
-        _skip("Parse/Index/Reindex", "No file_id")
+        _skip("Parse/Index", "No file_id")
 
     # Jobs
     try:
@@ -565,8 +555,8 @@ def run_all(username: str = "admin", password: str = "admin123") -> None:
     else:
         _skip("Move file", "No file_id or folder_id")
 
-    # ── 9. Query & Retrieve ───────────────────────────────────────────────
-    _log("\n▶ Phase 9: Query & Retrieve")
+    # ── 9. Query ──────────────────────────────────────────────────────────
+    _log("\n▶ Phase 9: Query")
 
     time.sleep(3)
 
@@ -580,38 +570,26 @@ def run_all(username: str = "admin", password: str = "admin123") -> None:
         _fail("Query KB", str(e))
 
     try:
-        r = POST(f"/api/v1/knowledge-bases/{kb_id}/query-test", json_body={
-            "query": "neural networks",
-            "mode": "naive",
-        })
-        if r.status_code == 200:
-            _pass("Query-test alias")
-        elif r.status_code == 500:
-            _fail("Query-test alias", f"status=500 (server error), body={r.text[:300]}")
-        else:
-            _fail("Query-test alias", f"status={r.status_code}, body={r.text[:300]}")
-    except Exception as e:
-        _fail("Query-test alias", str(e))
-
-    try:
-        r = POST(f"/api/v1/knowledge-bases/{kb_id}/retrieve-test", json_body={
-            "query": "deep learning", "topK": 3,
+        r = POST(f"/api/v1/knowledge-bases/{kb_id}/query", json_body={
+            "query": "deep learning",
+            "top_k": 3,
+            "only_need_context": True,
         })
         assert r.status_code == 200, f"status={r.status_code}, body={r.text[:300]}"
         retrieve_result = ok_data(r)
-        _pass("Retrieve-test")
+        _pass("Query context mode")
         if isinstance(retrieve_result, dict):
             _log(f"    Keys: {list(retrieve_result.keys())}")
     except Exception as e:
-        _fail("Retrieve-test", str(e))
+        _fail("Query context mode", str(e))
 
     # Negative: empty query → 400
     try:
-        r = POST(f"/api/v1/knowledge-bases/{kb_id}/retrieve-test", json_body={"query": ""})
+        r = POST(f"/api/v1/knowledge-bases/{kb_id}/query", json_body={"query": ""})
         assert r.status_code == 400, f"Expected 400, got {r.status_code}"
-        _pass("Retrieve-test empty query → 400")
+        _pass("Query empty query → 400")
     except Exception as e:
-        _fail("Retrieve-test empty query → 400", str(e))
+        _fail("Query empty query → 400", str(e))
 
     # ── 10. Sample Questions ──────────────────────────────────────────────
     _log("\n▶ Phase 10: Sample Questions")
@@ -915,11 +893,11 @@ def run_all(username: str = "admin", password: str = "admin123") -> None:
     doc_ids = [fid for fid in [state.get("doc_file_id"), state.get("source_id")] if fid]
     if doc_ids:
         try:
-            r = POST(f"/api/v1/knowledge-bases/{kb_id}/documents/delete", json_body={"docIds": doc_ids})
+            r = POST(f"/api/v1/knowledge-bases/{kb_id}/files/delete", json_body={"file_ids": doc_ids})
             assert r.status_code == 200, f"status={r.status_code}"
-            _pass(f"Batch delete documents ({len(doc_ids)})")
+            _pass(f"Batch delete files ({len(doc_ids)})")
         except Exception as e:
-            _fail("Batch delete documents", str(e))
+            _fail("Batch delete files", str(e))
 
     # Delete single file
     if file_id:

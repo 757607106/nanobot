@@ -505,9 +505,9 @@ export default function KnowledgeWorkspace() {
               mode: value,
             })
           }
-          onTopKChange={(value) => onQueryParamsChange({ ...queryParams, topK: value })}
-          onChunkTopKChange={(value) => onQueryParamsChange({ ...queryParams, chunkTopK: value })}
-          onEnableRerankChange={(checked) => onQueryParamsChange({ ...queryParams, enableRerank: checked })}
+          onTopKChange={(value) => onQueryParamsChange({ ...queryParams, top_k: value })}
+          onChunkTopKChange={(value) => onQueryParamsChange({ ...queryParams, chunk_top_k: value })}
+          onEnableRerankChange={(checked) => onQueryParamsChange({ ...queryParams, enable_rerank: checked })}
           onSaveQueryDefaults={onSaveQueryDefaults}
           onOpenQueryConfig={() => onOpenModal('queryConfig')}
           onResultViewChange={onResultViewChange}

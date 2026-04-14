@@ -13,7 +13,9 @@ from tests.knowledge_test_utils import FakeRAGEngine
 
 
 def _make_test_config(tmp_path, monkeypatch) -> Config:
-    config_path = tmp_path / "config.json"
+    # Keep instance_id unique across pytest runs and test cases.
+    config_path = tmp_path / f"{tmp_path.parent.name}-{tmp_path.name}" / "config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     workspace = tmp_path / "workspace"
     config = Config()
     config.agents.defaults.workspace = str(workspace)
@@ -76,7 +78,7 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
         assert created.status_code == 201
         kb_id = created.json()["data"]["kbId"]
         assert created.json()["data"]["kbType"] == "lightrag"
-        assert created.json()["data"]["queryParams"]["mode"] == "mix"
+        assert created.json()["data"]["query_params"]["mode"] == "mix"
 
         unsupported = client.post(
             "/api/v1/knowledge-bases",
@@ -118,11 +120,11 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
         index_missing_ids = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/index", json={})
         assert index_missing_ids.status_code == 400
 
-        parsed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={"fileIds": [file_id]})
+        parsed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={"file_ids": [file_id]})
         assert parsed.status_code == 202
         assert _wait_for_job(client, kb_id, parsed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
 
-        indexed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/index", json={"fileIds": [file_id]})
+        indexed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/index", json={"file_ids": [file_id]})
         assert indexed.status_code == 202
         assert _wait_for_job(client, kb_id, indexed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
 
@@ -131,8 +133,8 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
             json={
                 "query": "How do we restart the worker?",
                 "mode": "mix",
-                "topK": 4,
-                "onlyNeedContext": False,
+                "top_k": 4,
+                "only_need_context": False,
             },
         )
         assert queried.status_code == 200
@@ -156,11 +158,11 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
         assert faq_source.status_code == 201
         faq_file_id = faq_source.json()["data"]["fileId"]
 
-        faq_parsed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={"fileIds": [faq_file_id]})
+        faq_parsed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={"file_ids": [faq_file_id]})
         assert faq_parsed.status_code == 202
         assert _wait_for_job(client, kb_id, faq_parsed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
 
-        faq_indexed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/index", json={"fileIds": [faq_file_id]})
+        faq_indexed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/index", json={"file_ids": [faq_file_id]})
         assert faq_indexed.status_code == 202
         assert _wait_for_job(client, kb_id, faq_indexed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
 
@@ -182,18 +184,18 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
         assert qa_upload.status_code == 201
         qa_file_id = qa_upload.json()["data"]["items"][0]["fileId"]
 
-        qa_parsed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={"fileIds": [qa_file_id]})
+        qa_parsed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={"file_ids": [qa_file_id]})
         assert qa_parsed.status_code == 202
         assert _wait_for_job(client, kb_id, qa_parsed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
 
         qa_indexed = client.post(
             f"/api/v1/knowledge-bases/{kb_id}/files/index",
             json={
-                "fileIds": [qa_file_id],
+                "file_ids": [qa_file_id],
                 "params": {
-                    "chunkPresetId": "qa",
-                    "chunkSize": 400,
-                    "chunkOverlap": 50,
+                    "chunk_preset_id": "qa",
+                    "chunk_size": 400,
+                    "chunk_overlap": 50,
                 },
             },
         )
@@ -214,31 +216,29 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
         updated_query_params = client.put(
             f"/api/v1/knowledge-bases/{kb_id}/query-params",
             json={
-                "chunkTopK": 8,
-                "enableRerank": True,
+                "chunk_top_k": 8,
+                "enable_rerank": True,
             },
         )
         assert updated_query_params.status_code == 200
         query_params_payload = updated_query_params.json()["data"]
         assert query_params_payload["mode"] == "mix"
-        assert query_params_payload["chunkTopK"] == 8
-        assert query_params_payload["enableRerank"] is True
+        assert query_params_payload["chunk_top_k"] == 8
+        assert query_params_payload["enable_rerank"] is True
 
-        query_test = client.post(
-            f"/api/v1/knowledge-bases/{kb_id}/query-test",
+        filtered_query = client.post(
+            f"/api/v1/knowledge-bases/{kb_id}/query",
             json={
                 "query": "How do we clear the cache?",
-                "meta": {
-                    "file_ids": [qa_file_id],
-                    "mode": "mix",
-                    "top_k": 2,
-                },
+                "mode": "mix",
+                "top_k": 2,
+                "file_ids": [qa_file_id],
             },
         )
-        assert query_test.status_code == 200
-        query_test_payload = query_test.json()["data"]
-        assert query_test_payload["metadata"]["fileFilterApplied"] is True
-        assert any("cache reset task" in str(item.get("content") or "").lower() for item in query_test_payload["data"]["chunks"])
+        assert filtered_query.status_code == 200
+        filtered_payload = filtered_query.json()["data"]
+        assert filtered_payload["metadata"]["fileFilterApplied"] is True
+        assert any("cache reset task" in str(item.get("content") or "").lower() for item in filtered_payload["data"]["chunks"])
 
         generated = client.post(
             f"/api/v1/knowledge-bases/{kb_id}/benchmarks/generate",
@@ -263,7 +263,7 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
         assert result["details"]
 
 
-def test_web_api_legacy_knowledge_routes_match_yuxi_shape(tmp_path, monkeypatch) -> None:
+def test_web_api_legacy_routes_removed(tmp_path, monkeypatch) -> None:
     config = _make_test_config(tmp_path, monkeypatch)
     monkeypatch.setattr("nanobot.web.app.create_rag_engine_from_config", lambda config, instance_dir: FakeRAGEngine())
     monkeypatch.setattr(
@@ -273,225 +273,6 @@ def test_web_api_legacy_knowledge_routes_match_yuxi_shape(tmp_path, monkeypatch)
 
     with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
         _bootstrap_admin(client)
-        client.app.state.knowledge._generate_with_llm = lambda **kwargs: None  # type: ignore[method-assign]
-
-        created = client.post(
-            "/api/knowledge/databases",
-            json={
-                "name": "Legacy Ops KB",
-                "description": "Legacy route smoke test",
-                "kbType": "milvus",
-            },
-        )
-        assert created.status_code == 201
-        kb_id = created.json()["data"]["kbId"]
-
-        uploaded = client.post(
-            f"/api/knowledge/files/upload?db_id={kb_id}",
-            files={
-                "file": (
-                    "legacy-runbook.md",
-                    b"# Legacy Runbook\n\nRestart the worker after draining the queue.\n\nClear the token cache.\n",
-                    "text/markdown",
-                )
-            },
-        )
-        assert uploaded.status_code == 201
-        upload_payload = uploaded.json()["data"]
-        assert upload_payload["file_path"]
-        assert upload_payload["content_hash"]
-
-        ingest = client.post(
-            f"/api/knowledge/databases/{kb_id}/documents",
-            json={
-                "items": [upload_payload["file_path"]],
-                "params": {
-                    "auto_index": True,
-                    "chunk_preset_id": "general",
-                },
-            },
-        )
-        assert ingest.status_code == 202
-        task_id = ingest.json()["data"]["task_id"]
-        assert _wait_for_job(client, kb_id, task_id)["status"] == "succeeded"
-
-        listed = client.get(f"/api/v1/knowledge-bases/{kb_id}/files")
-        assert listed.status_code == 200
-        file_id = listed.json()["data"]["items"][0]["fileId"]
-
-        detail = client.get(f"/api/knowledge/databases/{kb_id}/documents/{file_id}")
-        assert detail.status_code == 200
-        assert "Restart the worker" in detail.json()["data"]["content"]
-
-        basic = client.get(f"/api/knowledge/databases/{kb_id}/documents/{file_id}/basic")
-        assert basic.status_code == 200
-        assert basic.json()["data"]["fileId"] == file_id
-
-        content = client.get(f"/api/knowledge/databases/{kb_id}/documents/{file_id}/content")
-        assert content.status_code == 200
-        assert content.json()["data"]["chunks"]
-
-        updated_query_params = client.put(
-            f"/api/knowledge/databases/{kb_id}/query-params",
-            json={
-                "chunkTopK": 21,
-                "enableRerank": True,
-            },
-        )
-        assert updated_query_params.status_code == 200
-
-        query_params = client.get(f"/api/knowledge/databases/{kb_id}/query-params")
-        assert query_params.status_code == 200
-        params_payload = query_params.json()["data"]["params"]
-        chunk_top_k_option = next(item for item in params_payload["options"] if item["key"] == "chunkTopK")
-        rerank_option = next(item for item in params_payload["options"] if item["key"] == "enableRerank")
-        assert chunk_top_k_option["default"] == 21
-        assert rerank_option["default"] is True
-
-        query_test = client.post(
-            f"/api/knowledge/databases/{kb_id}/query-test",
-            json={
-                "query": "How do we restart the worker?",
-                "meta": {
-                    "mode": "mix",
-                    "top_k": 2,
-                },
-            },
-        )
-        assert query_test.status_code == 200
-        query_payload = query_test.json()["data"]
-        assert query_payload["metadata"]["kbType"] == "lightrag"
-        assert any("restart the worker" in str(item.get("content") or "").lower() for item in query_payload["data"]["chunks"])
-
-
-def test_web_api_legacy_graph_routes_match_yuxi_shape(tmp_path, monkeypatch) -> None:
-    config = _make_test_config(tmp_path, monkeypatch)
-    monkeypatch.setattr("nanobot.web.app.create_rag_engine_from_config", lambda config, instance_dir: FakeRAGEngine())
-    monkeypatch.setattr(
-        "nanobot.web.runtime_services.config.create_rag_engine_from_config",
-        lambda config, instance_dir: FakeRAGEngine(),
-    )
-
-    with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
-        _bootstrap_admin(client)
-
-        created = client.post(
-            "/api/v1/knowledge-bases",
-            json={
-                "name": "Legacy Graph KB",
-                "kbType": "lightrag",
-                "description": "Graph alias smoke test",
-            },
-        )
-        assert created.status_code == 201
-        kb_id = created.json()["data"]["kbId"]
-
-        uploaded = client.post(
-            f"/api/v1/knowledge-bases/{kb_id}/files",
-            files={
-                "file": (
-                    "graph.md",
-                    b"# Graph Runbook\n\nNanobot worker links to cache reset procedures.\n",
-                    "text/markdown",
-                )
-            },
-        )
-        assert uploaded.status_code == 201
-        file_id = uploaded.json()["data"]["items"][0]["fileId"]
-
-        parsed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={"fileIds": [file_id]})
-        assert parsed.status_code == 202
-        assert _wait_for_job(client, kb_id, parsed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
-
-        indexed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/index", json={"fileIds": [file_id]})
-        assert indexed.status_code == 202
-        assert _wait_for_job(client, kb_id, indexed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
-
-        listed = client.get("/api/graph/list")
-        assert listed.status_code == 200
-        graphs = listed.json()["data"]
-        assert any(item["id"] == kb_id and item["type"] == "lightrag" for item in graphs)
-
-        labels = client.get(f"/api/graph/labels?db_id={kb_id}")
-        assert labels.status_code == 200
-        assert labels.json()["data"]["labels"] == ["Document"]
-
-        subgraph = client.get(f"/api/graph/subgraph?db_id={kb_id}&node_label=*&max_depth=2&max_nodes=50")
-        assert subgraph.status_code == 200
-        subgraph_payload = subgraph.json()["data"]
-        assert subgraph_payload["nodes"]
-        assert subgraph_payload["labels"] == ["Document"]
-
-        stats = client.get(f"/api/graph/stats?db_id={kb_id}")
-        assert stats.status_code == 200
-        stats_payload = stats.json()["data"]
-        assert stats_payload["nodeCount"] >= 1
-        assert stats_payload["labels"] == ["Document"]
-
-
-def test_web_api_legacy_graph_routes_and_auth(tmp_path, monkeypatch) -> None:
-    config = _make_test_config(tmp_path, monkeypatch)
-    monkeypatch.setattr("nanobot.web.app.create_rag_engine_from_config", lambda config, instance_dir: FakeRAGEngine())
-    monkeypatch.setattr(
-        "nanobot.web.runtime_services.config.create_rag_engine_from_config",
-        lambda config, instance_dir: FakeRAGEngine(),
-    )
-
-    with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as anonymous_client:
-        unauthenticated = anonymous_client.get("/api/graph/list")
-        assert unauthenticated.status_code == 401
-
-    with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
-        _bootstrap_admin(client)
-
-        created = client.post(
-            "/api/v1/knowledge-bases",
-            json={
-                "name": "Legacy Graph KB",
-                "kbType": "lightrag",
-                "description": "Graph route smoke test",
-            },
-        )
-        assert created.status_code == 201
-        kb_id = created.json()["data"]["kbId"]
-
-        source = client.post(
-            f"/api/v1/knowledge-bases/{kb_id}/sources",
-            json={
-                "sourceType": "faq_table",
-                "title": "Graph FAQ",
-                "items": [
-                    {
-                        "question": "How do we restart nanobot?",
-                        "answer": "Use supervisorctl restart nanobot after checking service health.",
-                    }
-                ],
-            },
-        )
-        assert source.status_code == 201
-        file_id = source.json()["data"]["fileId"]
-
-        parsed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={"fileIds": [file_id]})
-        assert parsed.status_code == 202
-        assert _wait_for_job(client, kb_id, parsed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
-
-        indexed = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/index", json={"fileIds": [file_id]})
-        assert indexed.status_code == 202
-        assert _wait_for_job(client, kb_id, indexed.json()["data"]["job"]["jobId"])["status"] == "succeeded"
-
-        graphs = client.get("/api/graph/list")
-        assert graphs.status_code == 200
-        graph_entries = graphs.json()["data"]
-        assert any(item["id"] == kb_id and item["type"] == "lightrag" for item in graph_entries)
-
-        labels = client.get(f"/api/graph/labels?db_id={kb_id}")
-        assert labels.status_code == 200
-        assert labels.json()["data"]["labels"] == ["Document"]
-
-        subgraph = client.get(f"/api/graph/subgraph?db_id={kb_id}&node_label=*&max_depth=2&max_nodes=20")
-        assert subgraph.status_code == 200
-        assert subgraph.json()["data"]["nodes"]
-
-        stats = client.get(f"/api/graph/stats?db_id={kb_id}")
-        assert stats.status_code == 200
-        assert stats.json()["data"]["nodeCount"] >= 1
+        assert client.post("/api/knowledge/databases", json={"name": "legacy"}).status_code == 404
+        assert client.get("/api/graph/list").status_code == 404
+        assert client.post("/api/knowledge/files/upload?db_id=any").status_code == 404

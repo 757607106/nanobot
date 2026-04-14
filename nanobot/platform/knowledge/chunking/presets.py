@@ -42,14 +42,12 @@ def resolve_chunk_params(
     params = {**(kb_params or {}), **(file_params or {})}
     preset_id = str(
         params.get("chunk_preset_id")
-        or params.get("chunkPresetId")
         or "general"
     ).strip().lower()
     chunk_size = max(
         200,
         int(
             params.get("chunk_size")
-            or params.get("chunkSize")
             or DEFAULT_CHUNK_SIZE
         ),
     )
@@ -57,11 +55,10 @@ def resolve_chunk_params(
         0,
         int(
             params.get("chunk_overlap")
-            or params.get("chunkOverlap")
             or DEFAULT_CHUNK_OVERLAP
         ),
     )
     qa_separator = str(
-        params.get("qa_separator") or params.get("qaSeparator") or ""
+        params.get("qa_separator") or ""
     ).strip()
     return preset_id, chunk_size, chunk_overlap, qa_separator

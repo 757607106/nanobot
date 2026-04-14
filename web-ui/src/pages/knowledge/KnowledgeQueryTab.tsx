@@ -151,7 +151,7 @@ export function KnowledgeQueryTab({
                 <InputNumber
                   min={1}
                   max={100}
-                  value={queryParams.topK}
+                  value={queryParams.top_k}
                   onChange={(value) => onTopKChange(Number(value || 10))}
                   style={{ width: '100%', marginTop: 8 }}
                 />
@@ -161,7 +161,7 @@ export function KnowledgeQueryTab({
                 <InputNumber
                   min={1}
                   max={100}
-                  value={queryParams.chunkTopK}
+                  value={queryParams.chunk_top_k}
                   onChange={(value) => onChunkTopKChange(Number(value || 12))}
                   style={{ width: '100%', marginTop: 8 }}
                 />
@@ -181,8 +181,8 @@ export function KnowledgeQueryTab({
               <div style={{ minWidth: 120 }}>
                 <Text type="secondary">结果重排</Text>
                 <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Switch checked={queryParams.enableRerank} onChange={onEnableRerankChange} />
-                  <Text type="secondary">{queryParams.enableRerank ? '已开启' : '已关闭'}</Text>
+                  <Switch checked={queryParams.enable_rerank} onChange={onEnableRerankChange} />
+                  <Text type="secondary">{queryParams.enable_rerank ? '已开启' : '已关闭'}</Text>
                 </div>
               </div>
             </Space>

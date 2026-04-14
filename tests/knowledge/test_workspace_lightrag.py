@@ -3,18 +3,24 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from nanobot.config.schema import Config
 from nanobot.platform.knowledge.rag_engine import IndexResult
 from nanobot.platform.instances import PlatformInstance
-from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
+from nanobot.platform.knowledge import KnowledgeBaseService, create_knowledge_store
 from tests.knowledge_test_utils import FakeRAGEngine
 
 
 def _make_instance(tmp_path: Path) -> PlatformInstance:
+    unique_id = f"instance-{tmp_path.parent.name}-{tmp_path.name}"
     return PlatformInstance(
-        id="instance-test",
+        id=unique_id,
         label="Test Instance",
         config_path=tmp_path / "instance" / "config.json",
     )
+
+
+def _make_store(instance: PlatformInstance):
+    return create_knowledge_store(Config(), instance)
 
 
 def _wait_for_job(service: KnowledgeBaseService, kb_id: str, job_id: str) -> dict[str, object]:
@@ -30,7 +36,7 @@ def _wait_for_job(service: KnowledgeBaseService, kb_id: str, job_id: str) -> dic
 def test_lightrag_index_respects_chunk_params_and_file_id_aliases(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=FakeRAGEngine(),
@@ -44,9 +50,9 @@ def test_lightrag_index_respects_chunk_params_and_file_id_aliases(tmp_path: Path
         }
     )
     kb_id = created["kbId"]
-    assert created["queryParams"]["mode"] == "mix"
-    assert created["queryParams"]["topK"] == 10
-    assert created["queryParams"]["onlyNeedContext"] is True
+    assert created["query_params"]["mode"] == "mix"
+    assert created["query_params"]["top_k"] == 10
+    assert created["query_params"]["only_need_context"] is True
 
     uploaded = service.upload_files(
         kb_id,
@@ -73,7 +79,7 @@ def test_lightrag_index_respects_chunk_params_and_file_id_aliases(tmp_path: Path
         {
             "file_ids": [file_id],
             "params": {
-                "chunkPresetId": "qa",
+                "chunk_preset_id": "qa",
             },
         },
     )["job"]["jobId"]
@@ -102,7 +108,7 @@ def test_lightrag_index_respects_chunk_params_and_file_id_aliases(tmp_path: Path
 def test_lightrag_index_uses_kb_default_chunk_params_when_file_has_none(tmp_path: Path) -> None:
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=FakeRAGEngine(),
@@ -133,10 +139,10 @@ def test_lightrag_index_uses_kb_default_chunk_params_when_file_has_none(tmp_path
     )
     file_id = uploaded["items"][0]["fileId"]
 
-    parse_job = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    parse_job = service.parse_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, parse_job)["status"] == "succeeded"
 
-    index_job = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    index_job = service.index_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, index_job)["status"] == "succeeded"
 
     file_payload = next(item for item in service.list_files(kb_id)["items"] if item["fileId"] == file_id)
@@ -163,7 +169,7 @@ def test_lightrag_index_prefers_local_chunk_count_over_lightrag_status_metadata(
 
     instance = _make_instance(tmp_path)
     service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        _make_store(instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=MisreportingInsertRAGEngine(),
@@ -194,10 +200,10 @@ def test_lightrag_index_prefers_local_chunk_count_over_lightrag_status_metadata(
     )
     file_id = uploaded["items"][0]["fileId"]
 
-    parse_job = service.parse_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    parse_job = service.parse_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, parse_job)["status"] == "succeeded"
 
-    index_job = service.index_files(kb_id, {"fileIds": [file_id]})["job"]["jobId"]
+    index_job = service.index_files(kb_id, {"file_ids": [file_id]})["job"]["jobId"]
     assert _wait_for_job(service, kb_id, index_job)["status"] == "succeeded"
 
     file_payload = next(item for item in service.list_files(kb_id)["items"] if item["fileId"] == file_id)

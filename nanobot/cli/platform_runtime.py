@@ -16,7 +16,8 @@ from nanobot.cron.service import CronService
 from nanobot.platform.agents import AgentDefinitionService, AgentDefinitionStore
 from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBindingStore
 from nanobot.platform.instances import PlatformInstance
-from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
+from nanobot.platform.knowledge import KnowledgeBaseService
+from nanobot.platform.knowledge.store import create_knowledge_store
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.memory import MemoryService, MemoryStore
 from nanobot.platform.runs import RunService, RunStore
@@ -118,7 +119,7 @@ def build_cli_gateway_routing_runtime(
     )
     routing_service = ChannelRoutingService(channel_bindings)
     knowledge_service = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        create_knowledge_store(config, instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=create_rag_engine_from_config(config, instance.data_dir),

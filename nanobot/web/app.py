@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -19,7 +19,8 @@ from nanobot.platform.agents import AgentDefinitionService, AgentDefinitionStore
 from nanobot.platform.channel_audit import ChannelAuditService, ChannelAuditStore
 from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBindingStore
 from nanobot.platform.instances import PlatformInstanceService
-from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseStore
+from nanobot.platform.knowledge import KnowledgeBaseService
+from nanobot.platform.knowledge.store import create_knowledge_store
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.memory import MemoryService, MemoryStore
 from nanobot.platform.runs import RunService, RunStore
@@ -133,7 +134,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     )
     rag_engine = create_rag_engine_from_config(config, instance.data_dir)
     knowledge = KnowledgeBaseService(
-        KnowledgeBaseStore(instance.knowledge_db_path()),
+        create_knowledge_store(config, instance),
         instance=instance,
         instance_id=instance.id,
         rag_engine=rag_engine,
@@ -205,10 +206,9 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     @app.middleware("http")
     async def enforce_web_auth(request: Request, call_next):
         path = request.url.path
-        protected_legacy_prefixes = ("/api/knowledge/", "/api/evaluation/", "/api/graph/", "/api/mindmap/")
         if request.method == "OPTIONS":
             return await call_next(request)
-        if not path.startswith("/api/v1/") and not any(path.startswith(prefix) for prefix in protected_legacy_prefixes):
+        if not path.startswith("/api/v1/"):
             return await call_next(request)
         if path == "/api/v1/health" or path.startswith("/api/v1/auth/"):
             response = await call_next(request)

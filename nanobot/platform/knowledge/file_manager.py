@@ -498,8 +498,8 @@ class KnowledgeFileManager:
         ingest = self.ingest_files(
             kb_id,
             {
-                "fileIds": [updated_source.file_id],
-                "params": {"autoIndex": True},
+                "file_ids": [updated_source.file_id],
+                "params": {"auto_index": True},
             },
         )
         refreshed = self._require_file(kb_id, updated_source.file_id)
@@ -571,10 +571,10 @@ class KnowledgeFileManager:
 
     def delete_files(self, kb_id: str, file_ids: list[str]) -> dict[str, Any]:
         deleted: list[str] = []
-        for file_id in normalize_string_list(file_ids, field_name="fileIds"):
+        for file_id in normalize_string_list(file_ids, field_name="file_ids"):
             if self.delete_file(kb_id, file_id):
                 deleted.append(file_id)
-        return {"deletedCount": len(deleted), "fileIds": deleted}
+        return {"deleted_count": len(deleted), "file_ids": deleted}
 
     def get_file_detail(self, kb_id: str, file_id: str) -> dict[str, Any]:
         self.require_kb(kb_id)

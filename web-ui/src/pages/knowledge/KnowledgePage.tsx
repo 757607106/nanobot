@@ -512,10 +512,10 @@ export default function KnowledgePage() {
       const defaultQueryParams = getDefaultQueryParams()
       setQueryParams({
         ...defaultQueryParams,
-        ...(kb.queryParams || {}),
+        ...(kb.query_params || {}),
         options: {
           ...(defaultQueryParams.options || {}),
-          ...(kb.queryParams?.options || {}),
+          ...(kb.query_params?.options || {}),
         },
       })
       setQueryParamSchema(querySchemaPayload)
@@ -734,10 +734,10 @@ export default function KnowledgePage() {
       await api.indexKnowledgeFiles(currentKb.kbId, {
         fileIds: targetFileIds,
         params: {
-          chunkSize: indexConfig.chunkSize,
-          chunkOverlap: indexConfig.chunkOverlap,
-          chunkPresetId: indexConfig.chunkPresetId,
-          qaSeparator: indexConfig.qaSeparator.trim() || undefined,
+          chunk_size: indexConfig.chunkSize,
+          chunk_overlap: indexConfig.chunkOverlap,
+          chunk_preset_id: indexConfig.chunkPresetId,
+          qa_separator: indexConfig.qaSeparator.trim() || undefined,
         },
       })
       message.success('索引任务已提交')
@@ -825,18 +825,18 @@ export default function KnowledgePage() {
     switch (key) {
       case 'mode':
         return queryParams.mode
-      case 'topK':
-        return queryParams.topK
-      case 'chunkTopK':
-        return queryParams.chunkTopK
-      case 'responseType':
-        return queryParams.responseType
-      case 'onlyNeedContext':
-        return queryParams.onlyNeedContext
-      case 'onlyNeedPrompt':
-        return queryParams.onlyNeedPrompt
-      case 'enableRerank':
-        return queryParams.enableRerank
+      case 'top_k':
+        return queryParams.top_k
+      case 'chunk_top_k':
+        return queryParams.chunk_top_k
+      case 'response_type':
+        return queryParams.response_type
+      case 'only_need_context':
+        return queryParams.only_need_context
+      case 'only_need_prompt':
+        return queryParams.only_need_prompt
+      case 'enable_rerank':
+        return queryParams.enable_rerank
       default:
         return queryParams.options?.[key]
     }
@@ -847,23 +847,23 @@ export default function KnowledgePage() {
       case 'mode':
         setQueryParams((prev) => ({ ...prev, mode: String(value || prev.mode) }))
         return
-      case 'topK':
-        setQueryParams((prev) => ({ ...prev, topK: Number(value || prev.topK || 10) }))
+      case 'top_k':
+        setQueryParams((prev) => ({ ...prev, top_k: Number(value || prev.top_k || 10) }))
         return
-      case 'chunkTopK':
-        setQueryParams((prev) => ({ ...prev, chunkTopK: Number(value || prev.chunkTopK || 12) }))
+      case 'chunk_top_k':
+        setQueryParams((prev) => ({ ...prev, chunk_top_k: Number(value || prev.chunk_top_k || 12) }))
         return
-      case 'responseType':
-        setQueryParams((prev) => ({ ...prev, responseType: String(value || prev.responseType) }))
+      case 'response_type':
+        setQueryParams((prev) => ({ ...prev, response_type: String(value || prev.response_type) }))
         return
-      case 'onlyNeedContext':
-        setQueryParams((prev) => ({ ...prev, onlyNeedContext: Boolean(value) }))
+      case 'only_need_context':
+        setQueryParams((prev) => ({ ...prev, only_need_context: Boolean(value) }))
         return
-      case 'onlyNeedPrompt':
-        setQueryParams((prev) => ({ ...prev, onlyNeedPrompt: Boolean(value) }))
+      case 'only_need_prompt':
+        setQueryParams((prev) => ({ ...prev, only_need_prompt: Boolean(value) }))
         return
-      case 'enableRerank':
-        setQueryParams((prev) => ({ ...prev, enableRerank: Boolean(value) }))
+      case 'enable_rerank':
+        setQueryParams((prev) => ({ ...prev, enable_rerank: Boolean(value) }))
         return
       default:
         updateQueryOption(key, value)
@@ -878,11 +878,11 @@ export default function KnowledgePage() {
       const result = await api.queryKnowledgeBase(currentKb.kbId, {
         query,
         mode: queryParams.mode,
-        topK: queryParams.topK,
-        chunkTopK: queryParams.chunkTopK,
-        enableRerank: queryParams.enableRerank,
-        onlyNeedContext: false,
-        onlyNeedPrompt: false,
+        top_k: queryParams.top_k,
+        chunk_top_k: queryParams.chunk_top_k,
+        enable_rerank: queryParams.enable_rerank,
+        only_need_context: false,
+        only_need_prompt: false,
         ...queryParams.options,
       })
       setQueryResult(result)
