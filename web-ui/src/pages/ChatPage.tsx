@@ -119,7 +119,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const selectedSessionSubtitle = selectedSessionUpdatedAt
     ? `最近更新 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}`
     : ''
-  const reasoningSupported = (workspaceData?.runtime.supportsReasoning ?? true) !== false
+  const reasoningSupported = (workspaceData?.runtime?.supportsReasoning ?? true) !== false
 
   const assistantLabel = inAgentMode
     ? String(activeAgent?.name || agentId || '智能体')
@@ -142,8 +142,8 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
     if (reasoningPreferenceTouchedRef.current || reasoningEffort !== null) {
       return
     }
-    setReasoningEffort(normalizeReasoningEffortLevel(workspaceData?.runtime.reasoningEffort))
-  }, [reasoningEffort, reasoningSupported, workspaceData?.runtime.reasoningEffort])
+    setReasoningEffort(normalizeReasoningEffortLevel(workspaceData?.runtime?.reasoningEffort))
+  }, [reasoningEffort, reasoningSupported, workspaceData?.runtime?.reasoningEffort])
 
   // Agent picker options for the Select component
   const agentSelectOptions = useMemo(() => {

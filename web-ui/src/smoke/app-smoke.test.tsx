@@ -1808,6 +1808,7 @@ function makeChatWorkspace() {
       resolvedProvider: 'deepseek',
       resolvedBinding: 'deepseek-default',
       model: 'deepseek/deepseek-chat',
+      supportsReasoning: true,
       reasoningEffort: 'medium',
       maxToolIterations: 24,
       restrictToWorkspace: true,
@@ -1833,6 +1834,16 @@ function makeChatWorkspace() {
       '检查当前项目里最需要优先处理的问题',
     ],
   }
+}
+
+function mockChatPageApi(workspacePayload = makeChatWorkspace()) {
+  mockApi.getChatWorkspace.mockResolvedValue(workspacePayload)
+  mockApi.getSessions.mockResolvedValue({
+    items: [{ id: 'smoke-session', sessionId: 'web:smoke-session', title: 'Smoke Session', createdAt: '2026-03-13T10:00:00Z', updatedAt: '2026-03-13T10:00:00Z', messageCount: 1 }],
+  })
+  mockApi.getMessages.mockResolvedValue([])
+  mockApi.getSessionFiles.mockResolvedValue([])
+  mockApi.getAgents.mockResolvedValue(makeAgents())
 }
 
 function renderShell() {
@@ -3668,13 +3679,7 @@ describe('web app smoke pages', () => {
   })
 
   it('renders the chat page', async () => {
-    mockApi.getChatWorkspace.mockResolvedValue({ sessionId: 'smoke-session', agentId: 'support-lead' })
-    mockApi.getSessions.mockResolvedValue({
-      items: [{ id: 'smoke-session', sessionId: 'web:smoke-session', title: 'Smoke Session', createdAt: '2026-03-13T10:00:00Z', updatedAt: '2026-03-13T10:00:00Z', messageCount: 1 }],
-    })
-    mockApi.getMessages.mockResolvedValue([])
-    mockApi.getSessionFiles.mockResolvedValue([])
-    mockApi.getAgents.mockResolvedValue(makeAgents())
+    mockChatPageApi()
     renderPage(<ChatPage />)
     expect(await screen.findByRole('textbox', { name: /sender/i })).toBeInTheDocument()
   })
