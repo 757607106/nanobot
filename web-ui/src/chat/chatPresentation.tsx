@@ -86,7 +86,6 @@ function CodeBlockComponent(props: XMarkdownComponentProps) {
     lang,
     block,
     children,
-    domNode,
     streamStatus,
     class: htmlClass,
     ...rest
@@ -121,9 +120,14 @@ function MarkdownBubble({ content, isStreaming }: { content: string; isStreaming
     <div className="markdown-bubble">
       <XMarkdown
         content={content}
-        streaming={{ hasNextChunk: !!isStreaming }}
+        className="x-markdown-light"
+        streaming={{
+          hasNextChunk: !!isStreaming,
+          tail: true,
+        }}
         components={XMARKDOWN_COMPONENTS}
-        paragraphTag="div"
+        openLinksInNewTab
+        escapeRawHtml
       />
     </div>
   )
@@ -225,14 +229,13 @@ export function ChatMessageBody({
       effectiveReasoning = allReasoning
     }
 
-    // Find content from the last assistant sub-message (the final answer)
-    if (!effectiveContent.trim()) {
-      const lastAssistantWithContent = [...subMessages]
-        .reverse()
-        .find(m => m.role === 'assistant' && m.content?.trim())
-      if (lastAssistantWithContent) {
-        effectiveContent = lastAssistantWithContent.content || ''
-      }
+    // Always use the latest assistant segment as the visible answer.
+    // Streaming may accumulate intermediate iterations in the primary message.
+    const lastAssistantWithContent = [...subMessages]
+      .reverse()
+      .find(m => m.role === 'assistant' && m.content?.trim())
+    if (lastAssistantWithContent) {
+      effectiveContent = lastAssistantWithContent.content || ''
     }
   }
 

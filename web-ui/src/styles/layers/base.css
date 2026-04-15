@@ -52,7 +52,3 @@ body::before {
   pointer-events: none;
   opacity: 1;
 }
-
-a {
-  color: inherit;
-}

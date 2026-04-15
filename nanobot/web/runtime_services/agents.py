@@ -623,6 +623,7 @@ class WebAgentRuntimeService:
         on_stream: Callable[[str], Awaitable[None]] | None = None,
         on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
         chat_message: dict[str, Any] | None = None,
+        reasoning_effort: str | None = None,
     ) -> str:
         if hasattr(isolated_agent, "_process_message") and hasattr(isolated_agent, "_connect_mcp"):
             await isolated_agent._connect_mcp()
@@ -631,6 +632,8 @@ class WebAgentRuntimeService:
                 run_context["run_event_sink"] = on_run_event
             if chat_message is not None:
                 run_context["chat_message"] = chat_message
+            if reasoning_effort:
+                run_context["reasoning_effort"] = reasoning_effort
             response = await isolated_agent._process_message(
                 InboundMessage(
                     channel=execution_context.origin_channel,
@@ -778,6 +781,7 @@ class WebAgentRuntimeService:
         on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         if not self.state.agent or not self.state.sessions or not self.state.runs:
             raise RuntimeError("Web agent runtime is not available.")
@@ -974,6 +978,7 @@ class WebAgentRuntimeService:
                         on_stream=on_stream,
                         on_run_event=on_run_event,
                         chat_message=chat_message,
+                        reasoning_effort=reasoning_effort,
                     ),
                     timeout=timeout_seconds,
                 )
@@ -1128,17 +1133,32 @@ class WebAgentRuntimeService:
         name = str(payload.get("name") or "未命名助手").strip()
         description = str(payload.get("description") or "无详细背景").strip()
         original_prompt = str(payload.get("system_prompt") or payload.get("systemPrompt") or "").strip()
-        model = str(payload.get("model") or "").strip() or self.state.config.agents.defaults.model
-        provider = str(payload.get("provider") or "").strip() or self.state.config.agents.defaults.provider
+        defaults = self.state.config.agents.defaults
 
-        if not provider:
-            from nanobot.platform.agents.model_selection import canonicalize_agent_model_selection
-            selection = canonicalize_agent_model_selection(model=model, binding=None, provider=None, global_config_meta=self.state.get_config_meta())
-            provider = selection.provider
+        # Prompt optimization must always follow global Model Center defaults,
+        # not per-agent editor engine selections.
+        selection = canonicalize_agent_model_selection(
+            self.state.config,
+            model=None,
+            binding=None,
+            provider=None,
+            default_model=defaults.model,
+            default_binding=defaults.binding,
+            default_provider=defaults.provider,
+        )
+        model = str(selection.model or defaults.model).strip()
+        if not model:
+            raise ValueError("No model configured for prompt optimization.")
 
         config_override = self.state.config.model_copy(deep=True)
         config_override.agents.defaults.model = model
-        config_override.agents.defaults.provider = provider
+        config_override.agents.defaults.binding = selection.binding
+        config_override.agents.defaults.provider = (
+            selection.provider
+            or config_override.get_provider_name(model)
+            or defaults.provider
+            or "auto"
+        )
         provider_instance = self.state.config_runtime.make_provider(config_override)
 
         optimize_session_id = f"opt-{int(time.time() * 1000)}"

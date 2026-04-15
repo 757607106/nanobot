@@ -93,8 +93,6 @@ export default function AgentEditor({
         name: form.name,
         description: form.description,
         systemPrompt: form.systemPrompt,
-        model: form.model,
-        provider: form.provider,
       })
       if (response && response.optimized_prompt) {
         onUpdateForm('systemPrompt', response.optimized_prompt)

@@ -470,12 +470,16 @@ class Consolidator:
         The budget reserves space for completion tokens and a safety buffer
         so the LLM request never exceeds the context window.
         """
-        if not session.messages or self.context_window_tokens <= 0:
+        if not session.messages:
+            return
+
+        context_window_tokens = int(self.context_window_tokens or 0)
+        if context_window_tokens <= 0:
             return
 
         lock = self.get_lock(session.key)
         async with lock:
-            budget = self.context_window_tokens - self.max_completion_tokens - self._SAFETY_BUFFER
+            budget = context_window_tokens - self.max_completion_tokens - self._SAFETY_BUFFER
             target = budget // 2
             estimated, source = self.estimate_session_prompt_tokens(session)
             if estimated <= 0:
@@ -485,7 +489,7 @@ class Consolidator:
                     "Token consolidation idle {}: {}/{} via {}",
                     session.key,
                     estimated,
-                    self.context_window_tokens,
+                    context_window_tokens,
                     source,
                 )
                 return
@@ -513,7 +517,7 @@ class Consolidator:
                     round_num,
                     session.key,
                     estimated,
-                    self.context_window_tokens,
+                    context_window_tokens,
                     source,
                     len(chunk),
                 )

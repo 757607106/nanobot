@@ -96,10 +96,6 @@
   overflow: auto;
 }
 
-.knowledge-file-detail-markdown > :first-child {
-  margin-top: 0;
-}
-
 .knowledge-file-detail-chunks {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -176,11 +172,6 @@
   margin: 0 auto;
   border-radius: calc(var(--nb-radius-lg) + 2px);
   box-shadow: var(--nb-shadow-soft);
-}
-
-.knowledge-file-preview-markdown img {
-  max-width: 100%;
-  height: auto;
 }
 
 .knowledge-file-preview-text {

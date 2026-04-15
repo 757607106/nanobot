@@ -62,13 +62,12 @@
 }
 
 /* ──────────────────── Typography Flow ──────────────────── */
-h1, h2, h3, h4, h5, h6,
 .ant-typography {
   color: var(--nb-ink);
   letter-spacing: -0.01em;
 }
 
-p, .ant-typography p {
+.ant-typography p {
   color: var(--nb-muted);
 }
 

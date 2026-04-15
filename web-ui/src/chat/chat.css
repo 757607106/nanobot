@@ -99,8 +99,6 @@
 
 .markdown-bubble {
   min-width: 0;
-  font-size: var(--nb-text-md);
-  line-height: var(--nb-line-relaxed);
 }
 
 .chat-attachment-tag {

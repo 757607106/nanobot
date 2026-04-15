@@ -299,6 +299,7 @@ class WebAgentChatRuntimeService:
         display_content: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
         on_stream=None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         agent = self._require_agent(agent_id, tenant_id=tenant_id)
         key = self.session_key(agent_id, session_id)
@@ -335,6 +336,7 @@ class WebAgentChatRuntimeService:
             on_stream=on_stream,
             display_content=display_content,
             attachments=attachments,
+            reasoning_effort=reasoning_effort,
         )
         assistant_message = result.get("assistantMessage")
         return {

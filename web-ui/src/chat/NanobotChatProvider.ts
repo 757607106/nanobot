@@ -3,12 +3,9 @@ import {
   XRequest,
   type SSEOutput,
   type TransformMessage,
-  type XRequestOptions,
 } from '@ant-design/x-sdk'
-import { ApiError } from '../api'
 import type { ChatMessage, ChatRequestInput, StreamEvent } from '../types'
 import {
-  collectProgressSteps,
   dedupeAttachmentRefs,
   getToolCallName,
   normalizeChatMessage,
@@ -83,6 +80,16 @@ function clearReasoning(message: ChatMessage, subMessages: ChatMessage[]) {
   for (const item of subMessages) {
     item.reasoningContent = undefined
   }
+}
+
+function getLatestAssistantContent(subMessages: ChatMessage[], fallbackContent?: string) {
+  for (let i = subMessages.length - 1; i >= 0; i -= 1) {
+    const item = subMessages[i]
+    if (item.role === 'assistant' && String(item.content || '').trim()) {
+      return String(item.content || '')
+    }
+  }
+  return String(fallbackContent || '')
 }
 
 export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatRequestInput, SSEOutput> {
@@ -273,19 +280,18 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
       )
       if (doneEvent?.message) {
         const serverMsg = doneEvent.message
-        // Streaming accumulates content & reasoning across ALL LLM iterations.
-        // The server's last assistant message may only contain the final iteration's data,
-        // losing earlier iterations' reasoning and potentially content.
-        // Prefer the longer (more complete) version for text fields.
-        const streamContent = baseMessage.content || ''
+        // Streaming may include intermediate iterations. Use the latest assistant
+        // segment as fallback, and prefer server content when available.
+        const streamContent = getLatestAssistantContent(subMessages, baseMessage.content || '')
         const serverContent = typeof serverMsg.content === 'string' ? serverMsg.content : ''
         const streamReasoning = baseMessage.reasoningContent || ''
         const serverReasoning = serverMsg.reasoningContent || ''
+        const finalContent = serverContent.trim() ? serverContent : streamContent
 
         const finalMessage = normalizeChatMessage({
           ...baseMessage,
           ...serverMsg,
-          content: streamContent.length >= serverContent.length ? streamContent : serverContent,
+          content: finalContent,
           reasoningContent: streamReasoning.length >= serverReasoning.length ? streamReasoning : serverReasoning,
           progressSteps: baseMessage.progressSteps ?? serverMsg.progressSteps ?? [],
         })

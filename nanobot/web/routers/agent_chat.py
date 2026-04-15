@@ -139,6 +139,7 @@ async def create_agent_chat_message(
     state = request.app.state.web
     tenant_id = get_tenant_id(request)
     attachments = payload.attachments or []
+    reasoning_effort = (payload.reasoningEffort or "").strip() or None
 
     if stream:
 
@@ -170,12 +171,13 @@ async def create_agent_chat_message(
                         event["toolCallId"] = tool_call_id
                 await queue.put(event)
 
-            async def on_stream(chunk_content: str) -> None:
-                if chunk_content:
+            async def on_stream(chunk_content: str, reasoning_content: str | None = None) -> None:
+                if chunk_content or reasoning_content:
                     await queue.put(
                         {
                             "type": "chunk",
-                            "content": chunk_content,
+                            "content": chunk_content or "",
+                            "reasoningContent": reasoning_content or "",
                         }
                     )
 
@@ -191,6 +193,7 @@ async def create_agent_chat_message(
                         display_content=display_content,
                         attachments=attachments,
                         on_stream=on_stream,
+                        reasoning_effort=reasoning_effort,
                     )
                     await queue.put({"type": "done", **data})
                 except KeyError:
@@ -239,6 +242,7 @@ async def create_agent_chat_message(
             tenant_id=tenant_id,
             display_content=display_content,
             attachments=attachments,
+            reasoning_effort=reasoning_effort,
         )
     except KeyError as exc:
         raise APIError(404, "AGENT_OR_SESSION_NOT_FOUND", "Agent session not found.") from exc

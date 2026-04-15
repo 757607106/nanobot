@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Alert, Button, Empty, Segmented, Space, Spin, Tag, Typography } from 'antd'
 import { DownloadOutlined, FileSearchOutlined } from '@ant-design/icons'
 import { useParams } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import type { ComponentProps as XMarkdownComponentProps } from '@ant-design/x-markdown'
+import { XMarkdown } from '@ant-design/x-markdown'
 import { api } from '../../api'
 import { getErrorMessage } from '../../errorMessage'
 import type { KnowledgeFilePreview } from '../../types'
@@ -23,6 +23,18 @@ const PREVIEW_KIND_LABELS: Record<KnowledgeFilePreview['previewKind'], string> =
 
 const TEXTUAL_PREVIEW_KINDS: KnowledgeFilePreview['previewKind'][] = ['html', 'markdown', 'text']
 
+type MarkdownAnchorProps = XMarkdownComponentProps & {
+  href?: string
+  children?: ReactNode
+  class?: string
+}
+
+type MarkdownImageProps = XMarkdownComponentProps & {
+  src?: string
+  alt?: string
+  class?: string
+}
+
 export default function KnowledgeFilePreviewPage() {
   const { kbId = '', fileId = '' } = useParams()
   const [preview, setPreview] = useState<KnowledgeFilePreview | null>(null)
@@ -39,6 +51,38 @@ export default function KnowledgeFilePreviewPage() {
         ? buildPreviewHtmlDocument(content, { baseUrl: preview.baseUrl })
         : '',
     [content, htmlPreviewMode, preview],
+  )
+  const markdownComponents = useMemo<Record<string, React.ComponentType<XMarkdownComponentProps>>>(
+    () => ({
+      a: ((props: XMarkdownComponentProps) => {
+        const { href, children, class: htmlClass, ...rest } = props as MarkdownAnchorProps
+        const resolvedHref = resolvePreviewUrl(href, preview?.baseUrl, 'link')
+        const isFragment = typeof resolvedHref === 'string' && resolvedHref.startsWith('#')
+        if (!resolvedHref) {
+          return <span {...rest} className={htmlClass}>{children}</span>
+        }
+        return (
+          <a
+            {...rest}
+            className={htmlClass}
+            href={resolvedHref}
+            target={isFragment ? undefined : '_blank'}
+            rel={isFragment ? undefined : 'noopener noreferrer'}
+          >
+            {children}
+          </a>
+        )
+      }) as React.ComponentType<XMarkdownComponentProps>,
+      img: ((props: XMarkdownComponentProps) => {
+        const { src, alt, class: htmlClass, ...rest } = props as MarkdownImageProps
+        const resolvedSrc = resolvePreviewUrl(src, preview?.baseUrl, 'resource')
+        if (!resolvedSrc) {
+          return <Text type="secondary">[图片资源不可用]</Text>
+        }
+        return <img {...rest} className={htmlClass} src={resolvedSrc} alt={alt || ''} loading="lazy" />
+      }) as React.ComponentType<XMarkdownComponentProps>,
+    }),
+    [preview?.baseUrl],
   )
 
   useEffect(() => {
@@ -89,40 +133,16 @@ export default function KnowledgeFilePreviewPage() {
     }
   }, [fileId, kbId])
 
-  function renderMarkdownPreview(data: KnowledgeFilePreview) {
+  function renderMarkdownPreview() {
     return (
       <div className="knowledge-file-preview-markdown">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            a: ({ href, children, ...props }) => {
-              const resolvedHref = resolvePreviewUrl(href, data.baseUrl, 'link')
-              const isFragment = typeof resolvedHref === 'string' && resolvedHref.startsWith('#')
-              if (!resolvedHref) {
-                return <span {...props}>{children}</span>
-              }
-              return (
-                <a
-                  {...props}
-                  href={resolvedHref}
-                  target={isFragment ? undefined : '_blank'}
-                  rel={isFragment ? undefined : 'noopener noreferrer'}
-                >
-                  {children}
-                </a>
-              )
-            },
-            img: ({ src, alt, ...props }) => {
-              const resolvedSrc = resolvePreviewUrl(src, data.baseUrl, 'resource')
-              if (!resolvedSrc) {
-                return <Text type="secondary">[图片资源不可用]</Text>
-              }
-              return <img {...props} src={resolvedSrc} alt={alt || ''} loading="lazy" />
-            },
-          }}
-        >
-          {content}
-        </ReactMarkdown>
+        <XMarkdown
+          content={content}
+          className="x-markdown-light"
+          components={markdownComponents}
+          openLinksInNewTab
+          escapeRawHtml
+        />
       </div>
     )
   }
@@ -161,7 +181,7 @@ export default function KnowledgeFilePreviewPage() {
     }
 
     if (data.previewKind === 'markdown') {
-      return renderMarkdownPreview(data)
+      return renderMarkdownPreview()
     }
 
     if (data.previewKind === 'text') {

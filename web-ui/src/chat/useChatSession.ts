@@ -293,22 +293,29 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
         // Streaming accumulates everything into a single message; the server splits into per-iteration messages.
         // We must put the accumulated data on the FIRST assistant so the grouping primary has it.
         if (lastStreamingAssistant) {
+          const streamSubMessages = Array.isArray((lastStreamingAssistant as any)._subMessages)
+            ? ((lastStreamingAssistant as any)._subMessages as ChatMessage[])
+            : [lastStreamingAssistant]
+          const streamFinalContent = [...streamSubMessages]
+            .reverse()
+            .find((m) => m.role === 'assistant' && m.content?.trim())
+            ?.content || ''
+
           for (let i = 0; i < serverItems.length; i++) {
             if (serverItems[i].message.role === 'assistant') {
               const serverMsg = serverItems[i].message
               const streamSteps = lastStreamingAssistant.progressSteps || []
               const streamReasoning = lastStreamingAssistant.reasoningContent || ''
               const serverReasoning = serverMsg.reasoningContent || ''
-              const streamContent = lastStreamingAssistant.content || ''
               const serverContent = serverMsg.content || ''
 
               serverItems[i] = {
                 ...serverItems[i],
                 message: normalizeChatMessage({
                   ...serverMsg,
-                  // Prefer the longer (more complete) version — streaming accumulates across all LLM iterations
-                  content: streamContent.length >= serverContent.length ? streamContent : serverContent,
-                  reasoningContent: streamReasoning.length >= serverReasoning.length ? streamReasoning : serverReasoning,
+                  // Prefer persisted server content; only fallback to stream value when missing.
+                  content: serverContent.trim() ? serverContent : streamFinalContent,
+                  reasoningContent: serverReasoning.trim() ? serverReasoning : streamReasoning,
                   // Server never has progressSteps; always use the streaming version
                   progressSteps: streamSteps.length > 0 ? streamSteps : (serverMsg.progressSteps || []),
                 }),

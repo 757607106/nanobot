@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Empty, Modal, Segmented, Space, Spin, Typography } from 'antd'
 import { DownloadOutlined, FileSearchOutlined } from '@ant-design/icons'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { XMarkdown } from '@ant-design/x-markdown'
 import { api } from '../../api'
 import type { KnowledgeFileDetail } from '../../types'
 
@@ -106,7 +105,12 @@ export function KnowledgeFileDetailModal({
             )
           ) : detail.content.trim() ? (
             <div className="knowledge-file-detail-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{detail.content}</ReactMarkdown>
+              <XMarkdown
+                content={detail.content}
+                className="x-markdown-light"
+                openLinksInNewTab
+                escapeRawHtml
+              />
             </div>
           ) : (
             <Empty description="当前文件还没有可预览内容" image={false} className="minimal-empty" />
