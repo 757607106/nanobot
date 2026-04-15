@@ -65,7 +65,7 @@ export interface ChatRequestInput {
   query: string
   displayContent?: string
   attachments?: ChatAttachmentRef[]
-  reasoningEffort?: 'low' | 'medium' | 'high' | null
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'none' | null
 }
 
 export interface ChatUploadItem {
@@ -89,6 +89,7 @@ export interface ChatWorkspaceData {
     resolvedProvider?: string | null
     resolvedBinding?: string | null
     model: string
+    supportsReasoning?: boolean
     reasoningEffort?: string | null
     maxToolIterations?: number
     restrictToWorkspace?: boolean
@@ -180,6 +181,7 @@ export interface ProviderMeta {
   keywords: string[]
   defaultApiBase?: string | null
   supportsPromptCaching: boolean
+  supportsReasoning?: boolean
   isGateway: boolean
   isLocal: boolean
   isOauth: boolean

@@ -107,7 +107,9 @@ export class NanobotChatProvider extends AbstractChatProvider<ChatMessage, ChatR
   }
 
   transformParams(requestParams: Partial<ChatRequestInput>) {
-    this._currentReasoningEffortEnabled = Boolean(requestParams.reasoningEffort)
+    this._currentReasoningEffortEnabled = Boolean(
+      requestParams.reasoningEffort && requestParams.reasoningEffort !== 'none',
+    )
     const sessionId = String(requestParams.sessionId || '').trim()
     const query = String(requestParams.query || '').trim()
 

@@ -415,6 +415,10 @@ class WebAgentRuntimeService:
         config.tools.mcp_servers = selected_mcp
         return config
 
+    def get_agent_config(self, agent: dict[str, Any]) -> Config:
+        """Return the fully resolved runtime config for one agent definition."""
+        return self._build_agent_config(agent)
+
     @staticmethod
     def build_workspace_memory_resolver(
         workspace_path: Path,

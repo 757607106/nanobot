@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from loguru import logger
 
+from nanobot.utils.reasoning import normalize_reasoning_effort
 from nanobot.web.http import APIError, _encode_sse, _json_response, _ok
 from nanobot.web.routers.chat import (
     ChatMessageRequest,
@@ -139,7 +140,7 @@ async def create_agent_chat_message(
     state = request.app.state.web
     tenant_id = get_tenant_id(request)
     attachments = payload.attachments or []
-    reasoning_effort = (payload.reasoningEffort or "").strip() or None
+    reasoning_effort = normalize_reasoning_effort(payload.reasoningEffort)
 
     if stream:
 

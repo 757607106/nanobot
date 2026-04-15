@@ -27,6 +27,7 @@ export interface ChatInputProps {
   onDraftAttachmentRefsChange: (refs: ChatAttachmentRef[]) => void
   dropContainerRef: React.RefObject<HTMLElement | null>
   isDesktopLayout: boolean
+  reasoningSupported: boolean
   reasoningEffort: ReasoningEffortLevel | null
   onReasoningEffortChange: (value: ReasoningEffortLevel | null) => void
 }
@@ -53,6 +54,7 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
       onDraftAttachmentRefsChange,
       dropContainerRef,
       isDesktopLayout,
+      reasoningSupported,
       reasoningEffort,
       onReasoningEffortChange,
     },
@@ -185,59 +187,60 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
                     </Badge>
                   </div>
                   <Divider type="vertical" style={{ margin: '0 2px' }} />
-                  {/* 深度思考开关 */}
-                  <Flex align="center" gap={6} style={{
-                    padding: '4px 4px 4px 12px',
-                    borderRadius: 24,
-                    background: thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 6%, transparent)' : 'transparent',
-                    border: `1px solid ${thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 20%, transparent)' : 'transparent'}`,
-                    transition: 'all 0.25s ease'
-                  }}>
-                    <ThunderboltOutlined style={{
-                      fontSize: 14,
-                      color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextQuaternary,
-                      transition: 'color 0.25s',
-                    }} />
-                    <Text
-                      id="chat-thinking-label"
-                      style={{
-                        fontSize: 'var(--nb-text-xs)',
-                        color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextSecondary,
-                        cursor: 'pointer',
-                        userSelect: 'none',
+                  {reasoningSupported && (
+                    <Flex align="center" gap={6} style={{
+                      padding: '4px 4px 4px 12px',
+                      borderRadius: 24,
+                      background: thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 6%, transparent)' : 'transparent',
+                      border: `1px solid ${thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 20%, transparent)' : 'transparent'}`,
+                      transition: 'all 0.25s ease'
+                    }}>
+                      <ThunderboltOutlined style={{
+                        fontSize: 14,
+                        color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextQuaternary,
                         transition: 'color 0.25s',
-                        fontWeight: thinkingEnabled ? 500 : 400,
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => onReasoningEffortChange(thinkingEnabled ? null : 'medium')}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          onReasoningEffortChange(thinkingEnabled ? null : 'medium')
-                        }
-                      }}
-                    >
-                      深度思考
-                    </Text>
-                    <Switch
-                      size="small"
-                      checked={thinkingEnabled}
-                      aria-labelledby="chat-thinking-label"
-                      onChange={(checked) => onReasoningEffortChange(checked ? 'medium' : null)}
-                      style={{ margin: '0 4px' }}
-                    />
-                    {thinkingEnabled && (
-                      <Segmented
+                      }} />
+                      <Text
+                        id="chat-thinking-label"
+                        style={{
+                          fontSize: 'var(--nb-text-xs)',
+                          color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextSecondary,
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          transition: 'color 0.25s',
+                          fontWeight: thinkingEnabled ? 500 : 400,
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onReasoningEffortChange(thinkingEnabled ? null : 'medium')}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            onReasoningEffortChange(thinkingEnabled ? null : 'medium')
+                          }
+                        }}
+                      >
+                        深度思考
+                      </Text>
+                      <Switch
                         size="small"
-                        value={reasoningEffort!}
-                        options={EFFORT_OPTIONS}
-                        onChange={(val) => onReasoningEffortChange(val as ReasoningEffortLevel)}
-                        aria-label="思考强度"
-                        style={{ background: 'var(--nb-card-bg)', boxShadow: 'var(--nb-shadow-soft)' }}
+                        checked={thinkingEnabled}
+                        aria-labelledby="chat-thinking-label"
+                        onChange={(checked) => onReasoningEffortChange(checked ? 'medium' : null)}
+                        style={{ margin: '0 4px' }}
                       />
-                    )}
-                  </Flex>
+                      {thinkingEnabled && (
+                        <Segmented
+                          size="small"
+                          value={reasoningEffort!}
+                          options={EFFORT_OPTIONS}
+                          onChange={(val) => onReasoningEffortChange(val as ReasoningEffortLevel)}
+                          aria-label="思考强度"
+                          style={{ background: 'var(--nb-card-bg)', boxShadow: 'var(--nb-shadow-soft)' }}
+                        />
+                      )}
+                    </Flex>
+                  )}
                 </Flex>
                 <Flex align="center">
                   {isRequesting || uploadingFiles ? (

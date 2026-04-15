@@ -13,6 +13,7 @@ from typing import Any
 from loguru import logger
 
 from nanobot.utils.helpers import image_placeholder_text
+from nanobot.utils.reasoning import normalize_reasoning_effort
 
 
 @dataclass
@@ -440,6 +441,9 @@ class LLMProvider(ABC):
             temperature = self.generation.temperature
         if reasoning_effort is self._SENTINEL:
             reasoning_effort = self.generation.reasoning_effort
+        reasoning_effort = normalize_reasoning_effort(
+            reasoning_effort if isinstance(reasoning_effort, str) else None
+        )
 
         kw: dict[str, Any] = dict(
             messages=messages, tools=tools, model=model,
@@ -479,6 +483,9 @@ class LLMProvider(ABC):
             temperature = self.generation.temperature
         if reasoning_effort is self._SENTINEL:
             reasoning_effort = self.generation.reasoning_effort
+        reasoning_effort = normalize_reasoning_effort(
+            reasoning_effort if isinstance(reasoning_effort, str) else None
+        )
 
         kw: dict[str, Any] = dict(
             messages=messages, tools=tools, model=model,

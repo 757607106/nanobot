@@ -12,6 +12,7 @@ from nanobot.agent.loop import AgentLoop
 from nanobot.bus.events import InboundMessage, extract_outbound_content
 from nanobot.chat_payload import normalize_chat_attachments
 from nanobot.session.manager import Session
+from nanobot.utils.reasoning import normalize_reasoning_effort
 
 if TYPE_CHECKING:
     from nanobot.web.runtime import WebAppState
@@ -450,6 +451,12 @@ class WebChatRuntimeService:
         defaults = self.state.config.agents.defaults
         resolved_provider = self.state.config.get_provider_name(defaults.model) or defaults.provider
         resolved_binding = self.state.config.get_binding_name(defaults.model) or defaults.binding
+        supports_reasoning = self.state.config_runtime.resolve_reasoning_support(
+            model=defaults.model,
+            binding_name=resolved_binding,
+            provider_name=resolved_provider,
+        )
+        normalized_reasoning_effort = normalize_reasoning_effort(defaults.reasoning_effort)
         return {
             "generatedAt": datetime.now().isoformat(),
             "runtime": {
@@ -458,7 +465,12 @@ class WebChatRuntimeService:
                 "resolvedProvider": resolved_provider,
                 "resolvedBinding": resolved_binding,
                 "model": defaults.model,
-                "reasoningEffort": defaults.reasoning_effort,
+                "supportsReasoning": supports_reasoning,
+                "reasoningEffort": (
+                    normalized_reasoning_effort
+                    if supports_reasoning and normalized_reasoning_effort in {"low", "medium", "high"}
+                    else None
+                ),
                 "maxToolIterations": defaults.max_tool_iterations,
                 "restrictToWorkspace": self.state.config.tools.restrict_to_workspace,
                 "sendProgress": self.state.config.channels.send_progress,
@@ -582,14 +594,25 @@ class WebChatRuntimeService:
         normalized_attachments = normalize_chat_attachments(attachments)
         if normalized_attachments:
             self.add_session_file_refs(session, normalized_attachments)
+        normalized_reasoning_effort = normalize_reasoning_effort(reasoning_effort)
+        supports_reasoning = self.state.config_runtime.resolve_reasoning_support(
+            model=self.state.config.agents.defaults.model,
+            binding_name=self.state.config.get_binding_name(self.state.config.agents.defaults.model),
+            provider_name=self.state.config.get_provider_name(self.state.config.agents.defaults.model),
+        )
+        effective_reasoning_effort = (
+            normalized_reasoning_effort
+            if supports_reasoning
+            else "none"
+        )
         run_context: dict[str, Any] = {
             "chat_message": {
                 "display_content": display_content or content,
                 "attachments": normalized_attachments,
             },
         }
-        if reasoning_effort:
-            run_context["reasoning_effort"] = reasoning_effort
+        if effective_reasoning_effort is not None:
+            run_context["reasoning_effort"] = effective_reasoning_effort
         response = await self._dispatch_chat_turn(
             session_key=key,
             session_id=session_id,

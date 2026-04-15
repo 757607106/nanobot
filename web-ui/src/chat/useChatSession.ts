@@ -544,7 +544,7 @@ export function useChatSession({ agentId }: UseChatSessionOptions = {}) {
     }
   }
 
-  async function handleSubmit(content: string, options?: { reasoningEffort?: 'low' | 'medium' | 'high' | null }) {
+  async function handleSubmit(content: string, options?: { reasoningEffort?: 'low' | 'medium' | 'high' | 'none' | null }) {
     const trimmed = content.trim()
     if (!trimmed || isRequesting || uploadingFiles) {
       return

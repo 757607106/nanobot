@@ -24,6 +24,14 @@ import { useChatSession } from '../chat/useChatSession'
 const { Title, Text } = Typography
 const { Content, Sider } = Layout
 
+function normalizeReasoningEffortLevel(value: string | null | undefined): ReasoningEffortLevel | null {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+    return normalized
+  }
+  return null
+}
+
 
 export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const { modal } = App.useApp()
@@ -46,6 +54,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [siderWidth, setSiderWidth] = useState(260)
   const isDragging = useRef(false)
+  const reasoningPreferenceTouchedRef = useRef(false)
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -110,12 +119,31 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const selectedSessionSubtitle = selectedSessionUpdatedAt
     ? `最近更新 ${formatRelativeTimeZh(selectedSessionUpdatedAt)}`
     : ''
+  const reasoningSupported = (workspaceData?.runtime.supportsReasoning ?? true) !== false
 
   const assistantLabel = inAgentMode
     ? String(activeAgent?.name || agentId || '智能体')
     : PLATFORM_ASSISTANT_NAME
 
   const isDesktopLayout = Boolean(screens.lg)
+
+  useEffect(() => {
+    reasoningPreferenceTouchedRef.current = false
+    setReasoningEffort(null)
+  }, [agentId])
+
+  useEffect(() => {
+    if (!reasoningSupported) {
+      if (reasoningEffort !== null) {
+        setReasoningEffort(null)
+      }
+      return
+    }
+    if (reasoningPreferenceTouchedRef.current || reasoningEffort !== null) {
+      return
+    }
+    setReasoningEffort(normalizeReasoningEffortLevel(workspaceData?.runtime.reasoningEffort))
+  }, [reasoningEffort, reasoningSupported, workspaceData?.runtime.reasoningEffort])
 
   // Agent picker options for the Select component
   const agentSelectOptions = useMemo(() => {
@@ -227,7 +255,9 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   }
 
   async function executeSubmit(content: string) {
-    const success = await handleSubmit(content, { reasoningEffort })
+    const success = await handleSubmit(content, {
+      reasoningEffort: reasoningSupported ? (reasoningEffort ?? 'none') : 'none',
+    })
     if (success) {
       setComposerValue('')
     }
@@ -345,8 +375,12 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
             onDraftAttachmentRefsChange={setDraftAttachmentRefs}
             dropContainerRef={chatPanelRef}
             isDesktopLayout={isDesktopLayout}
-            reasoningEffort={reasoningEffort}
-            onReasoningEffortChange={setReasoningEffort}
+            reasoningSupported={reasoningSupported}
+            reasoningEffort={reasoningSupported ? reasoningEffort : null}
+            onReasoningEffortChange={(value) => {
+              reasoningPreferenceTouchedRef.current = true
+              setReasoningEffort(value)
+            }}
           />
         </Flex>
       </div>

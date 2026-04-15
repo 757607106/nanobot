@@ -17,6 +17,7 @@ from nanobot.providers.factory import make_provider_from_config
 from nanobot.providers.registry import PROVIDERS, find_by_name
 from nanobot.session.manager import SessionManager
 from nanobot.storage.calendar_repository import get_calendar_repository
+from nanobot.utils.reasoning import supports_reasoning_mode
 from nanobot.utils.helpers import sync_workspace_templates
 from nanobot.web.services.agent_templates import AgentTemplateManager
 
@@ -32,6 +33,61 @@ class WebConfigRuntimeService:
 
     def make_provider(self, config: Config):
         return make_provider_from_config(config)
+
+    def provider_supports_reasoning(self, provider_name: str | None) -> bool:
+        name = str(provider_name or "").strip()
+        if not name:
+            return False
+        spec = find_by_name(name)
+        return supports_reasoning_mode(
+            model=None,
+            provider_name=name,
+            provider_backend=spec.backend if spec is not None else None,
+            capability_type="text_chat",
+        )
+
+    def resolve_reasoning_support(
+        self,
+        *,
+        config: Config | None = None,
+        model: str | None = None,
+        binding_name: str | None = None,
+        provider_name: str | None = None,
+    ) -> bool:
+        active_config = config or self.state.config
+        selected_model = str(model or active_config.agents.defaults.model or "").strip() or None
+        selected_binding_name = str(
+            binding_name
+            or active_config.get_binding_name(selected_model)
+            or ""
+        ).strip() or None
+        binding = (
+            active_config.model_bindings.get(selected_binding_name)
+            if selected_binding_name
+            else None
+        )
+        selected_provider_name = str(
+            provider_name
+            or (binding.provider if binding is not None else active_config.get_provider_name(selected_model))
+            or ""
+        ).strip() or None
+        selected_model_name = (
+            str(binding.model or "").strip()
+            if binding is not None and str(binding.model or "").strip()
+            else selected_model
+        )
+        spec = find_by_name(selected_provider_name) if selected_provider_name else None
+        capability_type = (
+            str(getattr(binding, "capability_type", "") or "").strip()
+            if binding is not None
+            else None
+        )
+        return supports_reasoning_mode(
+            model=selected_model_name,
+            provider_name=selected_provider_name,
+            provider_backend=spec.backend if spec is not None else None,
+            capability_type=capability_type,
+        )
 
     def rebuild_runtime(self, config: Config) -> None:
         sync_workspace_templates(config.workspace_path)
@@ -88,6 +144,7 @@ class WebConfigRuntimeService:
                     "keywords": list(spec.keywords),
                     "defaultApiBase": spec.default_api_base or None,
                     "supportsPromptCaching": spec.supports_prompt_caching,
+                    "supportsReasoning": self.provider_supports_reasoning(spec.name),
                     "isGateway": spec.is_gateway,
                     "isLocal": spec.is_local,
                     "isOauth": spec.is_oauth,

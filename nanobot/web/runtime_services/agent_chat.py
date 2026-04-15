@@ -11,6 +11,7 @@ from nanobot.chat_payload import normalize_chat_attachments
 from nanobot.harness import AgentThreadWorkspaceProvider
 from nanobot.platform.agents import AgentDefinitionNotFoundError
 from nanobot.session.manager import Session
+from nanobot.utils.reasoning import normalize_reasoning_effort
 
 if TYPE_CHECKING:
     from nanobot.web.runtime import WebAppState
@@ -203,9 +204,28 @@ class WebAgentChatRuntimeService:
                 recent_uploads.append(self.state.chat_runtime.format_upload_item(path, environment.workspace.path))
                 if len(recent_uploads) >= 6:
                     break
+        agent_config = self.state.agent_runtime.get_agent_config(agent)
+        agent_defaults = agent_config.agents.defaults
+        supports_reasoning = self.state.config_runtime.resolve_reasoning_support(
+            config=agent_config,
+            model=agent_defaults.model,
+            binding_name=agent_defaults.binding,
+            provider_name=agent_defaults.provider,
+        )
+        normalized_reasoning_effort = normalize_reasoning_effort(agent_defaults.reasoning_effort)
         payload = dict(self.state.chat_runtime.get_chat_workspace())
         payload["generatedAt"] = datetime.now().isoformat()
         runtime = dict(payload.get("runtime") or {})
+        runtime["provider"] = agent_defaults.provider
+        runtime["resolvedProvider"] = agent_config.get_provider_name(agent_defaults.model) or agent_defaults.provider
+        runtime["resolvedBinding"] = agent_config.get_binding_name(agent_defaults.model) or agent_defaults.binding
+        runtime["model"] = agent_defaults.model
+        runtime["supportsReasoning"] = supports_reasoning
+        runtime["reasoningEffort"] = (
+            normalized_reasoning_effort
+            if supports_reasoning and normalized_reasoning_effort in {"low", "medium", "high"}
+            else None
+        )
         runtime["workspace"] = str(environment.workspace.path)
         payload["runtime"] = runtime
         payload["recentUploads"] = recent_uploads
@@ -311,6 +331,19 @@ class WebAgentChatRuntimeService:
         normalized_attachments = normalize_chat_attachments(attachments)
         if normalized_attachments:
             self.state.chat_runtime.add_session_file_refs(session, normalized_attachments)
+        agent_config = self.state.agent_runtime.get_agent_config(agent)
+        normalized_reasoning_effort = normalize_reasoning_effort(reasoning_effort)
+        supports_reasoning = self.state.config_runtime.resolve_reasoning_support(
+            config=agent_config,
+            model=agent_config.agents.defaults.model,
+            binding_name=agent_config.agents.defaults.binding,
+            provider_name=agent_config.agents.defaults.provider,
+        )
+        effective_reasoning_effort = (
+            normalized_reasoning_effort
+            if supports_reasoning
+            else "none"
+        )
         environment = self.state.agent_runtime.resolve_agent_environment(
             agent,
             thread_id=session_id,
@@ -336,7 +369,7 @@ class WebAgentChatRuntimeService:
             on_stream=on_stream,
             display_content=display_content,
             attachments=attachments,
-            reasoning_effort=reasoning_effort,
+            reasoning_effort=effective_reasoning_effort,
         )
         assistant_message = result.get("assistantMessage")
         return {
