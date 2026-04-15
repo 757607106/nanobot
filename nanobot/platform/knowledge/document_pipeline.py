@@ -51,6 +51,42 @@ if TYPE_CHECKING:
 class DocumentPipeline:
     """Handles the full document lifecycle: parse → index → chunk tracking."""
 
+    _RAW_MULTIMODAL_INDEX_SUFFIXES = frozenset(
+        {
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".ppt",
+            ".pptx",
+            ".xls",
+            ".xlsx",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".gif",
+            ".webp",
+        }
+    )
+    _LIGHTWEIGHT_MULTIMODAL_PARSE_SUFFIXES = frozenset(
+        {
+            ".doc",
+            ".ppt",
+            ".pptx",
+            ".xls",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".gif",
+            ".webp",
+        }
+    )
+
     def __init__(
         self,
         *,
@@ -287,6 +323,60 @@ class DocumentPipeline:
         document = Document(io.BytesIO(content))
         return self._normalize_whitespace("\n".join(paragraph.text for paragraph in document.paragraphs))
 
+    @staticmethod
+    def _knowledge_file_suffix(file: KnowledgeFile) -> str:
+        return Path(file.original_filename or file.filename or "").suffix.lower()
+
+    def _resolve_multimodal_vision_runtime(self, kb: KnowledgeBaseDefinition) -> dict[str, Any] | None:
+        additional = kb.additional_params or {}
+        if not bool(additional.get("enable_multimodal")):
+            return None
+        if self._resolve_vision_runtime is None:
+            return None
+        try:
+            vision_info = additional.get("visionInfo") or {}
+            vision_runtime = self._resolve_vision_runtime(vision_info)
+        except Exception:
+            logger.debug("Failed to resolve vision runtime for KB {}", kb.kb_id)
+            return None
+        if not vision_runtime or not vision_runtime.get("model"):
+            return None
+        return vision_runtime
+
+    def _should_use_raw_multimodal_ingest(
+        self,
+        *,
+        kb: KnowledgeBaseDefinition,
+        file: KnowledgeFile,
+        vision_runtime: dict[str, Any] | None,
+    ) -> bool:
+        if self.rag_engine is None or not file.raw_path:
+            return False
+        if vision_runtime is None:
+            return False
+        return self._knowledge_file_suffix(file) in self._RAW_MULTIMODAL_INDEX_SUFFIXES
+
+    def _build_multimodal_stub_text(self, file: KnowledgeFile) -> str:
+        suffix = self._knowledge_file_suffix(file)
+        if suffix in {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".gif", ".webp"}:
+            source_label = "image"
+        elif suffix in {".ppt", ".pptx"}:
+            source_label = "presentation"
+        elif suffix in {".xls", ".xlsx"}:
+            source_label = "spreadsheet"
+        else:
+            source_label = "document"
+        return self._normalize_whitespace(
+            "\n".join(
+                [
+                    f"# {file.filename}",
+                    "",
+                    "This source is indexed through the LightRAG multimodal document pipeline.",
+                    f"Source type: {source_label}",
+                ]
+            )
+        )
+
     def _parse_file_content(
         self,
         *,
@@ -352,27 +442,32 @@ class DocumentPipeline:
         )
         content = source_path.read_bytes()
 
-        # Resolve vision runtime if KB has multimodal enabled
-        vision_runtime: dict[str, Any] | None = None
-        try:
-            kb = self.require_kb(current.kb_id)
-            additional = kb.additional_params or {}
-            enable_multimodal = bool(additional.get("enable_multimodal"))
-            if enable_multimodal and self._resolve_vision_runtime is not None:
-                vision_info = additional.get("visionInfo") or {}
-                vision_runtime = self._resolve_vision_runtime(vision_info)
-                if vision_runtime and not vision_runtime.get("model"):
-                    vision_runtime = None  # no valid model resolved
-        except Exception:
-            logger.debug("Failed to resolve vision runtime for KB {}", current.kb_id)
-
-        text, parser_name, metadata, faq_items = self._parse_file_content(
-            title=current.filename,
-            file_name=current.original_filename or current.filename,
-            mime_type=current.content_type,
-            content=content,
+        kb = self.require_kb(current.kb_id)
+        vision_runtime = self._resolve_multimodal_vision_runtime(kb)
+        raw_multimodal_ingest = self._should_use_raw_multimodal_ingest(
+            kb=kb,
+            file=current,
             vision_runtime=vision_runtime,
         )
+        suffix = self._knowledge_file_suffix(current)
+        if raw_multimodal_ingest:
+            # Raw-file multimodal ingest will handle images/tables/equations during indexing.
+            # Keep parse-time extraction lightweight so we do not run the expensive vision pass twice.
+            vision_runtime = None
+
+        if raw_multimodal_ingest and suffix in self._LIGHTWEIGHT_MULTIMODAL_PARSE_SUFFIXES:
+            text = self._build_multimodal_stub_text(current)
+            parser_name = "multimodal_stub"
+            metadata = {"parseMode": "lightweight_stub"}
+            faq_items = None
+        else:
+            text, parser_name, metadata, faq_items = self._parse_file_content(
+                title=current.filename,
+                file_name=current.original_filename or current.filename,
+                mime_type=current.content_type,
+                content=content,
+                vision_runtime=vision_runtime,
+            )
         parsed_path = Path(current.markdown_file or self._file_storage_paths(current.kb_id, current.file_id, current.filename)[1])
         parsed_path.parent.mkdir(parents=True, exist_ok=True)
         parsed_path.write_text(text, encoding="utf-8")
@@ -406,6 +501,12 @@ class DocumentPipeline:
         if not current.markdown_file:
             raise KnowledgeBaseValidationError(f"Knowledge file {current.file_id} has not been parsed.")
 
+        vision_runtime = self._resolve_multimodal_vision_runtime(kb)
+        raw_multimodal_ingest = self._should_use_raw_multimodal_ingest(
+            kb=kb,
+            file=current,
+            vision_runtime=vision_runtime,
+        )
         parsed_path = Path(current.markdown_file)
         if not parsed_path.exists():
             raise KnowledgeBaseValidationError(f"Parsed knowledge file is missing: {parsed_path}")
@@ -418,15 +519,36 @@ class DocumentPipeline:
         # Ensure RAG engine is available
         self._ensure_lightrag(kb, feature="Document indexing")
 
-        # Index via LightRAG Core
-        index_result = self._run_async(
-            self.rag_engine.insert_text(
-                current.kb_id,
-                text,
-                doc_id=current.file_id,
-                file_path=current.raw_path or current.filename,
+        ingest_mode = "text_insert"
+        index_result = None
+        if raw_multimodal_ingest:
+            ingest_mode = "raganything_file"
+            index_result = self._run_async(
+                self.rag_engine.insert_document_file(
+                    current.kb_id,
+                    current.raw_path or current.filename,
+                    doc_id=current.file_id,
+                    file_name=current.filename,
+                )
             )
-        )
+            if not index_result.success:
+                logger.warning(
+                    "Raw multimodal ingest failed for kb_id={} file_id={}, falling back to parsed text insert: {}",
+                    current.kb_id,
+                    current.file_id,
+                    index_result.error,
+                )
+                ingest_mode = "text_insert_fallback"
+
+        if index_result is None or not index_result.success:
+            index_result = self._run_async(
+                self.rag_engine.insert_text(
+                    current.kb_id,
+                    text,
+                    doc_id=current.file_id,
+                    file_path=current.raw_path or current.filename,
+                )
+            )
         if not index_result.success:
             raise KnowledgeBaseValidationError(
                 index_result.error or f"Failed to index knowledge file {current.file_id}"
@@ -446,9 +568,16 @@ class DocumentPipeline:
             self.artifacts.build_chunk_manifest_entries(current, chunk_texts),
         )
         processing_params = dict(current.processing_params)
-        processing_params["chunksCount"] = len(chunk_texts)
+        processing_params["chunksCount"] = (
+            int(index_result.chunks_count or len(chunk_texts))
+            if ingest_mode == "raganything_file"
+            else len(chunk_texts)
+        )
+        if ingest_mode != "text_insert":
+            processing_params["chunkManifestCount"] = len(chunk_texts)
         processing_params["indexedAt"] = now_iso()
         processing_params["indexBackend"] = "lightrag"
+        processing_params["indexMode"] = ingest_mode
         processing_params["graphExtraction"] = True
         if index_result.track_id:
             processing_params["trackId"] = index_result.track_id

@@ -92,6 +92,49 @@ def knowledge_model_value(info: dict[str, Any] | None, *keys: str) -> str:
     return ""
 
 
+def binding_supports_capability(
+    binding_capability: str | None,
+    requested_capability: str | None,
+) -> bool:
+    """Return whether a binding can satisfy the requested knowledge capability."""
+    requested = str(requested_capability or "").strip()
+    current = str(binding_capability or "").strip()
+    if not requested:
+        return True
+    if requested == "text_chat":
+        return current in {"text_chat", "multimodal"}
+    return current == requested
+
+
+def first_binding_name_by_capability(
+    bindings: dict[str, Any] | None,
+    capability_type: str,
+) -> str | None:
+    """Return the first configured binding that satisfies the requested capability."""
+    items = list(dict(bindings or {}).items())
+    for binding_name, binding in items:
+        if str(getattr(binding, "capability_type", None) or "").strip() == capability_type:
+            return str(binding_name)
+    for binding_name, binding in items:
+        if binding_supports_capability(
+            getattr(binding, "capability_type", None),
+            capability_type,
+        ):
+            return str(binding_name)
+    return None
+
+
+def infer_embedding_dim(model: str | None, provider_name: str | None = None) -> int:
+    """Infer the expected embedding dimensionality for common providers/models."""
+    model_name = str(model or "").strip().lower()
+    provider = str(provider_name or "").strip().lower()
+    if provider == "dashscope" and "text-embedding-v4" in model_name:
+        return 1024
+    if "text-embedding-3-small" in model_name or "text-embedding-ada-002" in model_name:
+        return 1536
+    return 3072
+
+
 def split_large_block(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
     """Split an oversized text block into fixed-size overlapping windows."""
     if len(text) <= chunk_size:

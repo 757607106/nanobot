@@ -372,6 +372,14 @@ class RagPostgresConfig(Base):
     ssl_crl: str | None = None
 
 
+class RagMineruConfig(Base):
+    """MinerU parser runtime options for multimodal document processing."""
+
+    backend: str | None = None  # e.g. "vlm-http-client"
+    vlm_url: str | None = None  # required by mineru when backend is vlm-http-client
+    source: Literal["huggingface", "modelscope", "local"] | None = None
+
+
 class RAGConfig(Base):
     """RAG integration configuration.
 
@@ -381,7 +389,13 @@ class RAGConfig(Base):
     # Model bindings (reference keys from Config.model_bindings)
     llm_binding: str | None = None       # LLM for indexing + query; None = use default agent binding
     embedding_binding: str | None = None  # Embedding model; None = auto-detect from bindings
+    vision_binding: str | None = None  # Vision/VLM model for multimodal document processing and queries
     rerank_binding: str | None = None  # Rerank model; None = disable by default unless KB-level override is set
+
+    # Multimodal parser runtime
+    parser: Literal["mineru"] = "mineru"
+    verify_parser_installation: bool = True
+    mineru: RagMineruConfig = Field(default_factory=RagMineruConfig)
 
     # Timeouts
     llm_timeout: int = 180       # seconds per LightRAG LLM/VLM request

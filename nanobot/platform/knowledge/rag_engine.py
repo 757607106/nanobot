@@ -9,6 +9,7 @@ that the rest of the platform relies on.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import os
 import re
@@ -21,6 +22,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from loguru import logger
+
+from nanobot.platform.knowledge.utils import (
+    binding_supports_capability,
+    first_binding_name_by_capability,
+    infer_embedding_dim,
+)
 
 # ---------------------------------------------------------------------------
 # Lazy imports – heavy libraries are only loaded when actually needed
@@ -38,6 +45,13 @@ def _check_rag_anything() -> bool:
         except ImportError:
             _rag_anything_available = False
     return _rag_anything_available
+
+
+@functools.lru_cache(maxsize=1)
+def _lightrag_query_param_fields() -> frozenset[str]:
+    from lightrag import QueryParam
+
+    return frozenset(getattr(QueryParam, "__annotations__", {}))
 
 
 # ---------------------------------------------------------------------------
@@ -112,11 +126,19 @@ class RAGEngine:
         embedding_max_tokens: int = 8192,
         llm_timeout: float = 60.0,
         embedding_timeout: float = 30.0,
+        vision_provider_name: str | None = None,
+        vision_api_key: str | None = None,
+        vision_api_base: str | None = None,
+        vision_extra_headers: dict[str, str] | None = None,
+        vision_model: str | None = None,
         rerank_provider_name: str | None = None,
         rerank_api_key: str | None = None,
         rerank_api_base: str | None = None,
         rerank_extra_headers: dict[str, str] | None = None,
         rerank_model: str | None = None,
+        document_parser: str = "mineru",
+        parser_kwargs: dict[str, Any] | None = None,
+        verify_parser_installation: bool = True,
         lightrag_base_kwargs: dict[str, Any] | None = None,
         storage_env: dict[str, str] | None = None,
         max_cached_instances: int = 5,
@@ -145,6 +167,15 @@ class RAGEngine:
         self._embedding_max_tokens = embedding_max_tokens
         self._llm_timeout = max(float(llm_timeout or 0), 0.001)
         self._embedding_timeout = max(float(embedding_timeout or 0), 0.001)
+        self._vision_provider_name = (
+            self._provider_name if vision_provider_name is None else (vision_provider_name or "")
+        )
+        self._vision_api_key = self._api_key if vision_api_key is None else vision_api_key
+        self._vision_api_base = self._api_base if vision_api_base is None else vision_api_base
+        self._vision_extra_headers = (
+            dict(self._extra_headers) if vision_extra_headers is None else dict(vision_extra_headers)
+        )
+        self._vision_model = str(vision_model or default_model or "").strip()
         self._rerank_provider_name = (
             self._provider_name if rerank_provider_name is None else (rerank_provider_name or "")
         )
@@ -154,6 +185,13 @@ class RAGEngine:
             dict(self._extra_headers) if rerank_extra_headers is None else dict(rerank_extra_headers)
         )
         self._rerank_model = str(rerank_model or "").strip()
+        self._document_parser = str(document_parser or "mineru").strip().lower() or "mineru"
+        self._parser_kwargs = {
+            str(key): value
+            for key, value in dict(parser_kwargs or {}).items()
+            if value is not None and str(value).strip() != ""
+        }
+        self._verify_parser_installation = bool(verify_parser_installation)
 
         self._lightrag_base_kwargs = dict(lightrag_base_kwargs or {})
         self._storage_env = {key: value for key, value in dict(storage_env or {}).items() if str(value or "").strip()}
@@ -365,7 +403,7 @@ class RAGEngine:
                     "updated_at": now_iso,
                     "file_path": resolved_file_path,
                     "track_id": "",
-                    "multimodal_processed": True,
+                    "multimodal_processed": False,
                     "metadata": {
                         "processing_start_time": started_at,
                         "processing_end_time": finished_at,
@@ -412,6 +450,11 @@ class RAGEngine:
             "embedding_extra_headers": dict(self._embedding_extra_headers),
             "embedding_dim": self._embedding_dim,
             "embedding_max_tokens": self._embedding_max_tokens,
+            "vision_model": self._vision_model,
+            "vision_provider_name": self._vision_provider_name,
+            "vision_api_key": self._vision_api_key,
+            "vision_api_base": self._vision_api_base,
+            "vision_extra_headers": dict(self._vision_extra_headers),
             "rerank_model": self._rerank_model,
             "rerank_provider_name": self._rerank_provider_name,
             "rerank_api_key": self._rerank_api_key,
@@ -558,7 +601,7 @@ class RAGEngine:
 
         config = RAGAnythingConfig(
             working_dir=str(working_dir),
-            parser="docling",
+            parser=self._document_parser,
             parse_method="auto",
             enable_image_processing=True,
             enable_table_processing=True,
@@ -576,9 +619,7 @@ class RAGEngine:
                 "rerank_model_func": self._build_rerank_func(runtime),
             },
         )
-        # nanobot pre-parses documents before indexing and only uses direct
-        # content insertion, so external parser binary checks are dead weight.
-        if hasattr(rag, "_parser_installation_checked"):
+        if not self._verify_parser_installation and hasattr(rag, "_parser_installation_checked"):
             rag._parser_installation_checked = True
 
         self._instances[kb_id] = rag
@@ -733,6 +774,49 @@ class RAGEngine:
         extra_headers = dict(resolved_runtime.get("llm_extra_headers") or self._extra_headers or {}) or None
         return model, provider_name, api_key, api_base, extra_headers
 
+    def _resolve_vision_completion_kwargs(
+        self,
+        runtime: dict[str, Any] | None = None,
+    ) -> tuple[str, str, str | None, str | None, dict | None]:
+        """Resolve VLM runtime parameters and fall back to the LLM runtime when needed."""
+        resolved_runtime = dict(runtime or {})
+        model = str(
+            resolved_runtime.get("vision_model")
+            or self._vision_model
+            or resolved_runtime.get("llm_model")
+            or self._default_model
+            or ""
+        ).strip()
+        provider_name = str(
+            resolved_runtime.get("vision_provider_name")
+            or self._vision_provider_name
+            or resolved_runtime.get("llm_provider_name")
+            or self._provider_name
+            or ""
+        ).strip()
+        api_key = str(
+            resolved_runtime.get("vision_api_key")
+            or self._vision_api_key
+            or resolved_runtime.get("llm_api_key")
+            or self._api_key
+            or ""
+        )
+        api_base = str(
+            resolved_runtime.get("vision_api_base")
+            or self._vision_api_base
+            or resolved_runtime.get("llm_api_base")
+            or self._api_base
+            or ""
+        ).strip() or None
+        extra_headers = dict(
+            resolved_runtime.get("vision_extra_headers")
+            or self._vision_extra_headers
+            or resolved_runtime.get("llm_extra_headers")
+            or self._extra_headers
+            or {}
+        ) or None
+        return model, provider_name, api_key, api_base, extra_headers
+
     def _build_completion_kw(
         self,
         *,
@@ -880,7 +964,7 @@ class RAGEngine:
         """Build the vision model function for multimodal processing."""
         from litellm import acompletion
 
-        model, provider_name, api_key, api_base, extra_headers = self._resolve_llm_completion_kwargs(runtime)
+        model, provider_name, api_key, api_base, extra_headers = self._resolve_vision_completion_kwargs(runtime)
 
         async def vision_model_func(
             prompt: str,
@@ -1239,6 +1323,80 @@ class RAGEngine:
                 error=str(exc),
             )
 
+    async def insert_document_file(
+        self,
+        kb_id: str,
+        file_path: str,
+        *,
+        doc_id: str | None = None,
+        file_name: str | None = None,
+    ) -> ParseResult:
+        """Process a raw document file through RAGAnything's full ingest flow."""
+        resolved_file_path = str(file_path or "").strip()
+        if not resolved_file_path:
+            raise ValueError("file_path is required.")
+        source_path = Path(resolved_file_path)
+        if not source_path.exists():
+            raise FileNotFoundError(f"Knowledge source file is missing: {resolved_file_path}")
+
+        normalized_doc_id = str(doc_id or "").strip() or None
+        normalized_file_name = str(file_name or "").strip() or None
+
+        rag = await self._ensure_ready(kb_id)
+        if normalized_doc_id:
+            await self.prepare_document_ingest(kb_id, normalized_doc_id)
+
+        try:
+            await rag.process_document_complete(
+                file_path=resolved_file_path,
+                parse_method="auto",
+                doc_id=normalized_doc_id,
+                file_name=normalized_file_name,
+                **self._parser_kwargs,
+            )
+            status = await self._require_processed_status(
+                rag,
+                kb_id=kb_id,
+                operation="insert_document_file",
+                doc_id=normalized_doc_id,
+                file_path=resolved_file_path,
+            )
+            return ParseResult(
+                success=True,
+                doc_id=normalized_doc_id,
+                chunks_count=int(status.get("chunks_count") or 0),
+                parser_name="raganything_file",
+                metadata={
+                    "doc_id": normalized_doc_id,
+                    "file_path": normalized_file_name or resolved_file_path,
+                    "chunks_count": int(status.get("chunks_count") or 0),
+                    "multimodal_processed": bool(status.get("multimodal_processed") is not False),
+                },
+            )
+        except Exception as exc:
+            if normalized_doc_id:
+                try:
+                    await self.delete_document(kb_id, normalized_doc_id)
+                except Exception:
+                    logger.warning(
+                        "RAGEngine: failed to clean partial raw document data for kb_id={} doc_id={}",
+                        kb_id,
+                        normalized_doc_id,
+                    )
+            logger.error(
+                "RAGEngine: insert_document_file failed for kb_id={} doc_id={} file_path={}: {}",
+                kb_id,
+                normalized_doc_id,
+                resolved_file_path,
+                exc,
+            )
+            return ParseResult(
+                success=False,
+                doc_id=normalized_doc_id,
+                parser_name="raganything_file",
+                error=str(exc),
+            )
+
     async def query(
         self,
         kb_ids: list[str],
@@ -1246,7 +1404,6 @@ class RAGEngine:
         *,
         mode: str = "hybrid",
         top_k: int = 8,
-        vlm_enhanced: bool = False,
     ) -> list[RetrievalHit]:
         """Query across one or more knowledge bases.
 
@@ -1255,8 +1412,6 @@ class RAGEngine:
             query_text: The query string.
             mode: LightRAG retrieval mode (local, global, hybrid, naive).
             top_k: Maximum number of results.
-            vlm_enhanced: Whether to enable VLM-enhanced query.
-
         Returns:
             List of RetrievalHit results.
         """
@@ -1321,7 +1476,6 @@ class RAGEngine:
                                 "chunk_id": chunk.get("chunk_id"),
                                 "reference_id": reference_id or None,
                                 "file_path": file_path or None,
-                                "vlm_enhanced": bool(vlm_enhanced),
                             },
                         )
                     )
@@ -1346,6 +1500,10 @@ class RAGEngine:
         response_type: str = "Multiple Paragraphs",
         only_need_context: bool = False,
         only_need_prompt: bool = False,
+        max_entity_tokens: int = 6000,
+        max_relation_tokens: int = 8000,
+        max_total_tokens: int = 30000,
+        history_turns: int = 0,
         enable_rerank: bool = False,
         rerank_model: str | None = None,
         extra_query_params: dict[str, Any] | None = None,
@@ -1365,21 +1523,21 @@ class RAGEngine:
             )
 
         rag = await self._ensure_ready(kb_id)
-        param_fields = getattr(QueryParam, "__annotations__", {})
-        query_kwargs: dict[str, Any] = {
-            "mode": self._normalize_query_mode(mode),
-            "top_k": max(1, int(top_k)),
-            "chunk_top_k": max(1, int(chunk_top_k)),
-            "response_type": response_type,
-            "only_need_context": bool(only_need_context),
-            "only_need_prompt": bool(only_need_prompt),
-            "enable_rerank": bool(enable_rerank),
-            "include_references": True,
-        }
-        if extra_query_params:
-            query_kwargs.update(extra_query_params)
-        
-        filtered_kwargs = {key: value for key, value in query_kwargs.items() if key in param_fields}
+        filtered_kwargs = self._build_query_param_kwargs(
+            mode=mode,
+            top_k=top_k,
+            chunk_top_k=chunk_top_k,
+            response_type=response_type,
+            only_need_context=only_need_context,
+            only_need_prompt=only_need_prompt,
+            max_entity_tokens=max_entity_tokens,
+            max_relation_tokens=max_relation_tokens,
+            max_total_tokens=max_total_tokens,
+            history_turns=history_turns,
+            enable_rerank=enable_rerank,
+            include_references=True,
+            extra_query_params=extra_query_params,
+        )
         try:
             result = await rag.lightrag.aquery_data(query_text, QueryParam(**filtered_kwargs))
             if filtered_kwargs.get("mode") != "naive" and not _has_structured_evidence(result):
@@ -1403,6 +1561,88 @@ class RAGEngine:
                 )
                 return await rag.lightrag.aquery_data(query_text, QueryParam(**fallback_kwargs))
             raise
+
+    def _build_query_param_kwargs(
+        self,
+        *,
+        mode: str,
+        top_k: int,
+        chunk_top_k: int,
+        response_type: str,
+        only_need_context: bool,
+        only_need_prompt: bool,
+        max_entity_tokens: int,
+        max_relation_tokens: int,
+        max_total_tokens: int,
+        history_turns: int,
+        enable_rerank: bool,
+        include_references: bool | None = None,
+        extra_query_params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        query_kwargs: dict[str, Any] = {
+            "mode": self._normalize_query_mode(mode),
+            "top_k": max(1, int(top_k)),
+            "chunk_top_k": max(1, int(chunk_top_k)),
+            "response_type": response_type,
+            "only_need_context": bool(only_need_context),
+            "only_need_prompt": bool(only_need_prompt),
+            "max_entity_tokens": max(1, int(max_entity_tokens)),
+            "max_relation_tokens": max(1, int(max_relation_tokens)),
+            "max_total_tokens": max(1, int(max_total_tokens)),
+            "history_turns": max(0, int(history_turns)),
+            "enable_rerank": bool(enable_rerank),
+        }
+        if include_references is not None:
+            query_kwargs["include_references"] = bool(include_references)
+        if extra_query_params:
+            query_kwargs.update(extra_query_params)
+        param_fields = _lightrag_query_param_fields()
+        return {key: value for key, value in query_kwargs.items() if key in param_fields}
+
+    async def query_multimodal(
+        self,
+        kb_id: str,
+        query_text: str,
+        *,
+        multimodal_content: list[dict[str, Any]],
+        mode: str = "hybrid",
+        top_k: int = 8,
+        chunk_top_k: int = 12,
+        response_type: str = "Multiple Paragraphs",
+        only_need_context: bool = False,
+        only_need_prompt: bool = False,
+        max_entity_tokens: int = 6000,
+        max_relation_tokens: int = 8000,
+        max_total_tokens: int = 30000,
+        history_turns: int = 0,
+        enable_rerank: bool = False,
+        rerank_model: str | None = None,
+        extra_query_params: dict[str, Any] | None = None,
+    ) -> str:
+        """Run LightRAG's multimodal query path for a single knowledge base."""
+        del rerank_model
+        rag = await self._ensure_ready(kb_id)
+        filtered_kwargs = self._build_query_param_kwargs(
+            mode=mode,
+            top_k=top_k,
+            chunk_top_k=chunk_top_k,
+            response_type=response_type,
+            only_need_context=only_need_context,
+            only_need_prompt=only_need_prompt,
+            max_entity_tokens=max_entity_tokens,
+            max_relation_tokens=max_relation_tokens,
+            max_total_tokens=max_total_tokens,
+            history_turns=history_turns,
+            enable_rerank=enable_rerank,
+            include_references=False,
+            extra_query_params=extra_query_params,
+        )
+        result = await rag.aquery_with_multimodal(
+            query_text,
+            multimodal_content=multimodal_content,
+            **filtered_kwargs,
+        )
+        return str(result or "")
 
     async def get_graph_labels(self, kb_id: str) -> list[str]:
         """Return graph labels for a knowledge base."""
@@ -1706,6 +1946,7 @@ def _resolve_binding_runtime(
     *,
     binding_name: str | None = None,
     model: str | None = None,
+    capability_type: str | None = None,
 ) -> dict[str, Any]:
     from nanobot.providers.registry import find_by_name
 
@@ -1715,15 +1956,24 @@ def _resolve_binding_runtime(
     binding = None
 
     if requested_binding:
-        binding = getattr(config, "model_bindings", {}).get(requested_binding)
-        if binding is not None:
+        candidate = getattr(config, "model_bindings", {}).get(requested_binding)
+        if candidate is not None and binding_supports_capability(
+            getattr(candidate, "capability_type", None),
+            capability_type,
+        ):
+            binding = candidate
             matched_binding_name = requested_binding
             provider_name = str(getattr(binding, "provider", "") or "").strip() or None
 
     if binding is None:
-        binding = config.get_binding(model)
-        matched_binding_name = config.get_binding_name(model)
-        provider_name = config.get_provider_name(model)
+        candidate = config.get_binding(model)
+        if candidate is not None and binding_supports_capability(
+            getattr(candidate, "capability_type", None),
+            capability_type,
+        ):
+            binding = candidate
+            matched_binding_name = config.get_binding_name(model)
+            provider_name = config.get_provider_name(model)
 
     provider_cfg = getattr(getattr(config, "providers", None), provider_name, None) if provider_name else None
     provider_spec = find_by_name(provider_name) if provider_name else None
@@ -1754,23 +2004,6 @@ def _resolve_binding_runtime(
         "extra_headers": extra_headers,
     }
 
-
-def _first_binding_name_by_capability(config: Any, capability_type: str) -> str | None:
-    for binding_name, binding in getattr(config, "model_bindings", {}).items():
-        if str(getattr(binding, "capability_type", "") or "").strip() == capability_type:
-            return str(binding_name)
-    return None
-
-
-def _infer_embedding_dim(model: str | None, provider_name: str | None = None) -> int:
-    model_name = str(model or "").strip().lower()
-    provider = str(provider_name or "").strip().lower()
-    if provider == "dashscope" and "text-embedding-v4" in model_name:
-        return 1024
-    if "text-embedding-3-small" in model_name or "text-embedding-ada-002" in model_name:
-        return 1536
-    return 3072
-
 def create_rag_engine_from_config(
     config: Any,
     instance_dir: Path,
@@ -1792,7 +2025,8 @@ def create_rag_engine_from_config(
     llm_runtime = _resolve_binding_runtime(
         config,
         binding_name=llm_binding_name,
-        model=None,
+        model=None if llm_binding_name else getattr(config.agents.defaults, "model", None),
+        capability_type="text_chat",
     )
     default_model = str(
         getattr(llm_runtime.get("binding"), "model", None)
@@ -1802,23 +2036,44 @@ def create_rag_engine_from_config(
 
     embedding_binding_name = (
         str(rag_config.embedding_binding or "").strip()
-        or _first_binding_name_by_capability(config, "embedding")
-        or llm_binding_name
+        or first_binding_name_by_capability(getattr(config, "model_bindings", {}), "embedding")
+        or None
     )
     embedding_runtime = _resolve_binding_runtime(
         config,
         binding_name=embedding_binding_name,
         model=None,
+        capability_type="embedding",
     )
     embedding_model = str(
         getattr(embedding_runtime.get("binding"), "model", None)
         or "text-embedding-3-large"
     )
-    embedding_dim = _infer_embedding_dim(embedding_model, embedding_runtime["provider_name"])
+    embedding_dim = infer_embedding_dim(embedding_model, embedding_runtime["provider_name"])
+
+    vision_binding_name = (
+        str(getattr(rag_config, "vision_binding", "") or "").strip()
+        or first_binding_name_by_capability(getattr(config, "model_bindings", {}), "multimodal")
+        or None
+    )
+    vision_runtime = (
+        _resolve_binding_runtime(
+            config,
+            binding_name=vision_binding_name,
+            model=None,
+            capability_type="multimodal",
+        )
+        if vision_binding_name
+        else {}
+    )
+    vision_model = str(
+        getattr(vision_runtime.get("binding"), "model", None)
+        or default_model
+    ).strip() or default_model
 
     rerank_binding_name = (
         str(rag_config.rerank_binding or "").strip()
-        or _first_binding_name_by_capability(config, "rerank")
+        or first_binding_name_by_capability(getattr(config, "model_bindings", {}), "rerank")
         or None
     )
     rerank_runtime = (
@@ -1826,6 +2081,7 @@ def create_rag_engine_from_config(
             config,
             binding_name=rerank_binding_name,
             model=None,
+            capability_type="rerank",
         )
         if rerank_binding_name
         else {}
@@ -1959,6 +2215,26 @@ def create_rag_engine_from_config(
             }
         )
 
+    parser_name = str(getattr(rag_config, "parser", "mineru") or "mineru").strip().lower() or "mineru"
+    if parser_name != "mineru":
+        raise ValueError("rag.parser only supports 'mineru'.")
+
+    verify_parser_installation = bool(getattr(rag_config, "verify_parser_installation", True))
+    mineru_config = getattr(rag_config, "mineru", None)
+    parser_kwargs: dict[str, Any] = {}
+    if mineru_config is not None:
+        backend = str(getattr(mineru_config, "backend", "") or "").strip()
+        vlm_url = str(getattr(mineru_config, "vlm_url", "") or "").strip()
+        source = str(getattr(mineru_config, "source", "") or "").strip()
+        if backend:
+            parser_kwargs["backend"] = backend
+        if vlm_url:
+            parser_kwargs["vlm_url"] = vlm_url
+        if source:
+            parser_kwargs["source"] = source
+        if backend.lower() == "vlm-http-client" and not vlm_url:
+            raise ValueError("rag.mineru.vlm_url is required when rag.mineru.backend is 'vlm-http-client'.")
+
     return RAGEngine(
         storage_root=instance_dir / "knowledge" / "lightrag",
         default_model=default_model,
@@ -1972,6 +2248,11 @@ def create_rag_engine_from_config(
         embedding_extra_headers=embedding_runtime["extra_headers"],
         embedding_model=embedding_model,
         embedding_dim=embedding_dim,
+        vision_provider_name=vision_runtime.get("provider_name"),
+        vision_api_key=vision_runtime.get("api_key"),
+        vision_api_base=vision_runtime.get("api_base"),
+        vision_extra_headers=vision_runtime.get("extra_headers"),
+        vision_model=vision_model,
         rerank_provider_name=rerank_runtime.get("provider_name"),
         rerank_api_key=rerank_runtime.get("api_key"),
         rerank_api_base=rerank_runtime.get("api_base"),
@@ -1979,6 +2260,9 @@ def create_rag_engine_from_config(
         rerank_model=rerank_model,
         llm_timeout=float(getattr(rag_config, "llm_timeout", 60) or 60),
         embedding_timeout=float(getattr(rag_config, "embedding_timeout", 30) or 30),
+        document_parser=parser_name,
+        parser_kwargs=parser_kwargs,
+        verify_parser_installation=verify_parser_installation,
         lightrag_base_kwargs=lightrag_base_kwargs,
         storage_env=storage_env,
         max_cached_instances=max(1, int(getattr(rag_config, "max_cached_instances", 5) or 5)),

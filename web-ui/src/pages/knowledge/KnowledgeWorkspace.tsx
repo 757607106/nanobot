@@ -226,7 +226,7 @@ export default function KnowledgeWorkspace() {
                 </Button>
                 <Button
                   size="small"
-                  onClick={() => window.open(api.downloadKnowledgeFileUrl(currentKb?.kbId || '', item.fileId, 'raw'), '_blank', 'noopener')}
+                  onClick={() => window.open(api.knowledgeFilePreviewPageUrl(currentKb?.kbId || '', item.fileId), '_blank', 'noopener')}
                 >
                   原文
                 </Button>
@@ -752,7 +752,7 @@ export default function KnowledgeWorkspace() {
                         value={formState.visionBindingName || undefined}
                         onChange={(value) => onFormStateChange({ ...formState, visionBindingName: value ?? '' })}
                         options={[{ value: '', label: '无' }, ...multimodalBindingOptions]}
-                        placeholder="选择 Vision 模型（用于 PDF 图片理解）"
+                        placeholder="选择 Vision 模型（用于 PDF / Office / 图像多模态解析）"
                         showSearch
                         optionFilterProp="label"
                         style={{ width: '100%' }}
@@ -767,7 +767,7 @@ export default function KnowledgeWorkspace() {
                           disabled={!formState.visionBindingName}
                         />
                         <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
-                          {formState.visionBindingName ? 'PDF 图片将被 AI 理解并加入索引' : '请先选择 Vision 模型'}
+                          {formState.visionBindingName ? 'PDF、Office 文档和图像将通过 LightRAG 多模态链路建立索引' : '请先选择 Vision 模型'}
                         </Typography.Text>
                       </div>
                     </div>

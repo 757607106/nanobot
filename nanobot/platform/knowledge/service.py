@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 import re
 import shutil
 import textwrap
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-from dataclasses import replace
-from pathlib import Path
+from dataclasses import dataclass, replace
+from pathlib import Path, PurePosixPath
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
@@ -17,6 +18,7 @@ from loguru import logger
 
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge.artifacts import KnowledgeArtifactStore
+from nanobot.platform.knowledge.preview_artifacts import KnowledgePreviewArtifacts
 from nanobot.platform.knowledge.models import (
     KnowledgeBaseDefinition,
     KnowledgeFile,
@@ -52,11 +54,22 @@ class KnowledgeSourceNotFoundError(KeyError):
     """Raised when a knowledge file or folder does not exist."""
 
 
+@dataclass(frozen=True)
+class KnowledgeFileArtifact:
+    """Resolved file artifact used by preview and download routes."""
+
+    file: KnowledgeFile
+    path: Path
+    media_type: str
+    filename: str
+
+
 from nanobot.platform.knowledge.llm_helpers import KnowledgeLLMHelper
 from nanobot.platform.knowledge.utils import (
     DEFAULT_KNOWLEDGE_CHUNK_SIZE,
     DEFAULT_KNOWLEDGE_CHUNK_OVERLAP,
     DEFAULT_BEST_EFFORT_RETRIEVE_TIMEOUT_SECONDS,
+    first_binding_name_by_capability as _first_binding_name_by_capability_fn,
     slugify as _slugify,
     short_id as _short_id,
     get_value as _get_value_fn,
@@ -103,6 +116,7 @@ class KnowledgeBaseService:
             vector_dir_factory=self._kb_vector_dir,
             evaluation_dir_factory=self._kb_eval_dir,
         )
+        self.preview_artifacts = KnowledgePreviewArtifacts(preview_dir_factory=self._kb_preview_dir)
         self.llm_helper = KnowledgeLLMHelper(config, self._run_async)
         
         from nanobot.platform.knowledge.file_manager import KnowledgeFileManager
@@ -284,12 +298,55 @@ class KnowledgeBaseService:
             capability_type=capability_type,
         )
 
+    def _default_binding_name_for_capability(self, capability_type: str) -> str:
+        if self.config is None:
+            return ""
+        rag_field = {
+            "text_chat": "llm_binding",
+            "embedding": "embedding_binding",
+            "multimodal": "vision_binding",
+            "rerank": "rerank_binding",
+        }.get(capability_type)
+        configured = str(getattr(self.config.rag, rag_field or "", "") or "").strip()
+        if configured:
+            return configured
+        return str(
+            _first_binding_name_by_capability_fn(
+                getattr(self.config, "model_bindings", {}),
+                capability_type,
+            )
+            or ""
+        ).strip()
+
+    def _resolve_runtime_with_default_binding(
+        self,
+        *,
+        binding_name: str | None,
+        model_name: str | None,
+        capability_type: str,
+    ) -> dict[str, Any]:
+        runtime = self._resolve_binding_runtime(
+            binding_name=binding_name,
+            model_name=model_name,
+            capability_type=capability_type,
+        )
+        if runtime:
+            return runtime
+        fallback_binding_name = self._default_binding_name_for_capability(capability_type)
+        if fallback_binding_name and fallback_binding_name != str(binding_name or "").strip():
+            return self._resolve_binding_runtime(
+                binding_name=fallback_binding_name,
+                model_name=None,
+                capability_type=capability_type,
+            )
+        return {}
+
     def _resolve_vision_runtime_from_info(self, vision_info: dict[str, Any]) -> dict[str, Any]:
         """Resolve a visionInfo dict (from KB additional_params) to a runtime dict.
 
-        Called by DocumentPipeline when parsing PDF files with multimodal enabled.
+        Called by DocumentPipeline when multimodal document ingest is enabled.
         """
-        return self._resolve_binding_runtime(
+        return self._resolve_runtime_with_default_binding(
             binding_name=self._knowledge_model_value(vision_info, "bindingName", "binding_name"),
             model_name=self._knowledge_model_value(vision_info, "modelName", "model_name", "model"),
             capability_type="multimodal",
@@ -313,7 +370,7 @@ class KnowledgeBaseService:
 
         # Vision binding stored in additional_params.visionInfo (set by frontend shared.ts)
         vision_info = kb.additional_params.get("visionInfo") or {}
-        vision_runtime = self._resolve_binding_runtime(
+        vision_runtime = self._resolve_runtime_with_default_binding(
             binding_name=self._knowledge_model_value(vision_info, "bindingName", "binding_name"),
             model_name=self._knowledge_model_value(vision_info, "modelName", "model_name", "model"),
             capability_type="multimodal",
@@ -321,7 +378,7 @@ class KnowledgeBaseService:
 
         # Rerank binding stored in additional_params.rerankInfo (set by frontend shared.ts)
         rerank_info = kb.additional_params.get("rerankInfo") or {}
-        rerank_runtime = self._resolve_binding_runtime(
+        rerank_runtime = self._resolve_runtime_with_default_binding(
             binding_name=self._knowledge_model_value(rerank_info, "bindingName", "binding_name"),
             model_name=self._knowledge_model_value(rerank_info, "modelName", "model_name", "model"),
             capability_type="rerank",
@@ -367,13 +424,6 @@ class KnowledgeBaseService:
             overrides["rerank_model"] = rerank_model
         return overrides
 
-    @staticmethod
-    def _knowledge_model_signature(info: dict[str, Any] | None) -> tuple[str, str]:
-        return (
-            KnowledgeBaseService._knowledge_model_value(info, "bindingName", "binding_name"),
-            KnowledgeBaseService._knowledge_model_value(info, "modelName", "model_name", "model"),
-        )
-
     def _effective_model_signature(
         self,
         info: dict[str, Any] | None,
@@ -395,10 +445,7 @@ class KnowledgeBaseService:
         if self.config is None:
             return binding_name, model_name
 
-        fallback_binding_name = str(
-            getattr(self.config.rag, "embedding_binding" if capability_type == "embedding" else "llm_binding", "")
-            or ""
-        ).strip()
+        fallback_binding_name = self._default_binding_name_for_capability(capability_type)
         fallback_runtime = self._resolve_binding_runtime(
             binding_name=fallback_binding_name or None,
             model_name=None,
@@ -488,6 +535,11 @@ class KnowledgeBaseService:
         if self.instance is not None:
             return ensure_dir(self.instance.knowledge_parsed_dir() / kb_id)
         raise KnowledgeBaseValidationError("Platform instance is required for parsed knowledge files.")
+
+    def _kb_preview_dir(self, kb_id: str) -> Path:
+        if self.instance is not None:
+            return ensure_dir(self.instance.runtime_dir("knowledge-preview") / kb_id)
+        raise KnowledgeBaseValidationError("Platform instance is required for preview knowledge files.")
 
     def _kb_vector_dir(self, kb_id: str) -> Path:
         if self.instance is not None:
@@ -738,6 +790,7 @@ class KnowledgeBaseService:
         for root in (
             self._kb_raw_dir(kb_id),
             self._kb_parsed_dir(kb_id),
+            self._kb_preview_dir(kb_id),
             self._kb_vector_dir(kb_id),
             self._kb_eval_dir(kb_id),
         ):
@@ -982,17 +1035,191 @@ class KnowledgeBaseService:
     def delete_evaluation_result(self, kb_id: str, task_id: str) -> bool:
         return self.eval_service.delete_evaluation_result(kb_id, task_id)
 
+    @staticmethod
+    def _normalize_media_type(value: str | None) -> str:
+        return str(value or "").split(";", 1)[0].strip().lower()
 
-    def get_download_path(self, kb_id: str, file_id: str, *, variant: str = "raw") -> Path:
+    @staticmethod
+    def _normalize_logical_path(base_path: str, relative_path: str) -> str:
+        raw = str(relative_path or "").strip()
+        if not raw:
+            raise KnowledgeBaseValidationError("Preview asset path is required.")
+
+        base_dir = PurePosixPath(base_path or "/").parent
+        candidate = PurePosixPath(raw) if raw.startswith("/") else base_dir / raw
+        normalized_parts: list[str] = []
+        for part in candidate.parts:
+            if part in {"", "/", "."}:
+                continue
+            if part == "..":
+                if not normalized_parts:
+                    raise KnowledgeBaseValidationError("Preview asset path escapes the knowledge-base root.")
+                normalized_parts.pop()
+                continue
+            normalized_parts.append(part)
+        return "/" + "/".join(normalized_parts)
+
+    def _resolve_file_artifact(
+        self,
+        kb_id: str,
+        file_id: str,
+        *,
+        variant: str = "raw",
+    ) -> tuple[KnowledgeFile, Path]:
         self.require_kb(kb_id)
         file = self._require_file(kb_id, file_id)
-        candidate = file.raw_path if variant != "parsed" else (file.markdown_file or file.raw_path)
+        resolved_variant = str(variant or "raw").strip().lower() or "raw"
+        if resolved_variant not in {"raw", "parsed", "preview"}:
+            raise KnowledgeBaseValidationError("File variant must be one of: raw, parsed, preview.")
+
+        if resolved_variant == "preview":
+            generated = self._resolve_generated_preview_artifact(kb_id, file)
+            if generated is not None:
+                return generated.file, generated.path
+
+        candidate = file.raw_path if resolved_variant != "parsed" else (file.markdown_file or file.raw_path)
         if not candidate:
             raise KnowledgeBaseValidationError("Requested download artifact is not available.")
         path = Path(candidate)
         if not path.exists():
             raise KnowledgeBaseValidationError("Requested download artifact is missing from disk.")
-        return path
+        return file, path
+
+    def _resolve_generated_preview_artifact(
+        self,
+        kb_id: str,
+        file: KnowledgeFile,
+    ) -> KnowledgeFileArtifact | None:
+        generated, updated_processing_params = self.preview_artifacts.resolve_office_preview(kb_id, file)
+        resolved_file = file
+        if updated_processing_params is not None:
+            resolved_file = self._update_file(
+                replace(
+                    file,
+                    processing_params=updated_processing_params,
+                    updated_at=now_iso(),
+                )
+            )
+        if generated is None:
+            return None
+        return KnowledgeFileArtifact(
+            file=resolved_file,
+            path=generated.path,
+            media_type=generated.media_type,
+            filename=generated.filename,
+        )
+
+    def _guess_artifact_content_type(
+        self,
+        file: KnowledgeFile,
+        path: Path,
+        *,
+        variant: str = "raw",
+    ) -> str:
+        if variant == "preview":
+            guessed, _encoding = mimetypes.guess_type(str(path.name))
+            normalized = self._normalize_media_type(guessed)
+            if normalized:
+                return normalized
+
+        if variant == "parsed":
+            return "text/markdown"
+
+        content_type = self._normalize_media_type(file.content_type)
+        if content_type:
+            return content_type
+
+        for candidate in (file.original_filename, file.filename, path.name):
+            guessed, _encoding = mimetypes.guess_type(str(candidate or ""))
+            normalized = self._normalize_media_type(guessed)
+            if normalized:
+                return normalized
+        return "application/octet-stream"
+
+    @staticmethod
+    def _artifact_filename(file: KnowledgeFile, path: Path, *, variant: str = "raw") -> str:
+        preferred_name = str(file.original_filename or file.filename or path.name).strip() or path.name
+        if variant == "preview":
+            stem = preferred_name.rsplit(".", 1)[0] if "." in preferred_name else preferred_name
+            suffix = path.suffix or Path(preferred_name).suffix
+            if suffix:
+                return f"{stem}{suffix}"
+            return preferred_name
+        if variant != "parsed":
+            return preferred_name
+        stem = preferred_name.rsplit(".", 1)[0] if "." in preferred_name else preferred_name
+        return f"{stem}.md"
+
+    def _build_file_artifact(
+        self,
+        file: KnowledgeFile,
+        path: Path,
+        *,
+        variant: str = "raw",
+    ) -> KnowledgeFileArtifact:
+        return KnowledgeFileArtifact(
+            file=file,
+            path=path,
+            media_type=self._guess_artifact_content_type(file, path, variant=variant),
+            filename=self._artifact_filename(file, path, variant=variant),
+        )
+
+    def _preview_kind_for_file(self, file: KnowledgeFile, content_type: str) -> str:
+        source_name = str(file.original_filename or file.filename or "")
+        suffix = Path(source_name).suffix.lower()
+        normalized_type = self._normalize_media_type(content_type)
+
+        if suffix in {".md", ".markdown"} or normalized_type in {"text/markdown", "text/x-markdown"}:
+            return "markdown"
+        if suffix in {".html", ".htm"} or normalized_type == "text/html":
+            return "html"
+        if suffix == ".pdf" or normalized_type == "application/pdf":
+            return "pdf"
+        if normalized_type in {
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+            "image/bmp",
+            "image/x-icon",
+            "image/vnd.microsoft.icon",
+            "image/avif",
+        }:
+            return "image"
+        if (
+            normalized_type.startswith("text/")
+            or suffix in {".txt", ".text", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".ini", ".cfg"}
+            ):
+            return "text"
+        return "unsupported"
+
+    def get_file_artifact(self, kb_id: str, file_id: str, *, variant: str = "raw") -> KnowledgeFileArtifact:
+        file, path = self._resolve_file_artifact(kb_id, file_id, variant=variant)
+        return self._build_file_artifact(file, path, variant=variant)
+
+    def get_file_preview(self, kb_id: str, file_id: str) -> dict[str, Any]:
+        artifact = self.get_file_artifact(kb_id, file_id, variant="preview")
+        preview_kind = self._preview_kind_for_file(artifact.file, artifact.media_type)
+        source_url = str(artifact.file.processing_params.get("sourceUrl") or "").strip() or None
+        return {
+            "file": self._serialize_file(artifact.file),
+            "previewKind": preview_kind,
+            "contentType": artifact.media_type,
+            "sourceUrl": source_url if preview_kind in {"html", "markdown"} else None,
+        }
+
+    def get_preview_asset_artifact(self, kb_id: str, file_id: str, asset_path: str) -> KnowledgeFileArtifact:
+        self.require_kb(kb_id)
+        file = self._require_file(kb_id, file_id)
+        if file.is_folder:
+            raise KnowledgeBaseValidationError("Folder preview is not supported.")
+
+        logical_path = self._normalize_logical_path(file.path, asset_path)
+        target = self.store.get_file_by_path(kb_id, logical_path)
+        if target is None or target.is_folder:
+            raise KnowledgeSourceNotFoundError(logical_path)
+        _resolved, path = self._resolve_file_artifact(kb_id, target.file_id, variant="raw")
+        return self._build_file_artifact(target, path, variant="raw")
 
     def get_file_detail(self, kb_id: str, file_id: str) -> dict[str, Any]:
         self.require_kb(kb_id)
@@ -1038,7 +1265,7 @@ class KnowledgeBaseService:
             "file": self._serialize_file(file),
             "content": content,
             "chunks": chunks,
-            "chunkCount": len(chunks) or int(file.processing_params.get("chunksCount") or 0),
+            "chunkCount": max(len(chunks), int(file.processing_params.get("chunksCount") or 0)),
         }
 
     def query_kb_for_agent(

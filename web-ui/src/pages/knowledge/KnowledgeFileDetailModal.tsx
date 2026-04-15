@@ -75,7 +75,7 @@ export function KnowledgeFileDetailModal({
               <Button
                 icon={<DownloadOutlined />}
                 disabled={!kbId}
-                onClick={() => kbId && window.open(api.downloadKnowledgeFileUrl(kbId, detail.file.fileId, 'raw'), '_blank', 'noopener')}
+                onClick={() => kbId && window.open(api.knowledgeFilePreviewPageUrl(kbId, detail.file.fileId), '_blank', 'noopener')}
               >
                 原文
               </Button>

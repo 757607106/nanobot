@@ -36,6 +36,7 @@ class FakeRAGEngine:
         # kb_id -> doc_id -> { content, file_path, doc_id, chunks }
         self._docs: dict[str, dict[str, dict[str, str | list[str]]]] = {}
         self.prepare_calls: list[tuple[str, str]] = []
+        self.multimodal_queries: list[dict[str, object]] = []
 
     async def shutdown_async(self) -> None:
         return None
@@ -87,11 +88,27 @@ class FakeRAGEngine:
         response_type: str = "Multiple Paragraphs",
         only_need_context: bool = False,
         only_need_prompt: bool = False,
+        max_entity_tokens: int = 6000,
+        max_relation_tokens: int = 8000,
+        max_total_tokens: int = 30000,
+        history_turns: int = 0,
         enable_rerank: bool = False,
         rerank_model: str | None = None,
         extra_query_params: dict | None = None,
     ) -> dict:
-        del chunk_top_k, response_type, only_need_context, only_need_prompt, enable_rerank, rerank_model, extra_query_params
+        del (
+            chunk_top_k,
+            response_type,
+            only_need_context,
+            only_need_prompt,
+            max_entity_tokens,
+            max_relation_tokens,
+            max_total_tokens,
+            history_turns,
+            enable_rerank,
+            rerank_model,
+            extra_query_params,
+        )
         query_tokens = _tokenize(query_text)
         results: list[dict] = []
 
@@ -135,6 +152,55 @@ class FakeRAGEngine:
             },
             "message": results[0]["content"] if results else "",
         }
+
+    async def query_multimodal(
+        self,
+        kb_id: str,
+        query_text: str,
+        *,
+        multimodal_content: list[dict],
+        mode: str = "mix",
+        top_k: int = 8,
+        chunk_top_k: int = 12,
+        response_type: str = "Multiple Paragraphs",
+        only_need_context: bool = False,
+        only_need_prompt: bool = False,
+        max_entity_tokens: int = 6000,
+        max_relation_tokens: int = 8000,
+        max_total_tokens: int = 30000,
+        history_turns: int = 0,
+        enable_rerank: bool = False,
+        rerank_model: str | None = None,
+        extra_query_params: dict | None = None,
+    ) -> str:
+        del (
+            top_k,
+            chunk_top_k,
+            response_type,
+            only_need_context,
+            only_need_prompt,
+            max_entity_tokens,
+            max_relation_tokens,
+            max_total_tokens,
+            history_turns,
+            enable_rerank,
+            rerank_model,
+            extra_query_params,
+        )
+        self.multimodal_queries.append(
+            {
+                "kb_id": kb_id,
+                "query_text": query_text,
+                "mode": mode,
+                "multimodal_content": list(multimodal_content or []),
+            }
+        )
+        content_types = ", ".join(
+            str(item.get("type") or "unknown")
+            for item in (multimodal_content or [])
+            if isinstance(item, dict)
+        ) or "unknown"
+        return f"multimodal[{content_types}] {query_text}"
 
     # -- knowledge graph (matches new RAGEngine) ------------------------------
 

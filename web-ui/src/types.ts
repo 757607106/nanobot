@@ -625,9 +625,38 @@ export interface KnowledgeQueryParams {
   response_type: string
   only_need_context: boolean
   only_need_prompt: boolean
+  max_entity_tokens: number
+  max_relation_tokens: number
+  max_total_tokens: number
+  history_turns: number
   enable_rerank: boolean
   rerank_model?: string | null
   options: Record<string, unknown>
+}
+
+export interface KnowledgeMultimodalQueryContent {
+  type: string
+  file_id?: string
+  fileId?: string
+  img_path?: string
+  image_path?: string
+  file_path?: string
+  table_data?: string
+  table_caption?: string
+  latex?: string
+  equation_caption?: string
+  [key: string]: unknown
+}
+
+export interface KnowledgeQueryRequest extends Record<string, unknown> {
+  query: string
+  mode?: string
+  top_k?: number
+  chunk_top_k?: number
+  file_ids?: string[]
+  file_name?: string
+  multimodal_content?: KnowledgeMultimodalQueryContent[]
+  multimodalContent?: KnowledgeMultimodalQueryContent[]
 }
 
 export interface KnowledgeQueryParamOption {
@@ -751,6 +780,15 @@ export interface KnowledgeFileDetail {
   content: string
   chunks: KnowledgeQueryChunk[]
   chunkCount: number
+}
+
+export type KnowledgeFilePreviewKind = 'image' | 'pdf' | 'html' | 'markdown' | 'text' | 'unsupported'
+
+export interface KnowledgeFilePreview {
+  file: KnowledgeFile
+  previewKind: KnowledgeFilePreviewKind
+  contentType: string
+  baseUrl?: string | null
 }
 
 export interface KnowledgeJob {

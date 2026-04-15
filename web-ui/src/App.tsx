@@ -27,6 +27,7 @@ const AgentChatPage = lazy(() => import('./pages/AgentChatPage'))
 const MemoryAuditPage = lazy(() => import('./pages/memory'))
 const RunsPage = lazy(() => import('./pages/runs'))
 const KnowledgePage = lazy(() => import('./pages/knowledge').then((m) => ({ default: m.KnowledgePage })))
+const KnowledgeFilePreviewPage = lazy(() => import('./pages/knowledge').then((m) => ({ default: m.KnowledgeFilePreviewPage })))
 const SystemLayoutPage = lazy(() => import('./pages/SystemLayoutPage'))
 const SystemPage = lazy(() => import('./pages/SystemPage'))
 const ValidationPage = lazy(() => import('./pages/ValidationPage'))
@@ -249,6 +250,14 @@ export function AppRoutes() {
           <SetupOnly>
             {withRouteSuspense(<SetupPage />)}
           </SetupOnly>
+        )}
+      />
+      <Route
+        path="knowledge/:kbId/files/:fileId/preview"
+        element={(
+          <RequireAuth>
+            {withRouteSuspense(<KnowledgeFilePreviewPage />)}
+          </RequireAuth>
         )}
       />
       <Route

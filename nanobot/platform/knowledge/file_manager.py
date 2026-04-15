@@ -26,6 +26,7 @@ from nanobot.platform.knowledge.models import (
     KnowledgeFile,
     now_iso,
 )
+from nanobot.platform.knowledge.preview_artifacts import KnowledgePreviewArtifacts
 from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.knowledge.service import (
     KnowledgeBaseValidationError,
@@ -558,7 +559,13 @@ class KnowledgeFileManager:
                         logger.exception("Failed to delete indexed knowledge file {}", file.file_id)
             if not file.is_folder:
                 self.artifacts.remove_chunk_entries_for_file(kb_id, file.file_id)
+            cleanup_candidates: set[str] = set()
             for candidate in (file.raw_path, file.markdown_file):
+                if candidate:
+                    cleanup_candidates.add(str(candidate))
+            for candidate in KnowledgePreviewArtifacts.collect_preview_paths(file):
+                cleanup_candidates.add(candidate)
+            for candidate in cleanup_candidates:
                 if candidate:
                     path = Path(candidate)
                     if path.exists():
@@ -580,13 +587,3 @@ class KnowledgeFileManager:
         self.require_kb(kb_id)
         file = self._require_file(kb_id, file_id)
         return self._serialize_file(file)
-
-    def get_download_path(self, kb_id: str, file_id: str, *, variant: str = "raw") -> Path:
-        self.require_kb(kb_id)
-        file = self._require_file(kb_id, file_id)
-        if file.is_folder:
-            raise KnowledgeBaseValidationError("Cannot download a folder.")
-        path = self._kb_raw_dir(kb_id) / file.file_id
-        if not path.is_file():
-            raise KnowledgeSourceNotFoundError(f"Blob for file {file_id}")
-        return path

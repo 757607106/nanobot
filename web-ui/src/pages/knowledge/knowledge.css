@@ -108,6 +108,90 @@
   overflow: auto;
 }
 
+.knowledge-file-preview-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--nb-warm) 12%, transparent), transparent 34%),
+    linear-gradient(180deg, var(--nb-surface-strong) 0%, var(--nb-bg) 100%);
+}
+
+.knowledge-file-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 20px;
+  border: 1px solid var(--nb-border);
+  border-radius: var(--nb-radius-xl);
+  background: color-mix(in srgb, var(--nb-surface) 92%, white 8%);
+  box-shadow: var(--nb-shadow-soft);
+}
+
+.knowledge-file-preview-title {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.knowledge-file-preview-stage {
+  min-height: calc(100vh - 180px);
+  border: 1px solid var(--nb-border);
+  border-radius: var(--nb-radius-xl);
+  background: var(--nb-surface);
+  box-shadow: var(--nb-shadow-soft);
+  overflow: hidden;
+}
+
+.knowledge-file-preview-frame {
+  width: 100%;
+  min-height: calc(100vh - 180px);
+  border: 0;
+  background: #fff;
+}
+
+.knowledge-file-preview-image-shell,
+.knowledge-file-preview-markdown,
+.knowledge-file-preview-text {
+  min-height: calc(100vh - 180px);
+  padding: 24px;
+  overflow: auto;
+}
+
+.knowledge-file-preview-image-shell {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.knowledge-file-preview-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: calc(var(--nb-radius-lg) + 2px);
+  box-shadow: var(--nb-shadow-soft);
+}
+
+.knowledge-file-preview-markdown img {
+  max-width: 100%;
+  height: auto;
+}
+
+.knowledge-file-preview-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--nb-font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 /* Upload Modal Styles */
 .knowledge-upload-modal .ant-modal-body {
   padding-top: 12px;

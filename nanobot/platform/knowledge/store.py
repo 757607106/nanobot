@@ -72,6 +72,9 @@ class KnowledgeBaseStore:
         CREATE INDEX IF NOT EXISTS idx_knowledge_files_status
         ON knowledge_files(kb_id, status, updated_at DESC);
 
+        CREATE INDEX IF NOT EXISTS idx_knowledge_files_path
+        ON knowledge_files(kb_id, path);
+
         CREATE TABLE IF NOT EXISTS knowledge_jobs (
             job_id TEXT PRIMARY KEY,
             tenant_id TEXT NOT NULL DEFAULT 'default',
@@ -326,6 +329,20 @@ class KnowledgeBaseStore:
         with self._connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM knowledge_files WHERE file_id = %s", (file_id,))
+                row = cur.fetchone()
+        return self._deserialize_file(row)
+
+    def get_file_by_path(self, kb_id: str, path: str) -> KnowledgeFile | None:
+        with self._connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM knowledge_files
+                    WHERE kb_id = %s AND path = %s
+                    LIMIT 1
+                    """,
+                    (kb_id, path),
+                )
                 row = cur.fetchone()
         return self._deserialize_file(row)
 

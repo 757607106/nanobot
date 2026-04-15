@@ -42,6 +42,16 @@ if TYPE_CHECKING:
     from nanobot.platform.knowledge.rag_engine import RAGEngine
 
 _BEST_EFFORT_QUERY_TIMEOUT_KEY = "__best_effort_timeout_seconds__"
+_MULTIMODAL_IMAGE_SUFFIXES = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".bmp",
+    ".webp",
+    ".tif",
+    ".tiff",
+}
 
 
 class KnowledgeQueryService:
@@ -83,6 +93,101 @@ class KnowledgeQueryService:
         if isinstance(meta, dict):
             return {**meta, **merged}
         return merged
+
+    @staticmethod
+    def _is_image_file(file: KnowledgeFile) -> bool:
+        content_type = str(file.content_type or "").strip().lower()
+        if content_type.startswith("image/"):
+            return True
+        candidate = str(file.raw_path or file.filename or "")
+        return Path(candidate).suffix.lower() in _MULTIMODAL_IMAGE_SUFFIXES
+
+    def _extract_multimodal_content(
+        self,
+        kb_id: str,
+        payload: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        raw_content = payload.pop("multimodal_content", None)
+        if raw_content is None:
+            raw_content = payload.pop("multimodalContent", None)
+        if raw_content is None:
+            return []
+        if not isinstance(raw_content, list):
+            raise KnowledgeBaseValidationError("multimodal_content must be a list.")
+
+        normalized_content: list[dict[str, Any]] = []
+        for index, item in enumerate(raw_content):
+            if not isinstance(item, dict):
+                raise KnowledgeBaseValidationError(
+                    f"multimodal_content[{index}] must be an object."
+                )
+            normalized_item = dict(item)
+            content_type = normalize_text(
+                normalized_item.get("type"),
+                required=True,
+                field_name=f"multimodal_content[{index}].type",
+            ).lower()
+            normalized_item["type"] = content_type
+
+            file_id = normalize_text(
+                normalized_item.get("file_id") or normalized_item.get("fileId"),
+                field_name=f"multimodal_content[{index}].file_id",
+            ) or None
+            if file_id:
+                file = self.store.get_file(file_id)
+                if file is None or file.kb_id != kb_id or file.is_folder:
+                    raise KnowledgeBaseValidationError(
+                        f"multimodal_content[{index}] references an invalid knowledge file."
+                    )
+                raw_path = str(file.raw_path or "").strip()
+                if not raw_path:
+                    raise KnowledgeBaseValidationError(
+                        f"multimodal_content[{index}] references a knowledge file without a source path."
+                    )
+                resolved_path = Path(raw_path)
+                if not resolved_path.exists():
+                    raise KnowledgeBaseValidationError(
+                        f"multimodal_content[{index}] references a missing source file."
+                    )
+                normalized_item["file_id"] = file.file_id
+                normalized_item.pop("fileId", None)
+                if content_type == "image":
+                    if not self._is_image_file(file):
+                        raise KnowledgeBaseValidationError(
+                            f"multimodal_content[{index}] must reference an image file when type='image'."
+                        )
+                    normalized_item["img_path"] = (
+                        str(normalized_item.get("img_path") or "").strip()
+                        or str(normalized_item.get("image_path") or "").strip()
+                        or str(normalized_item.get("file_path") or "").strip()
+                        or str(resolved_path)
+                    )
+                elif not str(normalized_item.get("file_path") or "").strip():
+                    normalized_item["file_path"] = str(resolved_path)
+
+            normalized_content.append(normalized_item)
+        return normalized_content
+
+    @staticmethod
+    def _build_query_metadata(
+        params: KnowledgeQueryParams,
+        *,
+        multimodal_content: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "kbType": KNOWLEDGE_ARCHITECTURE_TYPE,
+            "backend": "lightrag",
+            "mode": params.mode,
+            "graphEnhanced": True,
+        }
+        if multimodal_content:
+            metadata["multimodalQuery"] = True
+            metadata["multimodalContentCount"] = len(multimodal_content)
+            metadata["multimodalContentTypes"] = [
+                str(item.get("type") or "unknown")
+                for item in multimodal_content
+            ]
+        return metadata
 
     def _matching_file_tokens(self, kb_id: str, file_ids: list[str] | None = None, file_name: str | None = None) -> set[str]:
         tokens: set[str] = set()
@@ -365,6 +470,38 @@ class KnowledgeQueryService:
                     "default": False,
                 },
                 {
+                    "key": "max_entity_tokens",
+                    "label": "实体 Token 上限",
+                    "type": "number",
+                    "default": 6000,
+                    "min": 256,
+                    "max": 60000,
+                },
+                {
+                    "key": "max_relation_tokens",
+                    "label": "关系 Token 上限",
+                    "type": "number",
+                    "default": 8000,
+                    "min": 256,
+                    "max": 60000,
+                },
+                {
+                    "key": "max_total_tokens",
+                    "label": "总上下文 Token 上限",
+                    "type": "number",
+                    "default": 30000,
+                    "min": 512,
+                    "max": 120000,
+                },
+                {
+                    "key": "history_turns",
+                    "label": "历史轮数",
+                    "type": "number",
+                    "default": 0,
+                    "min": 0,
+                    "max": 20,
+                },
+                {
                     "key": "enable_rerank",
                     "label": "启用重排",
                     "type": "boolean",
@@ -392,6 +529,10 @@ class KnowledgeQueryService:
                 "response_type",
                 "only_need_context",
                 "only_need_prompt",
+                "max_entity_tokens",
+                "max_relation_tokens",
+                "max_total_tokens",
+                "history_turns",
                 "enable_rerank",
                 "rerank_model",
             }:
@@ -430,6 +571,7 @@ class KnowledgeQueryService:
             required=True,
             field_name="query",
         )
+        multimodal_content = self._extract_multimodal_content(kb_id, merged_payload)
         file_ids = self._extract_requested_file_ids(merged_payload) or []
         file_name = normalize_text(
             merged_payload.get("file_name"),
@@ -446,6 +588,44 @@ class KnowledgeQueryService:
         # Ensure RAG engine is available
         self._ensure_lightrag(kb, feature="Knowledge query")
 
+        if multimodal_content:
+            message = self._run_async(
+                self.rag_engine.query_multimodal(
+                    kb_id,
+                    query_text,
+                    multimodal_content=multimodal_content,
+                    mode=params.mode,
+                    top_k=params.top_k,
+                    chunk_top_k=params.chunk_top_k,
+                    response_type=params.response_type,
+                    only_need_context=params.only_need_context,
+                    only_need_prompt=params.only_need_prompt,
+                    max_entity_tokens=params.max_entity_tokens,
+                    max_relation_tokens=params.max_relation_tokens,
+                    max_total_tokens=params.max_total_tokens,
+                    history_turns=params.history_turns,
+                    enable_rerank=params.enable_rerank,
+                    rerank_model=params.rerank_model,
+                    extra_query_params=params.options,
+                ),
+                timeout=query_timeout,
+            )
+            return {
+                "data": {
+                    "chunks": [],
+                    "references": [],
+                    "entities": [],
+                    "relationships": [],
+                },
+                "message": str(message or ""),
+                "metadata": self._build_query_metadata(
+                    params,
+                    multimodal_content=multimodal_content,
+                ),
+                "query": query_text,
+                "query_params": params.to_dict(),
+            }
+
         # Query via LightRAG Core (single path: vector + graph + rerank)
         lightrag_result = self._run_async(
             self.rag_engine.query_structured(
@@ -457,6 +637,10 @@ class KnowledgeQueryService:
                 response_type=params.response_type,
                 only_need_context=params.only_need_context,
                 only_need_prompt=params.only_need_prompt,
+                max_entity_tokens=params.max_entity_tokens,
+                max_relation_tokens=params.max_relation_tokens,
+                max_total_tokens=params.max_total_tokens,
+                history_turns=params.history_turns,
                 enable_rerank=params.enable_rerank,
                 rerank_model=params.rerank_model,
                 extra_query_params=params.options,
@@ -516,10 +700,7 @@ class KnowledgeQueryService:
         ):
             filtered["message"] = self._synthesize_answer_from_chunks(kb, query_text, enriched_chunks)
         metadata = dict(filtered.get("metadata") or {})
-        metadata["kbType"] = KNOWLEDGE_ARCHITECTURE_TYPE
-        metadata["backend"] = "lightrag"
-        metadata["mode"] = params.mode
-        metadata["graphEnhanced"] = True
+        metadata.update(self._build_query_metadata(params))
         filtered["metadata"] = metadata
         filtered["query"] = query_text
         filtered["query_params"] = params.to_dict()

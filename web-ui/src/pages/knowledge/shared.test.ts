@@ -115,6 +115,10 @@ describe('createKnowledgeFormState', () => {
         response_type: 'Multiple Paragraphs',
         only_need_context: true,
         only_need_prompt: false,
+        max_entity_tokens: 6000,
+        max_relation_tokens: 8000,
+        max_total_tokens: 30000,
+        history_turns: 0,
         enable_rerank: false,
         rerank_model: null,
         options: {},
@@ -137,11 +141,15 @@ describe('createKnowledgeFormState', () => {
       embedModelName: 'text-embedding-v4',
       llmBindingName: 'deepseek',
       llmModelName: 'deepseek-chat',
+      visionBindingName: 'vision-main',
+      visionModelName: 'gpt-4o',
     })
 
     expect(result.embedBindingName).toBe('text-embedding-v4-2')
     expect(result.embedModelName).toBe('text-embedding-v4')
     expect(result.llmBindingName).toBe('deepseek')
     expect(result.llmModelName).toBe('deepseek-chat')
+    expect(result.visionBindingName).toBe('vision-main')
+    expect(result.visionModelName).toBe('gpt-4o')
   })
 })

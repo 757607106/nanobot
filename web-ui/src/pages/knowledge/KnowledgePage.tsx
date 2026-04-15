@@ -252,6 +252,10 @@ export default function KnowledgePage() {
     () => String(modelConfig?.rag?.rerankBinding || '').trim() || '',
     [modelConfig],
   )
+  const defaultVisionBindingName = useMemo(
+    () => String(modelConfig?.rag?.visionBinding || '').trim() || multimodalBindingOptions[0]?.value || '',
+    [modelConfig, multimodalBindingOptions],
+  )
 
   function findBindingNameByModel(modelName: string, capability: 'embedding' | 'text_chat' | 'multimodal') {
     const target = String(modelName || '').trim()
@@ -273,6 +277,8 @@ export default function KnowledgePage() {
       llmModelName: getBindingModel(defaultLlmBindingName),
       rerankBindingName: defaultRerankBindingName,
       rerankModelName: getBindingModel(defaultRerankBindingName),
+      visionBindingName: defaultVisionBindingName,
+      visionModelName: getBindingModel(defaultVisionBindingName),
     })
   }
 
@@ -310,7 +316,7 @@ export default function KnowledgePage() {
     }
     setActiveTab('files')
     void loadKnowledgeDetail(selectedKbId)
-  }, [selectedKbId, defaultEmbeddingBindingName, defaultLlmBindingName])
+  }, [selectedKbId, defaultEmbeddingBindingName, defaultLlmBindingName, defaultRerankBindingName, defaultVisionBindingName])
 
 
 

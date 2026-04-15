@@ -18,6 +18,18 @@ from nanobot.web.http import APIError, _json_response, _ok
 from nanobot.web.tenant_context import get_tenant_knowledge_service
 
 router = APIRouter()
+_INLINE_SANDBOX_CSP = (
+    "sandbox; "
+    "default-src 'none'; "
+    "img-src data: blob: http: https:; "
+    "media-src data: blob: http: https:; "
+    "font-src data: http: https:; "
+    "style-src 'unsafe-inline' http: https:; "
+    "object-src 'none'; "
+    "script-src 'none'; "
+    "connect-src 'none'; "
+    "form-action 'none'"
+)
 
 
 def _handle_knowledge_error(exc: Exception) -> None:
@@ -55,6 +67,28 @@ def _kb_error_handler(fn):
 def _knowledge_service(request: Request):
     return get_tenant_knowledge_service(request)
 
+
+def _knowledge_file_response(
+    path,
+    *,
+    filename: str,
+    media_type: str,
+    disposition: str,
+):
+    resolved_disposition = str(disposition or "attachment").strip().lower() or "attachment"
+    if resolved_disposition not in {"attachment", "inline"}:
+        raise KnowledgeBaseValidationError("File disposition must be either 'attachment' or 'inline'.")
+
+    headers = {"X-Content-Type-Options": "nosniff"}
+    if resolved_disposition == "inline" and media_type in {"text/html", "image/svg+xml"}:
+        headers["Content-Security-Policy"] = _INLINE_SANDBOX_CSP
+    return FileResponse(
+        path,
+        filename=filename,
+        media_type=media_type,
+        headers=headers,
+        content_disposition_type=resolved_disposition,
+    )
 
 @router.get("/api/v1/knowledge-bases/available-models")
 def list_available_models(request: Request) -> JSONResponse:
@@ -238,10 +272,47 @@ def download_knowledge_file(
     kb_id: str,
     file_id: str,
     variant: str = Query(default="raw"),
+    disposition: str = Query(default="attachment"),
 ):
-    path = _knowledge_service(request).get_download_path(kb_id, file_id, variant=variant)
-    filename = path.name if variant == "parsed" else path.name.split("-", 1)[-1]
-    return FileResponse(path, filename=filename)
+    service = _knowledge_service(request)
+    artifact = service.get_file_artifact(kb_id, file_id, variant=variant)
+    return _knowledge_file_response(
+        artifact.path,
+        filename=artifact.filename,
+        media_type=artifact.media_type,
+        disposition=disposition,
+    )
+
+
+@router.get("/api/v1/knowledge-bases/{kb_id}/files/{file_id}/preview")
+@_kb_error_handler
+def get_knowledge_file_preview(request: Request, kb_id: str, file_id: str) -> JSONResponse:
+    data = _knowledge_service(request).get_file_preview(kb_id, file_id)
+    source_url = str(data.pop("sourceUrl", "") or "").strip() or None
+    data["baseUrl"] = (
+        source_url
+        if source_url
+        else f"/api/v1/knowledge-bases/{kb_id}/files/{file_id}/preview/assets/"
+    ) if data.get("previewKind") in {"html", "markdown"} else None
+    return _json_response(200, _ok(data))
+
+
+@router.get("/api/v1/knowledge-bases/{kb_id}/files/{file_id}/preview/assets/{asset_path:path}")
+@_kb_error_handler
+def preview_knowledge_file_asset(
+    request: Request,
+    kb_id: str,
+    file_id: str,
+    asset_path: str,
+):
+    service = _knowledge_service(request)
+    artifact = service.get_preview_asset_artifact(kb_id, file_id, asset_path)
+    return _knowledge_file_response(
+        artifact.path,
+        filename=artifact.filename,
+        media_type=artifact.media_type,
+        disposition="inline",
+    )
 
 
 @router.delete("/api/v1/knowledge-bases/{kb_id}/files/{file_id}")

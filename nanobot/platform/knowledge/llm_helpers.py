@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from nanobot.platform.knowledge.utils import binding_supports_capability, infer_embedding_dim
+
 if TYPE_CHECKING:
     from nanobot.config.schema import Config
 
@@ -192,13 +194,22 @@ class KnowledgeLLMHelper:
         matched_binding_name: str | None = None
 
         if requested_binding_name:
-            binding = self.config.model_bindings.get(requested_binding_name)
-            if binding is not None:
+            candidate = self.config.model_bindings.get(requested_binding_name)
+            if candidate is not None and binding_supports_capability(
+                getattr(candidate, "capability_type", None),
+                capability_type,
+            ):
+                binding = candidate
                 matched_binding_name = requested_binding_name
 
         if binding is None and requested_model_name:
-            binding = self.config.get_binding(requested_model_name)
-            matched_binding_name = self.config.get_binding_name(requested_model_name)
+            candidate = self.config.get_binding(requested_model_name)
+            if candidate is not None and binding_supports_capability(
+                getattr(candidate, "capability_type", None),
+                capability_type,
+            ):
+                binding = candidate
+                matched_binding_name = self.config.get_binding_name(requested_model_name)
 
         if binding is None:
             return {}
@@ -230,7 +241,7 @@ class KnowledgeLLMHelper:
         if not resolved_model_name:
             return {}
 
-        return {
+        runtime = {
             "binding_name": matched_binding_name or requested_binding_name or None,
             "provider_name": provider_name or None,
             "model": resolved_model_name,
@@ -238,6 +249,9 @@ class KnowledgeLLMHelper:
             "api_base": api_base,
             "extra_headers": extra_headers,
         }
+        if capability_type == "embedding":
+            runtime["embedding_dim"] = infer_embedding_dim(resolved_model_name, provider_name)
+        return runtime
 
     # ── Internal ──
 
@@ -253,4 +267,3 @@ class KnowledgeLLMHelper:
             max_tokens=min(self.config.agents.defaults.max_tokens, 2000),
         )
         return provider
-

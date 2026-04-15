@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import time
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
 from nanobot.config.schema import Config
+from nanobot.platform.knowledge.preview_artifacts import KnowledgePreviewArtifacts
 from nanobot.web.app import create_app
 from tests.knowledge_test_utils import FakeRAGEngine
 
@@ -55,12 +57,47 @@ def _wait_for_evaluation(client: TestClient, kb_id: str, task_id: str) -> dict:
     raise AssertionError(f"Timed out waiting for evaluation {task_id}")
 
 
+def _build_docx_bytes(*paragraphs: str) -> bytes:
+    from docx import Document
+
+    buffer = io.BytesIO()
+    document = Document()
+    for paragraph in paragraphs:
+        document.add_paragraph(paragraph)
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def _build_xlsx_bytes(*rows: tuple[object, ...]) -> bytes:
+    from openpyxl import Workbook
+
+    buffer = io.BytesIO()
+    workbook = Workbook()
+    sheet = workbook.active
+    for row in rows:
+        sheet.append(list(row))
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
 def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
     config = _make_test_config(tmp_path, monkeypatch)
     monkeypatch.setattr("nanobot.web.app.create_rag_engine_from_config", lambda config, instance_dir: FakeRAGEngine())
     monkeypatch.setattr(
         "nanobot.web.runtime_services.config.create_rag_engine_from_config",
         lambda config, instance_dir: FakeRAGEngine(),
+    )
+    convert_calls = {"count": 0}
+
+    def _fake_convert(_source_path: Path, _preview_dir: Path, target_path: Path):
+        convert_calls["count"] += 1
+        target_path.write_bytes(b"%PDF-1.7\n%nanobot-preview\n")
+        return target_path, None
+
+    monkeypatch.setattr(
+        KnowledgePreviewArtifacts,
+        "_convert_presentation_to_pdf",
+        staticmethod(_fake_convert),
     )
 
     with TestClient(create_app(config, static_dir=tmp_path / "missing-static")) as client:
@@ -114,6 +151,122 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
         assert uploaded.status_code == 201
         file_id = uploaded.json()["data"]["items"][0]["fileId"]
 
+        guide_upload = client.post(
+            f"/api/v1/knowledge-bases/{kb_id}/files",
+            files=[
+                ("file", ("guide.md", b"![diagram](diagram.png)\n\n[External](https://example.com/docs)\n", "text/markdown")),
+                ("file", ("diagram.png", b"\x89PNG\r\n\x1a\ndiagram-bytes", "image/png")),
+                ("file", ("page.html", b"<html><body><img src='diagram.png'><a href='guide.md'>Guide</a></body></html>", "text/html")),
+            ],
+        )
+        assert guide_upload.status_code == 201
+        guide_file_id = next(item["fileId"] for item in guide_upload.json()["data"]["items"] if item["filename"] == "guide.md")
+        diagram_file_id = next(item["fileId"] for item in guide_upload.json()["data"]["items"] if item["filename"] == "diagram.png")
+        html_file_id = next(item["fileId"] for item in guide_upload.json()["data"]["items"] if item["filename"] == "page.html")
+
+        guide_preview = client.get(f"/api/v1/knowledge-bases/{kb_id}/files/{guide_file_id}/preview")
+        assert guide_preview.status_code == 200
+        guide_preview_payload = guide_preview.json()["data"]
+        assert guide_preview_payload["previewKind"] == "markdown"
+        assert guide_preview_payload["baseUrl"].endswith(f"/api/v1/knowledge-bases/{kb_id}/files/{guide_file_id}/preview/assets/")
+
+        guide_inline = client.get(
+            f"/api/v1/knowledge-bases/{kb_id}/files/{guide_file_id}/download",
+            params={"variant": "raw", "disposition": "inline"},
+        )
+        assert guide_inline.status_code == 200
+        assert guide_inline.headers["content-disposition"].startswith("inline;")
+
+        guide_asset = client.get(
+            f"/api/v1/knowledge-bases/{kb_id}/files/{guide_file_id}/preview/assets/diagram.png"
+        )
+        assert guide_asset.status_code == 200
+        assert guide_asset.headers["content-type"].startswith("image/png")
+        assert guide_asset.headers["content-disposition"].startswith("inline;")
+
+        html_preview = client.get(f"/api/v1/knowledge-bases/{kb_id}/files/{html_file_id}/preview")
+        assert html_preview.status_code == 200
+        assert html_preview.json()["data"]["previewKind"] == "html"
+
+        html_inline = client.get(
+            f"/api/v1/knowledge-bases/{kb_id}/files/{html_file_id}/download",
+            params={"variant": "raw", "disposition": "inline"},
+        )
+        assert html_inline.status_code == 200
+        assert html_inline.headers["content-disposition"].startswith("inline;")
+        assert html_inline.headers["content-security-policy"].startswith("sandbox;")
+
+        office_upload = client.post(
+            f"/api/v1/knowledge-bases/{kb_id}/files",
+            files=[
+                (
+                    "file",
+                    (
+                        "manual.docx",
+                        _build_docx_bytes("D9 操作手册", "按步骤执行即可。"),
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    ),
+                ),
+                (
+                    "file",
+                    (
+                        "metrics.xlsx",
+                        _build_xlsx_bytes(("Name", "Value"), ("CPU", 42)),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    ),
+                ),
+                (
+                    "file",
+                    (
+                        "deck.pptx",
+                        b"pptx-placeholder",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    ),
+                ),
+            ],
+        )
+        assert office_upload.status_code == 201
+        office_docx_id = next(item["fileId"] for item in office_upload.json()["data"]["items"] if item["filename"] == "manual.docx")
+        office_xlsx_id = next(item["fileId"] for item in office_upload.json()["data"]["items"] if item["filename"] == "metrics.xlsx")
+        office_pptx_id = next(item["fileId"] for item in office_upload.json()["data"]["items"] if item["filename"] == "deck.pptx")
+
+        office_docx_preview = client.get(f"/api/v1/knowledge-bases/{kb_id}/files/{office_docx_id}/preview")
+        assert office_docx_preview.status_code == 200
+        assert office_docx_preview.json()["data"]["previewKind"] == "html"
+        assert office_docx_preview.json()["data"]["contentType"] == "text/html"
+
+        office_xlsx_preview = client.get(f"/api/v1/knowledge-bases/{kb_id}/files/{office_xlsx_id}/preview")
+        assert office_xlsx_preview.status_code == 200
+        assert office_xlsx_preview.json()["data"]["previewKind"] == "html"
+        assert office_xlsx_preview.json()["data"]["contentType"] == "text/html"
+
+        office_pptx_preview = client.get(f"/api/v1/knowledge-bases/{kb_id}/files/{office_pptx_id}/preview")
+        assert office_pptx_preview.status_code == 200
+        assert office_pptx_preview.json()["data"]["previewKind"] == "pdf"
+        assert office_pptx_preview.json()["data"]["contentType"] == "application/pdf"
+
+        office_docx_inline = client.get(
+            f"/api/v1/knowledge-bases/{kb_id}/files/{office_docx_id}/download",
+            params={"variant": "preview", "disposition": "inline"},
+        )
+        assert office_docx_inline.status_code == 200
+        assert office_docx_inline.headers["content-type"].startswith("text/html")
+
+        office_xlsx_inline = client.get(
+            f"/api/v1/knowledge-bases/{kb_id}/files/{office_xlsx_id}/download",
+            params={"variant": "preview", "disposition": "inline"},
+        )
+        assert office_xlsx_inline.status_code == 200
+        assert office_xlsx_inline.headers["content-type"].startswith("text/html")
+
+        office_pptx_inline = client.get(
+            f"/api/v1/knowledge-bases/{kb_id}/files/{office_pptx_id}/download",
+            params={"variant": "preview", "disposition": "inline"},
+        )
+        assert office_pptx_inline.status_code == 200
+        assert office_pptx_inline.headers["content-type"].startswith("application/pdf")
+        assert convert_calls["count"] == 1
+
         parse_missing_ids = client.post(f"/api/v1/knowledge-bases/{kb_id}/files/parse", json={})
         assert parse_missing_ids.status_code == 400
 
@@ -141,6 +294,27 @@ def test_web_api_unified_workspace_flow(tmp_path, monkeypatch) -> None:
         query_payload = queried.json()["data"]
         assert query_payload["metadata"]["kbType"] == "lightrag"
         assert query_payload["data"]["chunks"]
+
+        multimodal_query = client.post(
+            f"/api/v1/knowledge-bases/{kb_id}/query",
+            json={
+                "query": "Describe the uploaded diagram",
+                "mode": "mix",
+                "only_need_context": False,
+                "multimodal_content": [
+                    {
+                        "type": "image",
+                        "file_id": diagram_file_id,
+                    }
+                ],
+            },
+        )
+        assert multimodal_query.status_code == 200
+        multimodal_payload = multimodal_query.json()["data"]
+        assert multimodal_payload["metadata"]["multimodalQuery"] is True
+        assert multimodal_payload["metadata"]["multimodalContentTypes"] == ["image"]
+        assert multimodal_payload["data"]["chunks"] == []
+        assert "multimodal[image]" in str(multimodal_payload.get("message") or "")
 
         faq_source = client.post(
             f"/api/v1/knowledge-bases/{kb_id}/sources",

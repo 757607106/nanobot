@@ -39,6 +39,10 @@ class KnowledgeQueryParams:
     response_type: str = "Multiple Paragraphs"
     only_need_context: bool = True
     only_need_prompt: bool = False
+    max_entity_tokens: int = 6000
+    max_relation_tokens: int = 8000
+    max_total_tokens: int = 30000
+    history_turns: int = 0
     enable_rerank: bool = False
     rerank_model: str | None = None
     options: dict[str, Any] = field(default_factory=dict)
@@ -62,6 +66,10 @@ class KnowledgeQueryParams:
             "response_type",
             "only_need_context",
             "only_need_prompt",
+            "max_entity_tokens",
+            "max_relation_tokens",
+            "max_total_tokens",
+            "history_turns",
             "enable_rerank",
             "rerank_model",
             "options",
@@ -90,6 +98,10 @@ class KnowledgeQueryParams:
             or "Multiple Paragraphs",
             only_need_context=bool(data.get("only_need_context", True)),
             only_need_prompt=bool(data.get("only_need_prompt", False)),
+            max_entity_tokens=max(1, int(data.get("max_entity_tokens") or 6000)),
+            max_relation_tokens=max(1, int(data.get("max_relation_tokens") or 8000)),
+            max_total_tokens=max(1, int(data.get("max_total_tokens") or 30000)),
+            history_turns=max(0, int(data.get("history_turns") or 0)),
             enable_rerank=bool(data.get("enable_rerank", False)),
             rerank_model=str(data.get("rerank_model") or "").strip() or None,
             options=options,
@@ -103,6 +115,10 @@ class KnowledgeQueryParams:
             "response_type": self.response_type,
             "only_need_context": self.only_need_context,
             "only_need_prompt": self.only_need_prompt,
+            "max_entity_tokens": self.max_entity_tokens,
+            "max_relation_tokens": self.max_relation_tokens,
+            "max_total_tokens": self.max_total_tokens,
+            "history_turns": self.history_turns,
             "enable_rerank": self.enable_rerank,
             "rerank_model": self.rerank_model,
             "options": dict(self.options),
@@ -123,9 +139,15 @@ def default_query_params_payload() -> dict[str, Any]:
         "response_type": "Multiple Paragraphs",
         "only_need_context": True,
         "only_need_prompt": False,
+        "max_entity_tokens": 6000,
+        "max_relation_tokens": 8000,
+        "max_total_tokens": 30000,
+        "history_turns": 0,
         "enable_rerank": False,
         "options": {},
     }
+
+
 @dataclass(slots=True)
 class KnowledgeBaseDefinition:
     kb_id: str

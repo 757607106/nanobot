@@ -11,9 +11,9 @@ import pytest
 from nanobot.config.schema import Config
 from nanobot.platform.knowledge.rag_engine import (
     RAGEngine,
-    _infer_embedding_dim,
     create_rag_engine_from_config,
 )
+from nanobot.platform.knowledge.utils import infer_embedding_dim
 
 
 class _FakeDocStatusStore:
@@ -258,6 +258,21 @@ class _QueryFallbackRag:
         self.lightrag = _QueryFallbackLightRAG()
 
 
+class _RecordingMultimodalRag:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def aquery_with_multimodal(self, query_text: str, *, multimodal_content, **kwargs):
+        self.calls.append(
+            {
+                "query_text": query_text,
+                "multimodal_content": list(multimodal_content or []),
+                "kwargs": dict(kwargs),
+            }
+        )
+        return "multimodal answer"
+
+
 class _PrepareDocStatusStore:
     def __init__(self, docs: dict[str, dict]) -> None:
         self.docs = dict(docs)
@@ -406,7 +421,104 @@ async def test_insert_chunks_falls_back_to_chunk_only_on_timeout(monkeypatch, tm
     assert fake_rag.lightrag.insert_done_calls == 1
     stored_status = await fake_rag.lightrag.doc_status.get_by_id("doc-fallback")
     assert stored_status["status"] == "processed"
-    assert stored_status["multimodal_processed"] is True
+    assert stored_status["multimodal_processed"] is False
+
+
+@pytest.mark.asyncio
+async def test_insert_document_file_uses_raganything_complete_processing(monkeypatch, tmp_path) -> None:
+    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
+    file_path = tmp_path / "ops.docx"
+    file_path.write_bytes(b"doc-bytes")
+    fake_rag = _FakeRag(
+        status_by_id={
+            "doc-raw": {
+                "status": "processed",
+                "chunks_count": 4,
+                "multimodal_processed": True,
+            }
+        },
+        ready=True,
+    )
+
+    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
+    prepare_mock = AsyncMock(return_value={"deletedDocIds": [], "prunedDocIds": []})
+    monkeypatch.setattr(engine, "prepare_document_ingest", prepare_mock)
+
+    result = await engine.insert_document_file(
+        "kb-raw",
+        str(file_path),
+        doc_id="doc-raw",
+        file_name="ops.docx",
+    )
+
+    assert result.success is True
+    assert result.parser_name == "raganything_file"
+    assert result.doc_id == "doc-raw"
+    assert result.chunks_count == 4
+    prepare_mock.assert_awaited_once_with("kb-raw", "doc-raw")
+    assert fake_rag.process_calls == [
+        (
+            (),
+            {
+                "file_path": str(file_path),
+                "parse_method": "auto",
+                "doc_id": "doc-raw",
+                "file_name": "ops.docx",
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_insert_document_file_passes_mineru_parser_runtime_kwargs(monkeypatch, tmp_path) -> None:
+    engine = RAGEngine(
+        storage_root=tmp_path / "storage",
+        default_model="openai/gpt-4o-mini",
+        parser_kwargs={
+            "backend": "vlm-http-client",
+            "vlm_url": "https://mineru.example.com",
+            "source": "huggingface",
+        },
+    )
+    file_path = tmp_path / "ops.docx"
+    file_path.write_bytes(b"doc-bytes")
+    fake_rag = _FakeRag(
+        status_by_id={
+            "doc-raw": {
+                "status": "processed",
+                "chunks_count": 4,
+                "multimodal_processed": True,
+            }
+        },
+        ready=True,
+    )
+
+    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
+    prepare_mock = AsyncMock(return_value={"deletedDocIds": [], "prunedDocIds": []})
+    monkeypatch.setattr(engine, "prepare_document_ingest", prepare_mock)
+
+    result = await engine.insert_document_file(
+        "kb-raw",
+        str(file_path),
+        doc_id="doc-raw",
+        file_name="ops.docx",
+    )
+
+    assert result.success is True
+    assert fake_rag.process_calls == [
+        (
+            (),
+            {
+                "file_path": str(file_path),
+                "parse_method": "auto",
+                "doc_id": "doc-raw",
+                "file_name": "ops.docx",
+                "backend": "vlm-http-client",
+                "vlm_url": "https://mineru.example.com",
+                "source": "huggingface",
+            },
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -497,6 +609,39 @@ async def test_query_falls_back_to_naive_on_timeout(monkeypatch, tmp_path) -> No
 
 
 @pytest.mark.asyncio
+async def test_query_multimodal_reuses_shared_query_param_filtering(monkeypatch, tmp_path) -> None:
+    engine = RAGEngine(storage_root=tmp_path / "storage", default_model="openai/gpt-4o-mini")
+    fake_rag = _RecordingMultimodalRag()
+
+    monkeypatch.setattr(engine, "_ensure_ready", AsyncMock(return_value=fake_rag))
+
+    result = await engine.query_multimodal(
+        "kb-query-mm",
+        "Analyze this chart",
+        multimodal_content=[{"type": "image", "img_path": "/tmp/chart.png"}],
+        mode="mix",
+        top_k=3,
+        chunk_top_k=5,
+        only_need_context=False,
+        extra_query_params={
+            "conversation_history": [{"role": "user", "content": "Earlier question"}],
+            "bogus": "ignored",
+        },
+    )
+
+    assert result == "multimodal answer"
+    assert len(fake_rag.calls) == 1
+    call_payload = fake_rag.calls[0]
+    assert call_payload["query_text"] == "Analyze this chart"
+    assert call_payload["multimodal_content"] == [{"type": "image", "img_path": "/tmp/chart.png"}]
+    assert call_payload["kwargs"]["mode"] == "mix"
+    assert call_payload["kwargs"]["top_k"] == 3
+    assert call_payload["kwargs"]["chunk_top_k"] == 5
+    assert "conversation_history" in call_payload["kwargs"]
+    assert "bogus" not in call_payload["kwargs"]
+
+
+@pytest.mark.asyncio
 async def test_rag_engine_query_raises_when_all_kbs_fail(monkeypatch) -> None:
     engine = RAGEngine(storage_root=Path("/tmp/test-rag-engine-query"), default_model="openai/gpt-4o-mini")
     fake_rag = _FakeRag(query_error=RuntimeError("boom"), ready=True)
@@ -573,10 +718,19 @@ def test_create_rag_engine_from_config_uses_rag_specific_bindings(monkeypatch, t
                     "apiKey": "sk-rag-embed",
                     "apiBase": "https://api.openai.com/v1",
                 },
+                "rag-vision": {
+                    "provider": "openai",
+                    "label": "OpenAI Vision",
+                    "model": "gpt-4o",
+                    "capabilityType": "multimodal",
+                    "apiKey": "sk-rag-vision",
+                    "apiBase": "https://api.openai.com/v1",
+                },
             },
             "rag": {
                 "llmBinding": "rag-llm",
                 "embeddingBinding": "rag-embedding",
+                "visionBinding": "rag-vision",
                 "llmTimeout": 42,
                 "embeddingTimeout": 21,
                 "maxAsync": 3,
@@ -595,6 +749,9 @@ def test_create_rag_engine_from_config_uses_rag_specific_bindings(monkeypatch, t
     assert engine._embedding_api_key == "sk-rag-embed"
     assert engine._embedding_api_base == "https://api.openai.com/v1"
     assert engine._embedding_model == "text-embedding-3-large"
+    assert engine._vision_api_key == "sk-rag-vision"
+    assert engine._vision_api_base == "https://api.openai.com/v1"
+    assert engine._vision_model == "gpt-4o"
     assert engine._llm_timeout == 42
     assert engine._embedding_timeout == 21
     assert engine._lightrag_base_kwargs["vector_storage"] == "MilvusVectorDBStorage"
@@ -613,6 +770,57 @@ def test_create_rag_engine_from_config_uses_rag_specific_bindings(monkeypatch, t
     assert engine._storage_env["POSTGRES_PORT"] == "5432"
     assert engine._storage_env["POSTGRES_USER"] == "postgres"
     assert engine._storage_env["POSTGRES_DATABASE"] == "nanobot"
+
+
+def test_create_rag_engine_from_config_maps_mineru_remote_runtime_options(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        "nanobot.platform.knowledge.rag_engine._check_rag_anything",
+        lambda: True,
+    )
+    config = Config.model_validate(
+        {
+            "rag": {
+                "parser": "mineru",
+                "verifyParserInstallation": False,
+                "mineru": {
+                    "backend": "vlm-http-client",
+                    "vlmUrl": "https://mineru.example.com",
+                    "source": "huggingface",
+                },
+            }
+        }
+    )
+
+    engine = create_rag_engine_from_config(config, tmp_path)
+
+    assert engine is not None
+    assert engine._document_parser == "mineru"
+    assert engine._verify_parser_installation is False
+    assert engine._parser_kwargs == {
+        "backend": "vlm-http-client",
+        "vlm_url": "https://mineru.example.com",
+        "source": "huggingface",
+    }
+
+
+def test_create_rag_engine_from_config_requires_vlm_url_for_http_backend(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        "nanobot.platform.knowledge.rag_engine._check_rag_anything",
+        lambda: True,
+    )
+    config = Config.model_validate(
+        {
+            "rag": {
+                "parser": "mineru",
+                "mineru": {
+                    "backend": "vlm-http-client",
+                },
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match="rag.mineru.vlm_url is required"):
+        create_rag_engine_from_config(config, tmp_path)
 
 
 def test_config_rag_timeouts_default_to_graph_safe_values() -> None:
@@ -659,6 +867,52 @@ def test_create_rag_engine_from_config_falls_back_to_provider_env_api_key(monkey
     assert engine._api_key == "env-dashscope-key"
     assert engine._embedding_api_key == "env-dashscope-key"
     assert engine._embedding_dim == 1024
+
+
+def test_create_rag_engine_from_config_uses_agent_default_binding_when_rag_llm_binding_missing(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        "nanobot.platform.knowledge.rag_engine._check_rag_anything",
+        lambda: True,
+    )
+    config = Config.model_validate(
+        {
+            "agents": {
+                "defaults": {
+                    "model": "deepseek/deepseek-chat",
+                    "binding": "chat-default",
+                    "provider": "deepseek",
+                }
+            },
+            "modelBindings": {
+                "chat-default": {
+                    "provider": "deepseek",
+                    "label": "DeepSeek",
+                    "model": "deepseek/deepseek-chat",
+                    "apiKey": "sk-chat",
+                    "apiBase": "https://api.deepseek.com",
+                },
+                "vision-main": {
+                    "provider": "openai",
+                    "label": "Vision Main",
+                    "model": "gpt-4o",
+                    "capabilityType": "multimodal",
+                    "apiKey": "sk-vision",
+                    "apiBase": "https://api.openai.com/v1",
+                },
+            },
+            "rag": {
+                "visionBinding": "vision-main",
+            },
+        }
+    )
+
+    engine = create_rag_engine_from_config(config, tmp_path)
+
+    assert engine is not None
+    assert engine._default_model == "deepseek/deepseek-chat"
+    assert engine._api_key == "sk-chat"
+    assert engine._api_base == "https://api.deepseek.com"
+    assert engine._vision_model == "gpt-4o"
 
 
 def test_create_rag_engine_from_config_uses_neo4j_graph_storage_when_enabled(monkeypatch, tmp_path) -> None:
@@ -739,7 +993,7 @@ def test_resolve_litellm_runtime_routes_dashscope_embedding_via_openai_compatibl
 
 
 def test_infer_embedding_dim_for_dashscope_v4() -> None:
-    assert _infer_embedding_dim("text-embedding-v4", "dashscope") == 1024
+    assert infer_embedding_dim("text-embedding-v4", "dashscope") == 1024
 
 
 @pytest.mark.asyncio

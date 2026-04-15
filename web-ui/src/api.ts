@@ -44,11 +44,13 @@ import type {
   KnowledgeEvaluationResult,
   KnowledgeEvaluationSummary,
   KnowledgeFileDetail,
+  KnowledgeFilePreview,
   KnowledgeFileListResponse,
   KnowledgeGraphData,
   KnowledgeGraphStats,
   KnowledgeIngestJob,
   KnowledgeMindmapNode,
+  KnowledgeQueryRequest,
   KnowledgeQueryParams,
   KnowledgeQueryParamSchema,
   KnowledgeSource,
@@ -100,6 +102,9 @@ interface RequestOptions extends RequestInit {
   skipJsonContentType?: boolean
 }
 
+type KnowledgeFileVariant = 'raw' | 'parsed' | 'preview'
+type KnowledgeFileDisposition = 'attachment' | 'inline'
+
 export class ApiError extends Error {
   statusCode: number
   code?: string
@@ -149,6 +154,44 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
     )
   }
   return payload.data
+}
+
+async function requestText(path: string, options?: RequestOptions): Promise<string> {
+  const { skipJsonContentType, cache, ...fetchOptions } = options ?? {}
+  const headers = skipJsonContentType ? { ...(options?.headers ?? {}) } : { ...(options?.headers ?? {}) }
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers,
+    cache: cache ?? 'no-store',
+    credentials: 'include',
+    ...fetchOptions,
+  })
+
+  if (response.status === 401) {
+    notifyAuthRequired()
+  }
+  if (!response.ok) {
+    let message = '请求失败'
+    let code: string | undefined
+    let details: unknown
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const payload = (await response.json()) as ApiEnvelope<unknown>
+      message = payload.error?.message || message
+      code = payload.error?.code
+      details = payload.error?.details
+    }
+    throw new ApiError(message, response.status, code, details)
+  }
+  return response.text()
+}
+
+function buildKnowledgeFileDownloadPath(
+  kbId: string,
+  fileId: string,
+  variant: KnowledgeFileVariant = 'raw',
+  disposition: KnowledgeFileDisposition = 'attachment',
+) {
+  return `/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/download?variant=${variant}&disposition=${disposition}`
 }
 
 export const api = {
@@ -587,6 +630,10 @@ export const api = {
     request<KnowledgeFileListResponse>(`/knowledge-bases/${encodeURIComponent(kbId)}/files`),
   getKnowledgeFileDetail: (kbId: string, fileId: string) =>
     request<KnowledgeFileDetail>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/detail`),
+  getKnowledgeFilePreview: (kbId: string, fileId: string) =>
+    request<KnowledgeFilePreview>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/preview`),
+  getKnowledgeFileRawText: (kbId: string, fileId: string, signal?: AbortSignal) =>
+    requestText(buildKnowledgeFileDownloadPath(kbId, fileId, 'preview', 'inline'), { signal }),
   getKnowledgeDocuments: async (kbId: string) => (await request<KnowledgeFileListResponse>(`/knowledge-bases/${encodeURIComponent(kbId)}/files`)).items,
   getKnowledgeSources: async (kbId: string) => (await request<KnowledgeFileListResponse>(`/knowledge-bases/${encodeURIComponent(kbId)}/files`)).items,
   createKnowledgeFolder: (kbId: string, payload: { name: string; parentId?: string | null }) =>
@@ -602,8 +649,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
-  downloadKnowledgeFileUrl: (kbId: string, fileId: string, variant: 'raw' | 'parsed' = 'raw') =>
-    `${API_BASE}/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/download?variant=${variant}`,
+  downloadKnowledgeFileUrl: (
+    kbId: string,
+    fileId: string,
+    variant: KnowledgeFileVariant = 'raw',
+    disposition: KnowledgeFileDisposition = 'attachment',
+  ) =>
+    `${API_BASE}${buildKnowledgeFileDownloadPath(kbId, fileId, variant, disposition)}`,
+  knowledgeFilePreviewPageUrl: (kbId: string, fileId: string) =>
+    `/knowledge/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/preview`,
   deleteKnowledgeDocument: (kbId: string, docId: string) =>
     request<{ deleted: boolean }>(`/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(docId)}`, {
       method: 'DELETE',
@@ -699,14 +753,7 @@ export const api = {
     }),
   queryKnowledgeBase: (
     kbId: string,
-    payload: Record<string, unknown> & {
-      query: string
-      mode?: string
-      top_k?: number
-      chunk_top_k?: number
-      file_ids?: string[]
-      file_name?: string
-    },
+    payload: KnowledgeQueryRequest,
   ) =>
     request<KnowledgeRetrieveResult>(`/knowledge-bases/${encodeURIComponent(kbId)}/query`, {
       method: 'POST',

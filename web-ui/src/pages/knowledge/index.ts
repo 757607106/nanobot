@@ -2,3 +2,4 @@
 export { default as KnowledgePage } from './KnowledgePage'
 export { default as KnowledgeList } from './KnowledgeList'
 export { default as KnowledgeWorkspace } from './KnowledgeWorkspace'
+export { default as KnowledgeFilePreviewPage } from './KnowledgeFilePreviewPage'
