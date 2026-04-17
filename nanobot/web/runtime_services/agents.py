@@ -97,6 +97,7 @@ class WebAgentRuntimeService:
 
     def __init__(self, state: WebAppState):
         self.state = state
+        self._dream_locks: dict[str, asyncio.Lock] = {}
 
     def _get_workspace_provider(self):
         return getattr(self.state, "workspace_provider", None) or SharedWorkspaceProvider()
@@ -115,6 +116,76 @@ class WebAgentRuntimeService:
         if service is None:
             return None
         return service.with_tenant(tenant_id) if hasattr(service, "with_tenant") else service
+
+    def _schedule_agent_dream(
+        self,
+        *,
+        agent_id: str,
+        tenant_id: str,
+        workspace_path: Path,
+        config: Config,
+        session_key: str,
+    ) -> None:
+        """Schedule a background Dream run for a custom agent after execution.
+
+        The Consolidator only archives messages when tokens overflow the context
+        window — which rarely happens for single-turn agent executions.  This
+        method first archives the current session to ``history.jsonl`` so Dream
+        always has data to process, then runs Dream's two-phase LLM pipeline and
+        syncs the result to the platform-level ``agent-memory/{agent_id}.md``.
+        """
+
+        async def _run() -> None:
+            lock = self._dream_locks.setdefault(agent_id, asyncio.Lock())
+            if lock.locked():
+                logger.debug("Dream: skipping {} — already running", agent_id)
+                return
+            async with lock:
+                try:
+                    from nanobot.agent.memory import Dream, MemoryStore as AgentMemoryStore
+
+                    store = AgentMemoryStore(workspace_path)
+
+                    # Archive session messages so Dream has data even for short runs 
+                    if self.state.sessions:
+                        session = self.state.sessions.get_or_create(session_key)
+                        if session.messages:
+                            summary_lines = []
+                            for m in session.messages:
+                                role = str(m.get("role", "")).upper()
+                                content = str(m.get("content", ""))[:500]
+                                if role and content.strip():
+                                    summary_lines.append(f"{role}: {content}")
+                            if summary_lines:
+                                store.append_history("\n".join(summary_lines))
+
+                    if not store.read_unprocessed_history(since_cursor=store.get_last_dream_cursor()):
+                        return
+
+                    provider = self.state.config_runtime.make_provider(config)
+                    dream = Dream(
+                        store=store,
+                        provider=provider,
+                        model=config.agents.defaults.model,
+                        max_batch_size=config.agents.defaults.dream.max_batch_size,
+                        max_iterations=config.agents.defaults.dream.max_iterations,
+                        skip_identity_files=True,
+                    )
+                    did_work = await dream.run()
+                    if not did_work:
+                        return
+
+                    # Sync workspace MEMORY.md → platform agent-memory file
+                    workspace_memory = store.read_memory().strip()
+                    if workspace_memory:
+                        memory_service = self._memory_service_for_tenant(tenant_id)
+                        if memory_service is not None:
+                            memory_service.update_agent_memory(agent_id, workspace_memory)
+                            logger.info("Dream: synced memory for agent {}", agent_id)
+                except Exception:
+                    logger.exception("Dream: background run failed for agent {}", agent_id)
+
+        asyncio.create_task(_run())
 
     @staticmethod
     def _channel_route_event_payload(route_metadata: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -1032,6 +1103,15 @@ class WebAgentRuntimeService:
             raise
         finally:
             await isolated_agent.close_mcp()
+            # Schedule background Dream for agent_profile-scoped agents
+            if agent_id and str(agent.get("memoryScope") or "agent_profile") == "agent_profile":
+                self._schedule_agent_dream(
+                    agent_id=agent_id,
+                    tenant_id=tenant_id,
+                    workspace_path=workspace_binding.path,
+                    config=config,
+                    session_key=execution_context.session_key,
+                )
 
         messages = self._format_messages(execution_context.session_key, execution_context.session_id)
         return {

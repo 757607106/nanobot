@@ -34,6 +34,8 @@ const ValidationPage = lazy(() => import('./pages/ValidationPage'))
 const ChannelBindingsPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelBindingsPage })))
 const ChannelAuditPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelAuditPage })))
 const ChannelsLayoutPage = lazy(() => import('./pages/channels').then((m) => ({ default: m.ChannelsLayoutPage })))
+const TenantsPage = lazy(() => import('./pages/tenants').then((m) => ({ default: m.TenantsPage })))
+const TemplatesPage = lazy(() => import('./pages/templates').then((m) => ({ default: m.TemplatesPage })))
 
 function RouteFallback() {
   return (
@@ -290,6 +292,7 @@ export function AppRoutes() {
           <Route path="agents/new" element={withRouteSuspense(<AgentsPage />)} />
           <Route path="agents/:agentId" element={withRouteSuspense(<AgentsPage />)} />
           <Route path="agents/:agentId/chat" element={withRouteSuspense(<AgentChatPage />)} />
+          <Route path="templates" element={withRouteSuspense(<TemplatesPage />)} />
           <Route path="memory" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route path="memory/agents/:agentId" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route
@@ -311,6 +314,7 @@ export function AppRoutes() {
           <Route path="automation" element={withRouteSuspense(<AutomationPage />)} />
           <Route path="operations" element={withRouteSuspense(<OperationsPage />)} />
           <Route path="admin" element={withRouteSuspense(<ProfilePage />)} />
+          <Route path="tenants" element={withRouteSuspense(<TenantsPage />)} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

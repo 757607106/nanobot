@@ -19,7 +19,9 @@ from nanobot.web.tenant_context import get_control_plane_principal, get_control_
 router = APIRouter()
 
 
-def _require_tenant_control_plane(request: Request, *, tenant_id: str | None = None) -> str:
+def _require_tenant_control_plane(
+    request: Request, *, tenant_id: str | None = None, require_tenant_selected: bool = True
+) -> str | None:
     principal = get_control_plane_principal(request)
     if principal is None:
         raise APIError(401, "AUTH_REQUIRED", "Authentication required.")
@@ -30,18 +32,19 @@ def _require_tenant_control_plane(request: Request, *, tenant_id: str | None = N
             "Tenant API keys cannot access the tenants control plane.",
         )
     selected_tenant_id = get_control_plane_tenant_id(request)
-    if not selected_tenant_id:
-        raise APIError(
-            403,
-            "TENANT_CONTEXT_REQUIRED",
-            "Select a current tenant before using the tenants control plane.",
-        )
-    if tenant_id is not None and selected_tenant_id != tenant_id:
-        raise APIError(
-            403,
-            "TENANT_CONTEXT_MISMATCH",
-            f"Current tenant '{selected_tenant_id}' does not match '{tenant_id}'.",
-        )
+    if require_tenant_selected:
+        if not selected_tenant_id:
+            raise APIError(
+                403,
+                "TENANT_CONTEXT_REQUIRED",
+                "Select a current tenant before using the tenants control plane.",
+            )
+        if tenant_id is not None and selected_tenant_id != tenant_id:
+            raise APIError(
+                403,
+                "TENANT_CONTEXT_MISMATCH",
+                f"Current tenant '{selected_tenant_id}' does not match '{tenant_id}'.",
+            )
     return selected_tenant_id
 
 
@@ -50,7 +53,7 @@ def _require_tenant_control_plane(request: Request, *, tenant_id: str | None = N
 
 @router.get("/api/v1/tenants")
 def list_tenants(request: Request) -> JSONResponse:
-    _require_tenant_control_plane(request)
+    _require_tenant_control_plane(request, require_tenant_selected=False)
     data = request.app.state.tenants_service.list_tenants()
     return _json_response(200, _ok(data))
 
@@ -58,9 +61,9 @@ def list_tenants(request: Request) -> JSONResponse:
 @router.post("/api/v1/tenants")
 def create_tenant(
     request: Request,
-    payload: dict[str, Any] = Body(default_factory=dict),
+    payload: dict[str, Any] = Body(...),
 ) -> JSONResponse:
-    _require_tenant_control_plane(request)
+    _require_tenant_control_plane(request, require_tenant_selected=False)
     try:
         data = request.app.state.tenants_service.create_tenant(payload)
     except TenantConflictError as exc:

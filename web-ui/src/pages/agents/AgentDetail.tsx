@@ -1,4 +1,4 @@
-import { CopyOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, MessageOutlined, SaveOutlined } from '@ant-design/icons'
+import { CopyOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, MessageOutlined, SaveOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { Alert, Button, Dropdown, Empty, Flex, Modal, Popover, Space, Spin, Tabs, Tag, Switch, Typography } from 'antd'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -13,12 +13,14 @@ import type {
   KnowledgeBaseDefinition,
   MemoryCandidate,
   McpServerEntry,
+  AgentTemplate,
 } from '../../types'
 import AgentEditor from './AgentEditor'
 import CapabilitiesTab from './CapabilitiesTab'
 import MemoryTab from './MemoryTab'
 import type { AgentFormState, AgentTab } from './types'
 import { getAgentAvatar, AVATAR_PRESETS, setAgentAvatarOverride, type AvatarPreset } from '../../avatarConfig'
+import AgentTestRunDrawer from './AgentTestRunDrawer'
 
 interface AgentDetailProps {
   isCreateRoute: boolean
@@ -30,6 +32,7 @@ interface AgentDetailProps {
   validTools: AgentTemplateTool[]
   skills: InstalledSkill[]
   mcpServers: McpServerEntry[]
+  agentTemplates: AgentTemplate[]
   knowledgeBases: KnowledgeBaseDefinition[]
   globalConfig: ConfigData | null
   globalConfigMeta: ConfigMeta | null
@@ -42,6 +45,7 @@ interface AgentDetailProps {
   memoryError: string | null
   detailRequestAgentId: string | null
   onUpdateForm: <K extends keyof AgentFormState>(key: K, value: AgentFormState[K]) => void
+  onApplyTemplate: (templateName: string) => void
   onToggleArrayItem: (
     key: 'toolAllowlist' | 'skillIds' | 'mcpServerIds' | 'knowledgeBindingIds',
     item: string,
@@ -66,6 +70,7 @@ export default function AgentDetail({
   validTools,
   skills,
   mcpServers,
+  agentTemplates,
   knowledgeBases,
   globalConfig,
   globalConfigMeta,
@@ -78,6 +83,7 @@ export default function AgentDetail({
   memoryError,
   detailRequestAgentId,
   onUpdateForm,
+  onApplyTemplate,
   onToggleArrayItem,
   onSave,
   onCopy,
@@ -92,6 +98,7 @@ export default function AgentDetail({
   const [detailTab, setDetailTab] = useState<AgentTab>('basic')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const [testRunOpen, setTestRunOpen] = useState(false)
   const capabilityCount = form.toolAllowlist.length + form.skillIds.length + form.mcpServerIds.length + form.knowledgeBindingIds.length
   const pendingMemoryCount = agentMemoryCandidates.filter((item) => item.status === 'proposed').length
 
@@ -248,14 +255,41 @@ export default function AgentDetail({
               </div>
             </Popover>
             <Flex vertical gap={4}>
-              <Typography.Title level={3} style={{ margin: 0, fontWeight: 'var(--nb-font-weight-title)', display: 'flex', alignItems: 'center', gap: 12 }}>
-                {detailTitle}
+              <Flex align="center" gap={12}>
+                <Typography.Title level={3} style={{ margin: 0, fontWeight: 'var(--nb-font-weight-title)' }}>
+                  {isCreateRoute ? '新建员工' : currentAgent?.name || form.name || '选择数字员工'}
+                </Typography.Title>
                 {!isCreateRoute && (
                   <Tag color={form.enabled ? 'processing' : 'default'} style={{ borderRadius: 12, padding: '2px 10px', fontSize: 'var(--nb-text-xs)', border: 'none', margin: 0 }}>
                     {form.enabled ? '已启用' : '已停用'}
                   </Tag>
                 )}
-              </Typography.Title>
+                  {isCreateRoute && agentTemplates.length > 0 && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8, 
+                      padding: '4px 10px', background: 'var(--nb-surface)', 
+                      borderRadius: 12, border: '1px solid var(--nb-border)'
+                    }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>快速预置：</Typography.Text>
+                      <select 
+                        onChange={(e) => onApplyTemplate(e.target.value)}
+                        style={{ 
+                          background: 'transparent',
+                          border: 'none',
+                          outline: 'none',
+                          fontSize: 'var(--nb-text-xs)',
+                          color: 'var(--nb-text)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value="">- 请选择资源蓝图 -</option>
+                        {agentTemplates.map(t => (
+                          <option key={t.name} value={t.name}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+              </Flex>
               <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)', maxWidth: 600 }}>
                 {detailSubtitle || '设定该数字员工的基础行为准则与响应模型'}
               </Typography.Text>
@@ -274,6 +308,9 @@ export default function AgentDetail({
             />
             {currentAgent && (
               <>
+                <Button icon={<PlayCircleOutlined />} onClick={() => setTestRunOpen(true)} style={{ borderRadius: 12 }}>
+                  测试运行
+                </Button>
                 <Button type="dashed" icon={<MessageOutlined />} onClick={() => navigate(`/studio/agents/${currentAgent.agentId}/chat`)} style={{ borderRadius: 12 }}>
                   发起会话
                 </Button>
@@ -383,6 +420,15 @@ export default function AgentDetail({
           确定要删除 {currentAgent ? `「${currentAgent.name}」` : '当前员工'} 吗？
         </Typography.Paragraph>
       </Modal>
+
+      {currentAgent && (
+        <AgentTestRunDrawer
+          open={testRunOpen}
+          onClose={() => setTestRunOpen(false)}
+          agentId={currentAgent.agentId}
+          agentName={currentAgent.name}
+        />
+      )}
     </Flex>
   )
 }

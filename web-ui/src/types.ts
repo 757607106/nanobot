@@ -1578,3 +1578,73 @@ export interface ChannelBindingMutationInput {
   enabled?: boolean
   metadata?: Record<string, unknown>
 }
+
+// ---------------------------------------------------------------------------
+// Tenants
+// ---------------------------------------------------------------------------
+
+export interface Tenant {
+  tenantId: string
+  name: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TenantApiKey {
+  keyId: string
+  tenantId: string
+  name: string
+  scopes?: string[]
+  expiresAt?: string
+  createdAt: string
+  lastUsedAt?: string
+  token?: string
+}
+
+export interface TenantAuditLog {
+  auditId: string
+  tenantId: string
+  actor: string
+  action: string
+  resourceType: string
+  resourceId?: string
+  details?: Record<string, unknown>
+  createdAt: string
+}
+
+export interface ArtifactRetentionPolicy {
+  archiveAfterDays: number | null
+  deleteAfterDays: number | null
+  reason?: string
+}
+
+// ---------------------------------------------------------------------------
+// Agent Templates
+// ---------------------------------------------------------------------------
+
+export interface AgentTemplate {
+  name: string
+  description?: string
+  tools?: string[]
+  rules?: string[]
+  systemPrompt?: string
+  skills?: string[]
+  model?: string
+  backend?: string
+  enabled?: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AgentTemplateMutationInput {
+  name?: string
+  description?: string
+  tools?: string[]
+  rules?: string[]
+  systemPrompt?: string
+  skills?: string[]
+  model?: string
+  backend?: string
+  enabled?: boolean
+}

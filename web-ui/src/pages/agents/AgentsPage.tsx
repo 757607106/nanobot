@@ -11,6 +11,7 @@ import type {
   KnowledgeBaseDefinition,
   MemoryCandidate,
   McpServerEntry,
+  AgentTemplate,
 } from '../../types'
 import AgentDetail from './AgentDetail'
 import AgentList from './AgentList'
@@ -36,6 +37,7 @@ export default function AgentsPage() {
   const [agentMemory, setAgentMemory] = useState<AgentMemorySnapshot | null>(null)
   const [agentMemoryCandidates, setAgentMemoryCandidates] = useState<MemoryCandidate[]>([])
   const [form, setForm] = useState<AgentFormState>(() => createEmptyForm())
+  const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
   const [globalConfig, setGlobalConfig] = useState<ConfigData | null>(null)
   const [globalConfigMeta, setGlobalConfigMeta] = useState<ConfigMeta | null>(null)
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
@@ -90,12 +92,13 @@ export default function AgentsPage() {
   async function loadWorkspace() {
     try {
       setLoadingWorkspace(true)
-      const [agentList, toolCatalog, skillList, mcpRegistry, kbList, configResult, metaResult] = await Promise.all([
+      const [agentList, toolCatalog, skillList, mcpRegistry, kbList, tplList, configResult, metaResult] = await Promise.all([
         api.getAgents(),
         api.getValidTemplateTools(),
         api.getInstalledSkills(),
         api.getMcpServers(),
         api.getKnowledgeBases(true),
+        api.getAgentTemplates(),
         api.getConfig().catch(() => null),
         api.getConfigMeta().catch(() => null),
       ])
@@ -104,6 +107,7 @@ export default function AgentsPage() {
       setSkills(skillList)
       setMcpServers(mcpRegistry.items)
       setKnowledgeBases(kbList)
+      setAgentTemplates(tplList.filter(t => t.enabled))
       setGlobalConfig(configResult)
       setGlobalConfigMeta(metaResult)
       setError(null)
@@ -160,6 +164,21 @@ export default function AgentsPage() {
       ...prev,
       [key]: prev[key].includes(item) ? prev[key].filter((value) => value !== item) : [...prev[key], item],
     }))
+  }
+
+  function applyTemplate(templateName: string) {
+    const tpl = agentTemplates.find(t => t.name === templateName)
+    if (!tpl) return
+    setForm(prev => ({
+      ...prev,
+      name: prev.name || `${tpl.name}的副本`,
+      description: tpl.description || prev.description,
+      systemPrompt: tpl.systemPrompt || prev.systemPrompt,
+      model: tpl.model || prev.model,
+      toolAllowlist: tpl.tools || [],
+      skillIds: tpl.skills || [],
+    }))
+    message.success(`已应用蓝图: ${templateName}`)
   }
 
   async function handleSave() {
@@ -314,6 +333,7 @@ export default function AgentsPage() {
             validTools={validTools}
             skills={skills}
             mcpServers={mcpServers}
+            agentTemplates={agentTemplates}
             knowledgeBases={knowledgeBases}
             globalConfig={globalConfig}
             globalConfigMeta={globalConfigMeta}
@@ -326,6 +346,7 @@ export default function AgentsPage() {
             memoryError={memoryError}
             detailRequestAgentId={detailRequestAgentId}
             onUpdateForm={updateForm}
+            onApplyTemplate={applyTemplate}
             onToggleArrayItem={toggleArrayItem}
             onSave={handleSave}
             onCopy={handleCopy}

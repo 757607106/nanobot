@@ -83,6 +83,12 @@ import type {
   ValidationRunResult,
   WhatsAppBindingStatus,
   WeixinBindingStatus,
+  Tenant,
+  TenantApiKey,
+  TenantAuditLog,
+  ArtifactRetentionPolicy,
+  AgentTemplate,
+  AgentTemplateMutationInput,
 } from './types'
 
 const API_BASE = '/api/v1'
@@ -1086,5 +1092,74 @@ export const api = {
   deleteSkill: (skillId: string) =>
     request<{ deleted: boolean }>(`/skills/${encodeURIComponent(skillId)}`, {
       method: 'DELETE',
+    }),
+
+  // Tenants
+  getTenants: () => request<Tenant[]>('/tenants'),
+  createTenant: (payload: Record<string, unknown>) =>
+    request<Tenant>('/tenants', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getTenant: (tenantId: string) => request<Tenant>(`/tenants/${encodeURIComponent(tenantId)}`),
+  updateTenant: (tenantId: string, payload: Record<string, unknown>) =>
+    request<Tenant>(`/tenants/${encodeURIComponent(tenantId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteTenant: (tenantId: string) =>
+    request<{ deleted: boolean }>(`/tenants/${encodeURIComponent(tenantId)}`, {
+      method: 'DELETE',
+    }),
+  getTenantArtifactRetentionPolicy: (tenantId: string) =>
+    request<ArtifactRetentionPolicy>(`/tenants/${encodeURIComponent(tenantId)}/artifact-retention-policy`),
+  updateTenantArtifactRetentionPolicy: (tenantId: string, payload: Record<string, unknown>) =>
+    request<ArtifactRetentionPolicy>(`/tenants/${encodeURIComponent(tenantId)}/artifact-retention-policy`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  getTenantAudit: (tenantId: string) => request<TenantAuditLog[]>(`/tenants/${encodeURIComponent(tenantId)}/audit`),
+  getTenantApiKeys: (tenantId: string) => request<TenantApiKey[]>(`/tenants/${encodeURIComponent(tenantId)}/api-keys`),
+  createTenantApiKey: (tenantId: string, payload: Record<string, unknown>) =>
+    request<TenantApiKey>(`/tenants/${encodeURIComponent(tenantId)}/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  revokeApiKey: (keyId: string) =>
+    request<{ deleted: boolean }>(`/api-keys/${encodeURIComponent(keyId)}`, {
+      method: 'DELETE',
+    }),
+
+  // Agent Templates
+  getAgentTemplates: () => request<AgentTemplate[]>('/agent-templates'),
+  createAgentTemplate: (payload: AgentTemplateMutationInput) =>
+    request<AgentTemplate>('/agent-templates', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getAgentTemplate: (templateName: string) =>
+    request<AgentTemplate>(`/agent-templates/${encodeURIComponent(templateName)}`),
+  updateAgentTemplate: (templateName: string, payload: AgentTemplateMutationInput) =>
+    request<AgentTemplate>(`/agent-templates/${encodeURIComponent(templateName)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteAgentTemplate: (templateName: string) =>
+    request<{ deleted: boolean }>(`/agent-templates/${encodeURIComponent(templateName)}`, {
+      method: 'DELETE',
+    }),
+  importAgentTemplates: (content: string, onConflict: 'skip' | 'replace' | 'rename' = 'skip') =>
+    request<{ imported: number; failures: number }[]>('/agent-templates/import', {
+      method: 'POST',
+      body: JSON.stringify({ content, on_conflict: onConflict }),
+    }),
+  exportAgentTemplates: (names?: string[]) =>
+    request<{ content: string }>('/agent-templates/export', {
+      method: 'POST',
+      body: JSON.stringify({ names }),
+    }),
+  reloadAgentTemplates: () =>
+    request<{ loaded: number }>('/agent-templates/reload', {
+      method: 'POST',
     }),
 }

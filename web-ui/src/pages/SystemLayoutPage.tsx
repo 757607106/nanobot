@@ -12,6 +12,7 @@ interface SystemRoute {
 
 const allSystemRoutes: SystemRoute[] = [
   { key: '/system', label: '系统状态', shortLabel: '状态' },
+  { key: '/system/tenants', label: '租户管理', shortLabel: '租户' },
   { key: '/system/preferences', label: '界面偏好', shortLabel: '偏好' },
   { key: '/system/validation', label: '配置验证', shortLabel: '验证', devOnly: true },
   { key: '/system/automation', label: '自动化任务', shortLabel: '任务' },
