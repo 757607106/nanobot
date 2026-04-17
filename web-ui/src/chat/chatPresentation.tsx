@@ -387,7 +387,7 @@ export function ChatMessageBody({
             key={seg.key}
             title="深度思考"
             loading={seg.loading}
-            defaultExpanded={seg.loading}
+            defaultExpanded={seg.loading || isStreaming}
           >
             <MarkdownBubble content={seg.content} isStreaming={seg.isStreaming} />
           </Think>

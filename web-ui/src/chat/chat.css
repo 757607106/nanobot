@@ -185,3 +185,15 @@
   max-height: 360px;
   overflow-y: auto;
 }
+
+/* 深度思考区标题降级：LLM 推理草稿常含 ### 符号，压至正文字号 */
+.ant-x-think .markdown-bubble h1,
+.ant-x-think .markdown-bubble h2,
+.ant-x-think .markdown-bubble h3,
+.ant-x-think .markdown-bubble h4,
+.ant-x-think .markdown-bubble h5,
+.ant-x-think .markdown-bubble h6 {
+  font-size: var(--nb-text-sm);
+  font-weight: 600;
+  margin: 8px 0 4px;
+}
