@@ -7,7 +7,11 @@ import pytest
 
 from nanobot.config.schema import Config
 from nanobot.platform.instances import PlatformInstance
-from nanobot.platform.knowledge import KnowledgeBaseService, KnowledgeBaseValidationError, create_knowledge_store
+from nanobot.platform.knowledge import (
+    KnowledgeBaseService,
+    KnowledgeBaseValidationError,
+    create_knowledge_store,
+)
 from tests.knowledge_test_utils import FakeRAGEngine
 
 

@@ -13,20 +13,17 @@ Tests the full message flow:
 from __future__ import annotations
 
 import asyncio
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
-from nanobot.bus.events import InboundMessage, OutboundMessage
+from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.dispatch import ChannelMessageDispatcher
 from nanobot.channels.manager import _RoutingBusProxy
 from nanobot.platform.channel_audit import ChannelAuditService, ChannelAuditStore
-from nanobot.platform.channel_bindings.models import ChannelBinding, now_iso
 from nanobot.platform.channel_bindings.service import (
-    ChannelBindingConflictError,
     ChannelBindingService,
     ChannelBindingValidationError,
 )
@@ -35,7 +32,6 @@ from nanobot.web.runtime_services.channel_routing import (
     ChannelRoutingService,
     RoutingTarget,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -554,9 +550,9 @@ class TestWebAPIChannelBindings:
     @pytest.fixture
     def session(self):
         """Login and return a requests-compatible session."""
-        import urllib.request
         import http.cookiejar
         import json
+        import urllib.request
 
         cj = http.cookiejar.CookieJar()
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
@@ -584,7 +580,7 @@ class TestWebAPIChannelBindings:
     def _ensure_agent(self, session, agent_id: str) -> None:
         try:
             self._api(session, "POST", "/api/v1/agents", {"name": agent_id, "systemPrompt": "Hello", "agentId": agent_id})
-        except Exception as e:
+        except Exception:
             pass
 
     def test_create_and_resolve_binding(self, session) -> None:

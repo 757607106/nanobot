@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from nanobot.harness import SandboxBinding, WorkspaceBinding
 from nanobot.cli.platform_runtime import CLIGatewayRoutingRuntime
+from nanobot.harness import SandboxBinding, WorkspaceBinding
 
 
 def _make_runtime(**overrides) -> CLIGatewayRoutingRuntime:

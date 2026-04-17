@@ -805,6 +805,7 @@ def test_web_api_mcp_repository_inspect_and_install_with_fixture_repo(
             assert command in (["npm", "ci"], ["npm", "install"])
             assert timeout == 900
 
+        monkeypatch.setattr("nanobot.web.services.mcp_repository.shutil.which", lambda _cmd: "/fake/path")
         monkeypatch.setattr(client.app.state.mcp_repository, "_clone_repository", fake_clone)
         monkeypatch.setattr(client.app.state.mcp_repository, "_run_install_step", fake_install_step)
 

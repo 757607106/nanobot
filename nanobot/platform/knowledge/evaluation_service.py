@@ -24,21 +24,18 @@ from nanobot.platform.knowledge.models import (
     KnowledgeFile,
     now_iso,
 )
-from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.knowledge.service import (
     KnowledgeBaseNotFoundError,
     KnowledgeBaseValidationError,
 )
+from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.knowledge.utils import (
-    short_id,
-    normalize_text,
-    normalize_string_list,
-    normalize_eval_text,
-    split_large_block,
-    DEFAULT_KNOWLEDGE_CHUNK_SIZE,
     DEFAULT_KNOWLEDGE_CHUNK_OVERLAP,
+    DEFAULT_KNOWLEDGE_CHUNK_SIZE,
+    normalize_eval_text,
+    short_id,
+    split_large_block,
 )
-from nanobot.platform.knowledge.llm_helpers import KnowledgeLLMHelper
 
 if TYPE_CHECKING:
     from nanobot.platform.knowledge.artifacts import KnowledgeArtifactStore

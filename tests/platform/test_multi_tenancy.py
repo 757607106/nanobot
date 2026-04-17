@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
 from nanobot.platform.agents.models import AgentDefinition, now_iso
-from nanobot.platform.agents.store import AgentDefinitionStore
 from nanobot.platform.agents.service import AgentDefinitionService
+from nanobot.platform.agents.store import AgentDefinitionStore
 from nanobot.platform.channel_bindings.models import ChannelBinding
-from nanobot.platform.channel_bindings.store import ChannelBindingStore
 from nanobot.platform.channel_bindings.service import ChannelBindingService
+from nanobot.platform.channel_bindings.store import ChannelBindingStore
 
 
 @pytest.fixture

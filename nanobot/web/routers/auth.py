@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from nanobot.web.http import APIError, _json_response, _ok
 from nanobot.web.services.auth import (
     SESSION_COOKIE_NAME,
     SESSION_MAX_AGE_SECONDS,
@@ -16,7 +17,6 @@ from nanobot.web.services.auth import (
     AuthInvalidCredentialsError,
     AuthNotInitializedError,
 )
-from nanobot.web.http import APIError, _json_response, _ok
 
 router = APIRouter()
 

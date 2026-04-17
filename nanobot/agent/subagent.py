@@ -9,8 +9,7 @@ from typing import Any
 from loguru import logger
 
 from nanobot.agent.hook import AgentHook, AgentHookContext
-from nanobot.utils.prompt_templates import render_template
-from nanobot.agent.runner import AgentRunSpec, AgentRunner
+from nanobot.agent.runner import AgentRunner, AgentRunSpec
 from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from nanobot.agent.tools.registry import ToolRegistry
@@ -18,16 +17,18 @@ from nanobot.agent.tools.search import GlobTool, GrepTool
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.bus.events import InboundMessage
-from nanobot.harness.workspace import WorkspaceContext
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import ExecToolConfig, WebToolsConfig
+from nanobot.harness.workspace import WorkspaceContext
 from nanobot.providers.base import LLMProvider
+from nanobot.utils.prompt_templates import render_template
 
 
 class _SubagentHook(AgentHook):
     """Logging-only hook for subagent execution."""
 
     def __init__(self, task_id: str) -> None:
+        super().__init__()
         self._task_id = task_id
 
     async def before_execute_tools(self, context: AgentHookContext) -> None:
@@ -53,6 +54,7 @@ class SubagentManager:
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
         workspace_context: WorkspaceContext | None = None,
+        disabled_skills: list[str] | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
 
@@ -64,6 +66,7 @@ class SubagentManager:
         self.max_tool_result_chars = max_tool_result_chars
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
+        self.disabled_skills = set(disabled_skills or [])
         self.runner = AgentRunner(provider)
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._session_tasks: dict[str, set[str]] = {}  # session_key -> {task_id, ...}
@@ -127,7 +130,6 @@ class SubagentManager:
                     working_dir=str(self.workspace),
                     timeout=self.exec_config.timeout,
                     restrict_to_workspace=self.restrict_to_workspace,
-                    sandbox=self.exec_config.sandbox,
                     path_append=self.exec_config.path_append,
                 ))
             if self.web_config.enable:
@@ -238,7 +240,10 @@ class SubagentManager:
         from nanobot.agent.skills import SkillsLoader
 
         time_ctx = ContextBuilder._build_runtime_context(None, None)
-        skills_summary = SkillsLoader(self._ws_ctx.agent_root).build_skills_summary()
+        skills_summary = SkillsLoader(
+            self._ws_ctx.agent_root,
+            disabled_skills=self.disabled_skills,
+        ).build_skills_summary()
         return render_template(
             "agent/subagent_system.md",
             time_ctx=time_ctx,
@@ -259,3 +264,11 @@ class SubagentManager:
     def get_running_count(self) -> int:
         """Return the number of currently running subagents."""
         return len(self._running_tasks)
+
+    def get_running_count_by_session(self, session_key: str) -> int:
+        """Return the number of currently running subagents for a session."""
+        tids = self._session_tasks.get(session_key, set())
+        return sum(
+            1 for tid in tids
+            if tid in self._running_tasks and not self._running_tasks[tid].done()
+        )

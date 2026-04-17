@@ -10,7 +10,6 @@ from pydantic_settings import BaseSettings
 
 from nanobot.cron.types import CronSchedule
 
-
 _COMMON_API_ENDPOINT_SUFFIXES = (
     "/chat/completions",
     "/completions",
@@ -184,8 +183,16 @@ class AgentDefaults(Base):
     max_tool_result_chars: int = 16_000
     provider_retry_mode: Literal["standard", "persistent"] = "standard"
     memory_window: int | None = Field(default=None, exclude=True)
-    reasoning_effort: str | None = None  # low / medium / high - enables LLM thinking mode
+    reasoning_effort: str | None = None  # low / medium / high / adaptive - enables LLM thinking mode
     timezone: str = "UTC"  # IANA timezone, e.g. "Asia/Shanghai", "America/New_York"
+    unified_session: bool = False  # Share one session across all channels (single-user multi-device)
+    disabled_skills: list[str] = Field(default_factory=list)  # Skill names to exclude from loading (e.g. ["summarize", "skill-creator"])
+    session_ttl_minutes: int = Field(
+        default=0,
+        ge=0,
+        validation_alias=AliasChoices("idleCompactAfterMinutes", "sessionTtlMinutes"),
+        serialization_alias="idleCompactAfterMinutes",
+    )  # Auto-compact idle threshold in minutes (0 = disabled)
     dream: DreamConfig = Field(default_factory=DreamConfig)
 
     @property
@@ -268,7 +275,7 @@ class ApiConfig(Base):
 class GatewayConfig(Base):
     """Gateway/server configuration."""
 
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"  # Safer default: local-only bind.
     port: int = 18790
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
 
@@ -276,7 +283,7 @@ class GatewayConfig(Base):
 class WebSearchConfig(Base):
     """Web search tool configuration."""
 
-    provider: str = "duckduckgo"  # brave, tavily, duckduckgo, searxng, jina
+    provider: str = "duckduckgo"  # brave, tavily, duckduckgo, searxng, jina, kagi
     api_key: str = ""
     base_url: str = ""  # SearXNG base URL
     max_results: int = 5
@@ -300,7 +307,7 @@ class ExecToolConfig(Base):
     timeout: int = 60
     path_append: str = ""
     sandbox_kind: Literal["local", "docker", "remote"] = "local"
-    sandbox: str = ""  # upstream sandbox compatibility
+    sandbox: str = ""  # sandbox backend: "" (none) or "bwrap"
     docker_image: str = "python:3.12-slim"
     docker_runtime_workdir: str = "/workspace"
     docker_network_mode: str = "bridge"
@@ -308,6 +315,7 @@ class ExecToolConfig(Base):
     docker_mounts: list[str] = Field(default_factory=list)
     docker_env_allowlist: list[str] = Field(default_factory=list)
     remote_endpoint: str = ""
+    allowed_env_keys: list[str] = Field(default_factory=list)  # Env var names to pass through to subprocess (e.g. ["GOPATH", "JAVA_HOME"])
 
 class MCPServerConfig(Base):
     """MCP server connection configuration (stdio or HTTP)."""

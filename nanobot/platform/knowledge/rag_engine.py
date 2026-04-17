@@ -39,8 +39,8 @@ def _check_rag_anything() -> bool:
     global _rag_anything_available
     if _rag_anything_available is None:
         try:
-            import raganything  # noqa: F401
             import lightrag  # noqa: F401
+            import raganything  # noqa: F401
             _rag_anything_available = True
         except ImportError:
             _rag_anything_available = False
@@ -886,9 +886,9 @@ class RAGEngine:
 
     def _build_embedding_func(self, runtime: dict[str, Any] | None = None):
         """Build the embedding function for LightRAG."""
-        from litellm import aembedding
         import numpy as np
         from lightrag.utils import EmbeddingFunc
+        from litellm import aembedding
 
         resolved_runtime = dict(runtime or {})
         api_key = str(resolved_runtime.get("embedding_api_key") or self._embedding_api_key or "")

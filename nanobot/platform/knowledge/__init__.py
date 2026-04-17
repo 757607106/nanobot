@@ -8,16 +8,16 @@ from nanobot.platform.knowledge.models import (
     KnowledgeIngestJob,
     KnowledgeJob,
     KnowledgeJobStatus,
-    KnowledgeRetrievalProfile,
     KnowledgeQueryParams,
+    KnowledgeRetrievalProfile,
     KnowledgeSource,
 )
 from nanobot.platform.knowledge.service import (
     KnowledgeBaseConflictError,
     KnowledgeBaseNotFoundError,
     KnowledgeBaseService,
-    KnowledgeSourceNotFoundError,
     KnowledgeBaseValidationError,
+    KnowledgeSourceNotFoundError,
 )
 from nanobot.platform.knowledge.store import KnowledgeBaseStore, create_knowledge_store
 

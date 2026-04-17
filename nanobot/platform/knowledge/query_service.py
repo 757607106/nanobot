@@ -19,22 +19,21 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from nanobot.platform.knowledge.models import (
+    KNOWLEDGE_ARCHITECTURE_TYPE,
     KnowledgeBaseDefinition,
     KnowledgeFile,
     KnowledgeQueryParams,
-    KNOWLEDGE_ARCHITECTURE_TYPE,
     default_query_params_payload,
     now_iso,
 )
-from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.knowledge.service import (
     KnowledgeBaseNotFoundError,
     KnowledgeBaseValidationError,
 )
+from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.knowledge.utils import (
     DEFAULT_BEST_EFFORT_RETRIEVE_TIMEOUT_SECONDS,
     normalize_text,
-    normalize_string_list,
 )
 
 if TYPE_CHECKING:

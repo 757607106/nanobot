@@ -7,9 +7,9 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Callable
 
 from nanobot.platform.agents.model_selection import canonicalize_agent_model_selection
-from nanobot.platform.artifact_retention import normalize_artifact_retention_policy
 from nanobot.platform.agents.models import AgentDefinition, now_iso
 from nanobot.platform.agents.store import AgentDefinitionStore
+from nanobot.platform.artifact_retention import normalize_artifact_retention_policy
 
 if TYPE_CHECKING:
     from nanobot.config.schema import Config

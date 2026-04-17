@@ -8,7 +8,6 @@ from nanobot.web.routers.channel_bindings import router as channel_bindings_rout
 from nanobot.web.routers.channels import router as channels_router
 from nanobot.web.routers.chat import router as chat_router
 from nanobot.web.routers.knowledge import router as knowledge_router
-
 from nanobot.web.routers.mcp import router as mcp_router
 from nanobot.web.routers.memory import router as memory_router
 from nanobot.web.routers.operations import router as operations_router

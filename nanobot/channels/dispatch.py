@@ -10,7 +10,6 @@ from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.platform.channel_audit import ChannelAuditService, ChannelAuditStatus
 
-
 ChannelDispatchResponse = str | dict[str, Any] | None
 
 

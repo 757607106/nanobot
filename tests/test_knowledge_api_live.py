@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import io
 import json
-import mimetypes
 import os
 import sys
 import time
@@ -21,9 +20,8 @@ import traceback
 import uuid
 from http.cookiejar import CookieJar
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
+from urllib.error import HTTPError
+from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 BASE_URL = "http://127.0.0.1:6788"
 TIMEOUT = 30

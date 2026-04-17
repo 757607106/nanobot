@@ -12,9 +12,10 @@ from typing import Any
 from loguru import logger
 
 from nanobot.agent.tools.base import Tool, tool_parameters
-from nanobot.agent.tools.sandbox import wrap_command
 from nanobot.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
 from nanobot.config.paths import get_media_dir
+
+_IS_WINDOWS = sys.platform == "win32"
 
 
 
@@ -209,19 +210,18 @@ class ExecTool(Tool):
         deny_patterns: list[str] | None = None,
         allow_patterns: list[str] | None = None,
         restrict_to_workspace: bool = False,
-        sandbox: str = "",
         path_append: str = "",
         host_working_dir: str | None = None,
         runtime_workdir: str | None = None,
         sandbox_executor: Any | None = None,
         env: dict[str, str] | None = None,
+        allowed_env_keys: list[str] | None = None,
     ):
         self.timeout = timeout
         self.working_dir = working_dir
         self.host_working_dir = host_working_dir or working_dir
         self.runtime_workdir = runtime_workdir or self.host_working_dir or working_dir
         self.sandbox_executor = sandbox_executor or LocalShellSandboxExecutor()
-        self.sandbox = sandbox
         self.deny_patterns = deny_patterns or [
             r"\brm\s+-[rf]{1,2}\b",          # rm -r, rm -rf, rm -fr
             r"\bdel\s+/[fq]\b",              # del /f, del /q
@@ -232,11 +232,20 @@ class ExecTool(Tool):
             r">\s*/dev/sd",                  # write to disk
             r"\b(shutdown|reboot|poweroff)\b",  # system power
             r":\(\)\s*\{.*\};\s*:",          # fork bomb
+            # Block writes to nanobot internal state files (#2989).
+            # history.jsonl / .dream_cursor are managed by append_history();
+            # direct writes corrupt the cursor format and crash /dream.
+            r">>?\s*\S*(?:history\.jsonl|\.dream_cursor)",            # > / >> redirect
+            r"\btee\b[^|;&<>]*(?:history\.jsonl|\.dream_cursor)",     # tee / tee -a
+            r"\b(?:cp|mv)\b(?:\s+[^\s|;&<>]+)+\s+\S*(?:history\.jsonl|\.dream_cursor)",  # cp/mv target
+            r"\bdd\b[^|;&<>]*\bof=\S*(?:history\.jsonl|\.dream_cursor)",  # dd of=
+            r"\bsed\s+-i[^|;&<>]*(?:history\.jsonl|\.dream_cursor)",  # sed -i
         ]
         self.allow_patterns = allow_patterns or []
         self.restrict_to_workspace = restrict_to_workspace
         self.path_append = path_append
         self.env = dict(env or {})
+        self.allowed_env_keys = allowed_env_keys or []
 
     @property
     def name(self) -> str:
@@ -247,7 +256,13 @@ class ExecTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Execute a shell command and return its output. Use with caution."
+        return (
+            "Execute a shell command and return its output. "
+            "Prefer read_file/write_file/edit_file over cat/echo/sed, "
+            "and grep/glob over shell find/grep. "
+            "Use -y or --yes flags to avoid interactive prompts. "
+            "Output is truncated at 10 000 chars; timeout defaults to 60s."
+        )
 
     @property
     def exclusive(self) -> bool:
@@ -258,14 +273,23 @@ class ExecTool(Tool):
         timeout: int | None = None, **kwargs: Any,
     ) -> str:
         host_cwd, runtime_cwd = self._resolve_cwds(working_dir)
+
+        # Prevent an LLM-supplied working_dir from escaping the configured
+        # workspace when restrict_to_workspace is enabled (#2826).
+        if self.restrict_to_workspace and self.working_dir:
+            try:
+                requested = Path(str(host_cwd)).expanduser().resolve()
+                workspace_root = Path(self.working_dir).expanduser().resolve()
+            except Exception:
+                return "Error: working_dir could not be resolved"
+            if requested != workspace_root and workspace_root not in requested.parents:
+                return "Error: working_dir is outside the configured workspace"
+
         guard_error = self._guard_command(command, str(host_cwd))
         if guard_error:
             return guard_error
 
-        if self.sandbox:
-            workspace = self.working_dir or cwd
-            command = wrap_command(self.sandbox, command, workspace, cwd)
-            cwd = str(Path(workspace).resolve())
+
 
         effective_timeout = min(timeout or self.timeout, self._MAX_TIMEOUT)
 
@@ -285,6 +309,11 @@ class ExecTool(Tool):
     def _build_env(self, *, path_append: str, include_host_env: bool) -> dict[str, str]:
         env = os.environ.copy() if include_host_env else {"PATH": os.environ.get("PATH", "")}
         env.update({key: value for key, value in self.env.items() if str(key or "").strip()})
+        # Pass through explicitly allowed env vars
+        for key in self.allowed_env_keys:
+            val = os.environ.get(key)
+            if val is not None:
+                env[key] = val
         if path_append:
             env["PATH"] = env.get("PATH", "") + os.pathsep + path_append
         return env
@@ -337,8 +366,8 @@ class ExecTool(Tool):
                     continue
 
                 media_path = get_media_dir().resolve()
-                if (p.is_absolute() 
-                    and cwd_path not in p.parents 
+                if (p.is_absolute()
+                    and cwd_path not in p.parents
                     and p != cwd_path
                     and media_path not in p.parents
                     and p != media_path

@@ -15,7 +15,6 @@ from nanobot.channels.manager import ChannelManager
 from nanobot.config.schema import ChannelsConfig
 from nanobot.utils.restart import RestartNotice
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -195,9 +194,10 @@ async def test_manager_loads_plugin_from_dict_config():
 
 
 def test_channels_login_uses_discovered_plugin_class(monkeypatch):
+    from typer.testing import CliRunner
+
     from nanobot.cli.commands import app
     from nanobot.config.schema import Config
-    from typer.testing import CliRunner
 
     runner = CliRunner()
     seen: dict[str, object] = {}
@@ -223,9 +223,10 @@ def test_channels_login_uses_discovered_plugin_class(monkeypatch):
 
 
 def test_channels_login_sets_custom_config_path(monkeypatch, tmp_path):
+    from typer.testing import CliRunner
+
     from nanobot.cli.commands import app
     from nanobot.config.schema import Config
-    from typer.testing import CliRunner
 
     runner = CliRunner()
     seen: dict[str, object] = {}
@@ -252,9 +253,10 @@ def test_channels_login_sets_custom_config_path(monkeypatch, tmp_path):
 
 
 def test_channels_status_sets_custom_config_path(monkeypatch, tmp_path):
+    from typer.testing import CliRunner
+
     from nanobot.cli.commands import app
     from nanobot.config.schema import Config
-    from typer.testing import CliRunner
 
     runner = CliRunner()
     seen: dict[str, object] = {}
@@ -647,7 +649,10 @@ class _ChannelWithAllowFrom(BaseChannel):
 
     def __init__(self, config, bus, allow_from):
         super().__init__(config, bus)
-        self.config.allow_from = allow_from
+        if isinstance(self.config, dict):
+            self.config["allow_from"] = allow_from
+        else:
+            self.config.allow_from = allow_from
 
     async def start(self) -> None:
         pass
@@ -713,6 +718,25 @@ async def test_validate_allow_from_passes_with_asterisk():
 
     # Should not raise
     mgr._validate_allow_from()
+
+
+@pytest.mark.asyncio
+async def test_validate_allow_from_removes_on_empty_dict_allow_from():
+    """_validate_allow_from should reject empty dict-backed allow_from lists and remove them."""
+    fake_config = SimpleNamespace(
+        channels=ChannelsConfig(),
+        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
+    )
+
+    mgr = ChannelManager.__new__(ChannelManager)
+    mgr.config = fake_config
+    mgr.channels = {"test": _ChannelWithAllowFrom({"enabled": True}, None, [])}
+    mgr._dispatch_task = None
+
+    mgr._validate_allow_from()
+
+    # Channel should be removed (not raise SystemExit)
+    assert "test" not in mgr.channels
 
 
 @pytest.mark.asyncio

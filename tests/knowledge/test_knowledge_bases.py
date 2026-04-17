@@ -77,7 +77,6 @@ class _RuntimeAwareFakeRAGEngine(FakeRAGEngine):
 
 class _SlowQueryFakeRAGEngine(FakeRAGEngine):
     async def query_structured(self, kb_id, query_text, **kwargs):
-        import asyncio
         await asyncio.sleep(0.2)
         return await super().query_structured(kb_id, query_text, **kwargs)
 

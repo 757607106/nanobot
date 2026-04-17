@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import mimetypes
-import re
 import shutil
 import textwrap
-from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from threading import Lock
@@ -18,17 +17,17 @@ from loguru import logger
 
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge.artifacts import KnowledgeArtifactStore
-from nanobot.platform.knowledge.preview_artifacts import KnowledgePreviewArtifacts
 from nanobot.platform.knowledge.models import (
+    KNOWLEDGE_ARCHITECTURE_TYPE,
     KnowledgeBaseDefinition,
     KnowledgeFile,
     KnowledgeIngestJob,
     KnowledgeJobStatus,
     KnowledgeQueryParams,
-    KNOWLEDGE_ARCHITECTURE_TYPE,
     default_query_params_payload,
     now_iso,
 )
+from nanobot.platform.knowledge.preview_artifacts import KnowledgePreviewArtifacts
 from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.tenant_scope import clone_service_with_overrides
 from nanobot.utils.helpers import ensure_dir, safe_filename
@@ -66,17 +65,33 @@ class KnowledgeFileArtifact:
 
 from nanobot.platform.knowledge.llm_helpers import KnowledgeLLMHelper
 from nanobot.platform.knowledge.utils import (
-    DEFAULT_KNOWLEDGE_CHUNK_SIZE,
-    DEFAULT_KNOWLEDGE_CHUNK_OVERLAP,
     DEFAULT_BEST_EFFORT_RETRIEVE_TIMEOUT_SECONDS,
+)
+from nanobot.platform.knowledge.utils import (
     first_binding_name_by_capability as _first_binding_name_by_capability_fn,
-    slugify as _slugify,
-    short_id as _short_id,
+)
+from nanobot.platform.knowledge.utils import (
     get_value as _get_value_fn,
-    normalize_text as _normalize_text_fn,
-    normalize_string_list as _normalize_string_list_fn,
-    normalize_object as _normalize_object_fn,
+)
+from nanobot.platform.knowledge.utils import (
     knowledge_model_value as _knowledge_model_value_fn,
+)
+from nanobot.platform.knowledge.utils import (
+    normalize_object as _normalize_object_fn,
+)
+from nanobot.platform.knowledge.utils import (
+    normalize_string_list as _normalize_string_list_fn,
+)
+from nanobot.platform.knowledge.utils import (
+    normalize_text as _normalize_text_fn,
+)
+from nanobot.platform.knowledge.utils import (
+    short_id as _short_id,
+)
+from nanobot.platform.knowledge.utils import (
+    slugify as _slugify,
+)
+from nanobot.platform.knowledge.utils import (
     split_large_block as _split_large_block_fn,
 )
 
@@ -118,9 +133,9 @@ class KnowledgeBaseService:
         )
         self.preview_artifacts = KnowledgePreviewArtifacts(preview_dir_factory=self._kb_preview_dir)
         self.llm_helper = KnowledgeLLMHelper(config, self._run_async)
-        
-        from nanobot.platform.knowledge.file_manager import KnowledgeFileManager
+
         from nanobot.platform.knowledge.document_pipeline import DocumentPipeline
+        from nanobot.platform.knowledge.file_manager import KnowledgeFileManager
 
         self.doc_pipeline = DocumentPipeline(
             store=self.store,

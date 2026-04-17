@@ -21,6 +21,8 @@ class ContextBuilder:
     # its own system_prompt_override so it doesn't inherit the global identity.
     _IDENTITY_BOOTSTRAP_FILES = {"SOUL.md"}
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
+    _MAX_RECENT_HISTORY = 50
+    _RUNTIME_CONTEXT_END = "[/Runtime Context]"
 
     def __init__(
         self,
@@ -30,6 +32,7 @@ class ContextBuilder:
         virtual_workspace_path: Path | str | None = None,
         timezone: str | None = None,
         workspace_context: WorkspaceContext | None = None,
+        disabled_skills: list[str] | None = None,
     ):
         if workspace_context is not None:
             self.workspace = workspace_context.identity_root
@@ -47,7 +50,7 @@ class ContextBuilder:
         self.memory = MemoryStore(self.memory_workspace)
         if self.workspace != self.memory_workspace:
             self.memory.set_identity_root(self.workspace)
-        self.skills = SkillsLoader(self.workspace)
+        self.skills = SkillsLoader(self.workspace, disabled_skills=set(disabled_skills) if disabled_skills else None)
 
     def build_system_prompt(
         self,
@@ -55,6 +58,7 @@ class ContextBuilder:
         extra_system_prompt: str | None = None,
         include_workspace_memory: bool = True,
         memory_sections: list[tuple[str, str]] | None = None,
+        channel: str | None = None,
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
         parts: list[str] = []
@@ -71,7 +75,7 @@ class ContextBuilder:
                 parts.append(runtime_section)
         else:
             # Default mode — use the global identity.
-            parts.append(self._get_identity())
+            parts.append(self._get_identity(channel=channel))
             bootstrap = self._load_bootstrap_files(skip_identity=False)
             if bootstrap:
                 parts.append(bootstrap)
@@ -105,6 +109,13 @@ class ContextBuilder:
         if skills_summary:
             parts.append(render_template("agent/skills_section.md", skills_summary=skills_summary))
 
+        entries = self.memory.read_unprocessed_history(since_cursor=self.memory.get_last_dream_cursor())
+        if entries:
+            capped = entries[-self._MAX_RECENT_HISTORY:]
+            parts.append("# Recent History\n\n" + "\n".join(
+                f"- [{e['timestamp']}] {e['content']}" for e in capped
+            ))
+
         return "\n\n---\n\n".join(parts)
 
     def _resolve_workspace_path(self) -> str:
@@ -115,7 +126,7 @@ class ContextBuilder:
             else str(self.workspace.expanduser().resolve())
         )
 
-    def _get_identity(self) -> str:
+    def _get_identity(self, channel: str | None = None) -> str:
         """Get the core identity section (includes persona + runtime info)."""
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
@@ -125,6 +136,7 @@ class ContextBuilder:
             workspace_path=self._resolve_workspace_path(),
             runtime=runtime,
             platform_policy=render_template("agent/platform_policy.md", system=system),
+            channel=channel or "",
         )
 
     def _get_runtime_section(self) -> str:
@@ -154,12 +166,15 @@ class ContextBuilder:
         channel: str | None,
         chat_id: str | None,
         timezone: str | None = None,
+        session_summary: str | None = None,
     ) -> str:
         """Build untrusted runtime metadata block for injection before the user message."""
         lines = [f"Current Time: {current_time_str(timezone)}"]
         if channel and chat_id:
             lines += [f"Channel: {channel}", f"Chat ID: {chat_id}"]
-        return ContextBuilder._RUNTIME_CONTEXT_TAG + "\n" + "\n".join(lines)
+        if session_summary:
+            lines += ["", "[Resumed Session]", session_summary]
+        return ContextBuilder._RUNTIME_CONTEXT_TAG + "\n" + "\n".join(lines) + "\n" + ContextBuilder._RUNTIME_CONTEXT_END
 
     @staticmethod
     def _merge_message_content(left: Any, right: Any) -> str | list[dict[str, Any]]:
@@ -206,9 +221,10 @@ class ContextBuilder:
         channel: str | None = None,
         chat_id: str | None = None,
         current_role: str = "user",
+        session_summary: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build the complete message list for an LLM call."""
-        runtime_ctx = self._build_runtime_context(channel, chat_id, self.timezone)
+        runtime_ctx = self._build_runtime_context(channel, chat_id, self.timezone, session_summary=session_summary)
         user_content = self._build_user_content(current_message, media)
 
         # Merge runtime context and user content into a single user message
@@ -226,6 +242,7 @@ class ContextBuilder:
                     extra_system_prompt,
                     include_workspace_memory=include_workspace_memory,
                     memory_sections=memory_sections,
+                    channel=channel,
                 ),
             },
             *history,
@@ -249,7 +266,6 @@ class ContextBuilder:
             if not p.is_file():
                 continue
             raw = p.read_bytes()
-            # Detect real MIME type from magic bytes; fallback to filename guess
             mime = detect_image_mime(raw) or mimetypes.guess_type(path)[0]
             if not mime or not mime.startswith("image/"):
                 continue

@@ -2,23 +2,16 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import io
-import mimetypes
-import shutil
 import json
+import mimetypes
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
-from dataclasses import replace
 
-import chardet
 import httpx
 from loguru import logger
-from lxml import html as lxml_html
-from openpyxl import load_workbook
-from readability import Document as ReadabilityDocument
 
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge.models import (
@@ -27,13 +20,18 @@ from nanobot.platform.knowledge.models import (
     now_iso,
 )
 from nanobot.platform.knowledge.preview_artifacts import KnowledgePreviewArtifacts
-from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.knowledge.service import (
     KnowledgeBaseValidationError,
     KnowledgeSourceNotFoundError,
 )
-from nanobot.platform.knowledge.utils import get_value, normalize_text, short_id, normalize_string_list
-from nanobot.utils.helpers import safe_filename, ensure_dir
+from nanobot.platform.knowledge.store import KnowledgeBaseStore
+from nanobot.platform.knowledge.utils import (
+    get_value,
+    normalize_string_list,
+    normalize_text,
+    short_id,
+)
+from nanobot.utils.helpers import safe_filename
 
 if TYPE_CHECKING:
     pass
