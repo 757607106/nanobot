@@ -186,14 +186,46 @@
   overflow-y: auto;
 }
 
-/* 深度思考区标题降级：LLM 推理草稿常含 ### 符号，压至正文字号 */
+/* ─────────────────────────────────────────────────────────
+   🧠 深度思考区视觉降级 (OpenAI-like styling)
+   重置 XMarkdown 默认的强排版，赋予思考过程次级、柔和的视觉感知
+   ───────────────────────────────────────────────────────── */
+.ant-x-think .markdown-bubble,
+.ant-x-think .markdown-bubble p,
+.ant-x-think .markdown-bubble li,
+.ant-x-think .markdown-bubble span,
+.ant-x-think .markdown-bubble div {
+  font-size: var(--nb-text-sm, 14px) !important;
+  font-weight: 400 !important;
+  color: var(--nb-text-tertiary, #8c8c8c) !important;
+  line-height: var(--nb-line-snug, 1.5) !important;
+}
+
+/* 压制大模型草稿中乱用的标题符 (###) */
 .ant-x-think .markdown-bubble h1,
 .ant-x-think .markdown-bubble h2,
 .ant-x-think .markdown-bubble h3,
 .ant-x-think .markdown-bubble h4,
 .ant-x-think .markdown-bubble h5,
 .ant-x-think .markdown-bubble h6 {
-  font-size: var(--nb-text-sm);
-  font-weight: 600;
-  margin: 8px 0 4px;
+  font-size: var(--nb-text-sm, 14px) !important;
+  font-weight: 600 !important;
+  color: var(--nb-text-secondary, #595959) !important;
+  margin: 12px 0 4px !important;
+  line-height: var(--nb-line-snug, 1.5) !important;
 }
+
+/* 允许适度的加粗强调，但颜色不要死黑 */
+.ant-x-think .markdown-bubble strong,
+.ant-x-think .markdown-bubble b {
+  font-weight: 600 !important;
+  color: var(--nb-text-secondary, #595959) !important;
+}
+
+/* 规整列表缩进，减轻排版负担 */
+.ant-x-think .markdown-bubble ul,
+.ant-x-think .markdown-bubble ol {
+  padding-left: 20px !important;
+  margin-bottom: 8px !important;
+}
+
