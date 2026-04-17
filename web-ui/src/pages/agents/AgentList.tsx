@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useMemo, useState } from 'react'
-import { ArrowRightOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, SearchOutlined, MessageOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, Flex, Input, Spin, Tag, Typography, theme } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -13,6 +13,11 @@ interface AgentListProps {
   error: string | null
   selectedAgentId: string | null
   onRefresh: () => void
+}
+
+function formatNumberLabel(value: number) {
+  if (value <= 0) return '--'
+  return String(value)
 }
 
 export default function AgentList({
@@ -48,7 +53,7 @@ export default function AgentList({
             数字员工大厅
           </Typography.Title>
           <Typography.Text type="secondary" style={{ display: 'block', marginTop: 2 }}>
-            创建、编排并调试数字员工的角色与能力
+            创建、编排数字员工的角色与能力
           </Typography.Text>
         </div>
         <Flex gap="var(--nb-spacing-sm)" align="center" wrap="wrap">
@@ -91,6 +96,11 @@ export default function AgentList({
             const avatar = getAgentAvatar(record.agentId, record.name, record.description, record.tags)
             const displayRole = record.tags?.[0] || avatar.label
             const isSelected = record.agentId === selectedAgentId
+            const capabilityCount =
+              record.toolAllowlist.length +
+              record.skillIds.length +
+              record.mcpServerIds.length +
+              record.knowledgeBindingIds.length
             return (
               <motion.div
                 key={record.agentId}
@@ -105,11 +115,11 @@ export default function AgentList({
                 whileHover={
                   record.enabled
                     ? {
-                        y: -4,
-                      }
+                      y: -4,
+                    }
                     : {
-                        y: -2,
-                      }
+                      y: -2,
+                    }
                 }
                 onClick={() => navigate(`/studio/agents/${record.agentId}`)}
                 className={`agent-tile ${record.enabled ? '' : 'is-disabled'} ${isSelected ? 'is-selected' : ''}`}
@@ -120,81 +130,68 @@ export default function AgentList({
                   } as CSSProperties
                 }
               >
-                <div className="agent-tile-media">
+                <div className="agent-tile-cover">
                   <img
                     src={avatar.src}
                     alt={avatar.label}
-                    className="agent-tile-media-image"
+                    className="agent-tile-cover-image"
                     style={{ opacity: record.enabled ? 1 : 0.78 }}
                   />
-                  <div className="agent-tile-media-overlay" />
-                  <div className="agent-tile-media-head">
-                    <Tag bordered={false} className="agent-tile-role-chip">
-                      {displayRole}
-                    </Tag>
-                    <div className={`agent-tile-status ${record.enabled ? 'is-active' : 'is-idle'}`}>
-                      <div className="agent-tile-status-dot" aria-hidden />
-                      <span>{record.enabled ? '工作中' : '空闲'}</span>
-                    </div>
+                  <div className={`agent-tile-status-badge ${record.enabled ? 'is-active' : 'is-idle'}`}>
+                    <div className="agent-tile-status-dot" aria-hidden />
+                    <span>{record.enabled ? '工作中' : '空闲'}</span>
                   </div>
                 </div>
 
-                <div className="agent-tile-body">
-                  <div style={{ minWidth: 0 }}>
+                <div className="agent-tile-content">
                   <Typography.Text
                     strong
                     ellipsis
-                    className="agent-tile-name"
+                    className="agent-tile-title"
                     style={{ display: 'block' }}
                   >
                     {record.name}
                   </Typography.Text>
 
+                  <div className="agent-tile-tags-row">
+                    <Tag bordered={false} className="agent-tile-role-tag">
+                      {displayRole}
+                    </Tag>
+                    {(record.tags || []).slice(0, 1).map((tag, i) => {
+                      if (tag === displayRole) return null
+                      return (
+                        <Tag key={i} bordered={false} className="agent-tile-tag">
+                          {tag}
+                        </Tag>
+                      )
+                    })}
+                  </div>
+
                   <Typography.Paragraph
                     type="secondary"
-                    ellipsis={{ rows: 2 }}
+                    ellipsis={{ rows: 1 }}
                     className="agent-tile-desc"
                   >
                     {record.description || '负责特定业务场景的数字员工，可独立完成连续任务。'}
                   </Typography.Paragraph>
-                  </div>
 
-                  <div className="agent-tile-tags">
-                    {(record.tags || []).slice(0, 3).map((tag, i) => (
-                      <Tag
-                        key={i}
-                        bordered={false}
-                        className="agent-tile-tag"
-                        style={{ margin: 0 }}
-                      >
-                        {tag}
-                      </Tag>
-                    ))}
-                    {record.tags && record.tags.length > 3 && (
-                      <Tag
-                        bordered={false}
-                        className="agent-tile-tag is-more"
-                        style={{ margin: 0 }}
-                      >
-                        +{record.tags.length - 3}
-                      </Tag>
-                    )}
-                  </div>
-
-                  <div className="agent-tile-foot">
-                    <Typography.Text type="secondary" className="agent-tile-footnote">
-                      工号 · {record.agentId.slice(0, 10)}
-                    </Typography.Text>
+                  <div className="agent-tile-footer">
+                    <div className="agent-tile-footer-metrics">
+                      <span className="agent-tile-footer-metric">
+                        <MessageOutlined className="agent-tile-metric-icon" />
+                        {formatNumberLabel(capabilityCount)}
+                      </span>
+                    </div>
                     <Button
                       type="text"
-                      size="small"
-                      className="agent-tile-action"
+                      className="agent-tile-action-btn"
+                      icon={<AppstoreOutlined />}
                       onClick={(event) => {
                         event.stopPropagation()
                         navigate(`/studio/agents/${record.agentId}`)
                       }}
                     >
-                      进入工位 <ArrowRightOutlined />
+                      配置
                     </Button>
                   </div>
                 </div>

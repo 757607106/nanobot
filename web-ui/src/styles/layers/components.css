@@ -706,211 +706,224 @@
 
 .agent-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 328px), 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 272px), 1fr));
+  gap: 14px;
 }
 
 .agent-tile {
-  cursor: pointer;
-  background: color-mix(in srgb, var(--nb-card-bg) 96%, white 4%);
-  border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--nb-border) 72%, transparent);
-  box-shadow: 0 10px 28px rgba(15, 35, 67, 0.06);
+  background: var(--nb-surface, #ffffff);
+  border-radius: var(--nb-radius-lg, 16px);
+  border: 1px solid color-mix(in srgb, var(--nb-border) 40%, transparent);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
   position: relative;
   overflow: hidden;
-  padding: 10px;
-  min-height: 308px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   transition: transform 220ms var(--nb-ease-standard), box-shadow 220ms var(--nb-ease-standard), border-color 220ms var(--nb-ease-standard);
-}
-
-.agent-tile::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--agent-color) 10%, transparent), transparent 52%);
-}
-
-.agent-tile::after {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: var(--agent-gradient);
-  opacity: 0.72;
-  z-index: 1;
+  min-height: 0;
+  cursor: pointer;
 }
 
 .agent-tile.is-disabled {
-  opacity: 0.86;
+  opacity: 0.88;
 }
 
 .agent-tile.is-selected {
-  border-color: color-mix(in srgb, var(--agent-color) 58%, var(--nb-border));
-  box-shadow: 0 14px 36px color-mix(in srgb, var(--agent-color) 20%, transparent);
+  border-color: var(--nb-accent);
+  box-shadow: 0 0 0 1px var(--nb-accent), 0 4px 24px color-mix(in srgb, var(--nb-accent) 15%, transparent);
 }
 
 .agent-tile:hover {
-  border-color: color-mix(in srgb, var(--agent-color) 46%, var(--nb-border));
-  box-shadow: 0 16px 34px color-mix(in srgb, var(--agent-color) 16%, transparent);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
+  border-color: color-mix(in srgb, var(--nb-border) 70%, var(--nb-accent) 30%);
 }
 
-.agent-tile-media {
-  border-radius: 12px;
-  min-height: 124px;
-  background: color-mix(in srgb, var(--agent-color) 8%, var(--nb-card-subtle-bg));
-  border: 1px solid color-mix(in srgb, var(--agent-color) 20%, transparent);
-  overflow: hidden;
+.agent-tile-cover {
+  height: 140px;
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--agent-color) 34%, white), color-mix(in srgb, var(--agent-color) 18%, white) 58%, color-mix(in srgb, var(--agent-color) 12%, #f4f7fb) 100%),
+    linear-gradient(135deg, color-mix(in srgb, var(--agent-color) 18%, #eef4ff) 0%, color-mix(in srgb, var(--agent-color) 10%, #f7faff) 100%);
   position: relative;
+  overflow: hidden;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
+  isolation: isolate;
 }
 
-.agent-tile-media-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-}
-
-.agent-tile-media-overlay {
+.agent-tile-cover::before {
+  content: "";
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(to top, rgba(14, 24, 38, 0.46) 0%, rgba(14, 24, 38, 0.14) 34%, transparent 75%),
-    radial-gradient(circle at 10% 20%, color-mix(in srgb, var(--agent-color) 28%, transparent), transparent 52%);
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--agent-color) 24%, #ffffff), transparent 64%);
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 0;
 }
 
-.agent-tile-media-head {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  z-index: 2;
-}
-
-.agent-tile-role-chip {
-  margin: 0;
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: var(--nb-text-2xs);
-  font-weight: var(--nb-font-weight-medium);
-  color: #fff;
-  background: color-mix(in srgb, var(--agent-color) 44%, rgba(10, 20, 30, 0.56));
-  border: 1px solid color-mix(in srgb, #ffffff 30%, transparent);
-  max-width: calc(100% - 110px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-tile-body {
+.agent-tile-cover-image {
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+  object-position: center;
+  filter: saturate(1.03) contrast(1.01);
   position: relative;
   z-index: 2;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
 }
 
-.agent-tile-name {
-  margin-top: 2px;
-  font-size: var(--nb-title-xs);
-  line-height: 1.18;
-  letter-spacing: -0.012em;
-  color: var(--nb-ink);
+.agent-tile-cover::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 42%;
+  background:
+    linear-gradient(
+      to top,
+      color-mix(in srgb, var(--agent-color) 14%, #f6f9ff) 0%,
+      color-mix(in srgb, var(--agent-color) 6%, transparent) 52%,
+      transparent
+    );
+  pointer-events: none;
+  z-index: 1;
 }
 
-.agent-tile-status {
+.agent-tile-status-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--nb-text-2xs);
-  font-weight: var(--nb-font-weight-medium);
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(12, 24, 36, 0.42);
-  color: rgba(255, 255, 255, 0.9);
-  white-space: nowrap;
+  font-size: var(--nb-text-2xs);
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.9);
+  color: #374151; /* nb-ink equivalent */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  z-index: 4;
 }
-
-.agent-tile-status.is-active {
-  border-color: color-mix(in srgb, var(--agent-color) 35%, rgba(255, 255, 255, 0.3));
-}
-
 .agent-tile-status-dot {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--agent-color) 65%, #fff 35%);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-color) 24%, transparent);
+  background: #bfbfbf;
+}
+.agent-tile-status-badge.is-active .agent-tile-status-dot {
+  background: #52c41a;
+  box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2);
 }
 
-.agent-tile-desc {
-  margin: 8px 0 0;
-  font-size: var(--nb-text-xs);
-  line-height: 1.62;
+.agent-tile-status-badge.is-idle {
+  background: rgba(255, 255, 255, 0.92);
+  color: color-mix(in srgb, var(--nb-muted) 88%, #ffffff);
 }
 
-.agent-tile-tags {
+.agent-tile-status-badge.is-idle .agent-tile-status-dot {
+  background: color-mix(in srgb, var(--nb-muted) 70%, #ffffff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--nb-muted) 18%, transparent);
+}
+
+.agent-tile-content {
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.agent-tile-title {
+  font-size: var(--nb-text-md);
+  font-weight: 600;
+  color: var(--nb-ink, #111827);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.agent-tile-tags-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 5px;
+  margin-top: 0;
+}
+
+.agent-tile-role-tag {
+  background: color-mix(in srgb, var(--agent-color) 14%, transparent) !important;
+  color: color-mix(in srgb, var(--agent-color) 78%, var(--nb-ink)) !important;
+  border: 1px solid color-mix(in srgb, var(--agent-color) 22%, transparent) !important;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: var(--nb-text-2xs);
+  font-weight: 500;
+  margin: 0;
 }
 
 .agent-tile-tag {
+  background: var(--nb-card-subtle-bg, #f9fafb) !important;
+  color: var(--nb-muted, #6b7280) !important;
+  border: 1px solid var(--nb-border, #e5e7eb) !important;
   border-radius: 999px;
-  padding: 1px 9px;
+  padding: 0 8px;
   font-size: var(--nb-text-2xs);
-  background: color-mix(in srgb, var(--agent-color) 10%, transparent);
-  color: var(--agent-color);
-  font-weight: var(--nb-font-weight-medium);
-  border: 1px solid color-mix(in srgb, var(--agent-color) 18%, transparent);
+  margin: 0;
 }
 
-.agent-tile-tag.is-more {
-  background: var(--nb-card-subtle-bg);
-  color: var(--nb-muted);
-  border-color: var(--nb-card-subtle-border);
+.agent-tile-desc {
+  margin: 0 !important;
+  font-size: var(--nb-text-xs);
+  color: var(--nb-muted, #6b7280);
+  line-height: 1.5;
 }
 
-.agent-tile-foot {
+.agent-tile-footer {
   margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px dashed color-mix(in srgb, var(--nb-border) 65%, transparent);
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--nb-border) 42%, transparent);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
 }
 
-.agent-tile-footnote {
-  font-size: var(--nb-text-2xs);
-  letter-spacing: 0.03em;
+.agent-tile-footer-metrics {
+  display: flex;
+  align-items: center;
 }
 
-.agent-tile-action {
-  color: color-mix(in srgb, var(--agent-color) 82%, var(--nb-ink));
-  border-radius: 10px;
+.agent-tile-footer-metric {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--nb-text-xs);
-  font-weight: var(--nb-font-weight-medium);
-  padding-inline: 8px;
+  color: var(--nb-muted, #6b7280);
+  font-weight: 500;
 }
 
-.agent-tile-action.ant-btn:hover {
-  color: color-mix(in srgb, var(--agent-color) 88%, var(--nb-ink)) !important;
-  background: color-mix(in srgb, var(--agent-color) 10%, transparent) !important;
+.agent-tile-metric-icon {
+  font-size: 14px;
+  color: color-mix(in srgb, var(--nb-muted) 80%, transparent);
+}
+
+.agent-tile-action-btn {
+  border-radius: 8px;
+  font-weight: 600;
+  color: var(--nb-accent, #2f54eb) !important;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline: 6px;
+  height: 26px;
+}
+
+.agent-tile-action-btn:hover {
+  background: color-mix(in srgb, var(--nb-accent) 8%, transparent) !important;
+}
+
+@media (max-width: 1440px) {
+  .agent-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  }
 }
 
 /* ---------- Agent Detail ---------- */
