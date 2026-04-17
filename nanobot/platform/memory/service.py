@@ -10,7 +10,6 @@ from typing import Any, Callable
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.memory.models import MemoryCandidate, now_iso
 from nanobot.platform.memory.store import MemoryStore
-from nanobot.platform.tenant_scope import call_with_tenant, clone_service_with_overrides
 from nanobot.platform.search_scoring import (
     build_preview,
     normalize_mode,
@@ -18,6 +17,7 @@ from nanobot.platform.search_scoring import (
     retrieval_score,
     score_threshold,
 )
+from nanobot.platform.tenant_scope import call_with_tenant, clone_service_with_overrides
 from nanobot.utils.helpers import safe_filename
 
 

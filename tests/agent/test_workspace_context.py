@@ -2,11 +2,8 @@
 
 from pathlib import Path
 
-import pytest
-
-from nanobot.harness.workspace import WorkspaceContext
 from nanobot.agent.memory import MemoryStore
-from nanobot.agent.skills import SkillsLoader
+from nanobot.harness.workspace import WorkspaceContext
 
 
 class TestWorkspaceContext:

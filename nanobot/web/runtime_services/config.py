@@ -6,19 +6,20 @@ import asyncio
 import platform
 import time
 from typing import TYPE_CHECKING, Any
+
 import httpx
 
 from nanobot.agent.loop import AgentLoop
+from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import Config, ModelBindingConfig, normalize_api_base_url
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.knowledge.store import create_knowledge_store
-from nanobot.bus.queue import MessageBus
 from nanobot.providers.factory import make_provider_from_config
 from nanobot.providers.registry import PROVIDERS, find_by_name
 from nanobot.session.manager import SessionManager
 from nanobot.storage.calendar_repository import get_calendar_repository
-from nanobot.utils.reasoning import supports_reasoning_mode
 from nanobot.utils.helpers import sync_workspace_templates
+from nanobot.utils.reasoning import supports_reasoning_mode
 from nanobot.web.services.agent_templates import AgentTemplateManager
 
 if TYPE_CHECKING:

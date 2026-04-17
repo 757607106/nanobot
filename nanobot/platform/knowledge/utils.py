@@ -6,7 +6,6 @@ import re
 import uuid
 from typing import Any
 
-
 # ── Defaults ──
 
 DEFAULT_KNOWLEDGE_CHUNK_SIZE = 500

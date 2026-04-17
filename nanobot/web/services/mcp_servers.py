@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import subprocess
 import shutil
+import subprocess
 import threading
 from contextlib import AsyncExitStack
 from datetime import UTC, datetime

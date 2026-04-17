@@ -7,7 +7,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
-import pytest
 
 from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
@@ -122,6 +121,7 @@ def test_web_mcp_repository_service_analyzes_and_installs_local_fixture(tmp_path
     lambda _clone_url, target_dir: shutil.copytree(fixture_repo, target_dir),
   )
   monkeypatch.setattr(service, "_run_install_step", lambda _command, cwd, timeout: None)
+  monkeypatch.setattr("nanobot.web.services.mcp_repository.shutil.which", lambda _cmd: "/fake/path")
 
   analysis = service.analyze_repository("https://github.com/acme/filesystem-mcp")
   assert analysis["serverName"] == "filesystem-mcp"

@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import uuid
 from collections import deque
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-import re
 from typing import Any, Callable
 
 from nanobot.platform.artifact_retention import normalize_artifact_retention_policy
-from nanobot.platform.tenant_scope import clone_service_with_overrides
 from nanobot.platform.runs.models import (
     RunControlScope,
     RunEvent,
@@ -23,6 +22,7 @@ from nanobot.platform.runs.models import (
     now_iso,
 )
 from nanobot.platform.runs.store import RunStore
+from nanobot.platform.tenant_scope import clone_service_with_overrides
 
 
 class RunNotFoundError(KeyError):

@@ -12,7 +12,10 @@ from importlib.resources import files as pkg_files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nanobot.services.skillhub_marketplace import SkillHubMarketplaceClient, SkillHubMarketplaceError
+from nanobot.services.skillhub_marketplace import (
+    SkillHubMarketplaceClient,
+    SkillHubMarketplaceError,
+)
 
 if TYPE_CHECKING:
     from nanobot.web.runtime import WebAppState

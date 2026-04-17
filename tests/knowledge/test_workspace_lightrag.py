@@ -4,9 +4,9 @@ import time
 from pathlib import Path
 
 from nanobot.config.schema import Config
-from nanobot.platform.knowledge.rag_engine import IndexResult
 from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge import KnowledgeBaseService, create_knowledge_store
+from nanobot.platform.knowledge.rag_engine import IndexResult
 from tests.knowledge_test_utils import FakeRAGEngine
 
 

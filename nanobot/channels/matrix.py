@@ -18,7 +18,6 @@ try:
     from nio import (
         AsyncClient,
         AsyncClientConfig,
-        ContentRepositoryConfigError,
         DownloadError,
         InviteEvent,
         JoinError,
@@ -30,10 +29,11 @@ try:
         RoomMessageMedia,
         RoomMessageText,
         RoomSendError,
+        RoomSendResponse,
         RoomTypingError,
         SyncError,
-        UploadError, RoomSendResponse,
-)
+        UploadError,
+    )
     from nio.crypto.attachments import decrypt_attachment
     from nio.exceptions import EncryptionError
 except ImportError as e:
@@ -209,7 +209,7 @@ class MatrixConfig(Base):
     password: str = ""
     access_token: str = ""
     device_id: str = ""
-    e2ee_enabled: bool = True
+    e2ee_enabled: bool = Field(default=True, alias="e2eeEnabled")
     sync_stop_grace_seconds: int = 2
     max_media_bytes: int = 20 * 1024 * 1024
     allow_from: list[str] = Field(default_factory=list)
@@ -535,7 +535,7 @@ class MatrixChannel(BaseChannel):
                 return
 
             await self._stop_typing_keepalive(chat_id, clear_typing=True)
-            
+
             content = _build_matrix_text_content(
                 buf.text,
                 buf.event_id,
@@ -549,7 +549,7 @@ class MatrixChannel(BaseChannel):
             buf = _StreamBuf()
             self._stream_bufs[chat_id] = buf
         buf.text += delta
-    
+
         if not buf.text.strip():
             return
 

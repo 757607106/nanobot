@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import csv
-import hashlib
 import io
 import json
 import re
@@ -27,20 +26,18 @@ from nanobot.platform.knowledge.models import (
     KnowledgeBaseDefinition,
     KnowledgeDocumentStatus,
     KnowledgeFile,
-    KnowledgeIngestJob,
     KnowledgeJobStatus,
     now_iso,
 )
-from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.knowledge.service import (
     KnowledgeBaseValidationError,
-    KnowledgeSourceNotFoundError,
 )
+from nanobot.platform.knowledge.store import KnowledgeBaseStore
 from nanobot.platform.knowledge.utils import (
     DEFAULT_KNOWLEDGE_CHUNK_SIZE,
-    normalize_text,
-    normalize_string_list,
     normalize_object,
+    normalize_string_list,
+    normalize_text,
 )
 
 if TYPE_CHECKING:

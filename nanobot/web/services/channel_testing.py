@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import importlib.util
 import imaplib
+import importlib.util
 import json
 import smtplib
 from datetime import UTC, datetime

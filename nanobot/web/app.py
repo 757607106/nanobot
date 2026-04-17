@@ -20,8 +20,8 @@ from nanobot.platform.channel_audit import ChannelAuditService, ChannelAuditStor
 from nanobot.platform.channel_bindings import ChannelBindingService, ChannelBindingStore
 from nanobot.platform.instances import PlatformInstanceService
 from nanobot.platform.knowledge import KnowledgeBaseService
-from nanobot.platform.knowledge.store import create_knowledge_store
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
+from nanobot.platform.knowledge.store import create_knowledge_store
 from nanobot.platform.memory import MemoryService, MemoryStore
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.platform.tenants import TenantService, TenantStore
@@ -44,12 +44,11 @@ from nanobot.web.routers import (
     agent_chat_router,
     agents_router,
     auth_router,
-    channel_bindings_router,
     channel_audit_router,
+    channel_bindings_router,
     channels_router,
     chat_router,
     knowledge_router,
-
     mcp_router,
     memory_router,
     operations_router,

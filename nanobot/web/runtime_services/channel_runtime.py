@@ -22,8 +22,8 @@ from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.dispatch import ChannelMessageDispatcher
 from nanobot.channels.manager import ChannelManager
-from nanobot.web.tenant_context import get_metadata_tenant_id
 from nanobot.web.runtime_services.channel_routing import ChannelRoutingService
+from nanobot.web.tenant_context import get_metadata_tenant_id
 
 if TYPE_CHECKING:
     from nanobot.web.runtime import WebAppState

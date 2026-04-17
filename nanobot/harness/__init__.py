@@ -20,9 +20,9 @@ from .knowledge import (
 )
 from .middleware import (
     ExecutionAssemblyState,
-    ExecutionMiddlewareError,
     ExecutionMiddleware,
     ExecutionMiddlewareChain,
+    ExecutionMiddlewareError,
     KnowledgePolicyMiddleware,
     MemoryPolicyMiddleware,
     PromptAssemblyMiddleware,
