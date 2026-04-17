@@ -66,7 +66,8 @@ export default function CapabilitySection({
                     <Typography.Paragraph
                       type="secondary"
                       style={{ margin: 0, fontSize: 'var(--nb-text-sm)', lineHeight: 1.5, opacity: selected ? 0.8 : 1 }}
-                      ellipsis={{ rows: 2, tooltip: item.description }}
+                      ellipsis={{ rows: 2 }}
+                      title={item.description}
                     >
                       {item.description}
                     </Typography.Paragraph>
