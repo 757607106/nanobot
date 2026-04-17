@@ -1,13 +1,11 @@
-import { CopyOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, MessageOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
-import { Alert, Button, Dropdown, Empty, Flex, Modal, Popover, Space, Spin, Tabs, Tag, Switch, Tooltip, Typography } from 'antd'
-import { useMemo, useState } from 'react'
+import { CopyOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, MessageOutlined, SaveOutlined } from '@ant-design/icons'
+import { Alert, Button, Dropdown, Empty, Flex, Modal, Popover, Space, Spin, Tabs, Tag, Switch, Typography } from 'antd'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import PageHeader from '../../components/console/PageHeader'
 import SectionCard from '../../components/console/SectionCard'
 import type {
   AgentDefinition,
   AgentMemorySnapshot,
-  AgentRunSummary,
   AgentTemplateTool,
   ConfigData,
   ConfigMeta,
@@ -20,7 +18,6 @@ import AgentEditor from './AgentEditor'
 import CapabilitiesTab from './CapabilitiesTab'
 import MemoryTab from './MemoryTab'
 import type { AgentFormState, AgentTab } from './types'
-import { memoryScopeLabel } from './utils'
 import { getAgentAvatar, AVATAR_PRESETS, setAgentAvatarOverride, type AvatarPreset } from '../../avatarConfig'
 
 interface AgentDetailProps {
@@ -30,7 +27,6 @@ interface AgentDetailProps {
   form: AgentFormState
   agentMemory: AgentMemorySnapshot | null
   agentMemoryCandidates: MemoryCandidate[]
-  recentRuns: AgentRunSummary[]
   validTools: AgentTemplateTool[]
   skills: InstalledSkill[]
   mcpServers: McpServerEntry[]
@@ -39,13 +35,11 @@ interface AgentDetailProps {
   globalConfigMeta: ConfigMeta | null
   loadingDetail: boolean
   loadingMemory: boolean
-  loadingRuns: boolean
   saving: boolean
   copying: boolean
   deleting: boolean
   error: string | null
   memoryError: string | null
-  runError: string | null
   detailRequestAgentId: string | null
   onUpdateForm: <K extends keyof AgentFormState>(key: K, value: AgentFormState[K]) => void
   onToggleArrayItem: (
@@ -55,14 +49,11 @@ interface AgentDetailProps {
   onSave: () => void
   onCopy: () => void
   onDelete: () => void
-  onRefreshWorkspace: () => void
   onRefreshMemory: (agentId: string) => void
   onSaveMemory: (agentId: string, content: string) => void
   onCreateCandidate: (agentId: string, content: string) => void
   onApplyCandidate: (agentId: string, candidateId: string) => void
   onRejectCandidate: (agentId: string, candidateId: string) => void
-  onTestRun: (agentId: string, prompt: string) => Promise<string>
-  onRefreshRuns: (agentId: string) => void
 }
 
 export default function AgentDetail({
@@ -72,7 +63,6 @@ export default function AgentDetail({
   form,
   agentMemory,
   agentMemoryCandidates,
-  recentRuns,
   validTools,
   skills,
   mcpServers,
@@ -81,27 +71,22 @@ export default function AgentDetail({
   globalConfigMeta,
   loadingDetail,
   loadingMemory,
-  loadingRuns,
   saving,
   copying,
   deleting,
   error,
   memoryError,
-  runError,
   detailRequestAgentId,
   onUpdateForm,
   onToggleArrayItem,
   onSave,
   onCopy,
   onDelete,
-  onRefreshWorkspace,
   onRefreshMemory,
   onSaveMemory,
   onCreateCandidate,
   onApplyCandidate,
   onRejectCandidate,
-  onTestRun,
-  onRefreshRuns,
 }: AgentDetailProps) {
   const navigate = useNavigate()
   const [detailTab, setDetailTab] = useState<AgentTab>('basic')
@@ -207,35 +192,9 @@ export default function AgentDetail({
   )
 
   return (
-    <Flex vertical gap={24} style={{ minHeight: '100vh', background: 'var(--nb-body-bg)' }}>
-      
-      <div style={{
-        background: 'var(--nb-surface-strong)',
-        borderRadius: 20,
-        padding: '16px 24px',
-        border: '1px solid var(--nb-card-border)',
-        boxShadow: 'var(--nb-shadow-soft)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 16,
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        {/* Subtle background glow */}
-        <div style={{
-          position: 'absolute',
-          top: -100,
-          right: -100,
-          width: 300,
-          height: 300,
-          background: avatar.gradient,
-          filter: 'blur(80px)',
-          opacity: 0.3,
-          zIndex: 0,
-          borderRadius: '50%'
-        }} />
-
-        <Flex justify="space-between" align="center" style={{ position: 'relative', zIndex: 1 }}>
+    <Flex vertical gap={18} className="page-stack">
+      <div className="agent-detail-hero">
+        <Flex justify="space-between" align="center">
           <Flex gap={16} align="center">
             <Popover
               content={avatarPickerContent}
@@ -276,8 +235,8 @@ export default function AgentDetail({
                   width: 20,
                   height: 20,
                   borderRadius: '50%',
-                  background: 'var(--nb-surface-strong)',
-                  border: '2px solid var(--nb-card-border)',
+                  background: 'var(--nb-surface)',
+                  border: '2px solid var(--nb-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -293,7 +252,7 @@ export default function AgentDetail({
                 {detailTitle}
                 {!isCreateRoute && (
                   <Tag color={form.enabled ? 'processing' : 'default'} style={{ borderRadius: 12, padding: '2px 10px', fontSize: 'var(--nb-text-xs)', border: 'none', margin: 0 }}>
-                    {form.enabled ? 'Active' : 'Inactive'}
+                    {form.enabled ? '已启用' : '已停用'}
                   </Tag>
                 )}
               </Typography.Title>
@@ -353,14 +312,13 @@ export default function AgentDetail({
         {error ? <Alert type="error" message={error} showIcon style={{ borderRadius: 12 }} /> : null}
       </div>
 
-      <div style={{ padding: '0 8px' }}>
-        <Tabs
-          activeKey={detailTab}
-          onChange={(value) => setDetailTab(value as AgentTab)}
-          type="line"
-          size="large"
-          tabBarStyle={{ marginBottom: 24 }}
-          items={[
+      <Tabs
+        activeKey={detailTab}
+        onChange={(value) => setDetailTab(value as AgentTab)}
+        type="line"
+        size="large"
+        tabBarStyle={{ marginBottom: 24 }}
+        items={[
             {
               key: 'basic',
               label: <span style={{ fontWeight: 'var(--nb-font-weight-medium)', fontSize: 'var(--nb-text-md)' }}>核心配置 (Engine & Rules)</span>,
@@ -408,8 +366,7 @@ export default function AgentDetail({
               ),
             },
           ]}
-        />
-      </div>
+      />
 
       <Modal
         open={deleteDialogOpen}

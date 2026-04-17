@@ -8,8 +8,8 @@
 
 :root {
   /* Typography stacks */
-  --nb-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", system-ui, sans-serif;
-  --nb-font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --nb-font-display: "Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", system-ui, sans-serif;
+  --nb-font-body: "Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
   --nb-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* Typography scale (rem) */
@@ -17,11 +17,11 @@
   --nb-text-xs: 0.8125rem;
   --nb-text-sm: 0.875rem;
   --nb-text-md: 0.9375rem;
-  --nb-text-lg: 1.0625rem;
-  --nb-title-xs: 1.25rem;
-  --nb-title-sm: 1.5rem;
-  --nb-title-md: 1.75rem;
-  --nb-title-lg: 2.125rem;
+  --nb-text-lg: 1rem;
+  --nb-title-xs: 1.125rem;
+  --nb-title-sm: 1.25rem;
+  --nb-title-md: 1.375rem;
+  --nb-title-lg: 1.625rem;
 
   /* Font weights */
   --nb-font-weight-regular: 400;

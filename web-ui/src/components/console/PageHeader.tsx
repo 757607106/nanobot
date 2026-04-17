@@ -51,25 +51,16 @@ export default function PageHeader({
           className="page-header-title"
           style={{
             margin: 0,
-            fontSize: 'clamp(1.55rem, 2vw, 1.95rem)',
-            lineHeight: 1.08,
+            fontSize: 'var(--nb-title-md)',
+            lineHeight: 1.15,
+            fontWeight: 'var(--nb-font-weight-title)',
           }}
         >
           {title}
         </Typography.Title>
 
         {subtitle ? (
-          <Typography.Paragraph
-            className="page-header-subtitle"
-            type="secondary"
-            style={{
-              margin: 0,
-              maxWidth: 620,
-              lineHeight: 1.55,
-            }}
-          >
-            {subtitle}
-          </Typography.Paragraph>
+          <div className="page-header-subtitle">{subtitle}</div>
         ) : null}
       </Flex>
 

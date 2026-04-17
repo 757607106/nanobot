@@ -54,7 +54,6 @@ export function ChatSidebar({
   isDesktopLayout,
 }: ChatSidebarProps) {
   const { token } = theme.useToken()
-  const surfaceRadius = token.borderRadiusLG + 8
 
   const filteredSessions = sessions.filter((item) => {
     const query = sessionQuery.trim().toLowerCase()
@@ -90,7 +89,7 @@ export function ChatSidebar({
       flexDirection: 'column',
       height: '100%',
       padding: '16px 8px 16px 12px',
-      borderRadius: surfaceRadius,
+      borderRadius: 'var(--nb-radius-2xl)',
       background: 'var(--nb-card-bg)',
       border: '1px solid var(--nb-surface-panel-border)',
       boxShadow: 'var(--nb-surface-panel-shadow)',

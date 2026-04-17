@@ -1129,7 +1129,7 @@ export default function KnowledgePage() {
             )}
           />
 
-          <div className="knowledge-master-container" style={{ maxWidth: 1200, margin: '0 auto', width: '100%', paddingBottom: 40 }}>
+          <div className="knowledge-master-container">
             <KnowledgeList
               knowledgeBases={knowledgeBases}
               visibleKnowledgeBases={visibleKnowledgeBases}

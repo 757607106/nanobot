@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Flex, Splitter } from 'antd'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import type {
   AgentDefinition,
   AgentMemorySnapshot,
-  AgentRunSummary,
   AgentTemplateTool,
   ConfigData,
   ConfigMeta,
@@ -37,23 +35,17 @@ export default function AgentsPage() {
   const [currentAgent, setCurrentAgent] = useState<AgentDefinition | null>(null)
   const [agentMemory, setAgentMemory] = useState<AgentMemorySnapshot | null>(null)
   const [agentMemoryCandidates, setAgentMemoryCandidates] = useState<MemoryCandidate[]>([])
-  const [recentRuns, setRecentRuns] = useState<AgentRunSummary[]>([])
   const [form, setForm] = useState<AgentFormState>(() => createEmptyForm())
   const [globalConfig, setGlobalConfig] = useState<ConfigData | null>(null)
   const [globalConfigMeta, setGlobalConfigMeta] = useState<ConfigMeta | null>(null)
   const [loadingWorkspace, setLoadingWorkspace] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(() => Boolean(selectedAgentId) && !isCreateRoute)
   const [loadingMemory, setLoadingMemory] = useState(false)
-  const [loadingRuns, setLoadingRuns] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [savingMemory, setSavingMemory] = useState(false)
-  const [creatingMemoryCandidate, setCreatingMemoryCandidate] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [copying, setCopying] = useState(false)
-  const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [memoryError, setMemoryError] = useState<string | null>(null)
-  const [runError, setRunError] = useState<string | null>(null)
   const [detailRequestAgentId, setDetailRequestAgentId] = useState<string | null>(selectedAgentId)
 
   useEffect(() => {
@@ -69,7 +61,6 @@ export default function AgentsPage() {
       setCurrentAgent(null)
       setAgentMemory(null)
       setAgentMemoryCandidates([])
-      setRecentRuns([])
       setForm(createEmptyForm())
       return
     }
@@ -80,7 +71,6 @@ export default function AgentsPage() {
       setCurrentAgent(null)
       setAgentMemory(null)
       setAgentMemoryCandidates([])
-      setRecentRuns([])
       return
     }
 
@@ -90,12 +80,9 @@ export default function AgentsPage() {
     setForm(createEmptyForm())
     setAgentMemory(null)
     setAgentMemoryCandidates([])
-    setRecentRuns([])
     setMemoryError(null)
-    setRunError(null)
     void loadAgentDetail(selectedAgentId)
     void loadAgentMemoryGovernance(selectedAgentId)
-    void loadRecentRuns(selectedAgentId)
   }, [isCreateRoute, loadingWorkspace, selectedAgentId])
 
   // Removed automatic redirect to detail view to support the Master Grid view.
@@ -137,23 +124,6 @@ export default function AgentsPage() {
       setError(getErrorMessage(loadError, '加载 Agent 详情失败'))
     } finally {
       setLoadingDetail(false)
-    }
-  }
-
-  async function loadRecentRuns(nextAgentId: string) {
-    try {
-      setLoadingRuns(true)
-      const payload = await api.getRuns({
-        agentId: nextAgentId,
-        kind: 'agent',
-        limit: 8,
-      })
-      setRecentRuns(payload.items)
-      setRunError(null)
-    } catch (loadError) {
-      setRunError(getErrorMessage(loadError, '加载最近运行失败'))
-    } finally {
-      setLoadingRuns(false)
     }
   }
 
@@ -226,63 +196,12 @@ export default function AgentsPage() {
       navigate(`/studio/agents/${saved.agentId}`, { replace: true })
       await loadAgentDetail(saved.agentId)
       await loadAgentMemoryGovernance(saved.agentId)
-      await loadRecentRuns(saved.agentId)
     } catch (saveError) {
       const nextError = getErrorMessage(saveError, '保存 Agent 失败')
       setError(nextError)
       message.error(nextError)
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function handleInlineDescriptionUpdate(targetAgentId: string, description: string) {
-    const existing = agents.find((a) => a.agentId === targetAgentId)
-    if (!existing || existing.description === description) return
-
-    try {
-      const availableBindings = globalConfig ? getAllModelBindings(globalConfig, globalConfigMeta) : {}
-      const targetForm = agentToForm(existing)
-      targetForm.description = description
-      const payload = toPayload(targetForm, availableBindings)
-
-      await api.updateAgent(targetAgentId, payload)
-      message.success('员工职责已更新')
-      await loadWorkspace()
-      
-      if (currentAgent?.agentId === targetAgentId) {
-        updateForm('description', description)
-      }
-    } catch (updateError) {
-      message.error(getErrorMessage(updateError, '更新职责失败'))
-    }
-  }
-
-  async function handleInlineRoleUpdate(targetAgentId: string, newRole: string) {
-    const existing = agents.find((a) => a.agentId === targetAgentId)
-    if (!existing) return
-    const currentRole = existing.tags[0] || ''
-    if (currentRole === newRole) return
-
-    try {
-      const availableBindings = globalConfig ? getAllModelBindings(globalConfig, globalConfigMeta) : {}
-      const targetForm = agentToForm(existing)
-      if (targetForm.tags.length > 0) {
-        targetForm.tags[0] = newRole
-      } else {
-        targetForm.tags = [newRole]
-      }
-      const payload = toPayload(targetForm, availableBindings)
-
-      await api.updateAgent(targetAgentId, payload)
-      message.success('岗位头衔已更新')
-      await loadWorkspace()
-      
-      if (currentAgent?.agentId === targetAgentId) {
-        updateForm('tags', targetForm.tags)
-      }
-    } catch (updateError) {
-      message.error(getErrorMessage(updateError, '更新岗位失败'))
     }
   }
 
@@ -325,36 +244,8 @@ export default function AgentsPage() {
     }
   }
 
-  async function handleTestRun(agentId: string, prompt: string): Promise<string> {
-    if (!prompt.trim()) {
-      setRunError('请输入测试任务。')
-      throw new Error('请输入测试任务。')
-    }
-    try {
-      setTesting(true)
-      const result = await api.testRunAgent(agentId, prompt.trim())
-      const resultText = result.assistantMessage?.content || result.run.resultSummary?.content || '本次运行未返回可显示摘要。'
-      if (result.knowledgeHits.length > 0) {
-        message.success(`试运行已完成，并命中 ${result.knowledgeHits.length} 条知识证据`)
-      } else {
-        message.success('试运行已完成')
-      }
-      await loadRecentRuns(agentId)
-      setRunError(null)
-      return resultText
-    } catch (testError) {
-      const errorMsg = getErrorMessage(testError, '试运行失败')
-      setRunError(errorMsg)
-      message.error(errorMsg)
-      throw testError
-    } finally {
-      setTesting(false)
-    }
-  }
-
   async function handleSaveAgentMemory(agentId: string, content: string) {
     try {
-      setSavingMemory(true)
       const snapshot = await api.updateAgentMemory(agentId, content)
       setAgentMemory(snapshot)
       message.success('员工记忆已保存')
@@ -363,8 +254,6 @@ export default function AgentsPage() {
       const nextError = getErrorMessage(saveError, '保存员工记忆失败')
       setMemoryError(nextError)
       message.error(nextError)
-    } finally {
-      setSavingMemory(false)
     }
   }
 
@@ -374,7 +263,6 @@ export default function AgentsPage() {
       return
     }
     try {
-      setCreatingMemoryCandidate(true)
       await api.createAgentMemoryCandidate(agentId, {
         content: content.trim(),
         sourceKind: 'manual_note',
@@ -385,8 +273,6 @@ export default function AgentsPage() {
       const nextError = getErrorMessage(createError, '提交员工记忆候选失败')
       setMemoryError(nextError)
       message.error(nextError)
-    } finally {
-      setCreatingMemoryCandidate(false)
     }
   }
 
@@ -425,7 +311,6 @@ export default function AgentsPage() {
             form={form}
             agentMemory={agentMemory}
             agentMemoryCandidates={agentMemoryCandidates}
-            recentRuns={recentRuns}
             validTools={validTools}
             skills={skills}
             mcpServers={mcpServers}
@@ -434,27 +319,22 @@ export default function AgentsPage() {
             globalConfigMeta={globalConfigMeta}
             loadingDetail={loadingDetail}
             loadingMemory={loadingMemory}
-            loadingRuns={loadingRuns}
             saving={saving}
             copying={copying}
             deleting={deleting}
             error={error}
             memoryError={memoryError}
-            runError={runError}
             detailRequestAgentId={detailRequestAgentId}
             onUpdateForm={updateForm}
             onToggleArrayItem={toggleArrayItem}
             onSave={handleSave}
             onCopy={handleCopy}
             onDelete={handleDelete}
-            onRefreshWorkspace={loadWorkspace}
             onRefreshMemory={loadAgentMemoryGovernance}
             onSaveMemory={handleSaveAgentMemory}
             onCreateCandidate={handleCreateAgentMemoryCandidate}
             onApplyCandidate={handleApplyAgentMemoryCandidate}
             onRejectCandidate={handleRejectAgentMemoryCandidate}
-            onTestRun={handleTestRun}
-            onRefreshRuns={loadRecentRuns}
           />
         </div>
       ) : (
@@ -464,8 +344,6 @@ export default function AgentsPage() {
             loadingWorkspace={loadingWorkspace}
             error={error}
             selectedAgentId={selectedAgentId}
-            onUpdateDescription={handleInlineDescriptionUpdate}
-            onUpdateRole={handleInlineRoleUpdate}
             onRefresh={loadWorkspace}
           />
         </div>

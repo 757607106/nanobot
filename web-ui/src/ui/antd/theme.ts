@@ -55,6 +55,7 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       fontWeightStrong: designTokens.fontWeight.semibold,
       lineHeight: designTokens.lineHeight.body,
       fontFamily: designTokens.font.body,
+      fontFamilyCode: designTokens.font.mono,
 
       // === Spacing ===
       paddingXS: designTokens.space.xs,

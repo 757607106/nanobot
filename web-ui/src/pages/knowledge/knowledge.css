@@ -593,6 +593,11 @@
   padding-right: var(--nb-spacing-xs);
 }
 
+.knowledge-master-container {
+  width: 100%;
+  padding-bottom: var(--nb-spacing-2xl);
+}
+
 .knowledge-list-loading {
   min-height: 220px;
 }
@@ -766,7 +771,26 @@
 
 .knowledge-card.is-selected {
   border-color: var(--nb-accent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--nb-accent) 4%, transparent), var(--nb-surface));
+  background: color-mix(in oklch, var(--nb-accent) 6%, var(--nb-surface));
+}
+
+.knowledge-card.is-create {
+  border-style: dashed;
+  background: var(--nb-card-subtle-bg);
+}
+
+.knowledge-card-create-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--nb-border);
+  background: var(--nb-surface);
+  color: var(--nb-accent);
+  font-size: var(--nb-text-lg);
+  box-shadow: var(--nb-shadow-xs);
 }
 
 .knowledge-card-header {

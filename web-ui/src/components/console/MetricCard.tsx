@@ -80,11 +80,13 @@ export default function MetricCard({
       <div
         className="metric-item-value"
         style={{
-          fontSize: 'var(--nb-scale-xl)',
-          fontWeight: 'var(--nb-font-weight-strong)',
+          fontSize: 'var(--nb-title-sm)',
+          fontWeight: 'var(--nb-font-weight-title)',
           lineHeight: 1.1,
           color: tone === 'neutral' ? 'inherit' : toneColor,
           wordBreak: 'break-word',
+          fontFamily: 'var(--nb-font-display)',
+          letterSpacing: '-0.02em',
         }}
       >
         {value}

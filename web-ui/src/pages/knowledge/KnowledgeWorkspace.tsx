@@ -427,7 +427,7 @@ export default function KnowledgeWorkspace() {
   const renderTasksTab = () => (
     <Flex vertical gap={16} style={{ minWidth: 0 }}>
       <Flex justify="space-between" align="center">
-        <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-base)', color: 'var(--nb-ink-main)' }}>当前知识库任务 ({jobs.length})</Typography.Title>
+        <Typography.Text className="nb-section-label" style={{ marginBottom: 0 }}>当前知识库任务 ({jobs.length})</Typography.Text>
       </Flex>
       {jobs.length === 0 ? (
         <Empty image={false} className="minimal-empty" description="暂无后台任务" style={{ padding: '64px 0' }} />

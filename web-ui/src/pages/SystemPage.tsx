@@ -171,9 +171,9 @@ export default function SystemPage() {
             </div>
 
             <div style={{ paddingTop: 20, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
-              <Typography.Title level={5} style={{ marginBottom: 0, fontSize: 14 }}>
+              <Typography.Text className="nb-section-label" style={{ marginBottom: 0 }}>
                 已启用渠道
-              </Typography.Title>
+              </Typography.Text>
               <Flex gap={8} wrap="wrap" style={{ marginTop: 12 }}>
                 {(status.stats.enabledChannels.length > 0 ? status.stats.enabledChannels : ['—']).map((item) => (
                   <Tag key={item} color="blue">
@@ -199,7 +199,7 @@ export default function SystemPage() {
               }}
             >
               <Typography.Text type="secondary">当前 Web 会话</Typography.Text>
-              <Typography.Title level={2} style={{ margin: 0 }}>
+              <Typography.Title level={2} style={{ margin: 0, fontSize: 'var(--nb-title-lg)', lineHeight: 'var(--nb-line-tight)' }}>
                 {status.stats.webSessions}
               </Typography.Title>
               <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0', fontSize: 'var(--nb-text-sm)', lineHeight: 1.6 }}>

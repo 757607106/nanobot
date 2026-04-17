@@ -80,7 +80,7 @@ function FieldGroup({
 }) {
   return (
     <Flex vertical gap={8}>
-      <Typography.Text strong style={{ fontSize: 13 }}>
+      <Typography.Text strong style={{ fontSize: 'var(--nb-text-xs)' }}>
         {label}
       </Typography.Text>
       {children}
@@ -385,7 +385,7 @@ export default function ProfilePage() {
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Flex vertical gap={12}>
                     <Flex gap={8} wrap="wrap" align="center">
-                      <Typography.Title level={2} style={{ margin: 0, fontSize: 28, letterSpacing: '-0.02em' }}>
+                      <Typography.Title level={2} style={{ margin: 0, fontSize: 'var(--nb-title-lg)', letterSpacing: '-0.02em' }}>
                         {profile.username}
                       </Typography.Title>
                       <Tag color="gold" bordered={false} style={{ margin: 0, borderRadius: 6, fontWeight: 'var(--nb-font-weight-strong)' }}>ADMIN</Tag>

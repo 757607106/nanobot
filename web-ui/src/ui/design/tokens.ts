@@ -11,9 +11,9 @@ export type DesignMode = 'light' | 'dark'
 export const designTokens = {
   /* ──────────────────── Typography ──────────────────── */
   font: {
-    body: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif',
+    body: '"Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif',
     display:
-      '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", system-ui, sans-serif',
+      '"Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", system-ui, sans-serif',
     mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
   },
   fontSize: {
@@ -21,11 +21,11 @@ export const designTokens = {
     xs: 13, // 0.8125rem — secondary labels
     sm: 14, // 0.875rem — body default
     md: 15, // 0.9375rem — emphasized body
-    lg: 17, // 1.0625rem — subheadings
-    titleXs: 20, // 1.25rem — card titles
-    titleSm: 24, // 1.5rem — section titles
-    titleMd: 28, // 1.75rem — page titles
-    titleLg: 34, // 2.125rem — hero titles
+    lg: 16, // 1rem — subheadings
+    titleXs: 18, // 1.125rem — card titles
+    titleSm: 20, // 1.25rem — section titles
+    titleMd: 22, // 1.375rem — page titles
+    titleLg: 26, // 1.625rem — hero titles (rare)
   },
   fontWeight: {
     regular: 400,

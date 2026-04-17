@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Empty, Flex, Input, Spin, Tag, Typography, theme } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -33,7 +33,9 @@ export default function KnowledgeList({
             <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-sm)', color: 'var(--nb-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               知识库目录
             </Typography.Title>
-            <span className="console-inline-code" style={{ fontSize: 'var(--nb-text-xs)' }}>{`${visibleKnowledgeBases.length}/${knowledgeBases.length}`}</span>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+              {`显示 ${visibleKnowledgeBases.length} / ${knowledgeBases.length}`}
+            </Typography.Text>
           </Flex>
 
           <div style={{ padding: '0 4px' }}>
@@ -62,6 +64,7 @@ export default function KnowledgeList({
             <div className="knowledge-nav-list">
               {visibleKnowledgeBases.map((item, index) => {
                 const isSelected = item.kbId === selectedKbId
+                const hue = ((item.name.charCodeAt(0) || 65) * 137) % 360
                 return (
                   <motion.div
                     key={item.kbId}
@@ -84,7 +87,7 @@ export default function KnowledgeList({
                       <div
                         className="knowledge-card-avatar"
                         style={{
-                          background: `hsl(${(item.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`,
+                          background: `oklch(0.66 0.14 ${hue})`,
                         }}
                       >
                         {item.name.charAt(0).toUpperCase()}
@@ -124,6 +127,38 @@ export default function KnowledgeList({
                   </motion.div>
                 )
               })}
+
+              <motion.div
+                key="create-knowledge"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(visibleKnowledgeBases.length, 6) * 0.04 }}
+                onClick={() =>
+                  startTransition(() => navigate('/knowledge/new'))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    startTransition(() => navigate('/knowledge/new'))
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                className="knowledge-card is-create focus-ring"
+                aria-label="新建知识库"
+              >
+                <div className="knowledge-card-create-icon" aria-hidden>
+                  <PlusOutlined />
+                </div>
+                <div className="knowledge-card-body">
+                  <Typography.Text strong className="knowledge-card-title">
+                    新建知识库
+                  </Typography.Text>
+                  <Typography.Paragraph type="secondary" className="knowledge-card-desc" ellipsis={{ rows: 2 }} style={{ margin: 0 }}>
+                    导入语料，生成索引，让员工获得可检索的专属知识
+                  </Typography.Paragraph>
+                </div>
+              </motion.div>
             </div>
           )}
         </Flex>

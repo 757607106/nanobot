@@ -215,19 +215,19 @@ export function KnowledgeQueryTab({
             <Flex className="knowledge-summary-bar" align="center" gap={32} wrap="wrap" style={{ marginBottom: 32, paddingBottom: 16, borderBottom: '1px solid var(--nb-border)' }}>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>回答状态</Typography.Text>
-                <Typography.Text style={{ fontSize: 'var(--nb-scale-xl)', fontWeight: 'var(--nb-font-weight-strong)', color: answerMessage ? 'var(--ant-color-success)' : 'inherit' }}>{answerMessage ? '就绪' : '--'}</Typography.Text>
+                <Typography.Text style={{ fontSize: 'var(--nb-title-xs)', fontWeight: 'var(--nb-font-weight-title)', fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em', color: answerMessage ? 'var(--ant-color-success)' : 'inherit' }}>{answerMessage ? '就绪' : '--'}</Typography.Text>
               </Flex>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>文档片段</Typography.Text>
-                <Typography.Text style={{ fontSize: 'var(--nb-scale-xl)', fontWeight: 'var(--nb-font-weight-strong)' }}>{resultStats.chunkCount}</Typography.Text>
+                <Typography.Text style={{ fontSize: 'var(--nb-title-xs)', fontWeight: 'var(--nb-font-weight-title)', fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em' }}>{resultStats.chunkCount}</Typography.Text>
               </Flex>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>实体与关系</Typography.Text>
-                <Typography.Text style={{ fontSize: 'var(--nb-scale-xl)', fontWeight: 'var(--nb-font-weight-strong)' }}>{resultStats.entityCount + resultStats.relationshipCount}</Typography.Text>
+                <Typography.Text style={{ fontSize: 'var(--nb-title-xs)', fontWeight: 'var(--nb-font-weight-title)', fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em' }}>{resultStats.entityCount + resultStats.relationshipCount}</Typography.Text>
               </Flex>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>引用源</Typography.Text>
-                <Typography.Text style={{ fontSize: 'var(--nb-scale-xl)', fontWeight: 'var(--nb-font-weight-strong)' }}>{resultStats.referenceCount}</Typography.Text>
+                <Typography.Text style={{ fontSize: 'var(--nb-title-xs)', fontWeight: 'var(--nb-font-weight-title)', fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em' }}>{resultStats.referenceCount}</Typography.Text>
               </Flex>
             </Flex>
 
@@ -238,7 +238,7 @@ export function KnowledgeQueryTab({
                 <div style={{ flex: '1 1 500px', maxWidth: '75ch', display: 'flex', flexDirection: 'column', gap: 40 }}>
                   {answerMessage ? (
                     <section>
-                      <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>分析流回答</Typography.Title>
+                      <Typography.Text className="nb-section-label">分析流回答</Typography.Text>
                       <Paragraph style={{ whiteSpace: 'pre-wrap', fontSize: 'var(--nb-text-md)', lineHeight: 1.6, margin: 0 }}>
                         {answerMessage}
                       </Paragraph>
@@ -246,7 +246,7 @@ export function KnowledgeQueryTab({
                   ) : null}
 
                   <section>
-                    <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>文档片段溯源 ({queryResult.data?.chunks?.length || 0})</Typography.Title>
+                    <Typography.Text className="nb-section-label">文档片段溯源 ({queryResult.data?.chunks?.length || 0})</Typography.Text>
                     {groupedChunks.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
                         {groupedChunks.map((group) => (
@@ -282,7 +282,7 @@ export function KnowledgeQueryTab({
                 
                 <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: 32 }}>
                   <section>
-                    <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>元数据</Typography.Title>
+                    <Typography.Text className="nb-section-label">元数据</Typography.Text>
                     <div className="knowledge-metadata-list">
                       {Object.entries(queryResult.metadata || {}).map(([key, value]) => (
                         <div key={key} className="knowledge-metadata-item" style={{ fontSize: 'var(--nb-text-sm)' }}>
@@ -303,7 +303,7 @@ export function KnowledgeQueryTab({
                   </section>
 
                   <section>
-                    <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>实体关联 ({queryResult.data?.entities?.length || 0})</Typography.Title>
+                    <Typography.Text className="nb-section-label">实体关联 ({queryResult.data?.entities?.length || 0})</Typography.Text>
                     <List
                       size="small"
                       split={false}
@@ -323,7 +323,7 @@ export function KnowledgeQueryTab({
                   </section>
 
                   <section>
-                    <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>路径引用 ({queryResult.data?.references?.length || 0})</Typography.Title>
+                    <Typography.Text className="nb-section-label">路径引用 ({queryResult.data?.references?.length || 0})</Typography.Text>
                     <List
                       size="small"
                       split={false}

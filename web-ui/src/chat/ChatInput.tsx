@@ -2,7 +2,7 @@ import type { ComponentProps, ComponentRef } from 'react'
 import React, { forwardRef } from 'react'
 import { Attachments, Sender } from '@ant-design/x'
 import { Badge, Button, Divider, Flex, Segmented, Switch, Typography, theme } from 'antd'
-import { CloudUploadOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, CloseOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { AttachmentTags } from './chatPresentation'
 import { testIds } from '../testIds'
 import type { ChatAttachmentRef, ChatUploadItem } from '../types'
@@ -102,47 +102,147 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
     const thinkingEnabled = reasoningEffort !== null
 
     const senderHeader = (
-      <Sender.Header
-        title="本轮上下文"
-        open={headerOpen}
-        onOpenChange={setHeaderOpen}
-        styles={{ content: { padding: 0 } }}
-      >
-        <Flex vertical gap={8} style={{ padding: '0 8px 16px' }}>
-          {draftAttachmentRefs.length > 0 && (
-            <Flex vertical gap={4}>
-              <Text type="secondary" style={{ fontSize: 12 }}>关联知识与记忆</Text>
-              <AttachmentTags
-                attachments={draftAttachmentRefs}
-                removable
-                onRemove={(relativePath) => {
-                  onDraftAttachmentRefsChange(
-                    draftAttachmentRefs.filter((item) => item.relativePath !== relativePath),
-                  )
-                }}
+      headerOpen ? (
+        <div style={{ padding: '0 8px 16px' }}>
+          <Flex justify="space-between" align="center" style={{ marginBottom: 10 }}>
+            <Text style={{ fontSize: 'var(--nb-text-2xs)', fontWeight: 'var(--nb-font-weight-title)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+              本轮上下文
+            </Text>
+            <Button
+              type="text"
+              size="small"
+              icon={<CloseOutlined />}
+              aria-label="收起上下文"
+              onClick={() => setHeaderOpen(false)}
+              disabled={uploadingFiles}
+            />
+          </Flex>
+          <Flex vertical gap={8}>
+            {draftAttachmentRefs.length > 0 && (
+              <Flex vertical gap={4}>
+                <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>关联知识与记忆</Text>
+                <AttachmentTags
+                  attachments={draftAttachmentRefs}
+                  removable
+                  onRemove={(relativePath) => {
+                    onDraftAttachmentRefsChange(
+                      draftAttachmentRefs.filter((item) => item.relativePath !== relativePath),
+                    )
+                  }}
+                />
+              </Flex>
+            )}
+            <Attachments
+              beforeUpload={() => false}
+              items={pendingAttachments}
+              onChange={handleAttachmentsChange}
+              disabled={uploadingFiles}
+              placeholder={(type) =>
+                type === 'drop'
+                  ? {
+                      title: '松开鼠标以添加',
+                    }
+                  : {
+                      icon: <CloudUploadOutlined />,
+                      title: '上传附件',
+                      description: '点击或拖拽文件到此区域进行上传',
+                    }
+              }
+              getDropContainer={() => dropContainerRef.current}
+            />
+          </Flex>
+        </div>
+      ) : null
+    )
+
+    const senderFooter = (
+      <Flex justify="space-between" align="center" style={{ width: '100%' }}>
+        <Flex gap={4} align="center">
+          <div style={{ position: 'relative' }}>
+            <Badge dot={pendingAttachments.length > 0 && !headerOpen} offset={[-4, 4]}>
+              <Button
+                type="text"
+                size="small"
+                aria-label="添加附件"
+                onClick={() => setHeaderOpen(!headerOpen)}
+                icon={<LinkOutlined />}
+                disabled={uploadingFiles}
               />
+            </Badge>
+          </div>
+          <Divider type="vertical" style={{ margin: '0 2px' }} />
+          {reasoningSupported && (
+            <Flex align="center" gap={6} style={{
+              padding: '4px 4px 4px 12px',
+              borderRadius: 24,
+              background: thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 6%, transparent)' : 'transparent',
+              border: `1px solid ${thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 20%, transparent)' : 'transparent'}`,
+              transition: 'all 0.25s ease'
+            }}>
+              <ThunderboltOutlined style={{
+                fontSize: 14,
+                color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextQuaternary,
+                transition: 'color 0.25s',
+              }} />
+              <Text
+                id="chat-thinking-label"
+                style={{
+                  fontSize: 'var(--nb-text-xs)',
+                  color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextSecondary,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  transition: 'color 0.25s',
+                  fontWeight: thinkingEnabled ? 500 : 400,
+                }}
+                role="button"
+                tabIndex={0}
+                onClick={() => onReasoningEffortChange(thinkingEnabled ? null : 'medium')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onReasoningEffortChange(thinkingEnabled ? null : 'medium')
+                  }
+                }}
+              >
+                深度思考
+              </Text>
+              <Switch
+                size="small"
+                checked={thinkingEnabled}
+                aria-labelledby="chat-thinking-label"
+                onChange={(checked) => onReasoningEffortChange(checked ? 'medium' : null)}
+                style={{ margin: '0 4px' }}
+              />
+              {thinkingEnabled && (
+                <Segmented
+                  size="small"
+                  value={reasoningEffort!}
+                  options={EFFORT_OPTIONS}
+                  onChange={(val) => onReasoningEffortChange(val as ReasoningEffortLevel)}
+                  aria-label="思考强度"
+                  style={{ background: 'var(--nb-card-bg)', boxShadow: 'var(--nb-shadow-soft)' }}
+                />
+              )}
             </Flex>
           )}
-          <Attachments
-            beforeUpload={() => false}
-            items={pendingAttachments}
-            onChange={handleAttachmentsChange}
-            disabled={uploadingFiles}
-            placeholder={(type) =>
-              type === 'drop'
-                ? {
-                    title: '松开鼠标以添加',
-                  }
-                : {
-                    icon: <CloudUploadOutlined />,
-                    title: '上传附件',
-                    description: '点击或拖拽文件到此区域进行上传',
-                  }
-            }
-            getDropContainer={() => dropContainerRef.current}
-          />
         </Flex>
-      </Sender.Header>
+        <Flex align="center">
+          {isRequesting || uploadingFiles ? (
+            <Button onClick={onCancel} disabled={!isRequesting} style={{ borderRadius: 12 }}>
+              停止
+            </Button>
+          ) : (
+            <Button
+              type="primary"
+              onClick={() => onSubmit(value)}
+              disabled={!value.trim()}
+              style={{ borderRadius: 12, fontWeight: 'var(--nb-font-weight-medium)' }}
+            >
+              发送
+            </Button>
+          )}
+        </Flex>
+      </Flex>
     )
 
     return (
@@ -168,90 +268,7 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
           placeholder={`给 ${assistantLabel} 发送消息`}
           header={senderHeader}
           suffix={false}
-          footer={(_value, { components }) => {
-            const { SendButton, LoadingButton } = components
-            return (
-              <Flex justify="space-between" align="center" style={{ width: '100%' }}>
-                <Flex gap={4} align="center">
-                  {/* 附件按钮 */}
-                  <div style={{ position: 'relative' }}>
-                    <Badge dot={pendingAttachments.length > 0 && !headerOpen} offset={[-4, 4]}>
-                      <Button 
-                        type="text" 
-                        size="small"
-                        aria-label="添加附件"
-                        onClick={() => setHeaderOpen(!headerOpen)} 
-                        icon={<LinkOutlined />} 
-                        disabled={uploadingFiles}
-                      />
-                    </Badge>
-                  </div>
-                  <Divider type="vertical" style={{ margin: '0 2px' }} />
-                  {reasoningSupported && (
-                    <Flex align="center" gap={6} style={{
-                      padding: '4px 4px 4px 12px',
-                      borderRadius: 24,
-                      background: thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 6%, transparent)' : 'transparent',
-                      border: `1px solid ${thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 20%, transparent)' : 'transparent'}`,
-                      transition: 'all 0.25s ease'
-                    }}>
-                      <ThunderboltOutlined style={{
-                        fontSize: 14,
-                        color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextQuaternary,
-                        transition: 'color 0.25s',
-                      }} />
-                      <Text
-                        id="chat-thinking-label"
-                        style={{
-                          fontSize: 'var(--nb-text-xs)',
-                          color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextSecondary,
-                          cursor: 'pointer',
-                          userSelect: 'none',
-                          transition: 'color 0.25s',
-                          fontWeight: thinkingEnabled ? 500 : 400,
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => onReasoningEffortChange(thinkingEnabled ? null : 'medium')}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            onReasoningEffortChange(thinkingEnabled ? null : 'medium')
-                          }
-                        }}
-                      >
-                        深度思考
-                      </Text>
-                      <Switch
-                        size="small"
-                        checked={thinkingEnabled}
-                        aria-labelledby="chat-thinking-label"
-                        onChange={(checked) => onReasoningEffortChange(checked ? 'medium' : null)}
-                        style={{ margin: '0 4px' }}
-                      />
-                      {thinkingEnabled && (
-                        <Segmented
-                          size="small"
-                          value={reasoningEffort!}
-                          options={EFFORT_OPTIONS}
-                          onChange={(val) => onReasoningEffortChange(val as ReasoningEffortLevel)}
-                          aria-label="思考强度"
-                          style={{ background: 'var(--nb-card-bg)', boxShadow: 'var(--nb-shadow-soft)' }}
-                        />
-                      )}
-                    </Flex>
-                  )}
-                </Flex>
-                <Flex align="center">
-                  {isRequesting || uploadingFiles ? (
-                    <LoadingButton type="default" />
-                  ) : (
-                    <SendButton type="primary" disabled={!value.trim()} />
-                  )}
-                </Flex>
-              </Flex>
-            )
-          }}
+          footer={senderFooter}
         />
       </div>
     )

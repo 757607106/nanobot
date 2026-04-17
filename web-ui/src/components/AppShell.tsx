@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ApiOutlined,
@@ -333,7 +333,20 @@ export default function AppShell() {
               exit={{ opacity: 0, y: -6 }}
               transition={shellSpring}
             >
-              <Outlet />
+              {isChatRoute ? (
+                <Outlet />
+              ) : (
+                <div
+                  className="page-content-wrapper"
+                  style={
+                    {
+                      ['--nb-layout-content-max-width' as any]: `${designTokens.layout.contentMaxWidth}px`,
+                    } as CSSProperties
+                  }
+                >
+                  <Outlet />
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </main>

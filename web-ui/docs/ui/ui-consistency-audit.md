@@ -4,33 +4,33 @@
 
 | 文件 | 体积 |
 |---|---:|
-| vendor-C7f6oGNY.js | 3.66 MB |
-| chunk-markdown-BBPfqN3K.js | 2.38 MB |
-| antd-y-c1aDfp.js | 1.37 MB |
-| chunk-graph-CQdp2uUk.js | 1.05 MB |
+| vendor-CG5FlbKr.js | 5.91 MB |
+| antd-C5xzgOXU.js | 1.36 MB |
+| chunk-graph-Cm3RVvSC.js | 1.05 MB |
 | worker-B9qc9nkC.js | 303.5 KB |
 | pkg-html2canvas-Bxw5drDI.js | 179.3 KB |
 | react-core-DMX3MsSR.js | 140.7 KB |
+| vendor-BU66-h4g.css | 105.6 KB |
 | pkg-yaml-RrwvUN8j.js | 95.9 KB |
-| index-BCVnwG1J.js | 84.7 KB |
-| pkg-ml-matrix-CUTErpyz.js | 66.2 KB |
-| index-CtfJMTzN.js | 51.1 KB |
-| pkg-lodash-Cs9jqwOn.js | 45.9 KB |
-| index-Chfojq3Z.js | 42.0 KB |
-| index-BHpqTOrM.js | 39.8 KB |
-| ChatPage-Dy01wQuJ.js | 35.2 KB |
-| index-rn_y-Ss9.js | 30.8 KB |
-| pkg-dagre-B39qPlnq.js | 29.7 KB |
-| index-BOY6ZZjT.js | 25.2 KB |
-| index-CXZr_Tf9.js | 24.9 KB |
-| index-B8CU4x0r.css | 24.9 KB |
-| AutomationPage-IaeGHZll.js | 23.9 KB |
-| pkg-gl-matrix-DFc-l9Mq.js | 23.0 KB |
-| shared-runtime-NS7l3Vzw.js | 22.7 KB |
-| router-DfmdXw1s.js | 19.1 KB |
-| KnowledgeGraphTab-MnPiDsAg.js | 16.5 KB |
+| index-Ciclq7Mh.js | 95.1 KB |
+| noto-sans-sc-119-wght-normal-BfzSEbFz.woff2 | 75.0 KB |
+| pkg-ml-matrix-D2NwDeVa.js | 66.2 KB |
+| noto-sans-sc-45-wght-normal-MKIEVRIC.woff2 | 66.0 KB |
+| noto-sans-sc-22-wght-normal-VXjdYcT-.woff2 | 63.9 KB |
+| noto-sans-sc-108-wght-normal-7aXvqIa2.woff2 | 63.0 KB |
+| noto-sans-sc-100-wght-normal-DrqXJETY.woff2 | 63.0 KB |
+| noto-sans-sc-103-wght-normal-DGHo20nu.woff2 | 62.4 KB |
+| noto-sans-sc-111-wght-normal-ClFr5QXM.woff2 | 61.2 KB |
+| noto-sans-sc-106-wght-normal-D6uUHw3w.woff2 | 61.2 KB |
+| noto-sans-sc-24-wght-normal-B58DWgHS.woff2 | 61.1 KB |
+| noto-sans-sc-105-wght-normal-BFoiJwz2.woff2 | 60.4 KB |
+| noto-sans-sc-104-wght-normal-CJT2ioDJ.woff2 | 60.1 KB |
+| noto-sans-sc-110-wght-normal-D2JBr045.woff2 | 60.0 KB |
+| noto-sans-sc-107-wght-normal-kFQzJDLH.woff2 | 59.6 KB |
+| noto-sans-sc-102-wght-normal-C1RtbCZr.woff2 | 59.3 KB |
+| noto-sans-sc-109-wght-normal-CnjNbNmw.woff2 | 59.0 KB |
 
-- >500KB 文件数：4
+- >500KB 文件数：3
 
 ## 建议
 

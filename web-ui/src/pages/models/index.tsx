@@ -48,7 +48,6 @@ import {
   inferCapabilityType,
 } from './utils'
 import type { AddModelDraft, BindingRow, TestDraft } from './types'
-import { designTokens } from '../../ui/design/tokens'
 import { useToast } from '../../toast'
 
 export default function ModelsPage() {
@@ -446,7 +445,7 @@ export default function ModelsPage() {
         )}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: designTokens.space.md }}>
+      <div className="models-metrics-grid">
         <MetricCard
           label="已注册模型"
           value={totalBindingCount}
@@ -467,7 +466,7 @@ export default function ModelsPage() {
         />
       </div>
 
-      <Flex align="center" justify="space-between" gap={12} wrap="wrap">
+      <Flex align="center" justify="space-between" gap={12} wrap="wrap" className="models-toolbar">
         <Segmented
           value={viewMode}
           onChange={(value) => setViewMode(value as 'models' | 'providers')}
@@ -484,7 +483,7 @@ export default function ModelsPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           prefix={<SearchOutlined />}
           allowClear
-          style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)', border: 'none', maxWidth: 400 }}
+          className="models-search"
         />
       </Flex>
 
@@ -540,7 +539,7 @@ export default function ModelsPage() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                gap: designTokens.space.md,
+                gap: 'var(--nb-spacing-md)',
               }}
             >
               {providerCards.map((provider, index) => (

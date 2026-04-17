@@ -57,7 +57,7 @@ export default function SectionTabs({
               className="section-tabs-title"
               style={{
                 margin: eyebrow ? '4px 0 0' : 0,
-                fontSize: '1rem',
+                fontSize: 'var(--nb-text-lg)',
                 lineHeight: 1.15,
               }}
             >

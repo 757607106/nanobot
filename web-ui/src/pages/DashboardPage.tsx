@@ -144,14 +144,7 @@ export default function DashboardPage() {
       {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 'var(--nb-spacing-lg)' }} /> : null}
 
       {/* ── 核心指标卡 ── */}
-      <div
-        style={{
-          display: 'grid',
-          gap: 24,
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          marginBottom: 'var(--nb-spacing-xl)',
-        }}
-      >
+      <div className="dashboard-metrics-grid">
         <MetricCard
           label="智能体"
           value={loading ? cardSkeleton() : agents.length}
@@ -306,7 +299,7 @@ export default function DashboardPage() {
         </Flex>
 
         {/* 右：状态面板 */}
-        <Flex vertical gap="var(--nb-spacing-lg)" style={{ position: 'sticky', top: 80 }}>
+        <Flex vertical gap="var(--nb-spacing-lg)" className="dashboard-side-rail" style={{ position: 'sticky', top: 80 }}>
           {/* 系统状态 */}
           <SectionCard title="系统状态">
             {loading ? (

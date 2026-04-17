@@ -15,8 +15,10 @@ body {
   color: var(--nb-ink);
   background: var(--nb-body-bg);
   font-family: var(--nb-font-body);
-  font-size: var(--nb-text-md);
+  font-size: var(--nb-text-sm);
   line-height: var(--nb-line-body);
+  font-kerning: normal;
+  font-variant-numeric: tabular-nums;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

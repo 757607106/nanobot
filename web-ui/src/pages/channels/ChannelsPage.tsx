@@ -513,7 +513,7 @@ export default function ChannelsPage() {
       />
 
       {/* 统计卡片 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: designTokens.space.md }}>
+      <div className="channels-metrics-grid">
         <MetricCard
           label="已接入"
           value={channels.filter((c) => c.configured).length}
@@ -539,7 +539,7 @@ export default function ChannelsPage() {
         {channels.length === 0 ? (
           <Empty description="无匹配项" />
         ) : (
-          <div className="channel-card interactive-lift-grid">
+          <div className="channel-card-grid">
             {channels.map((channel, index) => (
               <motion.div
                 key={channel.key}
@@ -547,7 +547,7 @@ export default function ChannelsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04, duration: 0.2 }}
                 onClick={() => openChannelDrawer(channel.name)}
-                className={`channel-card ${selectedChannel === channel.name ? 'is-selected' : ''}`}
+                className={`channel-card interactive-lift ${selectedChannel === channel.name ? 'is-selected' : ''}`}
               >
                 {/* 图标 + 状态 */}
                 <Flex align="flex-start" justify="space-between">
@@ -564,6 +564,10 @@ export default function ChannelsPage() {
                 {/* 渠道名 */}
                 <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)' }}>
                   {channel.label}
+                </Typography.Text>
+
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.5 }}>
+                  {channel.description}
                 </Typography.Text>
               </motion.div>
             ))}
