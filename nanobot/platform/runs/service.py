@@ -208,6 +208,12 @@ class RunService:
         summary: RunResultSummary,
         *,
         artifact_path: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cached_tokens: int = 0,
+        total_tokens: int = 0,
     ) -> RunRecord:
         record = self.require_run(run_id)
         self._ensure_transition(record, allowed_from={RunStatus.RUNNING})
@@ -216,6 +222,12 @@ class RunService:
             status=RunStatus.SUCCEEDED,
             result_summary=summary,
             artifact_path=artifact_path,
+            provider=provider,
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cached_tokens=cached_tokens,
+            total_tokens=total_tokens,
             finished_at=now_iso(),
         )
         assert updated is not None
@@ -1083,6 +1095,27 @@ class RunService:
         children_count = len(self.store.list_runs(parent_run_id=run_id, limit=1000))
         events = self.store.list_events(run_id) if include_events else None
         return record.to_dict(children_count=children_count, events=events)
+
+    def get_global_token_metrics(self) -> dict[str, int]:
+        """Get aggregate token usage metrics aligned with the current scope."""
+        return self.store.get_global_token_metrics(
+            tenant_id=self.tenant_id if self._scope_enforced else None,
+            instance_id=self.instance_id if self._scope_enforced else None,
+        )
+
+    def get_all_agents_metrics(
+        self,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Get aggregate token and tool usage metrics for all agents aligned with the current scope."""
+        return self.store.get_all_agents_metrics(
+            tenant_id=self.tenant_id if self._scope_enforced else None,
+            instance_id=self.instance_id if self._scope_enforced else None,
+            since=since,
+            until=until,
+        )
 
     def list_runs(
         self,

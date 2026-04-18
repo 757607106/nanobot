@@ -370,6 +370,10 @@ export interface SystemStatus {
     enabledChannels: string[]
     enabledChannelCount: number
     scheduledJobs: number
+    totalTokens: number
+    promptTokens: number
+    completionTokens: number
+    cachedTokens: number
   }
   environment: {
     python: string
@@ -1049,10 +1053,19 @@ export interface AgentRunSummary {
   finishedAt?: string | null
   lastErrorCode?: string | null
   lastErrorMessage?: string | null
+  provider?: string | null
+  model?: string | null
+  promptTokens?: number
+  completionTokens?: number
+  cachedTokens?: number
+  totalTokens?: number
   resultSummary?: {
     content?: string | null
     toolsUsed?: string[]
     tools_used?: string[]
+    tools_call_counts?: Record<string, number>
+    mcps_call_counts?: Record<string, number>
+    knowledge_call_counts?: Record<string, number>
     metadata?: Record<string, unknown>
   } | null
   artifactPath?: string | null
@@ -1647,4 +1660,20 @@ export interface AgentTemplateMutationInput {
   model?: string
   backend?: string
   enabled?: boolean
+}
+
+export interface AgentMetricTokenInfo {
+  provider: string
+  model: string
+  promptTokens: number
+  completionTokens: number
+  cachedTokens: number
+  totalTokens: number
+}
+
+export interface AgentExecutionMetrics {
+  tokens: AgentMetricTokenInfo[]
+  tools: Record<string, number>
+  mcps: Record<string, number>
+  knowledge: Record<string, number>
 }

@@ -850,7 +850,7 @@ async def test_runner_blocks_repeated_external_fetches():
         msg for msg in captured_final_call
         if msg.get("role") == "tool" and msg.get("tool_call_id") == "call_3"
     ][0]
-    assert "repeated external lookup blocked" in blocked_tool_message["content"]
+    assert "STOP: This exact query has already been executed" in blocked_tool_message["content"]
 
 
 @pytest.mark.asyncio

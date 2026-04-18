@@ -657,20 +657,21 @@ class AgentRunner:
         external_lookup_counts: dict[str, int],
     ) -> tuple[Any, dict[str, str], BaseException | None]:
         _HINT = "\n\n[Analyze the error above and try a different approach.]"
-        lookup_error = repeated_external_lookup_error(
+        lookup_block = repeated_external_lookup_error(
             tool_call.name,
             tool_call.arguments,
             external_lookup_counts,
         )
-        if lookup_error:
+        if lookup_block is not None:
             event = {
                 "name": tool_call.name,
                 "status": "error",
                 "detail": "repeated external lookup blocked",
             }
-            if spec.fail_on_tool_error:
-                return lookup_error + _HINT, event, RuntimeError(lookup_error)
-            return lookup_error + _HINT, event, None
+            error_text = lookup_block.message + _HINT
+            if lookup_block.fatal or spec.fail_on_tool_error:
+                return error_text, event, RuntimeError(lookup_block.message)
+            return error_text, event, None
         prepare_call = getattr(spec.tools, "prepare_call", None)
         tool, params, prep_error = None, tool_call.arguments, None
         if callable(prepare_call):

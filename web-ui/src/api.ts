@@ -89,6 +89,7 @@ import type {
   ArtifactRetentionPolicy,
   AgentTemplate,
   AgentTemplateMutationInput,
+  AgentExecutionMetrics,
 } from './types'
 
 const API_BASE = '/api/v1'
@@ -877,6 +878,7 @@ export const api = {
         method: 'DELETE',
       },
     ),
+  getAgentsMetrics: () => request<Record<string, AgentExecutionMetrics>>('/agents/metrics'),
   getAgents: (enabled?: boolean) => {
     const params = new URLSearchParams()
     if (typeof enabled === 'boolean') {

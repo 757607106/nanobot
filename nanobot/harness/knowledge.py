@@ -154,6 +154,14 @@ class GetKnowledgeMindmapTool(_KnowledgeToolBase):
 
 
 class QueryKnowledgeBaseTool(_KnowledgeToolBase):
+    _MAX_CHUNK_CONTENT_LEN = 800
+    _MAX_ENTITY_DISPLAY = 4
+    _MAX_RELATIONSHIP_DISPLAY = 4
+
+    def __init__(self, binding_context: KnowledgeBindingContext):
+        super().__init__(binding_context)
+        self._query_cache: dict[str, str] = {}
+
     @property
     def name(self) -> str:
         return "query_kb"
@@ -197,6 +205,10 @@ class QueryKnowledgeBaseTool(_KnowledgeToolBase):
         limit: int = 6,
         **kwargs: Any,
     ) -> str:
+        cache_key = f"{kb_name}:{query_text}:{file_name or ''}"
+        if cache_key in self._query_cache:
+            return self._query_cache[cache_key]
+
         kb = self._resolve_kb_payload(kb_name)
         kb_id = str(kb.get("kbId") or "")
         kb_label = str(kb.get("name") or kb_id)
@@ -214,7 +226,7 @@ class QueryKnowledgeBaseTool(_KnowledgeToolBase):
         references = list(data.get("references") or [])
 
         if not any((chunks, entities, relationships, references)):
-            return "\n".join(
+            output = "\n".join(
                 [
                     f"Knowledge base query mode: {metadata.get('mode') or metadata.get('query_mode') or 'naive'}",
                     f"Knowledge base: {kb_label}",
@@ -223,6 +235,8 @@ class QueryKnowledgeBaseTool(_KnowledgeToolBase):
                     "Reply that the bound knowledge base did not contain a matching answer.",
                 ]
             )
+            self._query_cache[cache_key] = output
+            return output
 
         lines = [
             f"Knowledge base query mode: {metadata.get('mode') or metadata.get('query_mode') or 'hybrid'}",
@@ -234,6 +248,8 @@ class QueryKnowledgeBaseTool(_KnowledgeToolBase):
             lines.append("Relevant chunks:")
             for index, item in enumerate(chunks[:limit], start=1):
                 content = str(item.get("content") or "").strip()
+                if len(content) > self._MAX_CHUNK_CONTENT_LEN:
+                    content = content[: self._MAX_CHUNK_CONTENT_LEN] + "…"
                 file_path = str(item.get("file_path") or "").strip()
                 label = f"[{index}]"
                 if file_path:
@@ -241,17 +257,19 @@ class QueryKnowledgeBaseTool(_KnowledgeToolBase):
                 lines.append(f"{label}\n{content}")
         if entities:
             lines.append("Entities:")
-            for item in entities[:8]:
+            for item in entities[: self._MAX_ENTITY_DISPLAY]:
                 lines.append(
                     f"- {item.get('entity_name') or item.get('name')}: {str(item.get('description') or '').strip()}"
                 )
         if relationships:
             lines.append("Relationships:")
-            for item in relationships[:8]:
+            for item in relationships[: self._MAX_RELATIONSHIP_DISPLAY]:
                 lines.append(
                     f"- {item.get('src_id')} -> {item.get('tgt_id')}: {str(item.get('description') or '').strip()}"
                 )
-        return "\n\n".join(lines)
+        output = "\n\n".join(lines)
+        self._query_cache[cache_key] = output
+        return output
 
 
 def build_knowledge_prompt_block(hits: list[dict[str, Any]]) -> str:
@@ -335,7 +353,7 @@ class KnowledgeBindingMiddleware:
                 kb_ids=list(binding_context.bound_kb_ids),
                 query=str(task or ""),
                 limit=6,
-                requested_mode=None,
+                requested_mode="naive",
             )
 
         knowledge_hits = list(knowledge_result.get("hits") or [])

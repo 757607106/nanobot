@@ -52,6 +52,9 @@ class RunResultSummary:
 
     content: str | None = None
     tools_used: list[str] = field(default_factory=list)
+    tools_call_counts: dict[str, int] = field(default_factory=dict)
+    mcps_call_counts: dict[str, int] = field(default_factory=dict)
+    knowledge_call_counts: dict[str, int] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -114,6 +117,12 @@ class RunRecord:
     last_error_message: str | None = None
     result_summary: RunResultSummary | None = None
     artifact_path: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cached_tokens: int = 0
+    total_tokens: int = 0
 
     def to_dict(self, *, children_count: int | None = None, events: list[RunEvent] | None = None) -> dict[str, Any]:
         payload = asdict(self)
@@ -143,6 +152,10 @@ class RunRecord:
         payload["lastErrorMessage"] = payload.pop("last_error_message")
         payload["resultSummary"] = payload.pop("result_summary")
         payload["artifactPath"] = payload.pop("artifact_path")
+        payload["promptTokens"] = payload.pop("prompt_tokens")
+        payload["completionTokens"] = payload.pop("completion_tokens")
+        payload["cachedTokens"] = payload.pop("cached_tokens")
+        payload["totalTokens"] = payload.pop("total_tokens")
         if children_count is not None:
             payload["childrenCount"] = children_count
         if events is not None:

@@ -807,15 +807,31 @@ class KnowledgeQueryService:
         file_name: str | None = None,
         limit: int = 6,
     ) -> dict[str, Any]:
-        kb = self.require_kb(kb_id)
-        resolved_mode = str(kb.query_params.mode or "mix").strip() or "mix"
+        import time
+
+        # Agent queries use naive (pure vector) mode for fast retrieval.
+        # Graph-enhanced modes (mix/hybrid/local/global) require an extra
+        # LLM call for keyword extraction and are too slow for real-time
+        # agent interactions.  Users who need graph search can still use
+        # the full query_database() path via the Web UI.
         payload: dict[str, Any] = {
             "query": query_text,
             "top_k": limit,
             "chunk_top_k": max(12, limit),
-            "mode": resolved_mode,
+            "mode": "naive",
             "only_need_context": True,
         }
         if file_name:
             payload["file_name"] = file_name
-        return self.query_database(kb_id, payload)
+
+        t0 = time.perf_counter()
+        result = self.query_database(kb_id, payload)
+        elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+        chunk_count = len((result.get("data") or {}).get("chunks") or [])
+        logger.info(
+            "KB agent query kb_id={} elapsed={}ms chunks={}",
+            kb_id,
+            elapsed_ms,
+            chunk_count,
+        )
+        return result

@@ -1079,10 +1079,29 @@ class WebAgentRuntimeService:
                     ("Retrieved Knowledge", self._format_knowledge_hits_markdown(knowledge_hits)),
                 ],
             )
+            usage_metrics = getattr(isolated_agent, "_last_usage", {})
+            tools_used_list = getattr(isolated_agent, "_last_tools_used", [])
+
+            tools_call_counts = {}
+            mcps_call_counts = {}
+            knowledge_call_counts = {}
+
+            for tool in tools_used_list:
+                if tool.startswith("mcp__"):
+                    mcps_call_counts[tool] = mcps_call_counts.get(tool, 0) + 1
+                elif tool.startswith("kb__") or tool == "search_knowledge_context":
+                    knowledge_call_counts[tool] = knowledge_call_counts.get(tool, 0) + 1
+                else:
+                    tools_call_counts[tool] = tools_call_counts.get(tool, 0) + 1
+
             self.state.runs.complete_run(
                 record.run_id,
                 RunResultSummary(
                     content=response,
+                    tools_used=tools_used_list,
+                    tools_call_counts=tools_call_counts,
+                    mcps_call_counts=mcps_call_counts,
+                    knowledge_call_counts=knowledge_call_counts,
                     metadata={
                         "sessionKey": execution_context.session_key,
                         "sessionId": execution_context.session_id,
@@ -1091,6 +1110,12 @@ class WebAgentRuntimeService:
                     },
                 ),
                 artifact_path=artifact_path,
+                provider=config.agents.defaults.provider,
+                model=config.agents.defaults.model,
+                prompt_tokens=usage_metrics.get("prompt_tokens", 0),
+                completion_tokens=usage_metrics.get("completion_tokens", 0),
+                cached_tokens=usage_metrics.get("cached_tokens", 0),
+                total_tokens=usage_metrics.get("total_tokens", 0) or (usage_metrics.get("prompt_tokens", 0) + usage_metrics.get("completion_tokens", 0)),
             )
         except asyncio.CancelledError:
             try:

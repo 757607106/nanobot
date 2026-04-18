@@ -43,6 +43,12 @@ class RunStore:
             artifact_path TEXT,
             last_error_code TEXT,
             last_error_message TEXT,
+            provider TEXT,
+            model TEXT,
+            prompt_tokens INTEGER NOT NULL DEFAULT 0,
+            completion_tokens INTEGER NOT NULL DEFAULT 0,
+            cached_tokens INTEGER NOT NULL DEFAULT 0,
+            total_tokens INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             started_at TEXT,
             finished_at TEXT
@@ -90,6 +96,18 @@ class RunStore:
     def _init_tables(self) -> None:
         conn = self._connect()
         conn.executescript(self._CREATE_SCHEMA)
+        try:
+            conn.execute("ALTER TABLE run_records ADD COLUMN provider TEXT;")
+            conn.execute("ALTER TABLE run_records ADD COLUMN model TEXT;")
+            conn.execute("ALTER TABLE run_records ADD COLUMN prompt_tokens INTEGER NOT NULL DEFAULT 0;")
+            conn.execute("ALTER TABLE run_records ADD COLUMN completion_tokens INTEGER NOT NULL DEFAULT 0;")
+            conn.execute("ALTER TABLE run_records ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0;")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE run_records ADD COLUMN cached_tokens INTEGER NOT NULL DEFAULT 0;")
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
         conn.close()
 
@@ -101,6 +119,9 @@ class RunStore:
             {
                 "content": summary.content,
                 "tools_used": summary.tools_used,
+                "tools_call_counts": summary.tools_call_counts,
+                "mcps_call_counts": summary.mcps_call_counts,
+                "knowledge_call_counts": summary.knowledge_call_counts,
                 "metadata": summary.metadata,
             },
             ensure_ascii=False,
@@ -114,6 +135,9 @@ class RunStore:
         return RunResultSummary(
             content=payload.get("content"),
             tools_used=list(payload.get("tools_used") or []),
+            tools_call_counts=dict(payload.get("tools_call_counts") or {}),
+            mcps_call_counts=dict(payload.get("mcps_call_counts") or {}),
+            knowledge_call_counts=dict(payload.get("knowledge_call_counts") or {}),
             metadata=dict(payload.get("metadata") or {}),
         )
 
@@ -147,6 +171,12 @@ class RunStore:
             last_error_message=row["last_error_message"],
             result_summary=cls._deserialize_result_summary(row["result_summary_json"]),
             artifact_path=row["artifact_path"],
+            provider=row.keys().count("provider") > 0 and row["provider"] or None,
+            model=row.keys().count("model") > 0 and row["model"] or None,
+            prompt_tokens=row.keys().count("prompt_tokens") > 0 and row["prompt_tokens"] or 0,
+            completion_tokens=row.keys().count("completion_tokens") > 0 and row["completion_tokens"] or 0,
+            cached_tokens=row.keys().count("cached_tokens") > 0 and row["cached_tokens"] or 0,
+            total_tokens=row.keys().count("total_tokens") > 0 and row["total_tokens"] or 0,
         )
 
     def insert_run(self, record: RunRecord) -> RunRecord:
@@ -158,10 +188,11 @@ class RunStore:
                 agent_id, thread_id, parent_run_id, root_run_id, session_key,
                 origin_channel, origin_chat_id, control_scope,
                 workspace_path, memory_scope, knowledge_scope, result_summary_json,
-                artifact_path, last_error_code, last_error_message, created_at,
-                started_at, finished_at
+                artifact_path, last_error_code, last_error_message,
+                provider, model, prompt_tokens, completion_tokens, cached_tokens, total_tokens,
+                created_at, started_at, finished_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.run_id,
@@ -186,6 +217,12 @@ class RunStore:
                 record.artifact_path,
                 record.last_error_code,
                 record.last_error_message,
+                record.provider,
+                record.model,
+                record.prompt_tokens,
+                record.completion_tokens,
+                record.cached_tokens,
+                record.total_tokens,
                 record.created_at,
                 record.started_at,
                 record.finished_at,
@@ -317,6 +354,138 @@ class RunStore:
         ).fetchone()
         conn.close()
         return int(row["count"]) if row is not None else 0
+
+    def get_global_token_metrics(
+        self,
+        *,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+    ) -> dict[str, int]:
+        where: list[str] = []
+        values: list[object] = []
+        if tenant_id is not None:
+            where.append("tenant_id = ?")
+            values.append(tenant_id)
+        if instance_id is not None:
+            where.append("instance_id = ?")
+            values.append(instance_id)
+
+        where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                f"SELECT SUM(prompt_tokens) AS p, SUM(completion_tokens) AS c, SUM(cached_tokens) AS ca, SUM(total_tokens) AS t FROM run_records {where_clause}",
+                values,
+            ).fetchone()
+            if row and row["t"] is not None:
+                return {
+                    "prompt_tokens": int(row["p"] or 0),
+                    "completion_tokens": int(row["c"] or 0),
+                    "cached_tokens": int(row["ca"] or 0),
+                    "total_tokens": int(row["t"] or 0),
+                }
+            return {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "total_tokens": 0}
+        except Exception:
+            return {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "total_tokens": 0}
+        finally:
+            conn.close()
+
+    def get_all_agents_metrics(
+        self,
+        *,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        import json
+        where: list[str] = ["agent_id IS NOT NULL", "agent_id != ''"]
+        values: list[object] = []
+        if tenant_id is not None:
+            where.append("tenant_id = ?")
+            values.append(tenant_id)
+        if instance_id is not None:
+            where.append("instance_id = ?")
+            values.append(instance_id)
+        if since is not None:
+            where.append("created_at >= ?")
+            values.append(since)
+        if until is not None:
+            where.append("created_at <= ?")
+            values.append(until)
+
+        where_clause = f"WHERE {' AND '.join(where)}"
+        conn = self._connect()
+        try:
+            token_rows = conn.execute(
+                f"""
+                SELECT agent_id, provider, model, 
+                       SUM(prompt_tokens) AS p, 
+                       SUM(completion_tokens) AS c, 
+                       SUM(cached_tokens) AS ca,
+                       SUM(total_tokens) AS t
+                FROM run_records 
+                {where_clause}
+                GROUP BY agent_id, provider, model
+                """,
+                values,
+            ).fetchall()
+
+            try:
+                summary_rows = conn.execute(
+                    f"""
+                    SELECT agent_id,
+                           json_extract(result_summary_json, '$.tools_call_counts') as tools_json,
+                           json_extract(result_summary_json, '$.mcps_call_counts') as mcps_json,
+                           json_extract(result_summary_json, '$.knowledge_call_counts') as kb_json
+                    FROM run_records
+                    {where_clause}
+                    AND result_summary_json IS NOT NULL
+                    """,
+                    values,
+                ).fetchall()
+            except Exception:
+                summary_rows = []
+
+            agents_metrics: dict[str, dict[str, Any]] = {}
+
+            for r in token_rows:
+                aid = r["agent_id"]
+                if aid not in agents_metrics:
+                    agents_metrics[aid] = {"tokens": [], "tools": {}, "mcps": {}, "knowledge": {}}
+                
+                if int(r["t"] or 0) > 0:
+                    agents_metrics[aid]["tokens"].append({
+                        "provider": r["provider"] or "unknown",
+                        "model": r["model"] or "unknown",
+                        "promptTokens": int(r["p"] or 0),
+                        "completionTokens": int(r["c"] or 0),
+                        "cachedTokens": int(r["ca"] or 0),
+                        "totalTokens": int(r["t"] or 0),
+                    })
+            
+            for r in summary_rows:
+                aid = r["agent_id"]
+                if aid not in agents_metrics:
+                    agents_metrics[aid] = {"tokens": [], "tools": {}, "mcps": {}, "knowledge": {}}
+                
+                def _merge_counts(target: dict[str, int], json_str: str | None) -> None:
+                    if json_str:
+                        try:
+                            parsed = json.loads(json_str)
+                            if isinstance(parsed, dict):
+                                for k, v in parsed.items():
+                                    target[k] = target.get(k, 0) + (int(v) if str(v).isdigit() else 0)
+                        except Exception:
+                            pass
+                
+                _merge_counts(agents_metrics[aid]["tools"], r["tools_json"])
+                _merge_counts(agents_metrics[aid]["mcps"], r["mcps_json"])
+                _merge_counts(agents_metrics[aid]["knowledge"], r["kb_json"])
+
+            return agents_metrics
+        finally:
+            conn.close()
 
     def insert_event(self, event: RunEvent) -> RunEvent:
         conn = self._connect()

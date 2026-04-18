@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from loguru import logger
@@ -9,6 +10,7 @@ from loguru import logger
 from nanobot.utils.helpers import stringify_text_blocks
 
 _MAX_REPEAT_EXTERNAL_LOOKUPS = 2
+_HARD_STOP_AFTER_LOOKUPS = 5
 
 EMPTY_FINAL_RESPONSE_MESSAGE = (
     "I completed the tool steps but couldn't produce a final answer. "
@@ -23,6 +25,14 @@ LENGTH_RECOVERY_PROMPT = (
     "Output limit reached. Continue exactly where you left off "
     "— no recap, no apology. Break remaining work into smaller steps if needed."
 )
+
+
+@dataclass(slots=True, frozen=True)
+class ExternalLookupBlock:
+    """Result of a repeated-lookup check.  *fatal* forces the runner to stop."""
+
+    message: str
+    fatal: bool
 
 
 def empty_tool_result_message(tool_name: str) -> str:
@@ -70,6 +80,11 @@ def external_lookup_signature(tool_name: str, arguments: dict[str, Any]) -> str 
         query = str(arguments.get("query") or arguments.get("search_term") or "").strip()
         if query:
             return f"web_search:{query.lower()}"
+    if tool_name == "query_kb":
+        kb_name = str(arguments.get("kb_name") or "").strip()
+        query = str(arguments.get("query_text") or "").strip()
+        if query:
+            return f"query_kb:{kb_name.lower()}:{query.lower()}"
     return None
 
 
@@ -77,8 +92,13 @@ def repeated_external_lookup_error(
     tool_name: str,
     arguments: dict[str, Any],
     seen_counts: dict[str, int],
-) -> str | None:
-    """Block repeated external lookups after a small retry budget."""
+) -> ExternalLookupBlock | None:
+    """Block repeated external lookups after a small retry budget.
+
+    Returns ``None`` when the call is allowed, an `ExternalLookupBlock`
+    otherwise.  After `_HARD_STOP_AFTER_LOOKUPS` attempts the block is
+    marked *fatal* so the runner terminates the tool loop.
+    """
     signature = external_lookup_signature(tool_name, arguments)
     if signature is None:
         return None
@@ -86,12 +106,18 @@ def repeated_external_lookup_error(
     seen_counts[signature] = count
     if count <= _MAX_REPEAT_EXTERNAL_LOOKUPS:
         return None
+    fatal = count > _HARD_STOP_AFTER_LOOKUPS
     logger.warning(
-        "Blocking repeated external lookup {} on attempt {}",
+        "Blocking repeated external lookup {} on attempt {} (fatal={})",
         signature[:160],
         count,
+        fatal,
     )
-    return (
-        "Error: repeated external lookup blocked. "
-        "Use the results you already have to answer, or try a meaningfully different source."
+    return ExternalLookupBlock(
+        message=(
+            "STOP: This exact query has already been executed and returned results. "
+            "You MUST use the results already in the conversation to answer the user. "
+            "Do NOT call this tool again with the same or similar query."
+        ),
+        fatal=fatal,
     )

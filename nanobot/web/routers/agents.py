@@ -52,6 +52,16 @@ def _resolve_template_snapshot(request: Request, payload: dict[str, Any]) -> dic
         raise APIError(404, "AGENT_TEMPLATE_NOT_FOUND", "Agent template not found.") from exc
 
 
+@router.get("/api/v1/agents/metrics")
+def get_agents_metrics(
+    request: Request,
+    since: str | None = Query(default=None, description="ISO 8601 lower bound for created_at"),
+    until: str | None = Query(default=None, description="ISO 8601 upper bound for created_at"),
+) -> JSONResponse:
+    data = request.app.state.runs.get_all_agents_metrics(since=since, until=until)
+    return _json_response(200, _ok(data))
+
+
 @router.get("/api/v1/agents")
 def list_agents(
     request: Request,

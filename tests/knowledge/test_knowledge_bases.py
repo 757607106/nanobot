@@ -268,7 +268,7 @@ def test_query_kb_for_agent_uses_fast_context_only_mode(tmp_path: Path) -> None:
 
     result = service.query_kb_for_agent(kb_id, "How do we restart nanobot?", limit=4)
 
-    assert result["metadata"]["mode"] == "mix"
+    assert result["metadata"]["mode"] == "naive"
     assert result["query_params"]["only_need_context"] is True
     assert result["query_params"]["top_k"] == 4
 

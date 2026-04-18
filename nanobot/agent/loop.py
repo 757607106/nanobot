@@ -566,6 +566,7 @@ class AgentLoop:
             injection_callback=_drain_pending,
         ))
         self._last_usage = result.usage
+        self._last_tools_used = result.tools_used
         if result.stop_reason == "max_iterations":
             logger.warning("Max iterations ({}) reached", self.max_iterations)
         elif result.stop_reason == "error":

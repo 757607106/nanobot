@@ -309,3 +309,271 @@ def test_run_service_get_artifact_requires_artifact_path(tmp_path: Path) -> None
 
     with pytest.raises(RunArtifactNotFoundError):
         service.get_artifact(run.run_id)
+
+def test_run_service_metric_tracking(tmp_path: Path) -> None:
+    service = RunService(RunStore(tmp_path / "metrics.db"), instance_id="instance-metrics")
+
+    run = service.create_run(
+        kind=RunKind.AGENT,
+        label="Metric Test",
+        task_preview="Testing token metrics",
+        session_key="web:session-metrics",
+    )
+    service.start_run(run.run_id)
+    
+    summary = RunResultSummary(
+        content="Success with metrics",
+        tools_used=["web_search", "mcp__calculator", "kb__wiki"],
+        tools_call_counts={"web_search": 1},
+        mcps_call_counts={"mcp__calculator": 1},
+        knowledge_call_counts={"kb__wiki": 1},
+    )
+    
+    service.complete_run(
+        run.run_id,
+        summary,
+        provider="anthropic",
+        model="claude-4-preview",
+        prompt_tokens=150,
+        completion_tokens=25,
+        cached_tokens=42,
+        total_tokens=175,
+    )
+
+    detail = service.get_run(run.run_id)
+    assert detail["status"] == "succeeded"
+    assert detail["provider"] == "anthropic"
+    assert detail["model"] == "claude-4-preview"
+    assert detail["promptTokens"] == 150
+    assert detail["completionTokens"] == 25
+    assert detail["cachedTokens"] == 42
+    assert detail["totalTokens"] == 175
+    
+    res_summary = detail["resultSummary"]
+    assert res_summary["tools_call_counts"] == {"web_search": 1}
+    assert res_summary["mcps_call_counts"] == {"mcp__calculator": 1}
+    assert res_summary["knowledge_call_counts"] == {"kb__wiki": 1}
+
+def test_run_service_get_all_agents_metrics(tmp_path: Path) -> None:
+    service = RunService(RunStore(tmp_path / "agents_metrics.db"), instance_id="instance-agents-metrics")
+
+    # Create run for agent 1
+    run1 = service.create_run(
+        kind=RunKind.AGENT,
+        label="Agent 1 Run",
+        task_preview="Testing agent 1 metrics",
+        agent_id="agent-001"
+    )
+    service.start_run(run1.run_id)
+    service.complete_run(
+        run1.run_id,
+        RunResultSummary(
+            content="Agent 1 done",
+            tools_used=["toolA"],
+            tools_call_counts={"toolA": 2},
+            mcps_call_counts={"mcpX": 1},
+            knowledge_call_counts={"kbY": 3},
+        ),
+        provider="openai",
+        model="gpt-4",
+        prompt_tokens=100,
+        completion_tokens=50,
+        cached_tokens=20,
+        total_tokens=150,
+    )
+
+    # Create run for agent 2
+    run2 = service.create_run(
+        kind=RunKind.AGENT,
+        label="Agent 2 Run",
+        task_preview="Testing agent 2 metrics",
+        agent_id="agent-002"
+    )
+    service.start_run(run2.run_id)
+    service.complete_run(
+        run2.run_id,
+        RunResultSummary(
+            content="Agent 2 done",
+            tools_used=["toolB"],
+            tools_call_counts={"toolB": 5},
+            mcps_call_counts={},
+            knowledge_call_counts={"kbZ": 1},
+        ),
+        provider="anthropic",
+        model="claude-3-opus",
+        prompt_tokens=200,
+        completion_tokens=100,
+        cached_tokens=0,
+        total_tokens=300,
+    )
+
+    # Validate output structure and aggregations
+    metrics = service.get_all_agents_metrics()
+    
+    assert "agent-001" in metrics
+    a1_metrics = metrics["agent-001"]
+    assert len(a1_metrics["tokens"]) == 1
+    assert a1_metrics["tokens"][0]["provider"] == "openai"
+    assert a1_metrics["tokens"][0]["totalTokens"] == 150
+    assert a1_metrics["tokens"][0]["cachedTokens"] == 20
+    assert a1_metrics["tools"]["toolA"] == 2
+    assert a1_metrics["mcps"]["mcpX"] == 1
+    assert a1_metrics["knowledge"]["kbY"] == 3
+
+    assert "agent-002" in metrics
+    a2_metrics = metrics["agent-002"]
+    assert a2_metrics["tokens"][0]["provider"] == "anthropic"
+    assert a2_metrics["tokens"][0]["totalTokens"] == 300
+    assert a2_metrics["tokens"][0]["cachedTokens"] == 0
+    assert a2_metrics["tools"]["toolB"] == 5
+    assert "mcpX" not in a2_metrics["mcps"]
+    assert a2_metrics["knowledge"]["kbZ"] == 1
+
+
+def test_run_service_cached_tokens_persistence(tmp_path: Path) -> None:
+    """Verify cached_tokens flows correctly through the entire store lifecycle."""
+    store = RunStore(tmp_path / "cached.db")
+    service = RunService(store, instance_id="inst-cached")
+
+    run = service.create_run(
+        kind=RunKind.AGENT,
+        label="Cached test",
+        task_preview="Cached token test",
+        session_key="web:cached",
+        agent_id="cache-agent",
+    )
+    service.start_run(run.run_id)
+    service.complete_run(
+        run.run_id,
+        RunResultSummary(content="done"),
+        provider="anthropic",
+        model="claude-4-sonnet",
+        prompt_tokens=1000,
+        completion_tokens=200,
+        cached_tokens=600,
+        total_tokens=1200,
+    )
+
+    # Verify via get_run
+    detail = service.get_run(run.run_id)
+    assert detail["cachedTokens"] == 600
+
+    # Verify via raw store record
+    record = store.get_run(run.run_id)
+    assert record is not None
+    assert record.cached_tokens == 600
+
+    # Verify via global_token_metrics
+    global_metrics = store.get_global_token_metrics()
+    assert global_metrics["cached_tokens"] == 600
+
+    # Verify via agents_metrics
+    agents_m = store.get_all_agents_metrics()
+    assert "cache-agent" in agents_m
+    assert agents_m["cache-agent"]["tokens"][0]["cachedTokens"] == 600
+
+
+def test_run_service_metrics_time_range_filtering(tmp_path: Path) -> None:
+    """Verify that since/until parameters correctly filter aggregated metrics."""
+    store = RunStore(tmp_path / "timerange.db")
+    service = RunService(store, instance_id="inst-timerange")
+
+    # Create an older run with a fixed timestamp
+    old_run = service.create_run(
+        kind=RunKind.AGENT,
+        label="Old run",
+        task_preview="Old run",
+        agent_id="time-agent",
+    )
+    service.start_run(old_run.run_id)
+    service.complete_run(
+        old_run.run_id,
+        RunResultSummary(
+            content="old",
+            tools_call_counts={"toolOld": 3},
+        ),
+        provider="openai",
+        model="gpt-4",
+        prompt_tokens=100,
+        completion_tokens=50,
+        total_tokens=150,
+    )
+    # Manually backdate this run's created_at
+    conn = store._connect()
+    conn.execute(
+        "UPDATE run_records SET created_at = ? WHERE run_id = ?",
+        ("2025-01-01T00:00:00Z", old_run.run_id),
+    )
+    conn.commit()
+    conn.close()
+
+    # Create a recent run
+    new_run = service.create_run(
+        kind=RunKind.AGENT,
+        label="New run",
+        task_preview="New run",
+        agent_id="time-agent",
+    )
+    service.start_run(new_run.run_id)
+    service.complete_run(
+        new_run.run_id,
+        RunResultSummary(
+            content="new",
+            tools_call_counts={"toolNew": 7},
+        ),
+        provider="openai",
+        model="gpt-4",
+        prompt_tokens=200,
+        completion_tokens=100,
+        total_tokens=300,
+    )
+
+    # Without filtering, both runs should appear
+    all_metrics = service.get_all_agents_metrics()
+    assert "time-agent" in all_metrics
+    assert all_metrics["time-agent"]["tools"].get("toolOld", 0) == 3
+    assert all_metrics["time-agent"]["tools"].get("toolNew", 0) == 7
+
+    # Filter to only include runs since 2026-01-01
+    filtered = service.get_all_agents_metrics(since="2026-01-01T00:00:00Z")
+    assert "time-agent" in filtered
+    assert filtered["time-agent"]["tools"].get("toolOld", 0) == 0
+    assert filtered["time-agent"]["tools"].get("toolNew", 0) == 7
+
+    # Filter to only include runs until 2025-12-31
+    old_only = service.get_all_agents_metrics(until="2025-12-31T23:59:59Z")
+    assert "time-agent" in old_only
+    assert old_only["time-agent"]["tools"].get("toolOld", 0) == 3
+    assert old_only["time-agent"]["tools"].get("toolNew", 0) == 0
+
+    # Filter with both bounds to exclude all
+    empty = service.get_all_agents_metrics(
+        since="2024-01-01T00:00:00Z", until="2024-12-31T23:59:59Z"
+    )
+    assert "time-agent" not in empty
+
+
+def test_run_service_cached_tokens_zero_default(tmp_path: Path) -> None:
+    """Verify cached_tokens defaults to 0 when not provided."""
+    service = RunService(RunStore(tmp_path / "default_cached.db"), instance_id="inst-default")
+
+    run = service.create_run(
+        kind=RunKind.AGENT,
+        label="No cache run",
+        task_preview="No cache",
+        session_key="web:no-cache",
+    )
+    service.start_run(run.run_id)
+    service.complete_run(
+        run.run_id,
+        RunResultSummary(content="done"),
+        provider="openai",
+        model="gpt-4",
+        prompt_tokens=500,
+        completion_tokens=100,
+        total_tokens=600,
+    )
+
+    detail = service.get_run(run.run_id)
+    assert detail["cachedTokens"] == 0
+

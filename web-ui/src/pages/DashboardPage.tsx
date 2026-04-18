@@ -18,6 +18,7 @@ import {
   RobotOutlined,
   ApiOutlined,
   DatabaseOutlined,
+  FireOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
@@ -30,6 +31,7 @@ import type {
   KnowledgeBaseDefinition,
   SessionListResponse,
   SystemStatus,
+  AgentExecutionMetrics,
 } from '../types'
 import { useToast } from '../toast'
 
@@ -63,6 +65,7 @@ export default function DashboardPage() {
   const [agents, setAgents] = useState<AgentDefinition[]>([])
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
   const [system, setSystem] = useState<SystemStatus | null>(null)
+  const [agentMetrics, setAgentMetrics] = useState<Record<string, AgentExecutionMetrics>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,18 +81,20 @@ export default function DashboardPage() {
   async function loadDashboard() {
     try {
       setLoading(true)
-      const [cronData, sessionsData, agentsData, systemData, kbData] = await Promise.all([
+      const [cronData, sessionsData, agentsData, systemData, kbData, metricsData] = await Promise.all([
         api.getCronStatus(),
         api.getSessions(),
         api.getAgents(),
         api.getSystemStatus(),
         api.getKnowledgeBases().catch(() => [] as KnowledgeBaseDefinition[]),
+        api.getAgentsMetrics().catch(() => ({})),
       ])
       setCron(cronData)
       setSessions(sessionsData)
       setAgents(agentsData)
       setSystem(systemData)
       setKnowledgeBases(Array.isArray(kbData) ? kbData : [])
+      setAgentMetrics(metricsData)
       setError(null)
     } catch (loadError) {
       const nextError = loadError instanceof Error ? loadError.message : '加载控制台总览失败'
@@ -179,6 +184,13 @@ export default function DashboardPage() {
           helper="已启用的连接通道"
           tone="neutral"
           icon={<ApiOutlined />}
+        />
+        <MetricCard
+          label="算力消耗"
+          value={loading ? cardSkeleton() : (system?.stats.totalTokens ?? 0).toLocaleString()}
+          helper={`P: ${system?.stats.promptTokens ?? 0} / C: ${system?.stats.completionTokens ?? 0}`}
+          tone="primary"
+          icon={<FireOutlined />}
         />
       </div>
 
@@ -294,6 +306,131 @@ export default function DashboardPage() {
                 暂无会话记录
               </Typography.Text>
             </Flex>
+          )}
+        </SectionCard>
+
+        {/* ── Agent 效能诊断 ── */}
+        <SectionCard title="Agent 开销与效能分析">
+          {loading ? (
+             <Skeleton active paragraph={{ rows: 4 }} title={false} />
+          ) : Object.keys(agentMetrics).length > 0 ? (
+             <Flex vertical gap="var(--nb-spacing-lg)">
+               {agents.map((agent) => {
+                 const metrics = agentMetrics[agent.agentId]
+                 // Only render agents that actually have some usage
+                 if (!metrics || (metrics.tokens.length === 0 && Object.keys(metrics.tools || {}).length === 0 && Object.keys(metrics.mcps || {}).length === 0 && Object.keys(metrics.knowledge || {}).length === 0)) return null
+
+                 return (
+                   <div key={agent.agentId} style={{
+                     background: token.colorFillQuaternary,
+                     borderRadius: 'var(--nb-radius-lg)',
+                     padding: 'var(--nb-spacing-lg)',
+                     border: `1px solid ${token.colorBorderSecondary}`,
+                   }}>
+                     <Flex align="center" gap={12} style={{ marginBottom: 'var(--nb-spacing-md)' }}>
+                       <div style={{
+                         width: 32, height: 32, borderRadius: 8, background: 'var(--nb-accent)', 
+                         color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                       }}>
+                         <RobotOutlined />
+                       </div>
+                       <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)' }}>{agent.name}</Typography.Text>
+                     </Flex>
+
+                     <div style={{ 
+                       display: 'grid', 
+                       gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
+                       gap: 'var(--nb-spacing-md)' 
+                     }}>
+                       {/* Tokens Module */}
+                       <div style={{ background: token.colorBgContainer, padding: 'var(--nb-spacing-md)', borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                         <Flex align="center" gap={8} style={{ marginBottom: 12, opacity: 0.85 }}>
+                           <FireOutlined style={{ color: 'var(--nb-accent)' }} />
+                           <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', fontWeight: 600, letterSpacing: '0.04em' }}>模型算力消耗 (TOKENS)</Typography.Text>
+                         </Flex>
+                         {metrics.tokens.length > 0 ? (
+                           <Flex vertical gap={8}>
+                             {metrics.tokens.map((t, idx) => (
+                               <Flex justify="space-between" align="center" key={idx} style={{ paddingBottom: 6, borderBottom: idx < metrics.tokens.length - 1 ? `1px dashed ${token.colorBorderSecondary}` : 'none' }}>
+                                 <div style={{ fontSize: 'var(--nb-text-xs)' }}>
+                                   <div style={{ fontFamily: 'var(--nb-font-mono)', color: token.colorTextSecondary }}>{t.provider}/{t.model}</div>
+                                   <div style={{ fontSize: '10px', color: token.colorTextQuaternary }}>P:{t.promptTokens} / C:{t.completionTokens}{t.cachedTokens ? ` / Ca:${t.cachedTokens}` : ''}</div>
+                                 </div>
+                                 <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', color: token.colorTextHeading }}>{t.totalTokens.toLocaleString()}</Typography.Text>
+                               </Flex>
+                             ))}
+                           </Flex>
+                         ) : (
+                           <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>— 无流水 —</Typography.Text>
+                         )}
+                       </div>
+
+                       {/* Tools Module */}
+                       <div style={{ background: token.colorBgContainer, padding: 'var(--nb-spacing-md)', borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                         <Flex align="center" gap={8} style={{ marginBottom: 12, opacity: 0.85 }}>
+                           <ApiOutlined style={{ color: '#1677ff' }} />
+                           <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', fontWeight: 600, letterSpacing: '0.04em' }}>内部执行工具 (TOOLS)</Typography.Text>
+                         </Flex>
+                         {Object.keys(metrics.tools || {}).length > 0 ? (
+                           <Flex wrap="wrap" gap={6}>
+                             {Object.entries(metrics.tools || {}).map(([t, c]) => (
+                               <div key={t} style={{ background: token.colorFillAlter, border: `1px solid ${token.colorBorderSecondary}`, padding: '4px 10px', borderRadius: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
+                                 <Typography.Text style={{ fontSize: 'var(--nb-text-xs)' }}>{t}</Typography.Text>
+                                 <Tag color="blue" bordered={false} style={{ margin: 0, minWidth: 24, textAlign: 'center' }}>{c}</Tag>
+                               </div>
+                             ))}
+                           </Flex>
+                         ) : (
+                           <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>— 无记录 —</Typography.Text>
+                         )}
+                       </div>
+
+                       {/* MCPs Module */}
+                       <div style={{ background: token.colorBgContainer, padding: 'var(--nb-spacing-md)', borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                         <Flex align="center" gap={8} style={{ marginBottom: 12, opacity: 0.85 }}>
+                           <DatabaseOutlined style={{ color: '#2f54eb' }} />
+                           <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', fontWeight: 600, letterSpacing: '0.04em' }}>外联跨端节点 (MCP)</Typography.Text>
+                         </Flex>
+                         {Object.keys(metrics.mcps || {}).length > 0 ? (
+                           <Flex wrap="wrap" gap={6}>
+                             {Object.entries(metrics.mcps || {}).map(([m, c]) => (
+                               <div key={m} style={{ background: token.colorFillAlter, border: `1px solid ${token.colorBorderSecondary}`, padding: '4px 10px', borderRadius: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
+                                 <Typography.Text style={{ fontSize: 'var(--nb-text-xs)' }}>{m}</Typography.Text>
+                                 <Tag color="geekblue" bordered={false} style={{ margin: 0, minWidth: 24, textAlign: 'center' }}>{c}</Tag>
+                               </div>
+                             ))}
+                           </Flex>
+                         ) : (
+                           <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>— 无记录 —</Typography.Text>
+                         )}
+                       </div>
+
+                       {/* KB Module */}
+                       <div style={{ background: token.colorBgContainer, padding: 'var(--nb-spacing-md)', borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                         <Flex align="center" gap={8} style={{ marginBottom: 12, opacity: 0.85 }}>
+                           <DatabaseOutlined style={{ color: '#13c2c2' }} />
+                           <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', fontWeight: 600, letterSpacing: '0.04em' }}>知识检索引擎 (KB)</Typography.Text>
+                         </Flex>
+                         {Object.keys(metrics.knowledge || {}).length > 0 ? (
+                           <Flex wrap="wrap" gap={6}>
+                             {Object.entries(metrics.knowledge || {}).map(([k, c]) => (
+                               <div key={k} style={{ background: token.colorFillAlter, border: `1px solid ${token.colorBorderSecondary}`, padding: '4px 10px', borderRadius: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
+                                 <Typography.Text style={{ fontSize: 'var(--nb-text-xs)' }}>{k}</Typography.Text>
+                                 <Tag color="cyan" bordered={false} style={{ margin: 0, minWidth: 24, textAlign: 'center' }}>{c}</Tag>
+                               </div>
+                             ))}
+                           </Flex>
+                         ) : (
+                           <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>— 无记录 —</Typography.Text>
+                         )}
+                       </div>
+                     </div>
+                   </div>
+                 )
+               })}
+             </Flex>
+          ) : (
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>暂无分析数据</Typography.Text>
           )}
         </SectionCard>
         </Flex>

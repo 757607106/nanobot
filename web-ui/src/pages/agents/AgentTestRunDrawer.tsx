@@ -96,8 +96,65 @@ export default function AgentTestRunDrawer({ open, onClose, agentId, agentName }
             
             {result.run && (
               <div style={{ marginTop: designTokens.space.md }}>
+                <Typography.Text strong style={{ display: 'block', marginBottom: 8, fontSize: 'var(--nb-text-xs)', color: 'var(--nb-text-primary)' }}>
+                  执行消耗概览
+                </Typography.Text>
+                
+                <Flex gap={12} wrap style={{ marginBottom: 16 }}>
+                  {(result.run.provider || result.run.model) && (
+                    <div style={{ padding: '8px 12px', background: 'var(--nb-surface)', borderRadius: 6, border: '1px solid var(--nb-border)' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>Provider / Model</Typography.Text>
+                      <Typography.Text strong style={{ fontSize: '13px' }}>{result.run.provider || 'default'} {result.run.model ? `· ${result.run.model}` : ''}</Typography.Text>
+                    </div>
+                  )}
+                  {result.run.totalTokens !== undefined && result.run.totalTokens > 0 && (
+                    <div style={{ padding: '8px 12px', background: 'var(--nb-surface)', borderRadius: 6, border: '1px solid var(--nb-border)' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>Total Tokens</Typography.Text>
+                      <Typography.Text strong style={{ fontSize: '13px', color: '#1677ff' }}>{result.run.totalTokens}</Typography.Text>
+                      <Typography.Text style={{ fontSize: '11px', color: 'var(--nb-text-secondary)', marginLeft: 6 }}>
+                        (P: {result.run.promptTokens || 0} / C: {result.run.completionTokens || 0})
+                      </Typography.Text>
+                    </div>
+                  )}
+                </Flex>
+
+                {result.run.resultSummary && (
+                  <Flex vertical gap={8} style={{ marginBottom: 16 }}>
+                    {Object.keys(result.run.resultSummary.tools_call_counts || {}).length > 0 && (
+                       <Flex gap={8} align="center" wrap>
+                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', width: 65 }}>Tools:</Typography.Text>
+                          {Object.entries(result.run.resultSummary.tools_call_counts!).map(([k, v]) => (
+                            <div key={k} style={{ fontSize: '12px', border: '1px solid var(--nb-border)', padding: '2px 8px', borderRadius: 4, background: 'var(--nb-surface)', color: 'var(--nb-text-primary)' }}>
+                              {k} <span style={{ color: '#1677ff', fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
+                            </div>
+                          ))}
+                       </Flex>
+                    )}
+                    {Object.keys(result.run.resultSummary.mcps_call_counts || {}).length > 0 && (
+                       <Flex gap={8} align="center" wrap>
+                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', width: 65 }}>MCP:</Typography.Text>
+                          {Object.entries(result.run.resultSummary.mcps_call_counts!).map(([k, v]) => (
+                            <div key={k} style={{ fontSize: '12px', border: '1px solid var(--nb-border)', padding: '2px 8px', borderRadius: 4, background: 'var(--nb-surface)', color: 'var(--nb-text-primary)' }}>
+                              {k} <span style={{ color: '#1677ff', fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
+                            </div>
+                          ))}
+                       </Flex>
+                    )}
+                    {Object.keys(result.run.resultSummary.knowledge_call_counts || {}).length > 0 && (
+                       <Flex gap={8} align="center" wrap>
+                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', width: 65 }}>Knowledge:</Typography.Text>
+                          {Object.entries(result.run.resultSummary.knowledge_call_counts!).map(([k, v]) => (
+                            <div key={k} style={{ fontSize: '12px', border: '1px solid var(--nb-border)', padding: '2px 8px', borderRadius: 4, background: 'var(--nb-surface)', color: 'var(--nb-text-primary)' }}>
+                              {k} <span style={{ color: '#1677ff', fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
+                            </div>
+                          ))}
+                       </Flex>
+                    )}
+                  </Flex>
+                )}
+                
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
-                  运行状态: {result.run.status} | 耗时: {result.run.durationMs}ms
+                  运行状态: {result.run.status} | 耗时: {(result.run as any).durationMs || '-'}ms
                 </Typography.Text>
               </div>
             )}

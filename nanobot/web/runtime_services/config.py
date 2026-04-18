@@ -469,6 +469,7 @@ class WebConfigRuntimeService:
             for name, value in channels_data.items()
             if isinstance(value, dict) and value.get("enabled")
         ]
+        token_metrics = self.state.runs.get_global_token_metrics() if self.state.runs else {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
         return {
             "web": {
                 "version": self.state.version,
@@ -485,6 +486,10 @@ class WebConfigRuntimeService:
                 "enabledChannels": enabled_channels,
                 "enabledChannelCount": len(enabled_channels),
                 "scheduledJobs": cron_status["jobs"],
+                "totalTokens": token_metrics["total_tokens"],
+                "promptTokens": token_metrics["prompt_tokens"],
+                "completionTokens": token_metrics["completion_tokens"],
+                "cachedTokens": token_metrics.get("cached_tokens", 0),
             },
             "environment": {
                 "python": platform.python_version(),
