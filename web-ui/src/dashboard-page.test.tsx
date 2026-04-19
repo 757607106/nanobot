@@ -11,7 +11,6 @@ const mockApi = vi.hoisted(() => ({
   getInstalledSkills: vi.fn(),
   getCronStatus: vi.fn(),
   getChatWorkspace: vi.fn(),
-  getSessions: vi.fn(),
   getAgents: vi.fn(),
   getSystemStatus: vi.fn(),
   getKnowledgeBases: vi.fn(),
@@ -78,7 +77,6 @@ describe('DashboardPage', () => {
     mockApi.getInstalledSkills.mockReset()
     mockApi.getCronStatus.mockReset()
     mockApi.getChatWorkspace.mockReset()
-    mockApi.getSessions.mockReset()
 
     mockApi.getAuthStatus.mockResolvedValue({
       initialized: true,
@@ -108,19 +106,6 @@ describe('DashboardPage', () => {
       nextWakeAtMs: Date.now() + 60_000,
       deliveryMode: 'agent_only' as const,
     })
-    mockApi.getSessions.mockResolvedValue({
-      items: [
-        {
-          id: 'session-1',
-          sessionId: 'session-1',
-          title: 'Smoke Session',
-          messageCount: 2,
-        },
-      ],
-      page: 1,
-      pageSize: 20,
-      total: 1,
-    })
     mockApi.getAgents.mockResolvedValue([])
     mockApi.getSystemStatus.mockResolvedValue({ stats: { enabledChannels: ['telegram'] }, web: { version: '1.0' } })
     mockApi.getKnowledgeBases.mockResolvedValue([])
@@ -146,7 +131,6 @@ describe('DashboardPage', () => {
       expect(mockApi.getSystemStatus).toHaveBeenCalled()
       expect(mockApi.getAgents).toHaveBeenCalled()
       expect(mockApi.getCronStatus).toHaveBeenCalled()
-      expect(mockApi.getSessions).toHaveBeenCalled()
       expect(mockApi.getKnowledgeBases).toHaveBeenCalled()
       expect(mockApi.getChatWorkspace).not.toHaveBeenCalled()
     })

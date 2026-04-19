@@ -2,13 +2,13 @@
 
 ## 设计风格
 - 风格选型：Apple（克制、高密度但不拥挤、层级清晰、对比稳定、动效用于状态而非装饰）。
-- 字体：系统字体优先（SF 系列/系统 UI 字体），不引入远程字体。
+- 字体：本地字体优先（Noto Sans SC Variable + 系统 UI 字体回退），不引入远程字体。
 - 色彩：单一主色（蓝）+ 中性色面板体系；强调色只用于状态与关键动作。
 
 ## 单一组件体系红线
 - 仅允许使用 Ant Design（antd）作为 UI 组件库。
 - 禁止引入或混用其他 UI 组件库。
-- 禁止新增分散的页面 CSS、零散 className 片段（含 Tailwind 风格 utility）。
+- 允许页面级样式文件（例如复杂模块的独立样式），但必须：只使用设计 Token、只做结构/排版/布局，不得引入新的颜色语义体系或 utility 风格碎片。
 - 允许存在的样式入口：`src/styles/layers/theme.css`（设计令牌）、`src/styles/layers/base.css`（reset）、`src/styles/layers/components.css`（组件壳层）、`src/index.css`（历史兼容层），以及 antd Theme（`src/ui/antd/theme.ts`）。
 
 ## 设计令牌（原子化）
@@ -21,7 +21,7 @@
   - motion：duration/easing
 
 ## 基础组件（统一交互态）
-- 基础组件统一入口：`src/ui/kit`
+- 基础组件统一入口：`src/ui/kit`（聚合导出 `src/components/console` 的控制台组件）
 - 需要统一的交互态：hover / active / disabled / loading / focus ring
 - 默认行为由 antd theme 负责，不允许在页面里重复实现同一套交互态
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Flex, Typography, theme } from 'antd'
+import { Flex, Typography } from 'antd'
 
 interface PageHeaderProps {
   eyebrow?: string
@@ -14,8 +14,6 @@ export default function PageHeader({
   subtitle,
   actions,
 }: PageHeaderProps) {
-  const { token } = theme.useToken()
-
   return (
     <Flex
       justify="space-between"
@@ -23,24 +21,16 @@ export default function PageHeader({
       gap={16}
       wrap="wrap"
       className="page-header-shell"
-      style={{ width: '100%' }}
+      data-eyebrow={eyebrow ? 'true' : 'false'}
     >
       <Flex
         vertical
         gap={subtitle ? 6 : 2}
         className="page-header-copy"
-        style={{ minWidth: 0, flex: '1 1 420px' }}
       >
         {eyebrow ? (
           <Typography.Text
             className="page-header-eyebrow"
-            style={{
-              color: token.colorPrimary,
-              fontSize: 'var(--nb-text-2xs)',
-              fontWeight: 'var(--nb-font-weight-title)',
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-            }}
           >
             {eyebrow}
           </Typography.Text>
@@ -49,12 +39,6 @@ export default function PageHeader({
         <Typography.Title
           level={2}
           className="page-header-title"
-          style={{
-            margin: 0,
-            fontSize: 'var(--nb-title-md)',
-            lineHeight: 1.15,
-            fontWeight: 'var(--nb-font-weight-title)',
-          }}
         >
           {title}
         </Typography.Title>
@@ -71,7 +55,6 @@ export default function PageHeader({
           wrap="wrap"
           align="center"
           justify="flex-end"
-          style={{ paddingTop: eyebrow ? 2 : 0 }}
         >
           {actions}
         </Flex>

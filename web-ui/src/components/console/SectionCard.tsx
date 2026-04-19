@@ -21,11 +21,6 @@ export default function SectionCard({
       className="section-card"
       loading={loading}
       variant="borderless"
-      styles={{
-        body: {
-          padding: 'var(--nb-spacing-lg)',
-        },
-      }}
     >
       <Flex vertical gap={16}>
         <Flex
@@ -35,15 +30,10 @@ export default function SectionCard({
           wrap="wrap"
           className="section-card-head"
         >
-          <div className="section-card-copy" style={{ minWidth: 0, flex: '1 1 280px' }}>
+          <div className="section-card-copy">
             <Typography.Title
               level={4}
               className="section-card-title"
-              style={{
-                margin: 0,
-                fontSize: 'var(--nb-text-lg)',
-                letterSpacing: '0.01em',
-              }}
             >
               {title}
             </Typography.Title>
@@ -52,17 +42,13 @@ export default function SectionCard({
               <Typography.Paragraph
                 className="section-card-description"
                 type="secondary"
-                style={{
-                  margin: 'var(--nb-spacing-xs) 0 0',
-                  lineHeight: 'var(--nb-line-body)',
-                }}
               >
                 {description}
               </Typography.Paragraph>
             ) : null}
           </div>
 
-          {action ? <div className="section-card-extra" style={{ flexShrink: 0 }}>{action}</div> : null}
+          {action ? <div className="section-card-extra">{action}</div> : null}
         </Flex>
 
         <div className="section-card-body">

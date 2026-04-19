@@ -275,7 +275,7 @@ export default function AppShell() {
       className={`app-shell theme-${resolvedTheme} ${isChatRoute ? 'app-shell-chat' : ''}`}
     >
       {isDesktop ? (
-        <aside className="app-sidebar" style={{ '--nb-sider-width': designTokens.layout.siderWidth } as any}>
+        <aside className="app-sidebar" style={{ '--nb-sider-width': `${designTokens.layout.siderWidth}px` } as any}>
           {renderNavigation()}
         </aside>
       ) : (
@@ -295,7 +295,7 @@ export default function AppShell() {
 
       <div className={`app-main-layout ${isChatRoute ? 'app-main-layout-chat' : ''}`}>
         {!isDesktop && (
-          <header className="app-mobile-header" style={{ '--nb-header-height': designTokens.layout.headerHeight } as any}>
+          <header className="app-mobile-header" style={{ '--nb-header-height': `${designTokens.layout.headerHeight}px` } as any}>
             <Flex align="center" gap={12} style={{ minWidth: 0, flex: 1 }}>
               <Button
                 type="text"
@@ -318,11 +318,6 @@ export default function AppShell() {
 
         <main
           className={`app-content ${isChatRoute ? 'app-content-chat' : ''}`}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: isChatRoute ? '12px 16px 16px' : '16px 20px 24px',
-          }}
         >
           <AnimatePresence initial={false} mode="wait">
             <motion.div

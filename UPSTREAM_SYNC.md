@@ -1,7 +1,9 @@
 # Upstream Sync — 上游同步标准操作流程
 
-> 本项目基于 [HKUDS/nanobot](https://github.com/HKUDS/nanobot) 进行二次开发。
-> 使用 `upstream-sync` 中间分支承担合并冲突工作，保护 `dev` 分支的稳定性。
+> **致谢 / Acknowledgement**
+> 
+> 本项目基于 [HKUDS/nanobot](https://github.com/HKUDS/nanobot) 进行二次开发。由衷感谢原项目团队提供的精彩架构设计。
+> 使用 `upstream-sync` 中间分支承担合并冲突工作，保护 `dev` 分支的稳定性。在同步上游代码时，请特别注意保护我们新增加的 “Tech Luxury” UI 系统、Dashboard 统计监控大盘，以及在 `agent/loop.py` 中新增的死循环中断验证，避免其被覆盖。
 
 ## 分支约定
 

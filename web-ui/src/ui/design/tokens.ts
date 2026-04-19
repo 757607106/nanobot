@@ -90,15 +90,15 @@ export const designTokens = {
   color: {
     light: {
       // Brand
-      accent: '#3f6cff',
-      accentSoft: 'rgba(63, 108, 255, 0.12)',
+      accent: '#355fe6',
+      accentSoft: 'rgba(53, 95, 230, 0.12)',
       // Semantic
       success: '#1f8f5f',
       warning: '#c9831b',
       error: '#d14343',
       // Text
       ink: '#151821',
-      muted: '#6c7485',
+      muted: '#5f6778',
       quaternary: '#95a3b5',
       // Surfaces
       bodyBg: '#F5F7FA',
@@ -116,10 +116,10 @@ export const designTokens = {
       cardSubtleBorder: 'color-mix(in srgb, #101828 6%, #ffffff 94%)',
       // Interaction
       hoverBg: 'rgba(0, 0, 0, 0.04)',
-      selectedBg: 'rgba(63, 108, 255, 0.08)',
+      selectedBg: 'rgba(53, 95, 230, 0.08)',
       // Scroll
-      scrollThumb: 'rgba(63, 108, 255, 0.18)',
-      scrollThumbHover: 'rgba(63, 108, 255, 0.30)',
+      scrollThumb: 'rgba(53, 95, 230, 0.18)',
+      scrollThumbHover: 'rgba(53, 95, 230, 0.30)',
     },
     dark: {
       // Brand

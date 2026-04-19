@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
 import {
   Alert,
   Button,
@@ -29,28 +28,10 @@ import type {
   AgentDefinition,
   CronStatus,
   KnowledgeBaseDefinition,
-  SessionListResponse,
   SystemStatus,
   AgentExecutionMetrics,
 } from '../types'
 import { useToast } from '../toast'
-
-function getSessionTitle(title?: string) {
-  if (!title || title === 'New Chat') {
-    return '新会话'
-  }
-  return title
-}
-
-function formatSessionTime(value?: string) {
-  if (!value) return '—'
-  return new Date(value).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
 
 function cardSkeleton(width = 72) {
   return <Skeleton active title={{ width }} paragraph={false} />
@@ -61,7 +42,6 @@ export default function DashboardPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const [cron, setCron] = useState<CronStatus | null>(null)
-  const [sessions, setSessions] = useState<SessionListResponse | null>(null)
   const [agents, setAgents] = useState<AgentDefinition[]>([])
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
   const [system, setSystem] = useState<SystemStatus | null>(null)
@@ -73,7 +53,6 @@ export default function DashboardPage() {
     void loadDashboard()
   }, [])
 
-  const recentSessions = useMemo(() => (sessions?.items || []).slice(0, 10), [sessions])
   const activeChannels = system?.stats.enabledChannels || []
   const isSystemOnline = cron?.enabled ?? false
   const dateString = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
@@ -81,16 +60,14 @@ export default function DashboardPage() {
   async function loadDashboard() {
     try {
       setLoading(true)
-      const [cronData, sessionsData, agentsData, systemData, kbData, metricsData] = await Promise.all([
+      const [cronData, agentsData, systemData, kbData, metricsData] = await Promise.all([
         api.getCronStatus(),
-        api.getSessions(),
         api.getAgents(),
         api.getSystemStatus(),
         api.getKnowledgeBases().catch(() => [] as KnowledgeBaseDefinition[]),
         api.getAgentsMetrics().catch(() => ({})),
       ])
       setCron(cronData)
-      setSessions(sessionsData)
       setAgents(agentsData)
       setSystem(systemData)
       setKnowledgeBases(Array.isArray(kbData) ? kbData : [])
@@ -125,24 +102,15 @@ export default function DashboardPage() {
           </div>
         }
         actions={
-          <Flex gap={12} align="center">
-            <Button
-              type="text"
-              icon={<ReloadOutlined spin={loading} />}
-              onClick={() => void loadDashboard()}
-              disabled={loading}
-              style={{ color: 'var(--nb-text-secondary)' }}
-            >
-              刷新
-            </Button>
-            <Button
-              type="primary"
-              icon={<MessageOutlined />}
-              onClick={() => navigate('/chat')}
-            >
-              发起对话
-            </Button>
-          </Flex>
+          <Button
+            type="text"
+            icon={<ReloadOutlined spin={loading} />}
+            onClick={() => void loadDashboard()}
+            disabled={loading}
+            style={{ color: 'var(--nb-text-secondary)' }}
+          >
+            刷新
+          </Button>
         }
       />
 
@@ -159,8 +127,8 @@ export default function DashboardPage() {
         />
         <MetricCard
           label="会话总量"
-          value={loading ? cardSkeleton() : sessions?.total ?? 0}
-          helper="历史对话记录数"
+          value={loading ? cardSkeleton() : system?.stats.totalSessions ?? 0}
+          helper={`历史对话记录数 ${system?.stats.messages ?? 0}`}
           tone="success"
           icon={<MessageOutlined />}
         />
@@ -175,7 +143,7 @@ export default function DashboardPage() {
           label="定时任务"
           value={loading ? cardSkeleton() : cron?.jobs ?? 0}
           helper={cron?.enabled ? '调度引擎运行中' : '调度引擎离线'}
-          tone={cron?.enabled ? 'neutral' : 'neutral'}
+          tone={cron?.enabled ? 'neutral' : 'warning'}
           icon={<ClockCircleOutlined />}
         />
         <MetricCard
@@ -202,11 +170,8 @@ export default function DashboardPage() {
           
           {/* 快捷按钮阵列 */}
           <div className="dashboard-quick-action-grid">
-            <div 
-              onClick={() => navigate('/studio')}
-              className="dashboard-quick-action interactive-lift"
-            >
-              <div className="dashboard-quick-action-icon" style={{ background: 'rgba(22, 119, 255, 0.1)', color: '#1677ff' }}>
+            <div className="dashboard-quick-action tone-accent" onClick={() => navigate('/studio')}>
+              <div className="dashboard-quick-action-icon">
                 <RobotOutlined />
               </div>
               <div>
@@ -215,11 +180,8 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            <div 
-              onClick={() => navigate('/knowledge')}
-              className="dashboard-quick-action interactive-lift"
-            >
-              <div className="dashboard-quick-action-icon" style={{ background: 'rgba(250, 140, 22, 0.1)', color: '#fa8c16' }}>
+            <div className="dashboard-quick-action tone-warning" onClick={() => navigate('/knowledge')}>
+              <div className="dashboard-quick-action-icon">
                 <DatabaseOutlined />
               </div>
               <div>
@@ -228,11 +190,8 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            <div 
-              onClick={() => navigate('/channels')}
-              className="dashboard-quick-action interactive-lift"
-            >
-              <div className="dashboard-quick-action-icon" style={{ background: 'rgba(82, 196, 26, 0.1)', color: '#52c41a' }}>
+            <div className="dashboard-quick-action tone-success" onClick={() => navigate('/channels')}>
+              <div className="dashboard-quick-action-icon">
                 <ApiOutlined />
               </div>
               <div>
@@ -243,71 +202,6 @@ export default function DashboardPage() {
           </div>
 
           {/* 会话矩阵块 */}
-
-        {/* 左：最近会话 */}
-        <SectionCard
-          title="最近会话"
-          action={
-            <Button type="text" size="small" onClick={() => navigate('/chat')}
-              style={{ fontSize: 'var(--nb-text-xs)', color: 'var(--nb-accent)' }}>
-              查看全部
-            </Button>
-          }
-        >
-          {loading ? (
-            <Flex vertical gap="var(--nb-spacing-md)">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} active paragraph={{ rows: 1 }} title={{ width: '45%' }} />
-              ))}
-            </Flex>
-          ) : recentSessions.length > 0 ? (
-            <div className="dashboard-recent-sessions-grid">
-              {recentSessions.map((session, i) => (
-                <motion.div
-                  key={session.sessionId || session.id}
-                  onClick={() => navigate(`/chat?session=${session.sessionId || session.id}`)}
-                  className="dashboard-recent-session-card interactive-lift"
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.2, delay: i * 0.05 }}
-                >
-                  <Flex align="flex-start" gap={10} style={{ marginBottom: 12 }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: 6, background: 'color-mix(in srgb, var(--nb-accent) 15%, transparent)',
-                      color: 'var(--nb-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                    }}>
-                      <MessageOutlined style={{ fontSize: 'var(--nb-text-sm)' }} />
-                    </div>
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', lineHeight: 1.3, maxHeight: 40, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', display: '-webkit-box' }} title={getSessionTitle(session.title)}>
-                      {getSessionTitle(session.title)}
-                    </Typography.Text>
-                  </Flex>
-                  
-                  <Flex justify="space-between" align="center" style={{ marginTop: 'auto' }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>
-                      {formatSessionTime(session.updatedAt || session.createdAt)}
-                    </Typography.Text>
-                    <Flex align="center" gap={4} style={{ background: 'var(--nb-body-bg)', padding: '2px 8px', borderRadius: 20 }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)', fontWeight: 'var(--nb-font-weight-medium)' }}>
-                        {session.messageCount} msg
-                      </Typography.Text>
-                    </Flex>
-                  </Flex>
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <Flex vertical align="center" justify="center" style={{ padding: '48px 0', opacity: 0.55 }}>
-              <svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M0 20 H30 L40 5 L50 35 L60 15 L70 25 L80 20 H120" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--nb-muted)' }} />
-                <circle cx="60" cy="15" r="3" fill="var(--nb-accent)" />
-              </svg>
-              <Typography.Text type="secondary" style={{ marginTop: 14, fontSize: 'var(--nb-text-xs)', letterSpacing: '0.04em' }}>
-                暂无会话记录
-              </Typography.Text>
-            </Flex>
-          )}
-        </SectionCard>
 
         {/* ── Agent 效能诊断 ── */}
         <SectionCard title="Agent 开销与效能分析">

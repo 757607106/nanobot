@@ -20,7 +20,7 @@ vi.mock('@ant-design/x', async () => {
             LoadingButton: () => <button aria-label="mock-loading">loading</button>,
           },
         })
-      : null
+      : (props.footer ?? null)
 
     return (
       <div data-testid="mock-sender">
@@ -81,4 +81,3 @@ describe('ChatInput reasoning toggle', () => {
     expect(screen.queryByText('深度思考')).not.toBeInTheDocument()
   })
 })
-

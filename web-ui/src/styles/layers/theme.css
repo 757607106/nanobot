@@ -62,6 +62,7 @@
   --nb-control-height-sm: 34px;
   --nb-control-radius: 14px;
   --nb-tag-height: 28px;
+  --nb-card-stat-min-height: 84px;
 
   /* Motion */
   --nb-motion-fast: 140ms;
@@ -77,14 +78,17 @@
   color-scheme: light;
 
   --nb-ink: #151821;
-  --nb-muted: #6c7485;
-  --nb-accent: #3f6cff;
-  --nb-accent-soft: rgba(63, 108, 255, 0.12);
+  --nb-muted: #5f6778;
+  --nb-text-secondary: var(--nb-muted);
+  --nb-text-tertiary: rgba(21, 24, 33, 0.58);
+  --nb-accent: #355fe6;
+  --nb-accent-soft: rgba(53, 95, 230, 0.12);
   --nb-success: #1f8f5f;
   --nb-warning: #c9831b;
   --nb-error: #d14343;
 
   --nb-body-bg: #F5F7FA;
+  --nb-bg: var(--nb-body-bg);
   --nb-body-overlay:
     radial-gradient(circle at top right, rgba(63, 108, 255, 0.05), transparent 40vw),
     radial-gradient(circle at bottom left, rgba(79, 209, 162, 0.04), transparent 40vw);
@@ -92,6 +96,7 @@
   --nb-border: color-mix(in srgb, #101828 10%, #ffffff 90%);
   --nb-border-strong: color-mix(in srgb, #101828 18%, #ffffff 82%);
   --nb-card-bg: #ffffff;
+  --nb-surface: var(--nb-card-bg);
   --nb-card-border: color-mix(in srgb, #101828 8%, #ffffff 92%);
   --nb-card-subtle-bg: rgba(248, 250, 252, 0.94);
   --nb-card-subtle-border: color-mix(in srgb, #101828 6%, #ffffff 94%);
@@ -99,6 +104,7 @@
   --nb-surface-panel-bg: rgba(255, 255, 255, 0.85);
   --nb-surface-panel-border: rgba(0, 0, 0, 0.04);
   --nb-surface-panel-shadow: 0 4px 16px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --nb-surface-strong: var(--nb-surface-panel-bg);
   --nb-surface-soft-bg: rgba(255, 255, 255, 0.8);
   --nb-surface-soft-border: rgba(0, 0, 0, 0.04);
   --nb-surface-soft-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
@@ -110,6 +116,7 @@
   --nb-shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04);
   --nb-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.03);
   --nb-shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.06), 0 8px 20px rgba(15, 23, 42, 0.03);
+  --nb-shadow-soft: var(--nb-shadow-sm);
 
   --nb-sider-bg: color-mix(in srgb, #ffffff 92%, #f2f5fb 8%);
   --nb-sider-border: color-mix(in srgb, #101828 7%, #ffffff 93%);
@@ -135,7 +142,7 @@
 
   --nb-conversation-active-bg: rgba(63, 108, 255, 0.06);
   --nb-conversation-active-border: rgba(63, 108, 255, 0.14);
-  --nb-conversation-active-text: #3f6cff;
+  --nb-conversation-active-text: #355fe6;
 
   --nb-chat-surface: linear-gradient(180deg, rgba(252, 253, 255, 0.7), rgba(247, 250, 253, 0.7));
   --nb-chat-focus-bg: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
@@ -156,7 +163,7 @@
   --nb-quick-chip-text: #324154;
   --nb-quick-chip-hover-bg: rgba(63, 108, 255, 0.08);
   --nb-quick-chip-hover-border: rgba(63, 108, 255, 0.12);
-  --nb-quick-chip-hover-text: #3f6cff;
+  --nb-quick-chip-hover-text: #355fe6;
 
   --nb-code-bg: #182433;
   --nb-code-text: #f5f8fc;
@@ -164,11 +171,12 @@
   --nb-mono-color: #324154;
   --nb-mono-border: rgba(24, 36, 51, 0.08);
 
-  --nb-user-avatar-bg: linear-gradient(135deg, #4b83f5 0%, #3f6cff 100%);
+  --nb-user-avatar-bg: linear-gradient(135deg, #4b83f5 0%, #355fe6 100%);
   --nb-assistant-avatar-bg: linear-gradient(135deg, #eff5ff 0%, #bfd2ec 100%);
 
   --nb-icon-soft-bg: rgba(63, 108, 255, 0.08);
   --nb-icon-soft-text: #151821;
+  --nb-warm: oklch(0.78 0.11 70);
   --nb-state-success-bg: color-mix(in srgb, #58D68D 22%, #ffffff 78%);
   --nb-state-success-text: #1f8f5f;
   --nb-state-success-border: color-mix(in srgb, #58D68D 32%, #ffffff 68%);
@@ -186,6 +194,8 @@
 
   --nb-ink: #eef2fb;
   --nb-muted: #9aa3b5;
+  --nb-text-secondary: var(--nb-muted);
+  --nb-text-tertiary: rgba(238, 242, 251, 0.58);
   --nb-accent: #8ea6ff;
   --nb-accent-soft: rgba(142, 166, 255, 0.16);
   --nb-success: #53c98d;
@@ -193,6 +203,7 @@
   --nb-error: #ff8e8e;
 
   --nb-body-bg: #0A0A0A;
+  --nb-bg: var(--nb-body-bg);
   --nb-body-overlay:
     radial-gradient(circle at top, rgba(63, 108, 255, 0.15), transparent 40vw),
     radial-gradient(circle at bottom, rgba(140, 184, 255, 0.08), transparent 40vw);
@@ -200,6 +211,7 @@
   --nb-border: color-mix(in srgb, #ffffff 10%, #0f1320 90%);
   --nb-border-strong: color-mix(in srgb, #ffffff 18%, #0f1320 82%);
   --nb-card-bg: #141f30;
+  --nb-surface: var(--nb-card-bg);
   --nb-card-border: color-mix(in srgb, #ffffff 10%, #0f1320 90%);
   --nb-card-subtle-bg: rgba(20, 33, 49, 0.88);
   --nb-card-subtle-border: color-mix(in srgb, #ffffff 7%, #0f1320 93%);
@@ -207,6 +219,7 @@
   --nb-surface-panel-bg: rgba(255, 255, 255, 0.03);
   --nb-surface-panel-border: rgba(255, 255, 255, 0.06);
   --nb-surface-panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --nb-surface-strong: var(--nb-surface-panel-bg);
   --nb-surface-soft-bg: rgba(20, 31, 48, 0.8);
   --nb-surface-soft-border: rgba(255, 255, 255, 0.04);
   --nb-surface-soft-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
@@ -218,6 +231,7 @@
   --nb-shadow-sm: 0 8px 32px rgba(0, 0, 0, 0.4);
   --nb-shadow-md: 0 16px 40px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
   --nb-shadow-lg: 0 22px 48px rgba(0, 0, 0, 0.38), 0 10px 22px rgba(0, 0, 0, 0.18);
+  --nb-shadow-soft: var(--nb-shadow-sm);
 
   --nb-sider-bg: color-mix(in srgb, #0f1320 92%, #172138 8%);
   --nb-sider-border: color-mix(in srgb, #ffffff 8%, #0f1320 92%);
@@ -277,6 +291,7 @@
 
   --nb-icon-soft-bg: rgba(255, 255, 255, 0.08);
   --nb-icon-soft-text: #eef2fb;
+  --nb-warm: oklch(0.72 0.10 70);
   --nb-state-success-bg: rgba(16, 185, 129, 0.18);
   --nb-state-success-text: #6EE7B7;
   --nb-state-success-border: rgba(16, 185, 129, 0.28);

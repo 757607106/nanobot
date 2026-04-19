@@ -150,8 +150,8 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       },
       Tag: {
         borderRadiusSM: designTokens.radius.full,
-        defaultBg: palette.selectedBg,
-        defaultColor: palette.accent,
+        defaultBg: palette.hoverBg,
+        defaultColor: palette.muted,
       },
       Drawer: {
         colorBgElevated: palette.cardBg,

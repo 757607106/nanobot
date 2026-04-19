@@ -80,6 +80,7 @@ const mockApi = vi.hoisted(() => ({
   logout: vi.fn(),
   getSessions: vi.fn(),
   getMessages: vi.fn(),
+  getAgentsMetrics: vi.fn(),
   getConfig: vi.fn(),
   getConfigMeta: vi.fn(),
   getRun: vi.fn(),
@@ -1896,6 +1897,7 @@ describe('web app smoke pages', () => {
       username: 'admin',
     })
     mockApi.getAgents.mockResolvedValue(makeAgents())
+    mockApi.getAgentsMetrics.mockResolvedValue({})
     mockApi.getAgent.mockResolvedValue(makeAgents()[0])
     mockApi.getAgentMemory.mockResolvedValue(makeAgentMemory())
     mockApi.getAgent.mockResolvedValue(makeAgents()[0])
@@ -3670,11 +3672,11 @@ describe('web app smoke pages', () => {
     mockApi.getCronStatus.mockResolvedValue({ enabled: true, jobs: 0, nextWakeAtMs: null, deliveryMode: 'agent_only' })
     mockApi.getChannels.mockResolvedValue(makeChannelsList())
     mockApi.getAgents.mockResolvedValue(makeAgents())
-    mockApi.getSessions.mockResolvedValue({ items: [] })
+    mockApi.getAgentsMetrics.mockResolvedValue({})
     mockApi.getKnowledgeBases.mockResolvedValue([])
     renderPage(<DashboardPage />)
     expect((await screen.findAllByText(/总览|控制台|仪表板/)).length).toBeGreaterThan(0)
-    expect(screen.getByText('最近会话')).toBeInTheDocument()
+    expect(screen.getByText('Agent 开销与效能分析')).toBeInTheDocument()
     expect(screen.getByText('系统状态')).toBeInTheDocument()
   })
 

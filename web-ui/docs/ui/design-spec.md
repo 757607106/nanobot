@@ -1,8 +1,10 @@
 # Nanobot UI Design Specification (Tech Luxury)
 
+Token 总览见：`docs/ui/tokens.md`
+
 ## 1. 设计基调 (Design Direction)
 - **Console 级高颜值后台**：摒弃传统“玩具感”AI 面板，采用严谨、高密度、信息层次清晰的 Desktop-class 体验。
-- **色彩感知均质化**：全面采用 `oklch()` 取代 HSL/RGB，实现绝对视觉匀称。基准色相设定为 **Hue 250 (Slate/Blue)**。
+- **色彩感知均质化**：优先使用 `color-mix()` / `oklch()` 构建表面与边框层级；Token 可在 TS/Antd 层使用十六进制，但禁止页面内裸写 hardcode 颜色语义。
 - **克制但不冷漠**：采用细致的阴影 (`--nb-shadow-soft`)、微弱的边框 (`--nb-card-subtle-border`) 和优雅的交互动画提升质感。
 
 ## 2. 排版与字体 (Typography)
