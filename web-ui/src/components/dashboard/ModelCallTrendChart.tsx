@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Segmented, Empty } from 'antd'
-import { Line } from '@ant-design/charts'
-import type { LineConfig } from '@ant-design/charts'
+import { Column } from '@ant-design/charts'
+import type { ColumnConfig } from '@ant-design/charts'
 import { useChartTheme } from './chartTheme'
 import type { DashboardTimeSeriesPoint } from '../../types'
 
@@ -33,15 +33,15 @@ export default function ModelCallTrendChart({ data }: ModelCallTrendChartProps) 
   }, [data, view])
 
   if (!data.length) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用趋势数据" />
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用统计数据" />
   }
 
-  const config: LineConfig = {
+  const config: ColumnConfig = {
     data: chartData,
     xField: 'bucket',
     yField: 'value',
     colorField: 'series',
-    smooth: true,
+    isStack: true,
     axis: {
       x: {
         label: {
@@ -58,13 +58,9 @@ export default function ModelCallTrendChart({ data }: ModelCallTrendChartProps) 
         gridStroke: ct.colorBorderSecondary,
       },
     },
-    style: {
-      lineWidth: 2,
-    },
     interaction: { tooltip: { crosshairs: true } },
     scale: { color: { range: ct.palette10 } },
     height: 300,
-    animate: { enter: { type: 'fadeIn', duration: 400 } },
   }
 
   return (
@@ -80,7 +76,7 @@ export default function ModelCallTrendChart({ data }: ModelCallTrendChartProps) 
           onChange={(v) => setView(v as ViewMode)}
         />
       </div>
-      <Line {...config} />
+      <Column {...config} />
     </div>
   )
 }

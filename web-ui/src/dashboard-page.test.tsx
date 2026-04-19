@@ -1,8 +1,14 @@
-import { screen, waitFor } from '@testing-library/react'
+import '@testing-library/jest-dom/vitest'
+import { cleanup, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DashboardPage from './pages/DashboardPage'
 import { renderWithProviders } from './test/renderApp'
+
+// Mock lazy-loaded chart components to avoid @antv/g-canvas crash in jsdom
+vi.mock('./components/dashboard/ModelCallTrendChart', () => ({ default: () => <div data-testid="mock-trend-chart" /> }))
+vi.mock('./components/dashboard/TokenConsumptionPieChart', () => ({ default: () => <div data-testid="mock-pie-chart" /> }))
+vi.mock('./components/dashboard/ToolUsageBarChart', () => ({ default: () => <div data-testid="mock-bar-chart" /> }))
 
 const mockApi = vi.hoisted(() => ({
   getAuthStatus: vi.fn(),
@@ -14,6 +20,7 @@ const mockApi = vi.hoisted(() => ({
   getAgents: vi.fn(),
   getSystemStatus: vi.fn(),
   getKnowledgeBases: vi.fn(),
+  getDashboardAnalytics: vi.fn(),
 }))
 
 vi.mock('./api', () => ({
@@ -56,6 +63,27 @@ function makeChannelsList() {
   }
 }
 
+function makeAnalyticsResponse() {
+  return {
+    timeSeries: [],
+    toolRanking: [
+      { tool: 'web_search', count: 5, agents: ['agent-1'] },
+      { tool: 'read_file', count: 3, agents: ['agent-1', 'default'] },
+    ],
+    overview: {
+      totalRuns: 42,
+      activeAgents: 3,
+      activeModels: 2,
+      totalTokens: 12500,
+      promptTokens: 8000,
+      completionTokens: 4500,
+      cachedTokens: 2000,
+      runsByStatus: { succeeded: 38, failed: 3, timed_out: 1 },
+    },
+    agentMetrics: {},
+  }
+}
+
 function renderPage() {
   return renderWithProviders(
     <MemoryRouter
@@ -70,6 +98,8 @@ function renderPage() {
 }
 
 describe('DashboardPage', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     mockApi.getAuthStatus.mockReset()
     mockApi.getSetupStatus.mockReset()
@@ -77,6 +107,7 @@ describe('DashboardPage', () => {
     mockApi.getInstalledSkills.mockReset()
     mockApi.getCronStatus.mockReset()
     mockApi.getChatWorkspace.mockReset()
+    mockApi.getDashboardAnalytics.mockReset()
 
     mockApi.getAuthStatus.mockResolvedValue({
       initialized: true,
@@ -109,22 +140,35 @@ describe('DashboardPage', () => {
     mockApi.getAgents.mockResolvedValue([])
     mockApi.getSystemStatus.mockResolvedValue({ stats: { enabledChannels: ['telegram'] }, web: { version: '1.0' } })
     mockApi.getKnowledgeBases.mockResolvedValue([])
+    mockApi.getDashboardAnalytics.mockResolvedValue(makeAnalyticsResponse())
   })
 
-  it('renders the dashboard as a standalone page', async () => {
+  it('renders the dashboard with only data-backed metric cards', async () => {
     renderPage()
 
     expect(await screen.findByText('控制台总览')).toBeInTheDocument()
-    expect(screen.getByText('总运行数')).toBeInTheDocument()
-    expect(screen.getByText('知识库')).toBeInTheDocument()
-    expect(screen.getAllByText('接入渠道').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('创建智能体').length).toBeGreaterThan(0)
-    expect(screen.getByText('系统状态')).toBeInTheDocument()
+
+    // Three real metric cards exist
+    expect(screen.getAllByText('总对话数').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('智能体数').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/总 Token/).length).toBeGreaterThan(0)
+
+    // Section headers exist
+    expect(screen.getByText('AI智能体分析')).toBeInTheDocument()
+    expect(screen.getByText('调用统计')).toBeInTheDocument()
+    expect(screen.getByText('Token 消费分析')).toBeInTheDocument()
+
+    // Removed fake cards and sections do not exist
+    expect(screen.queryByText('总消息数')).not.toBeInTheDocument()
+    expect(screen.queryByText('负反馈数')).not.toBeInTheDocument()
+    expect(screen.queryByText('满意度')).not.toBeInTheDocument()
+    expect(screen.queryByText('活跃对话')).not.toBeInTheDocument()
+    expect(screen.queryByText('用户数')).not.toBeInTheDocument()
+    expect(screen.queryByText('用户活跃度分析')).not.toBeInTheDocument()
   })
 
-  it('loads standalone dashboard data through the backend summary endpoints', async () => {
+  it('calls the correct backend endpoints', async () => {
     renderPage()
-
     expect(await screen.findByText('控制台总览')).toBeInTheDocument()
 
     await waitFor(() => {
@@ -132,7 +176,40 @@ describe('DashboardPage', () => {
       expect(mockApi.getAgents).toHaveBeenCalled()
       expect(mockApi.getCronStatus).toHaveBeenCalled()
       expect(mockApi.getKnowledgeBases).toHaveBeenCalled()
+      expect(mockApi.getDashboardAnalytics).toHaveBeenCalled()
       expect(mockApi.getChatWorkspace).not.toHaveBeenCalled()
+    })
+  })
+
+  it('displays real token count from analytics overview', async () => {
+    renderPage()
+
+    // totalTokens = 12500 → formatted as "12,500"
+    const tokenDisplays = await screen.findAllByText('12,500')
+    expect(tokenDisplays.length).toBeGreaterThan(0)
+  })
+
+  it('displays real failed count and success rate in tool monitoring', async () => {
+    renderPage()
+
+    // Wait for analytics to load and render
+    await waitFor(() => {
+      // failed=3, timed_out=1 → total=4 failures shown in tool monitoring
+      expect(screen.getAllByText('4').length).toBeGreaterThan(0)
+    })
+
+    // succeeded=38, total completions=42 → 90% success rate
+    await waitFor(() => {
+      expect(screen.getAllByText('90%').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('includes default agent in active agents count', async () => {
+    renderPage()
+
+    // activeAgents = 3 (includes "default" agent)
+    await waitFor(() => {
+      expect(screen.getAllByText('3').length).toBeGreaterThan(0)
     })
   })
 })

@@ -93,7 +93,28 @@
   box-shadow: none;
   font-family: var(--nb-font-body);
   font-size: var(--nb-text-md);
+  color: var(--nb-ink);
   transition: all 150ms ease;
+}
+
+.login-form .ant-input::placeholder {
+  color: var(--nb-text-tertiary);
+}
+
+.login-form .ant-input-affix-wrapper > input.ant-input {
+  height: auto;
+  padding-inline: 0;
+  background: transparent;
+  color: var(--nb-ink);
+  box-shadow: none;
+}
+
+.login-form .ant-input-affix-wrapper > input.ant-input::placeholder {
+  color: var(--nb-text-tertiary);
+}
+
+.login-form .ant-input-affix-wrapper .ant-input-password-icon {
+  color: var(--nb-text-secondary);
 }
 
 .login-form .ant-input:focus,

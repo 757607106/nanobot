@@ -1085,10 +1085,7 @@ vi.mock('antd', async () => {
   }
 })
 
-vi.mock('../pages/mcp/ServerCard', () => ({
-  __esModule: true,
-  default: ({ entry }: { entry: { displayName?: string; name: string } }) => <div>{entry.displayName || entry.name}</div>,
-}))
+
 
 vi.mock('../pages/mcp/AddServerModal', () => ({
   __esModule: true,

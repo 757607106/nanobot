@@ -132,7 +132,7 @@ export default function AddServerModal({
               <Input
                 value={draft.url}
                 onChange={(e) => onDraftChange({ ...draft, url: e.target.value })}
-                placeholder="https://api.example.com/mcp"
+                placeholder="https://…/mcp"
               />
             </div>
             <div style={formGroupStyle}>

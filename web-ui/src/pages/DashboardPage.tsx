@@ -10,17 +10,12 @@ import {
   theme,
 } from 'antd'
 import {
-  ClockCircleOutlined,
-  DownloadOutlined,
   MessageOutlined,
   ReloadOutlined,
   RobotOutlined,
-  ApiOutlined,
-  DatabaseOutlined,
   FireOutlined,
-  BarChartOutlined,
 } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+
 import { api } from '../api'
 import MetricCard from '../components/console/MetricCard'
 import SectionCard from '../components/console/SectionCard'
@@ -30,11 +25,8 @@ import type {
   CronStatus,
   KnowledgeBaseDefinition,
   SystemStatus,
-  AgentExecutionMetrics,
   DashboardTimeBucket,
   DashboardAnalyticsResponse,
-  DashboardMcpHealthResponse,
-  DashboardKbActivityItem,
 } from '../types'
 import { useToast } from '../toast'
 
@@ -42,8 +34,7 @@ import { useToast } from '../toast'
 const ModelCallTrendChart = lazy(() => import('../components/dashboard/ModelCallTrendChart'))
 const TokenConsumptionPieChart = lazy(() => import('../components/dashboard/TokenConsumptionPieChart'))
 const ToolUsageBarChart = lazy(() => import('../components/dashboard/ToolUsageBarChart'))
-const McpHealthGauge = lazy(() => import('../components/dashboard/McpHealthGauge'))
-const KnowledgeActivityHeatmap = lazy(() => import('../components/dashboard/KnowledgeActivityHeatmap'))
+
 
 function cardSkeleton(width = 72) {
   return <Skeleton active title={{ width }} paragraph={false} />
@@ -145,46 +136,60 @@ function BasicTagList({ items, color }: { items: [string, number][], color: stri
 export default function DashboardPage() {
   const message = useToast()
   const { token } = theme.useToken()
-  const navigate = useNavigate()
+
 
   // ── existing state ──
   const [cron, setCron] = useState<CronStatus | null>(null)
   const [agents, setAgents] = useState<AgentDefinition[]>([])
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
   const [system, setSystem] = useState<SystemStatus | null>(null)
-  const [agentMetrics, setAgentMetrics] = useState<Record<string, AgentExecutionMetrics>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // ── new analytics state ──
+  // ── analytics state ──
   const [bucket, setBucket] = useState<DashboardTimeBucket>('day')
   const [analytics, setAnalytics] = useState<DashboardAnalyticsResponse | null>(null)
-  const [mcpHealth, setMcpHealth] = useState<DashboardMcpHealthResponse | null>(null)
-  const [kbActivity, setKbActivity] = useState<DashboardKbActivityItem[]>([])
   const [chartsLoading, setChartsLoading] = useState(true)
 
-  const activeChannels = system?.stats.enabledChannels || []
   const isSystemOnline = cron?.enabled ?? false
   const dateString = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
 
-  // Overview metrics from analytics API (preferred) or system status fallback
   const overview = analytics?.overview
+
+  // ── derived metrics (avoids inline computation in JSX) ──
+  const runMetrics = useMemo(() => {
+    const byStatus = overview?.runsByStatus ?? {}
+    const succeeded = byStatus.succeeded ?? 0
+    const failed = (byStatus.failed ?? 0) + (byStatus.timed_out ?? 0)
+    const total = succeeded + failed
+    const successRate = total > 0 ? `${Math.round((succeeded / total) * 100)}%` : '—'
+    return { succeeded, failed, successRate }
+  }, [overview])
+
+  const kbSummary = useMemo(() => {
+    let totalFiles = 0
+    const typeCounts: Record<string, number> = {}
+    for (const kb of knowledgeBases) {
+      totalFiles += kb.stats?.fileCount ?? 0
+      const t = kb.kbType || 'unknown'
+      typeCounts[t] = (typeCounts[t] ?? 0) + 1
+    }
+    return { totalFiles, typeCounts }
+  }, [knowledgeBases])
 
   const loadDashboard = useCallback(async () => {
     try {
       setLoading(true)
-      const [cronData, agentsData, systemData, kbData, metricsData] = await Promise.all([
+      const [cronData, agentsData, systemData, kbData] = await Promise.all([
         api.getCronStatus(),
         api.getAgents(),
         api.getSystemStatus(),
         api.getKnowledgeBases().catch(() => [] as KnowledgeBaseDefinition[]),
-        api.getAgentsMetrics().catch(() => ({})),
       ])
       setCron(cronData)
       setAgents(agentsData)
       setSystem(systemData)
       setKnowledgeBases(Array.isArray(kbData) ? kbData : [])
-      setAgentMetrics(metricsData)
       setError(null)
     } catch (loadError) {
       const nextError = loadError instanceof Error ? loadError.message : '加载控制台总览失败'
@@ -198,14 +203,8 @@ export default function DashboardPage() {
   const loadAnalytics = useCallback(async (b: DashboardTimeBucket) => {
     try {
       setChartsLoading(true)
-      const [analyticsData, mcpData, kbData] = await Promise.allSettled([
-        api.getDashboardAnalytics({ bucket: b }),
-        api.getDashboardMcpHealth(),
-        api.getDashboardKbActivity(),
-      ])
-      if (analyticsData.status === 'fulfilled') setAnalytics(analyticsData.value)
-      if (mcpData.status === 'fulfilled') setMcpHealth(mcpData.value)
-      if (kbData.status === 'fulfilled') setKbActivity(kbData.value)
+      const data = await api.getDashboardAnalytics({ bucket: b })
+      setAnalytics(data)
     } catch {
       // analytics errors are non-fatal — charts will show empty states
     } finally {
@@ -253,17 +252,6 @@ export default function DashboardPage() {
         }
         actions={
           <Flex gap={8} align="center">
-            <Segmented size="small" options={BUCKET_OPTIONS} value={bucket} onChange={handleBucketChange} />
-            <Button
-              type="text"
-              size="small"
-              icon={<DownloadOutlined />}
-              onClick={() => exportAnalyticsCsv(analytics)}
-              disabled={!analytics}
-              style={{ color: 'var(--nb-text-secondary)' }}
-            >
-              CSV
-            </Button>
             <Button
               type="text"
               icon={<ReloadOutlined spin={loading || chartsLoading} />}
@@ -279,259 +267,144 @@ export default function DashboardPage() {
 
       {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 'var(--nb-spacing-lg)' }} /> : null}
 
-      {/* ── 核心指标卡 ── */}
+      {/* ── 第一排：核心指标卡 (对齐参考图) ── */}
       <div className="dashboard-metrics-grid">
         <MetricCard
-          label="总运行数"
+          label="总对话数"
           value={loading && !overview ? cardSkeleton() : (overview?.totalRuns ?? system?.stats.totalSessions ?? 0).toLocaleString()}
-          helper="历史任务运行总计"
           tone="primary"
-          icon={<BarChartOutlined />}
+          icon={<MessageOutlined />}
         />
         <MetricCard
-          label="活跃智能体"
+          label="智能体数"
           value={loading && !overview ? cardSkeleton() : overview?.activeAgents ?? agents.length}
-          helper="有运行记录的智能体"
           tone="success"
           icon={<RobotOutlined />}
         />
         <MetricCard
-          label="活跃模型"
-          value={loading && !overview ? cardSkeleton() : overview?.activeModels ?? 0}
-          helper="被调用过的模型数"
-          tone="warning"
-          icon={<FireOutlined />}
-        />
-        <MetricCard
-          label="算力消耗"
-          value={loading && !overview ? cardSkeleton() : (overview?.totalTokens ?? system?.stats.totalTokens ?? 0).toLocaleString()}
-          helper={`输入 ${(
-            overview?.promptTokens ?? system?.stats.promptTokens ?? 0
-          ).toLocaleString()} · 输出 ${(
-            overview?.completionTokens ?? system?.stats.completionTokens ?? 0
-          ).toLocaleString()}`}
+          label="总 Token 数"
+          value={loading && !overview ? cardSkeleton() : (overview?.totalTokens ?? 0).toLocaleString()}
           tone="primary"
           icon={<FireOutlined />}
         />
-        <MetricCard
-          label="知识库"
-          value={loading ? cardSkeleton() : knowledgeBases.length}
-          helper="知识资源库数量"
-          tone="neutral"
-          icon={<DatabaseOutlined />}
-        />
-        <MetricCard
-          label="定时任务"
-          value={loading ? cardSkeleton() : cron?.jobs ?? 0}
-          helper={cron?.enabled ? '调度引擎运行中' : '调度引擎离线'}
-          tone={cron?.enabled ? 'neutral' : 'warning'}
-          icon={<ClockCircleOutlined />}
-        />
+
       </div>
 
-      {/* ── 快捷操作 ── */}
-      <div className="dashboard-quick-action-grid">
-        <button type="button" className="dashboard-quick-action tone-accent" onClick={() => navigate('/studio')}>
-          <div className="dashboard-quick-action-icon">
-            <RobotOutlined />
-          </div>
-          <div className="dashboard-quick-action-copy">
-            <Typography.Text strong className="dashboard-quick-action-title">
-              创建智能体
-            </Typography.Text>
-            <Typography.Text type="secondary" className="dashboard-quick-action-description">
-              配置并调试核心数字员工角色
-            </Typography.Text>
-          </div>
-        </button>
-        <button type="button" className="dashboard-quick-action tone-warning" onClick={() => navigate('/knowledge')}>
-          <div className="dashboard-quick-action-icon">
-            <DatabaseOutlined />
-          </div>
-          <div className="dashboard-quick-action-copy">
-            <Typography.Text strong className="dashboard-quick-action-title">
-              构建知识库
-            </Typography.Text>
-            <Typography.Text type="secondary" className="dashboard-quick-action-description">
-              导入私有语料训练专属大脑
-            </Typography.Text>
-          </div>
-        </button>
-        <button type="button" className="dashboard-quick-action tone-success" onClick={() => navigate('/channels')}>
-          <div className="dashboard-quick-action-icon">
-            <ApiOutlined />
-          </div>
-          <div className="dashboard-quick-action-copy">
-            <Typography.Text strong className="dashboard-quick-action-title">
-              连接发布渠道
-            </Typography.Text>
-            <Typography.Text type="secondary" className="dashboard-quick-action-description">
-              将中枢系统接入办公平台或社群
-            </Typography.Text>
-          </div>
-        </button>
-      </div>
-
-      {/* ── 图表区域 ── */}
-      <div className="dashboard-charts-grid">
-        {/* 模型调用趋势 (full width) */}
-        <SectionCard title="模型调用趋势" description="按选定时间粒度统计模型调用量与趋势。">
+      {/* ── 第二排：主图表区域 (左大右小) ── */}
+      <div className="dashboard-main-grid" style={{ marginTop: 'var(--nb-spacing-lg)' }}>
+        {/* 调用统计 */}
+        <SectionCard 
+          title="调用统计" 
+          action={<Segmented size="small" options={BUCKET_OPTIONS} value={bucket} onChange={handleBucketChange} />}
+        >
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <ModelCallTrendChart data={analytics?.timeSeries ?? []} />}
           </Suspense>
         </SectionCard>
 
-        {/* Token 消耗分布 */}
-        <SectionCard title="Token 消耗分布" description="输入与输出 Token 的消耗结构与占比。">
+        {/* Token 消费分析 */}
+        <SectionCard title="Token 消费分析">
+          <Flex justify="space-around" align="center" style={{ marginBottom: 24, textAlign: 'center' }}>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>总 Token</Typography.Text>
+              <div style={{ fontSize: 24, fontWeight: 600 }}>{(overview?.totalTokens ?? 0).toLocaleString()}</div>
+            </div>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Prompt</Typography.Text>
+              <div style={{ fontSize: 24, fontWeight: 600 }}>{(overview?.promptTokens ?? 0).toLocaleString()}</div>
+            </div>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Completion</Typography.Text>
+              <div style={{ fontSize: 24, fontWeight: 600 }}>{(overview?.completionTokens ?? 0).toLocaleString()}</div>
+            </div>
+          </Flex>
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>消费趋势</Typography.Text>
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <TokenConsumptionPieChart data={analytics?.timeSeries ?? []} />}
           </Suspense>
         </SectionCard>
+      </div>
 
-        {/* 工具使用 TOP10 */}
-        <SectionCard title="工具使用 TOP10" description="统计工具调用频次，定位高开销工具链。">
+      {/* ── 第三排：详情监控区域 (3等分) ── */}
+      <div className="dashboard-status-grid" style={{ marginTop: 'var(--nb-spacing-lg)' }}>
+        
+        {/* AI智能体分析 */}
+        <SectionCard title="AI智能体分析">
+          <Flex justify="space-between" style={{ marginBottom: 24 }}>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>智能体总数</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorPrimary }}>{overview?.activeAgents ?? agents.length}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>个</span></div>
+            </div>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>总对话数</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorInfo }}>{overview?.totalRuns ?? 0}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>次</span></div>
+            </div>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>工具调用总数</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorWarning }}>{analytics?.toolRanking.reduce((sum, item) => sum + item.count, 0) || 0}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>次</span></div>
+            </div>
+          </Flex>
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>对话/工具调用分布 (TOP 3)</Typography.Text>
+          <Suspense fallback={chartSkeleton()}>
+            {chartsLoading ? chartSkeleton() : <ToolUsageBarChart data={analytics?.toolRanking?.slice(0, 3) ?? []} />}
+          </Suspense>
+        </SectionCard>
+
+        {/* 工具调用监控 */}
+        <SectionCard title="工具调用监控">
+           <Flex justify="space-between" style={{ marginBottom: 24 }}>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>总调用次数</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorPrimary }}>{analytics?.toolRanking.reduce((sum, item) => sum + item.count, 0) || 0}</div>
+            </div>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>失败任务</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorError }}>{runMetrics.failed}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>次</span></div>
+            </div>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>成功率</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorSuccess }}>{runMetrics.successRate}</div>
+            </div>
+          </Flex>
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>最常用工具 TOP 10</Typography.Text>
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <ToolUsageBarChart data={analytics?.toolRanking ?? []} />}
           </Suspense>
         </SectionCard>
-      </div>
 
-      {/* ── 状态区域 ── */}
-      <div className="dashboard-status-grid">
-        {/* MCP 服务健康度 */}
-        <SectionCard title="连接健康度" description="监控连接可用性与响应健康度。">
-          <Suspense fallback={chartSkeleton()}>
-            {chartsLoading ? chartSkeleton() : <McpHealthGauge data={mcpHealth} />}
-          </Suspense>
-        </SectionCard>
-
-        {/* 知识库活动 */}
-        <SectionCard title="知识库活动" description="最近知识检索与写入活跃度。">
-          <Suspense fallback={chartSkeleton()}>
-            {chartsLoading ? chartSkeleton() : <KnowledgeActivityHeatmap data={kbActivity} />}
-          </Suspense>
-        </SectionCard>
-
-        {/* 系统状态 */}
-        <SectionCard title="系统状态" description="核心服务与配置摘要。">
-          {loading ? (
-            <Skeleton active paragraph={{ rows: 3 }} title={false} />
-          ) : (
-            <div className="dashboard-status-list">
-              {[
-                { label: '调度引擎', value: cron?.enabled ? '运行中' : '已离线', color: cron?.enabled ? 'green' : 'default' },
-                { label: '网关服务', value: '运行中', color: 'green' },
-                { label: '接入渠道', value: `${activeChannels.length} 个`, color: activeChannels.length > 0 ? 'blue' : 'default' },
-                { label: '运行版本', value: system?.web.version || '—', color: undefined },
-              ].map((row, i, arr) => (
-                <div
-                  key={row.label}
-                  className="dashboard-status-row"
-                  data-last={i === arr.length - 1 ? 'true' : 'false'}
-                >
-                  <Typography.Text type="secondary" className="dashboard-status-label">
-                    {row.label}
-                  </Typography.Text>
-                  {row.color ? (
-                    <Tag color={row.color} style={{ margin: 0 }}>
-                      {row.value}
-                    </Tag>
-                  ) : (
-                    <Typography.Text strong className="dashboard-status-value">
-                      {row.value}
-                    </Typography.Text>
-                  )}
-                </div>
-              ))}
+        {/* 知识库使用情况 */}
+        <SectionCard title="知识库使用情况">
+          <Flex justify="space-between" style={{ marginBottom: 24 }}>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>知识库总数</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorPrimary }}>{knowledgeBases.length}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>个</span></div>
             </div>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>文件总数</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorSuccess }}>{kbSummary.totalFiles}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>个</span></div>
+            </div>
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>引擎类型</Typography.Text>
+              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorWarning }}>{Object.keys(kbSummary.typeCounts).length}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>种</span></div>
+            </div>
+          </Flex>
+
+          {knowledgeBases.length > 0 && (
+            <>
+              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>引擎分布</Typography.Text>
+              <div>
+                {Object.entries(kbSummary.typeCounts).map(([type, count]) => (
+                  <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ height: 16, background: token.colorPrimary, borderRadius: 4, flex: 1 }} />
+                    <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{type} ({count})</Typography.Text>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </SectionCard>
       </div>
 
-      {/* ── Agent 效能诊断 ── */}
-      <SectionCard title="员工开销与效能分析">
-        {loading ? (
-          <Skeleton active paragraph={{ rows: 4 }} title={false} />
-        ) : Object.keys(agentMetrics).length > 0 ? (
-          <Flex vertical gap="var(--nb-spacing-lg)">
-            {agents.map((agent) => {
-              const metrics = agentMetrics[agent.agentId]
-              if (!metrics || (metrics.tokens.length === 0 && Object.keys(metrics.tools || {}).length === 0 && Object.keys(metrics.mcps || {}).length === 0 && Object.keys(metrics.knowledge || {}).length === 0)) return null
-
-              return (
-                <div key={agent.agentId} className="dashboard-agent-diagnostic">
-                  <Flex align="center" gap={12} className="dashboard-agent-diagnostic-head">
-                    <div className="dashboard-agent-diagnostic-badge" aria-hidden="true">
-                      <RobotOutlined />
-                    </div>
-                    <Typography.Text strong className="dashboard-agent-diagnostic-name">
-                      {agent.name}
-                    </Typography.Text>
-                  </Flex>
-
-                  <div className="dashboard-agent-diagnostic-grid">
-                    {/* Tokens Module */}
-                    <DiagnosticModule
-                      title="模型消耗（Token）"
-                      icon={<FireOutlined />}
-                      iconColor="var(--nb-accent)"
-                      isEmpty={metrics.tokens.length === 0}
-                    >
-                      <Flex vertical gap={8}>
-                        {metrics.tokens.map((t, idx) => (
-                          <div key={idx} className="dashboard-token-row" data-last={idx === metrics.tokens.length - 1 ? 'true' : 'false'}>
-                            <div className="dashboard-token-row-left">
-                              <div className="dashboard-token-row-model">{t.provider}/{t.model}</div>
-                              <div className="dashboard-token-row-breakdown">
-                                输入:{t.promptTokens} · 输出:{t.completionTokens}{t.cachedTokens ? ` · 缓存:${t.cachedTokens}` : ''}
-                              </div>
-                            </div>
-                            <Typography.Text strong className="dashboard-token-row-total">
-                              {t.totalTokens.toLocaleString()}
-                            </Typography.Text>
-                          </div>
-                        ))}
-                      </Flex>
-                    </DiagnosticModule>
-
-                    {/* Tools Module */}
-                    <DiagnosticModule
-                      title="工具调用"
-                      icon={<ApiOutlined />}
-                      iconColor="#1677ff"
-                      isEmpty={Object.keys(metrics.tools || {}).length === 0}
-                    >
-                      <BasicTagList items={Object.entries(metrics.tools || {})} color="blue" />
-                    </DiagnosticModule>
-
-                    {/* MCPs Module */}
-                    <DiagnosticModule
-                      title="连接节点"
-                      icon={<DatabaseOutlined />}
-                      iconColor="#2f54eb"
-                      isEmpty={Object.keys(metrics.mcps || {}).length === 0}
-                    >
-                      <BasicTagList items={Object.entries(metrics.mcps || {})} color="geekblue" />
-                    </DiagnosticModule>
-
-                    {/* KB Module */}
-                    <DiagnosticModule
-                      title="知识检索"
-                      icon={<DatabaseOutlined />}
-                      iconColor="#13c2c2"
-                      isEmpty={Object.keys(metrics.knowledge || {}).length === 0}
-                    >
-                      <BasicTagList items={Object.entries(metrics.knowledge || {})} color="cyan" />
-                    </DiagnosticModule>
-                  </div>
-                </div>
-              )
-            })}
-          </Flex>
-        ) : (
-          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>暂无分析数据</Typography.Text>
-        )}
-      </SectionCard>
     </div>
   )
 }

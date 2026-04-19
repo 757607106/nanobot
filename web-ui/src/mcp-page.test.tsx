@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom/vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
@@ -226,7 +227,7 @@ describe('McpPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('暂无服务连接')).toBeInTheDocument()
+    expect(await screen.findByText('暂无匹配的服务连接')).toBeInTheDocument()
     // Click the empty state button
     const addButton = await screen.findByText(/添加第一个连接/)
     await user.click(addButton)
