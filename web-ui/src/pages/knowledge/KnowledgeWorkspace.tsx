@@ -38,6 +38,7 @@ import {
 import { startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SectionCard from '../../components/console/SectionCard'
+import DevOnly from '../../components/DevOnly'
 import { formatDateTimeZh } from '../../locale'
 import { api } from '../../api'
 import { KNOWLEDGE_ARCHITECTURE_LABEL, canDeleteKnowledgeFile, canParseKnowledgeFile, canIndexKnowledgeFile, statusColor, statusLabel, LANGUAGE_OPTIONS, CHUNK_PRESET_OPTIONS } from './shared'
@@ -288,14 +289,6 @@ export default function KnowledgeWorkspace() {
 
             <Flex gap={12} wrap="wrap" align="center">
               <Button
-                icon={<SaveOutlined />}
-                color="default"
-                variant="filled"
-                onClick={() => onOpenModal('indexConfig')}
-              >
-                索引配置
-              </Button>
-              <Button
                 icon={<FolderAddOutlined />}
                 type="default"
                 onClick={() => onOpenModal('folder')}
@@ -312,6 +305,21 @@ export default function KnowledgeWorkspace() {
               >
                 添加文件
               </Button>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'index',
+                      icon: <BranchesOutlined />,
+                      label: '索引设置',
+                      onClick: () => onOpenModal('indexConfig'),
+                    },
+                  ],
+                }}
+                trigger={['click']}
+              >
+                <Button icon={<MoreOutlined />}>更多</Button>
+              </Dropdown>
             </Flex>
           </Flex>
 
@@ -391,7 +399,7 @@ export default function KnowledgeWorkspace() {
                 onClick={() => onIndexSelected()}
                 loading={loading.indexing}
               >
-                建索引
+                入库
               </Button>
               <Button 
                 type="default"
@@ -399,7 +407,7 @@ export default function KnowledgeWorkspace() {
                 disabled={!canParseSelectedDocuments}
                 onClick={() => onParseSelected()}
               >
-                重新解析
+                解析
               </Button>
               <Button 
                 type="default"
@@ -491,7 +499,7 @@ export default function KnowledgeWorkspace() {
     },
     {
       key: 'query',
-      label: '检索测试',
+      label: '问答测试',
       children: (
         <KnowledgeQueryTab
           queryParams={queryParams}
@@ -520,7 +528,15 @@ export default function KnowledgeWorkspace() {
       key: 'graph',
       label: '知识图谱',
       children: (
-        <Suspense fallback={<Flex justify="center" align="center" style={{ minHeight: 400 }}><Spin tip="正在加载知识图谱引擎..." size="large" /></Flex>}>
+        <Suspense
+          fallback={(
+            <Flex justify="center" align="center" style={{ minHeight: 400 }}>
+              <Spin tip="正在加载知识图谱引擎..." size="large">
+                <div style={{ width: 1, height: 1 }} />
+              </Spin>
+            </Flex>
+          )}
+        >
           <KnowledgeGraphTab
             graphLabel={graphConfig.label}
             graphDepth={graphConfig.depth}
@@ -549,7 +565,7 @@ export default function KnowledgeWorkspace() {
     },
     {
       key: 'evaluation',
-      label: `RAG 评测 (${evaluationHistory.length})`,
+      label: `问答效果评测 (${evaluationHistory.length})`,
       children: (
         <KnowledgeEvaluationTab
           selectedBenchmarkId={selectedBenchmarkId}
@@ -566,7 +582,7 @@ export default function KnowledgeWorkspace() {
     },
     {
       key: 'benchmarks',
-      label: `评估基准 (${benchmarks.length})`,
+      label: `评测题库 (${benchmarks.length})`,
       children: (
         <KnowledgeBenchmarksTab
           benchmarkLoading={loading.benchmark}
@@ -580,7 +596,7 @@ export default function KnowledgeWorkspace() {
     },
     {
       key: 'settings',
-      label: '设置',
+      label: '知识库设置',
       children: (
         <Flex vertical gap={20}>
           {/* ━━━ 基础信息 ━━━ */}
@@ -638,32 +654,32 @@ export default function KnowledgeWorkspace() {
                 <Input
                   value={formState.tagsText}
                   onChange={(e) => onFormStateChange({ ...formState, tagsText: e.target.value })}
-                  placeholder="逗号分隔，例如: AI, 文档, FAQ"
+                  placeholder="用逗号分隔，例如：AI，文档，FAQ"
                 />
                 <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', marginTop: 2, display: 'block' }}>
-                  多个标签用英文逗号分隔
+                  支持中文或英文逗号分隔
                 </Typography.Text>
               </div>
             </div>
           </SectionCard>
 
           {/* ━━━ 模型配置 ━━━ */}
-          <SectionCard title="模型配置" description="用于文档索引和检索的模型。">
+          <SectionCard title="索引与问答模型" description="用于文档入库与问答检索。">
             <div className="knowledge-settings-grid">
               <div className="studio-form-field">
-                <Typography.Text type="secondary">Embedding 模型</Typography.Text>
+                <Typography.Text type="secondary">向量模型</Typography.Text>
                 <Select
                   value={formState.embedBindingName || undefined}
                   onChange={(value) => onFormStateChange({ ...formState, embedBindingName: value })}
                   options={embeddingBindingOptions}
-                  placeholder="选择 Embedding 模型"
+                  placeholder="选择向量模型"
                   showSearch
                   optionFilterProp="label"
                   style={{ width: '100%' }}
                   notFoundContent={
                     <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
                       <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
-                        暂无可用的 Embedding 模型
+                        暂无可用的向量模型
                       </Typography.Text>
                       <Button
                         type="link"
@@ -677,7 +693,7 @@ export default function KnowledgeWorkspace() {
                 />
                 {embeddingBindingOptions.length === 0 && (
                   <Typography.Text type="warning" style={{ fontSize: 'var(--nb-text-xs)', marginTop: 4, display: 'block' }}>
-                    ⚠ 未配置 Embedding 模型，文档索引将无法工作。
+                    ⚠ 未配置向量模型，文档入库将无法使用。
                     <Button
                       type="link"
                       size="small"
@@ -690,19 +706,19 @@ export default function KnowledgeWorkspace() {
                 )}
               </div>
               <div className="studio-form-field">
-                <Typography.Text type="secondary">LLM 模型</Typography.Text>
+                <Typography.Text type="secondary">问答模型</Typography.Text>
                 <Select
                   value={formState.llmBindingName || undefined}
                   onChange={(value) => onFormStateChange({ ...formState, llmBindingName: value })}
                   options={llmBindingOptions}
-                  placeholder="选择 LLM 模型"
+                  placeholder="选择问答模型"
                   showSearch
                   optionFilterProp="label"
                   style={{ width: '100%' }}
                   notFoundContent={
                     <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
                       <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
-                        暂无可用的 LLM 模型
+                        暂无可用的问答模型
                       </Typography.Text>
                       <Button
                         type="link"
@@ -725,7 +741,7 @@ export default function KnowledgeWorkspace() {
                 />
               </div>
               <div className="studio-form-field">
-                <Typography.Text type="secondary">分块策略</Typography.Text>
+                <Typography.Text type="secondary">内容切分</Typography.Text>
                 <Select
                   value={formState.chunkPresetId}
                   onChange={(value) => onFormStateChange({ ...formState, chunkPresetId: value })}
@@ -737,29 +753,30 @@ export default function KnowledgeWorkspace() {
           </SectionCard>
 
           {/* ━━━ 高级设置（折叠） ━━━ */}
-          <Collapse ghost defaultActiveKey={[]}>
-            <Collapse.Panel header="高级设置" key="advanced">
-              <Flex vertical gap={20}>
+          <DevOnly>
+            <Collapse ghost defaultActiveKey={[]}>
+              <Collapse.Panel header="高级设置" key="advanced">
+                <Flex vertical gap={20}>
                 {/* — 多模态处理 — */}
                 <div>
                   <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
-                    多模态处理
+                    图文解析
                   </Typography.Text>
                   <div className="knowledge-settings-grid">
                     <div className="studio-form-field">
-                      <Typography.Text type="secondary">Vision 模型</Typography.Text>
+                      <Typography.Text type="secondary">图文解析模型</Typography.Text>
                       <Select
                         value={formState.visionBindingName || undefined}
                         onChange={(value) => onFormStateChange({ ...formState, visionBindingName: value ?? '' })}
                         options={[{ value: '', label: '无' }, ...multimodalBindingOptions]}
-                        placeholder="选择 Vision 模型（用于 PDF / Office / 图像多模态解析）"
+                        placeholder="选择用于 PDF / Office / 图片解析的模型"
                         showSearch
                         optionFilterProp="label"
                         style={{ width: '100%' }}
                       />
                     </div>
                     <div className="studio-form-field">
-                      <Typography.Text type="secondary">启用多模态解析</Typography.Text>
+                      <Typography.Text type="secondary">启用图文解析</Typography.Text>
                       <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Switch
                           checked={formState.enableMultimodal}
@@ -767,7 +784,7 @@ export default function KnowledgeWorkspace() {
                           disabled={!formState.visionBindingName}
                         />
                         <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
-                          {formState.visionBindingName ? 'PDF、Office 文档和图像将通过 LightRAG 多模态链路建立索引' : '请先选择 Vision 模型'}
+                          {formState.visionBindingName ? 'PDF、Office 与图片将以图文方式解析并建立索引' : '请先选择图文解析模型'}
                         </Typography.Text>
                       </div>
                     </div>
@@ -777,16 +794,16 @@ export default function KnowledgeWorkspace() {
                 {/* — 检索增强 — */}
                 <div>
                   <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
-                    检索增强
+                    排序优化
                   </Typography.Text>
                   <div className="knowledge-settings-grid">
                     <div className="studio-form-field">
-                      <Typography.Text type="secondary">Rerank 模型</Typography.Text>
+                      <Typography.Text type="secondary">重排模型</Typography.Text>
                       <Select
                         value={formState.rerankBindingName || undefined}
                         onChange={(value) => onFormStateChange({ ...formState, rerankBindingName: value })}
-                        options={[{ value: '', label: '无 (使用向量检索默认机制)' }, ...rerankBindingOptions]}
-                        placeholder="选择 Rerank 模型"
+                        options={[{ value: '', label: '无（使用默认排序）' }, ...rerankBindingOptions]}
+                        placeholder="选择重排模型（可选）"
                         showSearch
                         optionFilterProp="label"
                         style={{ width: '100%' }}
@@ -812,9 +829,9 @@ export default function KnowledgeWorkspace() {
                     </div>
                     {formState.chunkPresetId === 'qa' && (
                       <div className="studio-form-field">
-                        <Typography.Text type="secondary">QA 分隔符</Typography.Text>
+                        <Typography.Text type="secondary">问答分隔符</Typography.Text>
                         <Input
-                          placeholder="QA 分隔符"
+                          placeholder="例如：Q: / A:"
                           value={formState.qaSeparator}
                           onChange={(e) => onFormStateChange({ ...formState, qaSeparator: e.target.value })}
                         />
@@ -823,8 +840,9 @@ export default function KnowledgeWorkspace() {
                   </div>
                 </div>
               </Flex>
-            </Collapse.Panel>
-          </Collapse>
+              </Collapse.Panel>
+            </Collapse>
+          </DevOnly>
 
           {/* ━━━ 危险操作区 ━━━ */}
           <SectionCard
@@ -846,7 +864,9 @@ export default function KnowledgeWorkspace() {
     return (
       <div className="knowledge-workspace-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Flex justify="center" align="center" className="knowledge-workspace-loading">
-          <Spin tip="正在加载知识库详情..." size="large" />
+          <Spin tip="正在加载知识库详情..." size="large">
+            <div style={{ width: 1, height: 1 }} />
+          </Spin>
         </Flex>
       </div>
     )

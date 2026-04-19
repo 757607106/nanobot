@@ -474,7 +474,6 @@ export default function ModelsPage() {
             { label: '模型总览', value: 'models' },
             { label: '供应商管理', value: 'providers' },
           ]}
-          style={{ borderRadius: 10 }}
         />
         <Input
           size="large"
@@ -535,79 +534,63 @@ export default function ModelsPage() {
           {providerCards.length === 0 ? (
             <Empty description="无匹配项" />
           ) : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                gap: 'var(--nb-spacing-md)',
-              }}
-            >
+            <div className="models-provider-grid">
               {providerCards.map((provider, index) => (
                 <motion.div
                   key={provider.name}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.04, duration: 0.2 }}
-                  whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(99,102,241,0.1)' }}
-                  whileTap={{ scale: 0.98 }}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => openProviderDrawer(provider.name)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      openProviderDrawer(provider.name)
+                    }
+                  }}
+                  className="models-provider-card"
+                  data-selected={activeProviderName === provider.name ? 'true' : 'false'}
                   style={{
-                    background: 'var(--nb-card-subtle-bg)',
-                    border: `1px solid ${activeProviderName === provider.name ? token.colorPrimary : 'var(--nb-card-subtle-border)'}`,
-                    borderRadius: 16,
-                    padding: '20px 20px 16px',
-                    cursor: 'pointer',
-                    transition: 'border-color 200ms ease',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 12,
+                    ['--provider-status-color' as any]: provider.configured ? token.colorSuccess : token.colorWarning,
                   }}
                 >
-                  {/* 头部：Logo 和状态 */}
                   <Flex align="flex-start" justify="space-between">
                     <ProviderAvatar providerName={provider.name} label={provider.label} size={44} />
                     <Space size={6} wrap align="center">
                       {provider.defaultProvider ? (
-                        <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}>
+                        <Tag color="processing" bordered={false} style={{ margin: 0 }}>
                           默认
                         </Tag>
                       ) : null}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <div
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            background: provider.configured ? token.colorSuccess : token.colorWarning,
-                          }}
-                        />
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+                      <div className="models-provider-status">
+                        <span className="models-provider-status-dot" aria-hidden="true" />
+                        <Typography.Text type="secondary" className="models-provider-status-label">
                           {provider.configured ? '已配置' : '待预置'}
                         </Typography.Text>
                       </div>
                     </Space>
                   </Flex>
 
-                  {/* 名称和分类 */}
-                  <div style={{ marginTop: 2 }}>
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)', display: 'block' }}>
+                  <div className="models-provider-title">
+                    <Typography.Text strong className="models-provider-title-text">
                       {provider.label}
                     </Typography.Text>
                     <Typography.Text
                       type="secondary"
-                      style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginTop: 3 }}
+                      className="models-provider-subtitle"
                       ellipsis
                     >
                       {provider.categoryLabel}
                     </Typography.Text>
                   </div>
 
-                  {/* 模型数量统计 */}
-                  <Flex align="center" justify="space-between" style={{ marginTop: 'auto', paddingTop: 8 }}>
-                    <Typography.Text type={provider.bindingsCount > 0 ? undefined : 'secondary'} style={{ fontSize: 'var(--nb-text-sm)' }}>
-                      <span style={{ fontWeight: provider.bindingsCount > 0 ? 600 : 400 }}>{provider.bindingsCount}</span> 个模型
+                  <Flex align="center" justify="space-between" className="models-provider-footer">
+                    <Typography.Text type={provider.bindingsCount > 0 ? undefined : 'secondary'} className="models-provider-count">
+                      <span className="models-provider-count-value">{provider.bindingsCount}</span> 个模型
                     </Typography.Text>
-                    <Button size="small" type={provider.configured ? 'default' : 'primary'} style={{ borderRadius: 6 }}>
+                    <Button size="small" type={provider.configured ? 'default' : 'primary'}>
                       {provider.configured ? '管理模型' : '填入凭据'}
                     </Button>
                   </Flex>

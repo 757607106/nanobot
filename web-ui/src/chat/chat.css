@@ -97,6 +97,31 @@
   background: var(--nb-card-subtle-bg);
 }
 
+/* User Bubbles - Stark high contrast */
+.chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper {
+  background: var(--nb-ink);
+  color: var(--nb-card-bg);
+  border: none;
+  border-radius: var(--nb-radius-lg);
+  padding: 12px 18px;
+  box-shadow: var(--nb-shadow-sm);
+}
+.chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper .ant-typography,
+.chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper p,
+.chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper span,
+.chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper .ant-x-bubble-content {
+  color: var(--nb-card-bg);
+}
+
+/* AI Bubbles - Solid Structural Border */
+.chat-bubble-list .ant-x-bubble-start .ant-x-bubble-content-wrapper {
+  background: var(--nb-surface-panel);
+  border: 1px solid var(--nb-border);
+  box-shadow: none;
+  padding: 12px 16px;
+  border-radius: var(--nb-radius-lg);
+}
+
 .markdown-bubble {
   min-width: 0;
 }
@@ -139,8 +164,8 @@
 }
 
 .chat-agent-select .ant-select-selector {
-  border-radius: var(--nb-radius-xl) !important;
-  background: var(--nb-card-subtle-bg) !important;
+  border-radius: var(--nb-radius-xl);
+  background: var(--nb-card-subtle-bg);
 }
 
 .chat-agent-select .ant-select-selection-item {
@@ -180,7 +205,15 @@
   transition: opacity 150ms ease, transform 150ms ease;
 }
 
-/* Think 组件折叠内容高度限制 */
+/* Think 组件块强化 */
+.ant-x-think {
+  border-left: 3px solid var(--nb-borderStrong);
+  margin: 12px 0 16px;
+  background: var(--nb-surfaceSoft);
+  border-radius: 0 var(--nb-radius-md) var(--nb-radius-md) 0;
+  padding: 10px 14px;
+}
+
 .ant-x-think .markdown-bubble {
   max-height: 360px;
   overflow-y: auto;
@@ -195,10 +228,10 @@
 .ant-x-think .markdown-bubble li,
 .ant-x-think .markdown-bubble span,
 .ant-x-think .markdown-bubble div {
-  font-size: var(--nb-text-sm, 14px) !important;
-  font-weight: 400 !important;
-  color: var(--nb-text-tertiary, #8c8c8c) !important;
-  line-height: var(--nb-line-snug, 1.5) !important;
+  font-size: var(--nb-text-sm, 14px);
+  font-weight: 400;
+  color: var(--nb-text-tertiary, #8c8c8c);
+  line-height: var(--nb-line-snug, 1.5);
 }
 
 /* 压制大模型草稿中乱用的标题符 (###) */
@@ -208,24 +241,24 @@
 .ant-x-think .markdown-bubble h4,
 .ant-x-think .markdown-bubble h5,
 .ant-x-think .markdown-bubble h6 {
-  font-size: var(--nb-text-sm, 14px) !important;
-  font-weight: 600 !important;
-  color: var(--nb-text-secondary, #595959) !important;
-  margin: 12px 0 4px !important;
-  line-height: var(--nb-line-snug, 1.5) !important;
+  font-size: var(--nb-text-sm, 14px);
+  font-weight: 600;
+  color: var(--nb-text-secondary, #595959);
+  margin: 12px 0 4px;
+  line-height: var(--nb-line-snug, 1.5);
 }
 
 /* 允许适度的加粗强调，但颜色不要死黑 */
 .ant-x-think .markdown-bubble strong,
 .ant-x-think .markdown-bubble b {
-  font-weight: 600 !important;
-  color: var(--nb-text-secondary, #595959) !important;
+  font-weight: 600;
+  color: var(--nb-text-secondary, #595959);
 }
 
 /* 规整列表缩进，减轻排版负担 */
 .ant-x-think .markdown-bubble ul,
 .ant-x-think .markdown-bubble ol {
-  padding-left: 20px !important;
-  margin-bottom: 8px !important;
+  padding-left: 20px;
+  margin-bottom: 8px;
 }
 

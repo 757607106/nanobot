@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Empty, Flex, Input, Spin, Tag, Typography, theme } from 'antd'
+import { Button, Empty, Flex, Input, Spin, Tag, Typography, theme } from 'antd'
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -28,58 +28,61 @@ export default function KnowledgeList({
 
   return (
     <div className="knowledge-list-container">
-        <Flex vertical gap={16}>
-          <Flex justify="space-between" align="center" style={{ padding: '0 8px' }}>
-            <Typography.Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-sm)', color: 'var(--nb-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <Flex vertical gap={16}>
+          <Flex justify="space-between" align="center" className="knowledge-list-head">
+            <Typography.Title level={5} className="knowledge-list-head-title">
               知识库目录
             </Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+            <Typography.Text type="secondary" className="knowledge-list-head-count">
               {`显示 ${visibleKnowledgeBases.length} / ${knowledgeBases.length}`}
             </Typography.Text>
           </Flex>
 
-          <div style={{ padding: '0 4px' }}>
+          <div className="knowledge-list-search-shell">
             <Input
               placeholder="搜索知识库、标签..."
               value={knowledgeSearch}
               onChange={(event) => onSearchChange(event.target.value)}
-              prefix={<SearchOutlined style={{ color: 'var(--nb-text-tertiary)', fontSize: 'var(--nb-text-xs)' }} />}
+              prefix={<SearchOutlined className="knowledge-list-search-icon" />}
               allowClear
               variant="filled"
-              style={{ borderRadius: 8, padding: '4px 12px', fontSize: 'var(--nb-text-xs)' }}
+              className="knowledge-list-search-input"
               aria-label="搜索知识库"
             />
           </div>
 
           {loading ? (
             <Flex justify="center" align="center" className="knowledge-list-loading">
-              <Spin tip="正在加载知识库目录..." size="large" />
+              <Spin tip="正在加载知识库目录..." size="large">
+                <div style={{ width: 1, height: 1 }} />
+              </Spin>
             </Flex>
           ) : visibleKnowledgeBases.length === 0 ? (
             <Empty
               image={false} className="minimal-empty"
-              description="无匹配项"
-            />
+              description={knowledgeBases.length === 0 ? '还没有知识库' : '无匹配项'}
+            >
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => startTransition(() => navigate('/knowledge/new'))}
+              >
+                新建知识库
+              </Button>
+            </Empty>
           ) : (
             <div className="knowledge-nav-list">
               {visibleKnowledgeBases.map((item, index) => {
                 const isSelected = item.kbId === selectedKbId
                 const hue = ((item.name.charCodeAt(0) || 65) * 137) % 360
                 return (
-                  <motion.div
+                  <motion.button
                     key={item.kbId}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.04 }}
+                    type="button"
                     onClick={() => startTransition(() => navigate(`/knowledge/${item.kbId}`))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        startTransition(() => navigate(`/knowledge/${item.kbId}`))
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
                     className={`knowledge-card ${isSelected ? 'is-selected' : ''}`}
                     aria-label={`进入 ${item.name} 知识库`}
                   >
@@ -121,29 +124,22 @@ export default function KnowledgeList({
                       </div>
                       <div className="knowledge-card-stat">
                         <span className="stat-value">{item.stats?.indexedCount || 0}</span>
-                        <span className="stat-label">已索引</span>
+                        <span className="stat-label">已入库</span>
                       </div>
                     </div>
-                  </motion.div>
+                  </motion.button>
                 )
               })}
 
-              <motion.div
+              <motion.button
                 key="create-knowledge"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(visibleKnowledgeBases.length, 6) * 0.04 }}
+                type="button"
                 onClick={() =>
                   startTransition(() => navigate('/knowledge/new'))
                 }
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    startTransition(() => navigate('/knowledge/new'))
-                  }
-                }}
-                role="button"
-                tabIndex={0}
                 className="knowledge-card is-create focus-ring"
                 aria-label="新建知识库"
               >
@@ -158,10 +154,10 @@ export default function KnowledgeList({
                     导入语料，生成索引，让员工获得可检索的专属知识
                   </Typography.Paragraph>
                 </div>
-              </motion.div>
+              </motion.button>
             </div>
           )}
-        </Flex>
+      </Flex>
     </div>
   )
 }

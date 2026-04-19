@@ -1,17 +1,17 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ApiOutlined,
-  BlockOutlined,
-  ControlOutlined,
-  DatabaseOutlined,
-  FundProjectionScreenOutlined,
+  ApartmentOutlined,
+  AppstoreOutlined,
+  BookOutlined,
+  CloudServerOutlined,
+  LinkOutlined,
   LogoutOutlined,
   MenuOutlined,
   MessageOutlined,
-  PartitionOutlined,
-  SendOutlined,
-  ThunderboltOutlined,
+  PieChartOutlined,
+  SettingOutlined,
+  TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { Avatar, Button, Drawer, Flex, Menu, Typography, theme } from 'antd'
@@ -48,42 +48,42 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
   return [
     {
       key: 'overview',
-      label: '控制平面',
+      label: '运营洞察',
       routes: [
         {
           key: '/dashboard',
-          icon: <FundProjectionScreenOutlined />,
-          label: '数据看板',
+          icon: <PieChartOutlined />,
+          label: '效能面板',
           testId: testIds.app.navDashboard,
         },
       ],
     },
     {
       key: 'workspace',
-      label: '工作空间',
+      label: '智能体编排',
       routes: [
         {
           key: '/chat',
           icon: <MessageOutlined />,
-          label: '智能助手',
+          label: '数字专员',
           testId: testIds.app.navChat,
         },
         {
           key: '/studio',
-          icon: <PartitionOutlined />,
-          label: 'Agent 工坊',
+          icon: <TeamOutlined />,
+          label: '业务编排',
           testId: testIds.app.navStudio,
         },
         {
           key: '/channels',
-          icon: <SendOutlined />,
-          label: '分发渠道',
+          icon: <ApartmentOutlined />,
+          label: '多端接入',
           testId: testIds.app.navChannels,
         },
         {
           key: '/knowledge',
-          icon: <DatabaseOutlined />,
-          label: '知识引擎',
+          icon: <BookOutlined />,
+          label: '企业知识库',
           testId: testIds.app.navKnowledge,
         },
       ],
@@ -94,30 +94,30 @@ function buildRouteSections(devMode: boolean): AppRouteSection[] {
       routes: [
         {
           key: '/models',
-          icon: <BlockOutlined />,
-          label: '模型托管',
+          icon: <CloudServerOutlined />,
+          label: '模型配置',
         },
         {
           key: '/skills',
-          icon: <ThunderboltOutlined />,
-          label: '扩展技能',
+          icon: <AppstoreOutlined />,
+          label: '技能中心',
         },
         {
           key: '/mcp',
-          icon: <ApiOutlined />,
-          label: devMode ? 'MCP 协议' : '服务集成',
+          icon: <LinkOutlined />,
+          label: '服务集成',
           testId: testIds.app.navMcp,
         },
       ],
     },
     {
       key: 'system',
-      label: '管理后台',
+      label: '系统管理',
       routes: [
         {
           key: '/system',
-          icon: <ControlOutlined />,
-          label: '系统偏好',
+          icon: <SettingOutlined />,
+          label: '全局配置',
         },
       ],
     },
@@ -196,14 +196,14 @@ export default function AppShell() {
         {/* Logo 区域 */}
         <div className="app-sidebar-header" onClick={() => navigate('/dashboard')}>
           <div style={{ flexShrink: 0 }}>
-            <AnimatedLogo size={36} />
+            <AnimatedLogo size={32} />
           </div>
           <div style={{ minWidth: 0 }}>
             <Typography.Title level={5} className="app-sidebar-header-title">
               {PLATFORM_BRAND_NAME}
             </Typography.Title>
             <Typography.Text type="secondary" className="app-sidebar-header-subtitle">
-              Operations Console
+              运营控制台
             </Typography.Text>
           </div>
         </div>
@@ -237,19 +237,19 @@ export default function AppShell() {
 
         {/* 用户区域 */}
         <div className="app-sidebar-footer">
-          <Flex align="center" gap={12} justify="space-between">
-            <Flex align="center" gap={12} style={{ minWidth: 0, flex: 1 }}>
+          <Flex align="center" gap={10} justify="space-between">
+            <Flex align="center" gap={10} style={{ minWidth: 0, flex: 1 }}>
               <Avatar
                 icon={<UserOutlined />}
                 style={{ backgroundColor: token.colorPrimaryBg, color: token.colorPrimary, flexShrink: 0 }}
               >
                 {authStatus?.username?.slice(0, 1).toUpperCase()}
               </Avatar>
-              <div style={{ minWidth: 0 }}>
-                <Typography.Text type="secondary" style={{ display: 'block', fontSize: 'var(--nb-text-2xs)', letterSpacing: '0.04em' }}>
-                  Account
+              <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)', letterSpacing: '0.04em', lineHeight: 1.1 }}>
+                  当前账号
                 </Typography.Text>
-                <Typography.Text strong className="app-sidebar-user-name" ellipsis>
+                <Typography.Text strong className="app-sidebar-user-name" ellipsis style={{ lineHeight: 1.15 }}>
                   {authStatus?.username || '—'}
                 </Typography.Text>
               </div>

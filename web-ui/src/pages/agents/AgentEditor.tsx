@@ -234,21 +234,21 @@ export default function AgentEditor({
                 >
                   {!form.binding ? (
                     <>
-                      <FormField label="接口 (Provider)">
+                      <FormField label="供应商（可选）">
                         <Select
                           value={form.provider}
                           onChange={updateProvider}
-                          options={[{ value: '', label: '自动推断' }, ...agentProviderOptions]}
-                          aria-label="备用供应商"
+                          options={[{ value: '', label: '自动选择' }, ...agentProviderOptions]}
+                          aria-label="供应商"
                           style={{ width: '100%' }}
                         />
                       </FormField>
 
-                      <FormField label="模型版本 (Model)">
+                      <FormField label="模型（可选）">
                         <Input
                           value={form.model}
                           onChange={(event) => onUpdateForm('model', event.target.value)}
-                          aria-label="备用模型"
+                          aria-label="模型"
                           style={{ borderRadius: 12 }}
                         />
                       </FormField>
@@ -313,12 +313,12 @@ export default function AgentEditor({
         </Col>
 
         <Col xs={24} lg={14} xl={15} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          <SectionCard title="核心逻辑指令">
+          <SectionCard title="核心指令">
             <Flex vertical gap={24}>
               <FormField 
                 label={
                   <Flex align="center" justify="space-between" style={{ width: '100%' }}>
-                    <span>System Directives (核心指令)</span>
+                    <span>核心指令</span>
                     <Button 
                       type="link" 
                       size="small" 
@@ -340,7 +340,7 @@ export default function AgentEditor({
                     aria-label="角色说明"
                     style={{ 
                       borderRadius: 12, border: 'none', background: 'transparent',
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                      fontFamily: 'var(--nb-font-mono)',
                       lineHeight: 1.6
                     }}
                   />

@@ -7,6 +7,37 @@
   gap: 14px;
 }
 
+.knowledge-evaluation-panel .metric-card,
+.knowledge-benchmark-panel .metric-card {
+  min-height: 84px;
+  padding: 12px 14px;
+  gap: 8px;
+}
+
+.knowledge-eval-metrics .metric-card-value,
+.knowledge-benchmark-metrics .metric-card-value {
+  font-size: var(--nb-text-xl);
+  font-family: var(--nb-font-sans);
+  font-weight: var(--nb-font-weight-strong);
+  letter-spacing: 0;
+}
+
+.knowledge-eval-metrics .metric-card-label.ant-typography,
+.knowledge-benchmark-metrics .metric-card-label.ant-typography {
+  font-size: var(--nb-text-2xs);
+  letter-spacing: 0.04em;
+}
+
+.knowledge-eval-table .ant-table-thead > tr > th,
+.knowledge-benchmark-table .ant-table-thead > tr > th {
+  font-size: var(--nb-text-xs);
+}
+
+.knowledge-eval-table .ant-table-tbody > tr > td,
+.knowledge-benchmark-table .ant-table-tbody > tr > td {
+  font-size: var(--nb-text-xs);
+}
+
 .knowledge-query-topbar {
   display: flex;
   justify-content: space-between;
@@ -593,6 +624,37 @@
   padding-right: var(--nb-spacing-xs);
 }
 
+.knowledge-list-head {
+  padding: 0 8px;
+}
+
+.knowledge-list-head-title.ant-typography {
+  margin: 0;
+  font-size: var(--nb-text-sm);
+  color: var(--nb-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.knowledge-list-head-count.ant-typography {
+  font-size: var(--nb-text-xs);
+}
+
+.knowledge-list-search-shell {
+  padding: 0 4px;
+}
+
+.knowledge-list-search-icon {
+  color: var(--nb-text-tertiary);
+  font-size: var(--nb-text-xs);
+}
+
+.knowledge-list-search-input.ant-input-affix-wrapper {
+  border-radius: var(--nb-radius-lg);
+  padding: 4px 12px;
+  font-size: var(--nb-text-xs);
+}
+
 .knowledge-master-container {
   width: 100%;
   padding-bottom: var(--nb-spacing-2xl);
@@ -760,6 +822,16 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+}
+
+.knowledge-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--nb-accent) 28%, transparent);
+  outline-offset: 2px;
 }
 
 .knowledge-card:hover {

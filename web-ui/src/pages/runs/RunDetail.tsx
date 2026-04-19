@@ -130,7 +130,7 @@ export default function RunDetail({
                 size="small"
               >
                 <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="middle">
-                  <Descriptions.Item label="Agent">
+                  <Descriptions.Item label="员工">
                     {run.agentId ? (
                       <Tag color="blue" bordered={false}>
                         {run.agentId}
@@ -166,14 +166,14 @@ export default function RunDetail({
 
                   {/* ━━━ devMode 独有字段 ━━━ */}
                   {devMode && (
-                    <Descriptions.Item label="Run ID">
+                    <Descriptions.Item label="运行 ID">
                       <Text copyable code>
                         {run.runId}
                       </Text>
                     </Descriptions.Item>
                   )}
                   {devMode && run.threadId && (
-                    <Descriptions.Item label="Thread ID">
+                    <Descriptions.Item label="会话 ID">
                       <Text code copyable>
                         {run.threadId}
                       </Text>

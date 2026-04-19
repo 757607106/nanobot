@@ -1,6 +1,6 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
-import { Button, Flex, Input, InputNumber, Modal, Select, Space, Splitter, Switch, Typography, theme } from 'antd'
+import { Button, Collapse, Flex, Input, InputNumber, Modal, Select, Space, Splitter, Switch, Typography, theme } from 'antd'
 import {
   BranchesOutlined,
   DatabaseOutlined,
@@ -66,6 +66,7 @@ import { KnowledgeProvider } from './KnowledgeContext'
 import type { KnowledgeContextValue } from './KnowledgeContext'
 import './knowledge.css'
 import { useToast } from '../../toast'
+import DevOnly from '../../components/DevOnly'
 
 export default function KnowledgePage() {
   const message = useToast()
@@ -169,7 +170,7 @@ export default function KnowledgePage() {
     name: '', description: '', file: null as File | null,
   })
   const [benchmarkGenerateForm, setBenchmarkGenerateForm] = useState({
-    name: '自动生成评估基准', description: '', count: 10,
+    name: '自动生成评测题库', description: '', count: 10,
   })
 
   // ─── Form reset helpers ───
@@ -183,7 +184,7 @@ export default function KnowledgePage() {
     setBenchmarkUploadForm({ name: '', description: '', file: null })
   }
   function resetBenchmarkGenerateForm() {
-    setBenchmarkGenerateForm({ name: '自动生成评估基准', description: '', count: 10 })
+    setBenchmarkGenerateForm({ name: '自动生成评测题库', description: '', count: 10 })
   }
 
   const deferredFileSearch = useDeferredValue(fileSearch)
@@ -964,12 +965,12 @@ export default function KnowledgePage() {
         name: benchmarkUploadForm.name.trim() || benchmarkUploadForm.file.name.replace(/\.jsonl$/i, ''),
         description: benchmarkUploadForm.description.trim(),
       })
-      message.success('评估基准已上传')
+      message.success('评测题库已上传')
       closeModal('benchmarkUpload')
       resetBenchmarkUploadForm()
       await loadBenchmarkState(currentKb.kbId)
     } catch (uploadError) {
-      message.error(getErrorMessage(uploadError, '上传评估基准失败'))
+      message.error(getErrorMessage(uploadError, '上传评测题库失败'))
     } finally {
       setLoadingField('uploadingBenchmark', false)
     }
@@ -981,15 +982,15 @@ export default function KnowledgePage() {
       setLoadingField('generatingBenchmark', true)
       await api.generateKnowledgeBenchmark(currentKb.kbId, {
         count: benchmarkGenerateForm.count,
-        name: benchmarkGenerateForm.name.trim() || '自动生成评估基准',
+        name: benchmarkGenerateForm.name.trim() || '自动生成评测题库',
         description: benchmarkGenerateForm.description.trim(),
       })
-      message.success('评估基准已生成')
+      message.success('评测题库已生成')
       closeModal('benchmarkGenerate')
       resetBenchmarkGenerateForm()
       await loadBenchmarkState(currentKb.kbId)
     } catch (generateError) {
-      message.error(getErrorMessage(generateError, '生成评估基准失败'))
+      message.error(getErrorMessage(generateError, '生成评测题库失败'))
     } finally {
       setLoadingField('generatingBenchmark', false)
     }
@@ -1004,7 +1005,7 @@ export default function KnowledgePage() {
       const detail = await api.getKnowledgeBenchmarkDetail(currentKb.kbId, benchmark.benchmarkId, page, pageSize)
       setBenchmarkPreview(detail)
     } catch (previewError) {
-      message.error(getErrorMessage(previewError, '加载评估基准详情失败'))
+      message.error(getErrorMessage(previewError, '加载评测题库详情失败'))
     } finally {
       setLoadingField('benchmarkPreview', false)
     }
@@ -1013,7 +1014,7 @@ export default function KnowledgePage() {
   function handleDeleteBenchmark(benchmark: KnowledgeBenchmark) {
     if (!currentKb) return
     Modal.confirm({
-      title: `删除评估基准「${benchmark.name}」`,
+      title: `删除评测题库「${benchmark.name}」`,
       content: '删除后该基准及其下载文件不可恢复。',
       okText: '删除',
       okButtonProps: { danger: true },
@@ -1021,7 +1022,7 @@ export default function KnowledgePage() {
       onOk: async () => {
         await api.deleteKnowledgeBenchmark(currentKb.kbId, benchmark.benchmarkId)
         await loadBenchmarkState(currentKb.kbId)
-        message.success('评估基准已删除')
+        message.success('评测题库已删除')
       },
     })
   }
@@ -1098,8 +1099,9 @@ export default function KnowledgePage() {
         void handleViewEvaluationResult(taskId)
       },
       onDeleteEvaluationResult: handleDeleteEvaluationResult,
+      benchmarkNameById: Object.fromEntries(benchmarks.map((item) => [item.benchmarkId, item.name])),
     }),
-    [currentKb?.kbId, evaluationResult?.taskId],
+    [benchmarks, currentKb?.kbId, evaluationResult?.taskId],
   )
 
   return (
@@ -1383,14 +1385,14 @@ export default function KnowledgePage() {
 
       <Modal
         open={modals.indexConfig}
-        title="索引配置"
+        title="索引设置"
         onCancel={() => closeModal('indexConfig')}
         onOk={() => closeModal('indexConfig')}
-        okText="保存配置"
+        okText="完成"
       >
         <div className="knowledge-settings-grid">
-          <div className="studio-form-field">
-            <Typography.Text type="secondary">分块策略</Typography.Text>
+          <div className="studio-form-field studio-form-field-span-2">
+            <Typography.Text type="secondary">内容切分</Typography.Text>
             <Select
               value={indexConfig.chunkPresetId}
               onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkPresetId: value }))}
@@ -1398,46 +1400,61 @@ export default function KnowledgePage() {
               style={{ width: '100%' }}
             />
           </div>
-          <div className="studio-form-field">
-            <Typography.Text type="secondary">Chunk Size</Typography.Text>
-            <InputNumber
-              min={200}
-              max={8000}
-              value={indexConfig.chunkSize}
-              onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkSize: Number(value || 1000) }))}
-              style={{ width: '100%' }}
-            />
-          </div>
-          <div className="studio-form-field">
-            <Typography.Text type="secondary">Chunk Overlap</Typography.Text>
-            <InputNumber
-              min={0}
-              max={4000}
-              value={indexConfig.chunkOverlap}
-              onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkOverlap: Number(value || 0) }))}
-              style={{ width: '100%' }}
-            />
-          </div>
-          <div className="studio-form-field studio-form-field-span-2">
-            <Typography.Text type="secondary">QA 分隔符</Typography.Text>
-            <Input
-              placeholder="QA 分隔符"
-              value={indexConfig.qaSeparator}
-              onChange={(e) => setIndexConfig((prev) => ({ ...prev, qaSeparator: e.target.value }))}
-            />
-          </div>
         </div>
+        <DevOnly>
+          <Collapse
+            ghost
+            items={[
+              {
+                key: 'advanced',
+                label: '高级参数',
+                children: (
+                  <div className="knowledge-settings-grid" style={{ marginTop: 12 }}>
+                    <div className="studio-form-field">
+                      <Typography.Text type="secondary">片段长度</Typography.Text>
+                      <InputNumber
+                        min={200}
+                        max={8000}
+                        value={indexConfig.chunkSize}
+                        onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkSize: Number(value || 1000) }))}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div className="studio-form-field">
+                      <Typography.Text type="secondary">重叠长度</Typography.Text>
+                      <InputNumber
+                        min={0}
+                        max={4000}
+                        value={indexConfig.chunkOverlap}
+                        onChange={(value) => setIndexConfig((prev) => ({ ...prev, chunkOverlap: Number(value || 0) }))}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div className="studio-form-field studio-form-field-span-2">
+                      <Typography.Text type="secondary">问答分隔符（可选）</Typography.Text>
+                      <Input
+                        placeholder="例如：Q: / A:"
+                        value={indexConfig.qaSeparator}
+                        onChange={(e) => setIndexConfig((prev) => ({ ...prev, qaSeparator: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </DevOnly>
       </Modal>
 
       <Modal
         open={modals.queryConfig}
-        title="检索配置"
+        title="检索设置"
         onCancel={() => closeModal('queryConfig')}
         onOk={() => {
           closeModal('queryConfig')
           void handleSaveQueryDefaults()
         }}
-        okText="保存"
+        okText="保存为默认"
       >
         {queryParamSchema ? (
           <div className="knowledge-settings-grid">
@@ -1476,13 +1493,13 @@ export default function KnowledgePage() {
             ))}
           </div>
         ) : (
-          <Typography.Text type="secondary">当前知识库没有额外检索配置</Typography.Text>
+          <Typography.Text type="secondary">暂无可配置项</Typography.Text>
         )}
       </Modal>
 
       <Modal
         open={modals.benchmarkUpload}
-        title="上传评估基准"
+        title="上传评测题库"
         onCancel={() => {
           closeModal('benchmarkUpload')
           resetBenchmarkUploadForm()
@@ -1504,7 +1521,7 @@ export default function KnowledgePage() {
             onChange={(e) => setBenchmarkUploadForm((prev) => ({ ...prev, description: e.target.value }))}
           />
           <Button onClick={() => benchmarkUploadInputRef.current?.click()}>
-            {benchmarkUploadForm.file ? `已选择：${benchmarkUploadForm.file.name}` : '选择 JSONL 文件'}
+            {benchmarkUploadForm.file ? `已选择：${benchmarkUploadForm.file.name}` : '选择题库文件（.jsonl）'}
           </Button>
           <input
             ref={benchmarkUploadInputRef}
@@ -1518,7 +1535,7 @@ export default function KnowledgePage() {
 
       <Modal
         open={modals.benchmarkGenerate}
-        title="生成评估基准"
+        title="生成评测题库"
         onCancel={() => closeModal('benchmarkGenerate')}
         onOk={() => void handleGenerateBenchmark()}
         okText="生成"

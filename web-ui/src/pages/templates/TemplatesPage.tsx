@@ -61,6 +61,8 @@ export default function TemplatesPage() {
     }
   }
 
+  const hasChinese = (value: string) => /[\u4e00-\u9fa5]/.test(value)
+
   function openDrawer(name: string | null) {
     setSelectedTemplateName(name)
     setDrawerOpen(true)
@@ -69,7 +71,7 @@ export default function TemplatesPage() {
   return (
     <Flex vertical gap={18}>
       <PageHeader
-        title="Agent 资源蓝图 (Templates)"
+        title="员工资源蓝图"
         actions={
           <Flex gap={8}>
             <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>刷新</Button>
@@ -103,14 +105,16 @@ export default function TemplatesPage() {
                       </Tag>
                     </Flex>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} style={{ marginBottom: 0, minHeight: 44 }}>
-                      {tpl.description || '无详细描述。'}
+                      {tpl.description && hasChinese(tpl.description) ? tpl.description : '可在编辑中补充说明。'}
                     </Typography.Paragraph>
                   </div>
                   
                   <Flex justify="space-between" align="center" onClick={(e) => e.stopPropagation()}>
                     <Flex gap={4}>
-                      {tpl.tools && tpl.tools.length > 0 && <Tag bordered={false}>{tpl.tools.length} Tools</Tag>}
-                      {tpl.skills && tpl.skills.length > 0 && <Tag bordered={false}>{tpl.skills.length} Skills</Tag>}
+                      {(() => {
+                        const total = (tpl.tools?.length || 0) + (tpl.skills?.length || 0)
+                        return total > 0 ? <Tag bordered={false}>能力 {total}</Tag> : null
+                      })()}
                     </Flex>
                     <Popconfirm title="确认删除？" onConfirm={() => void deleteTemplate(tpl.name)}>
                       <Button type="text" danger icon={<DeleteOutlined />} size="small" />

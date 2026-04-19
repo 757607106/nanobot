@@ -6,9 +6,10 @@
 /* Hover Lift */
 .interactive-lift {
   transition: transform var(--nb-motion-fast) var(--nb-ease-decelerate),
-              box-shadow var(--nb-motion-normal) ease,
-              border-color var(--nb-motion-fast) ease;
+              box-shadow var(--nb-motion-normal) var(--nb-ease-decelerate),
+              border-color var(--nb-motion-fast) var(--nb-ease-decelerate);
 }
+
 
 .interactive-lift:hover {
   transform: translateY(-2px);
@@ -20,10 +21,15 @@
   transform: translateY(0);
 }
 
+.focus-ring:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--nb-accent) 28%, transparent);
+  outline-offset: 2px;
+}
+
 /* Subtle Hover Lift (for smaller items like list rows) */
 .interactive-lift-sm {
   transition: transform var(--nb-motion-fast) var(--nb-ease-decelerate),
-              background-color var(--nb-motion-fast) ease;
+              background-color var(--nb-motion-fast) var(--nb-ease-decelerate);
 }
 
 .interactive-lift-sm:hover {
@@ -55,7 +61,7 @@
 
 /* Base link / interactive text */
 .interactive-text {
-  transition: color var(--nb-motion-fast) ease;
+  transition: color var(--nb-motion-fast) var(--nb-ease-decelerate);
   cursor: pointer;
 }
 

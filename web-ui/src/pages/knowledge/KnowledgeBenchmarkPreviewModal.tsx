@@ -40,7 +40,7 @@ export function KnowledgeBenchmarkPreviewModal({
       ),
     },
     {
-      title: '黄金 Chunk',
+      title: '参考片段',
       key: 'goldChunkIds',
       render: (_value, record) => (record.goldChunkIds || record.gold_chunk_ids || []).join(', ') || '--',
     },
@@ -49,7 +49,7 @@ export function KnowledgeBenchmarkPreviewModal({
   return (
     <Modal
       open={open}
-      title={benchmark ? `评估基准预览 · ${benchmark.name}` : '评估基准预览'}
+      title={benchmark ? `题库预览 · ${benchmark.name}` : '题库预览'}
       onCancel={onClose}
       footer={null}
       width={960}
@@ -58,7 +58,7 @@ export function KnowledgeBenchmarkPreviewModal({
         <Space direction="vertical" style={{ width: '100%' }}>
           <Descriptions size="small" bordered column={3}>
             <Descriptions.Item label="问题数">{benchmark.questionCount || benchmark.question_count || 0}</Descriptions.Item>
-            <Descriptions.Item label="黄金检索集">
+            <Descriptions.Item label="参考片段">
               {(benchmark.hasGoldChunks || benchmark.has_gold_chunks) ? '有' : '无'}
             </Descriptions.Item>
             <Descriptions.Item label="标准答案">
@@ -86,7 +86,7 @@ export function KnowledgeBenchmarkPreviewModal({
           />
         </Space>
       ) : (
-        <Empty description="还没有评估基准" image={false} className="minimal-empty" />
+        <Empty description="还没有评测题库" image={false} className="minimal-empty" />
       )}
     </Modal>
   )

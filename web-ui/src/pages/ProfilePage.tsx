@@ -428,8 +428,10 @@ export default function ProfilePage() {
                   column={1}
                   size="small"
                   items={securityItems}
-                  labelStyle={{ color: 'var(--nb-text-quaternary)', width: 120 }}
-                  contentStyle={{ fontWeight: 'var(--nb-font-weight-medium)' }}
+                  styles={{
+                    label: { color: 'var(--nb-text-quaternary)', width: 120 },
+                    content: { fontWeight: 'var(--nb-font-weight-medium)' },
+                  }}
                 />
               </Flex>
             </SectionCard>
@@ -442,7 +444,9 @@ export default function ProfilePage() {
                 column={1}
                 size="small"
                 items={profileItems}
-                labelStyle={{ color: 'var(--nb-text-quaternary)', width: 100 }}
+                styles={{
+                  label: { color: 'var(--nb-text-quaternary)', width: 100 },
+                }}
               />
             </SectionCard>
 
@@ -472,7 +476,9 @@ export default function ProfilePage() {
                     { key: 'avatarStatus', label: '状态', children: profile?.hasAvatar ? <Tag color="success" bordered={false}>已就绪</Tag> : <Tag bordered={false}>未设置</Tag> },
                     { key: 'avatarTime', label: '最近更新', children: profile?.avatarUpdatedAt ? formatDateTimeZh(profile.avatarUpdatedAt).split(' ')[0] : '无' },
                   ]}
-                  labelStyle={{ color: 'var(--nb-text-quaternary)', width: 80 }}
+                  styles={{
+                    label: { color: 'var(--nb-text-quaternary)', width: 80 },
+                  }}
                 />
                 <Button 
                   block 

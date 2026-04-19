@@ -122,7 +122,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
   const reasoningSupported = (workspaceData?.runtime?.supportsReasoning ?? true) !== false
 
   const assistantLabel = inAgentMode
-    ? String(activeAgent?.name || agentId || '智能体')
+    ? String(activeAgent?.name || agentId || '员工')
     : PLATFORM_ASSISTANT_NAME
 
   const isDesktopLayout = Boolean(screens.lg)
@@ -181,7 +181,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
       } catch (error) {
         if (!cancelled) {
           setActiveAgent(null)
-          message.error(error instanceof Error ? error.message : '加载智能体失败')
+          message.error(error instanceof Error ? error.message : '加载员工失败')
         }
       } finally {
         if (!cancelled) {
@@ -206,7 +206,7 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
       setLoadingAgents(true)
       setAgents(await api.getAgents(true))
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载智能体失败')
+      message.error(error instanceof Error ? error.message : '加载员工失败')
     } finally {
       setLoadingAgents(false)
     }

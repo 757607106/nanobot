@@ -552,7 +552,6 @@ export default function SkillsPage() {
           display: 'grid',
           gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           gap: 16,
-          marginBottom: 16,
         }}
       >
         {activeTab === 'installed' ? (
@@ -570,19 +569,18 @@ export default function SkillsPage() {
         )}
       </div>
 
-      <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)' }}>
+      <div className="page-content-wrapper">
         <Tabs
           className="skills-page-tabs"
           activeKey={activeTab}
           onChange={setActiveTab}
           type="line"
-          size="large"
+          size="middle"
           items={[
             {
               key: 'installed',
               label: (
-                <span>
-                  <AppstoreOutlined />
+                <span style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 500 }}>
                   已安装技能
                 </span>
               ),
@@ -591,8 +589,7 @@ export default function SkillsPage() {
             {
               key: 'market',
               label: (
-                <span>
-                  <CloudDownloadOutlined />
+                <span style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 500 }}>
                   官方技能市场
                 </span>
               ),

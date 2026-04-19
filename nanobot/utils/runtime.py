@@ -85,6 +85,10 @@ def external_lookup_signature(tool_name: str, arguments: dict[str, Any]) -> str 
         query = str(arguments.get("query_text") or "").strip()
         if query:
             return f"query_kb:{kb_name.lower()}:{query.lower()}"
+    if tool_name == "exec":
+        cmd = str(arguments.get("command") or "").strip()
+        if cmd:
+            return f"exec:{cmd}"
     return None
 
 

@@ -1241,6 +1241,98 @@ class RAGEngine:
                 error=str(exc),
             )
 
+    async def insert_text_segments(
+        self,
+        kb_id: str,
+        segments: list[tuple[str, str]],
+        *,
+        file_path: str | None = None,
+        max_concurrency: int = 0,
+        on_segment_done: Any = None,
+    ) -> ParseResult:
+        """Insert multiple text segments with fault-isolated concurrency.
+
+        Each ``(text, segment_doc_id)`` tuple is indexed independently so that
+        a failure in one segment does not discard the graph data from others.
+
+        Args:
+            kb_id: Knowledge base identifier.
+            segments: List of ``(text, segment_doc_id)`` tuples.
+            file_path: Logical file path shared by all segments.
+            max_concurrency: Concurrent segment limit (0 = use
+                ``max_parallel_insert`` from LightRAG config).
+            on_segment_done: Optional ``callable(index, total, segment_doc_id, success, error)``
+                invoked after each segment completes.
+
+        Returns:
+            Aggregated ParseResult.  ``success`` is True when **at least one**
+            segment succeeded (partial success is not a hard failure).
+        """
+        if not segments:
+            raise ValueError("segments are required.")
+
+        rag = await self._ensure_ready(kb_id)
+        lightrag_kwargs = self._build_lightrag_kwargs(kb_id)
+        concurrency = max_concurrency or int(lightrag_kwargs.get("max_parallel_insert", 2))
+        concurrency = max(1, concurrency)
+        sem = asyncio.Semaphore(concurrency)
+
+        total = len(segments)
+        results: list[tuple[str, bool, int, str | None]] = []  # (doc_id, ok, chunks, error)
+
+        async def _process(index: int, text: str, seg_doc_id: str) -> None:
+            async with sem:
+                result = await self.insert_text(
+                    kb_id, text, doc_id=seg_doc_id, file_path=file_path,
+                )
+                chunks_count = int(result.chunks_count or 0)
+                results.append((seg_doc_id, result.success, chunks_count, result.error))
+                if callable(on_segment_done):
+                    try:
+                        on_segment_done(index, total, seg_doc_id, result.success, result.error)
+                    except Exception:
+                        pass
+
+        tasks = [
+            asyncio.create_task(_process(i, text, doc_id))
+            for i, (text, doc_id) in enumerate(segments)
+        ]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        succeeded = [(d, c) for d, ok, c, _ in results if ok]
+        failed = [(d, e) for d, ok, _, e in results if not ok]
+        total_chunks = sum(c for _, c in succeeded)
+
+        if failed:
+            logger.warning(
+                "RAGEngine: insert_text_segments partial failure for kb_id={}: {}/{} segments failed: {}",
+                kb_id,
+                len(failed),
+                total,
+                "; ".join(f"{d}: {e}" for d, e in failed),
+            )
+
+        return ParseResult(
+            success=len(succeeded) > 0,
+            parser_name="text_segments",
+            chunks_count=total_chunks,
+            metadata={
+                "file_path": file_path,
+                "total_segments": total,
+                "succeeded_segments": len(succeeded),
+                "failed_segments": len(failed),
+                "chunks_count": total_chunks,
+                "failed_details": [
+                    {"doc_id": d, "error": e} for d, e in failed
+                ] if failed else [],
+            },
+            error=(
+                f"{len(failed)}/{total} segments failed"
+                if failed and not succeeded
+                else None
+            ),
+        )
+
     async def insert_chunks(
         self,
         kb_id: str,

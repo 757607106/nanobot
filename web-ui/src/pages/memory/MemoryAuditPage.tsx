@@ -273,7 +273,9 @@ export default function MemoryAuditPage() {
             <SectionCard title="工作台">
               {loadingDetail ? (
                 <Flex justify="center" align="center" style={{ minHeight: 220 }}>
-                  <Spin tip="正在加载员工审计详情..." size="large" />
+                  <Spin tip="正在加载员工审计详情..." size="large">
+                    <div style={{ width: 1, height: 1 }} />
+                  </Spin>
                 </Flex>
               ) : (
                 <Tabs

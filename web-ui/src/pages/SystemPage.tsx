@@ -20,17 +20,15 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div
       style={{
-        padding: '12px 16px',
-        borderRadius: 12,
-        background: 'var(--nb-card-subtle-bg)',
-        border: '1px solid var(--nb-card-subtle-border)',
+        padding: '12px 0',
+        borderBottom: '1px solid var(--nb-card-subtle-border)',
         display: 'flex',
-        flexDirection: 'column',
-        gap: 4,
+        justifyContent: 'space-between',
+        alignItems: 'center',
       }}
     >
-      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</Typography.Text>
-      <Typography.Text className="break-all" strong style={{ fontSize: 'var(--nb-text-sm)' }}>{value}</Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)', letterSpacing: '0.01em' }}>{label}</Typography.Text>
+      <Typography.Text className="break-all" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 500, fontFamily: 'var(--nb-font-mono)' }}>{value}</Typography.Text>
     </div>
   )
 }
@@ -156,9 +154,9 @@ export default function SystemPage() {
       <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'minmax(0, 1.12fr) minmax(320px, 0.88fr)' }}>
         <SectionCard
           title="运行清单"
-          action={<Tag color="blue">v{status.web.version}</Tag>}
+          action={<Tag bordered={false} style={{ background: 'var(--nb-surface-soft-bg)', color: 'var(--nb-text-tertiary)' }}>v{status.web.version}</Tag>}
         >
-          <Flex vertical gap={20}>
+          <Flex vertical gap={0}>
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <DetailRow label="工作区" value={status.web.workspace} />
               <DetailRow label="配置文件" value={status.web.configPath} />
@@ -176,7 +174,7 @@ export default function SystemPage() {
               </Typography.Text>
               <Flex gap={8} wrap="wrap" style={{ marginTop: 12 }}>
                 {(status.stats.enabledChannels.length > 0 ? status.stats.enabledChannels : ['—']).map((item) => (
-                  <Tag key={item} color="blue">
+                  <Tag key={item} bordered={false} style={{ background: 'var(--nb-surface-soft-bg)', color: 'var(--nb-ink)' }}>
                     {item}
                   </Tag>
                 ))}
@@ -211,24 +209,24 @@ export default function SystemPage() {
           <SectionCard title="调度状态">
             <Flex vertical gap={12}>
               <Flex gap={8} wrap="wrap">
-                <Tag color={status.cron.enabled ? 'green' : 'orange'}>
+                <Tag bordered={false} style={{ background: 'var(--nb-surface-soft-bg)', color: status.cron.enabled ? 'var(--nb-success)' : 'var(--nb-warning)' }}>
+                  <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 3, background: status.cron.enabled ? 'var(--nb-success)' : 'var(--nb-warning)', marginRight: 6 }}></span>
                   {status.cron.enabled ? '运行中' : '未启用'}
                 </Tag>
-                <Tag>任务 {status.stats.scheduledJobs}</Tag>
+                <Tag bordered={false} style={{ background: 'var(--nb-surface-soft-bg)', color: 'var(--nb-text-secondary)' }}>任务 {status.stats.scheduledJobs}</Tag>
               </Flex>
 
               <div
                 style={{
-                  padding: '20px',
-                  borderRadius: 16,
-                  background: 'var(--nb-card-subtle-bg)',
-                  border: '1px solid var(--nb-card-subtle-border)',
+                  padding: '20px 0',
+                  borderTop: '1px solid var(--nb-card-subtle-border)',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 8,
+                  gap: 4,
+                  marginTop: 12,
                 }}
               >
-                <Typography.Text type="secondary">下一次唤醒时间</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>下一次唤醒时间</Typography.Text>
                 <Typography.Title level={4} style={{ margin: 0 }}>
                   {formatWakeTime(status.cron.nextWakeAtMs)}
                 </Typography.Title>

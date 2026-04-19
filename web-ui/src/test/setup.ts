@@ -79,7 +79,23 @@ Object.defineProperty(window, 'ResizeObserver', {
 
 Object.defineProperty(window, 'getComputedStyle', {
   writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    getPropertyValue: () => '',
-  })),
+  value: vi.fn().mockImplementation(() => {
+    const map: Record<string, string> = {
+      'line-height': '22px',
+      'padding-top': '0px',
+      'padding-bottom': '0px',
+      'border-top-width': '0px',
+      'border-bottom-width': '0px',
+      'box-sizing': 'border-box',
+    }
+    return {
+      getPropertyValue: (key: string) => map[key] ?? '',
+      lineHeight: map['line-height'],
+      paddingTop: map['padding-top'],
+      paddingBottom: map['padding-bottom'],
+      borderTopWidth: map['border-top-width'],
+      borderBottomWidth: map['border-bottom-width'],
+      boxSizing: map['box-sizing'],
+    }
+  }),
 })

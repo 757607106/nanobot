@@ -486,6 +486,15 @@ class DocumentPipeline:
             )
         )
 
+    # Minimum text length (in characters) to trigger segment splitting.
+    # Below this threshold, the text is small enough to insert as a single document.
+    _SEGMENT_SPLIT_THRESHOLD = 50_000
+    # Target size for each segment when using paragraph-based fallback splitting.
+    # 30K chars gives ~10-15 LightRAG chunks per segment — a good balance between
+    # context coherence for entity extraction and fault isolation granularity.
+    _SEGMENT_SIZE = 30_000
+    _SEGMENT_OVERLAP = 500
+
     def index_single_file(self, file: KnowledgeFile) -> KnowledgeFile:
         current = self._require_file(file.kb_id, file.file_id)
         kb = self.require_kb(current.kb_id)
@@ -520,12 +529,14 @@ class DocumentPipeline:
         index_result = None
         if raw_multimodal_ingest:
             ingest_mode = "raganything_file"
-            index_result = self._run_async(
-                self.rag_engine.insert_document_file(
-                    current.kb_id,
-                    current.raw_path or current.filename,
-                    doc_id=current.file_id,
-                    file_name=current.filename,
+            index_result = self._as_parse_result(
+                self._run_async(
+                    self.rag_engine.insert_document_file(
+                        current.kb_id,
+                        current.raw_path or current.filename,
+                        doc_id=current.file_id,
+                        file_name=current.filename,
+                    )
                 )
             )
             if not index_result.success:
@@ -538,14 +549,10 @@ class DocumentPipeline:
                 ingest_mode = "text_insert_fallback"
 
         if index_result is None or not index_result.success:
-            index_result = self._run_async(
-                self.rag_engine.insert_text(
-                    current.kb_id,
-                    text,
-                    doc_id=current.file_id,
-                    file_path=current.raw_path or current.filename,
-                )
-            )
+            index_result = self._index_text_with_segments(current, kb, text)
+            if index_result.parser_name == "text_segments":
+                ingest_mode = "text_segments"
+
         if not index_result.success:
             raise KnowledgeBaseValidationError(
                 index_result.error or f"Failed to index knowledge file {current.file_id}"
@@ -565,11 +572,12 @@ class DocumentPipeline:
             self.artifacts.build_chunk_manifest_entries(current, chunk_texts),
         )
         processing_params = dict(current.processing_params)
-        processing_params["chunksCount"] = (
-            int(index_result.chunks_count or len(chunk_texts))
-            if ingest_mode == "raganything_file"
-            else len(chunk_texts)
-        )
+        # Local manifest count is the canonical chunk count (used by UI).
+        # LightRAG's internal chunk count is stored separately for diagnostics.
+        processing_params["chunksCount"] = len(chunk_texts)
+        lightrag_chunks = int(index_result.chunks_count or 0)
+        if lightrag_chunks > 0:
+            processing_params["lightragChunksCount"] = lightrag_chunks
         if ingest_mode != "text_insert":
             processing_params["chunkManifestCount"] = len(chunk_texts)
         processing_params["indexedAt"] = now_iso()
@@ -578,6 +586,10 @@ class DocumentPipeline:
         processing_params["graphExtraction"] = True
         if index_result.track_id:
             processing_params["trackId"] = index_result.track_id
+        if index_result.metadata:
+            for key in ("total_segments", "succeeded_segments", "failed_segments", "failed_details"):
+                if key in index_result.metadata:
+                    processing_params[key] = index_result.metadata[key]
         return self._update_file(
             replace(
                 current,
@@ -585,6 +597,117 @@ class DocumentPipeline:
                 processing_params=processing_params,
                 error_message=None,
                 updated_at=now_iso(),
+            )
+        )
+
+    # -- Internal: segment-aware text indexing --------------------------------
+
+    @staticmethod
+    def _as_parse_result(result: Any) -> "ParseResult":
+        """Normalize an IndexResult (or ParseResult) to ParseResult.
+
+        Some RAG engine implementations (including test doubles) return
+        the base ``IndexResult``.  This helper ensures downstream code can
+        always access ``parser_name`` and ``metadata`` safely.
+        """
+        from nanobot.platform.knowledge.rag_engine import ParseResult
+
+        if isinstance(result, ParseResult):
+            return result
+        return ParseResult(
+            success=result.success,
+            doc_id=result.doc_id,
+            track_id=result.track_id,
+            chunks_count=result.chunks_count,
+            error=result.error,
+            parser_name=getattr(result, "parser_name", "text_insert"),
+            metadata=getattr(result, "metadata", {}),
+        )
+
+    def _index_text_with_segments(
+        self,
+        file: KnowledgeFile,
+        kb: KnowledgeBaseDefinition,
+        text: str,
+    ) -> "ParseResult":
+        """Index text content, auto-splitting into segments for large files.
+
+        Splitting strategy (in priority order):
+        1. **Heading-based**: Split by chapter/section markers (``第X回``,
+           ``# Heading``, etc.) — best for books and structured documents.
+        2. **Paragraph-based**: Fixed-window split by paragraphs — fallback for
+           large unstructured docs (contracts, transcripts, logs, etc.).
+        3. **Single insert**: For texts below ``_SEGMENT_SPLIT_THRESHOLD``.
+        """
+        if len(text) < self._SEGMENT_SPLIT_THRESHOLD:
+            return self._as_parse_result(
+                self._run_async(
+                    self.rag_engine.insert_text(
+                        file.kb_id,
+                        text,
+                        doc_id=file.file_id,
+                        file_path=file.raw_path or file.filename,
+                    )
+                )
+            )
+
+        # Strategy 1: heading-based splitting (books, structured docs).
+        from nanobot.platform.knowledge.chunking.dispatcher import chunk_by_headings
+        sections = chunk_by_headings(text)
+
+        # Strategy 2: paragraph-based fallback (unstructured large files).
+        if len(sections) < 2:
+            from nanobot.platform.knowledge.chunking.dispatcher import chunk_plain_text
+            sections = chunk_plain_text(
+                text,
+                chunk_size=self._SEGMENT_SIZE,
+                chunk_overlap=self._SEGMENT_OVERLAP,
+            )
+
+        # Build (text, segment_doc_id) pairs.
+        segments = [
+            (section, f"{file.file_id}_seg_{i:04d}")
+            for i, section in enumerate(sections)
+        ]
+        logger.info(
+            "Indexing kb_id={} file_id={} as {} segments (large file segment split)",
+            file.kb_id,
+            file.file_id,
+            len(segments),
+        )
+
+        def _on_segment_done(
+            index: int,
+            total: int,
+            seg_doc_id: str,
+            success: bool,
+            error: str | None,
+        ) -> None:
+            """Update file processing_params with real-time progress."""
+            try:
+                progress = {
+                    "completedSegments": index + 1,
+                    "totalSegments": total,
+                    "lastSegmentId": seg_doc_id,
+                    "lastSegmentSuccess": success,
+                    "lastSegmentAt": now_iso(),
+                }
+                if error:
+                    progress["lastSegmentError"] = str(error)[:200]
+                processing_params = dict(file.processing_params)
+                processing_params["indexProgress"] = progress
+                self._update_file(
+                    replace(file, processing_params=processing_params, updated_at=now_iso())
+                )
+            except Exception:
+                pass  # Progress tracking is best-effort; never block indexing.
+
+        return self._run_async(
+            self.rag_engine.insert_text_segments(
+                file.kb_id,
+                segments,
+                file_path=file.raw_path or file.filename,
+                on_segment_done=_on_segment_done,
             )
         )
 

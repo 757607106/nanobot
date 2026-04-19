@@ -37,7 +37,7 @@ export function KnowledgeEvaluationResultModal({
       render: (_value, record) => formatScorePercent(Number(record.metrics?.score ?? 0)),
     },
     {
-      title: 'Recall@1',
+      title: '命中率@1',
       key: 'recall1',
       width: 120,
       render: (_value, record) => formatScorePercent(Number(record.metrics?.['recall@1'] ?? 0)),
@@ -69,7 +69,7 @@ export function KnowledgeEvaluationResultModal({
             <Descriptions.Item label="状态">
               <Tag color={statusColor(result.status)}>{statusLabel(result.status)}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="总体评分">{formatScorePercent(result.overallScore ?? result.overall_score)}</Descriptions.Item>
+            <Descriptions.Item label="总分">{formatScorePercent(result.overallScore ?? result.overall_score)}</Descriptions.Item>
             <Descriptions.Item label="进度">
               {result.completedQuestions || result.completed_questions || 0}/
               {result.totalQuestions || result.total_questions || 0}
@@ -80,7 +80,7 @@ export function KnowledgeEvaluationResultModal({
                 : '--'}
             </Descriptions.Item>
           </Descriptions>
-          <Card size="small" title="聚合指标">
+          <Card size="small" title="指标汇总">
             <div className="knowledge-metadata-list">
               {Object.entries(result.metrics || {}).map(([key, value]) => (
                 <div key={key} className="knowledge-metadata-item">
@@ -92,7 +92,7 @@ export function KnowledgeEvaluationResultModal({
           </Card>
           <div className="knowledge-query-topbar">
             <Space wrap>
-              <Button onClick={onToggleErrorOnly}>{errorOnly ? '查看全部' : '仅查看异常'}</Button>
+              <Button onClick={onToggleErrorOnly}>{errorOnly ? '查看全部' : '只看异常'}</Button>
             </Space>
           </div>
           <Table

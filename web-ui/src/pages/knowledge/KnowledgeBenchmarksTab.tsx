@@ -30,22 +30,22 @@ export function KnowledgeBenchmarksTab({
   const goldChunkCount = benchmarks.filter((item) => item.hasGoldChunks || item.has_gold_chunks).length
 
   return (
-    <div className="knowledge-tab-panel">
+    <div className="knowledge-tab-panel knowledge-benchmark-panel">
       <SectionCard
-        title="评测基准库"
+        title="评测题库"
         action={(
           <Space wrap size={[8, 8]}>
-            <Button onClick={onOpenGenerate}>生成基准</Button>
-            <Button onClick={onOpenUpload}>上传 JSONL</Button>
+            <Button onClick={onOpenGenerate}>生成题库</Button>
+            <Button onClick={onOpenUpload}>上传题库</Button>
             <Button icon={<ReloadOutlined />} loading={benchmarkLoading} onClick={onRefresh}>
               刷新
             </Button>
           </Space>
         )}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--nb-border)' }}>
+        <div className="knowledge-benchmark-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--nb-border)' }}>
           <MetricCard
-            label="基准数量"
+            label="题库数量"
             value={benchmarks.length}
             icon={<DatabaseOutlined />}
             tone="neutral"
@@ -57,13 +57,13 @@ export function KnowledgeBenchmarksTab({
             tone="neutral"
           />
           <MetricCard
-            label="标准答案"
+            label="含标准答案"
             value={goldAnswerCount}
             icon={<CheckSquareOutlined />}
             tone="success"
           />
           <MetricCard
-            label="标准命中块"
+            label="含参考片段"
             value={goldChunkCount}
             icon={<AimOutlined />}
             tone="success"
@@ -71,6 +71,7 @@ export function KnowledgeBenchmarksTab({
         </div>
 
         <Table
+          className="knowledge-benchmark-table"
           rowKey="benchmarkId"
           size="small"
           loading={benchmarkLoading}
@@ -79,7 +80,7 @@ export function KnowledgeBenchmarksTab({
           columns={columns}
           locale={{
             emptyText: (
-              <Empty image={false} className="minimal-empty" description="暂无评测基准" />
+              <Empty image={false} className="minimal-empty" description="暂无评测题库" />
             ),
           }}
         />

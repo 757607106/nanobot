@@ -3299,10 +3299,9 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText(/审计/)).toBeInTheDocument()
     expect((await screen.findAllByText('Support Lead')).length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByText('候选审核'))
-    expect(screen.getByText('候选审核')).toBeInTheDocument()
-
-    expect(screen.getByText('检索取证')).toBeInTheDocument()
+    const candidatesTab = await screen.findByRole('tab', { name: '候选审核' })
+    fireEvent.click(candidatesTab)
+    expect(await screen.findByRole('tab', { name: '检索取证' })).toBeInTheDocument()
   })
 
   it('renders agent memory audit page with agent-specific overview panels', async () => {
@@ -3325,10 +3324,9 @@ describe('web app smoke pages', () => {
     expect(await screen.findByText(/审计/)).toBeInTheDocument()
     expect((await screen.findAllByText('Support Lead')).length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByText('候选审核'))
-    expect(screen.getByText('候选审核')).toBeInTheDocument()
-
-    expect(screen.getByText('检索取证')).toBeInTheDocument()
+    const candidatesTab = await screen.findByRole('tab', { name: '候选审核' })
+    fireEvent.click(candidatesTab)
+    expect(await screen.findByRole('tab', { name: '检索取证' })).toBeInTheDocument()
   })
 
   it('renders knowledge page with catalog and retrieval panels', async () => {
@@ -3356,11 +3354,11 @@ describe('web app smoke pages', () => {
     fireEvent.click(kbCard)
 
     expect(await screen.findByRole('tab', { name: '文件' })).toBeInTheDocument()
-    expect(screen.getByText('检索测试')).toBeInTheDocument()
+    expect(screen.getByText('问答测试')).toBeInTheDocument()
     expect(screen.getByText('知识导图')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: '设置' }))
-    expect(await screen.findByText('分块策略')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: '知识库设置' }))
+    expect(await screen.findByText('内容切分')).toBeInTheDocument()
     expect(screen.getByText('保存设置')).toBeInTheDocument()
   })
 
@@ -3676,7 +3674,7 @@ describe('web app smoke pages', () => {
     mockApi.getKnowledgeBases.mockResolvedValue([])
     renderPage(<DashboardPage />)
     expect((await screen.findAllByText(/总览|控制台|仪表板/)).length).toBeGreaterThan(0)
-    expect(screen.getByText('Agent 开销与效能分析')).toBeInTheDocument()
+    expect(screen.getByText('员工开销与效能分析')).toBeInTheDocument()
     expect(screen.getByText('系统状态')).toBeInTheDocument()
   })
 

@@ -39,7 +39,7 @@ export default function McpPage() {
       const next = await api.getMcpServers()
       setData(next)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载 MCP 列表失败')
+      message.error(error instanceof Error ? error.message : '加载服务连接失败')
     } finally {
       setLoading(false)
     }
@@ -61,7 +61,7 @@ export default function McpPage() {
   function handleDelete(entry: McpServerEntry) {
     modal.confirm({
       title: `删除 ${entry.displayName || entry.name}`,
-      content: '确定要删除该 MCP 服务器吗？',
+      content: '确定要删除该服务连接吗？',
       okText: '删除',
       cancelText: '取消',
       okButtonProps: { danger: true },
@@ -113,7 +113,7 @@ export default function McpPage() {
         },
       }
       await api.updateConfig(nextConfig)
-      message.success('服务器已添加')
+      message.success('连接已添加')
       setDialogOpen(false)
       await loadServers()
     } finally {
@@ -124,8 +124,8 @@ export default function McpPage() {
   if (loading && !data) {
     return (
       <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
-        <PageHeader title="MCP 扩展" />
-        <SectionCard title="服务器清单">
+        <PageHeader title="服务集成" />
+        <SectionCard title="连接列表">
           <div style={{ display: 'grid', gap: 'var(--nb-spacing-md)', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
             {[1, 2, 3].map((key) => (
               <Card
@@ -147,15 +147,15 @@ export default function McpPage() {
   return (
     <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)', paddingBlock: 'var(--nb-spacing-lg)' }}>
       <PageHeader
-        title="MCP 扩展"
+        title="服务集成"
         actions={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDialog}>
-            添加服务器
+            添加连接
           </Button>
         }
       />
 
-      <SectionCard title={`服务器清单 (${servers.length})`}>
+      <SectionCard title={`连接列表（${servers.length}）`}>
         {servers.length > 0 ? (
           <div style={{ display: 'grid', gap: 'var(--nb-spacing-md)', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
             {servers.map((entry) => (
@@ -169,9 +169,9 @@ export default function McpPage() {
             ))}
           </div>
         ) : (
-          <Empty description="暂无 MCP 服务器" style={{ paddingBlock: 'var(--nb-spacing-xl)' }}>
+          <Empty description="暂无服务连接" style={{ paddingBlock: 'var(--nb-spacing-xl)' }}>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDialog}>
-              添加第一个服务器
+              添加第一个连接
             </Button>
           </Empty>
         )}

@@ -18,43 +18,34 @@ export default function SectionCard({
 }: SectionCardProps) {
   return (
     <Card
-      className="section-card"
+      className={`section-card${loading ? ' is-loading' : ''}`}
       loading={loading}
       variant="borderless"
     >
-      <Flex vertical gap={16}>
+      {title || description || action ? (
         <Flex
           justify="space-between"
           align="flex-start"
-          gap={14}
-          wrap="wrap"
+          gap={16}
           className="section-card-head"
+          wrap="wrap"
         >
-          <div className="section-card-copy">
-            <Typography.Title
-              level={4}
-              className="section-card-title"
-            >
-              {title}
-            </Typography.Title>
-
+          <div className="section-card-head-main">
+            {title ? (
+              <Typography.Text strong className="section-card-head-title">
+                {title}
+              </Typography.Text>
+            ) : null}
             {description ? (
-              <Typography.Paragraph
-                className="section-card-description"
-                type="secondary"
-              >
+              <Typography.Text type="secondary" className="section-card-head-description">
                 {description}
-              </Typography.Paragraph>
+              </Typography.Text>
             ) : null}
           </div>
-
-          {action ? <div className="section-card-extra">{action}</div> : null}
+          {action ? <div className="section-card-head-action">{action}</div> : null}
         </Flex>
-
-        <div className="section-card-body">
-          {children}
-        </div>
-      </Flex>
+      ) : null}
+      <div className="section-card-content">{children}</div>
     </Card>
   )
 }

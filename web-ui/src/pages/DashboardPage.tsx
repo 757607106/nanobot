@@ -90,6 +90,58 @@ function exportAnalyticsCsv(analytics: DashboardAnalyticsResponse | null) {
   URL.revokeObjectURL(url)
 }
 
+/* ── Helper Component for Agent Diagnostics ── */
+function DiagnosticModule({
+  title,
+  icon,
+  iconColor,
+  isEmpty,
+  children
+}: {
+  title: string
+  icon: React.ReactNode
+  iconColor: string
+  isEmpty: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="dashboard-diagnostic-module">
+      <Flex align="center" gap={8} className="dashboard-diagnostic-head">
+        <span style={{ color: iconColor }} aria-hidden="true">
+          {icon}
+        </span>
+        <Typography.Text type="secondary" className="dashboard-diagnostic-title">
+          {title}
+        </Typography.Text>
+      </Flex>
+      {isEmpty ? (
+        <Typography.Text type="secondary" className="dashboard-diagnostic-empty">
+          — 无记录 —
+        </Typography.Text>
+      ) : (
+        children
+      )}
+    </div>
+  )
+}
+
+function BasicTagList({ items, color }: { items: [string, number][], color: string }) {
+  return (
+    <Flex wrap="wrap" gap={6} className="dashboard-diagnostic-tags">
+      {items.map(([key, count]) => (
+        <div key={key} className="dashboard-diagnostic-tag">
+          <Typography.Text className="dashboard-diagnostic-tag-label">
+            {key}
+          </Typography.Text>
+          <Tag color={color} bordered={false} className="dashboard-diagnostic-tag-count">
+            {count}
+          </Tag>
+        </div>
+      ))}
+    </Flex>
+  )
+}
+
 export default function DashboardPage() {
   const message = useToast()
   const { token } = theme.useToken()
@@ -193,7 +245,6 @@ export default function DashboardPage() {
               height: 7,
               borderRadius: '50%',
               background: isSystemOnline ? token.colorSuccess : token.colorWarning,
-              boxShadow: `0 0 10px ${isSystemOnline ? token.colorSuccess : token.colorWarning}`,
             }} />
             <span style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 'var(--nb-text-sm)', letterSpacing: '0.04em' }}>
               {isSystemOnline ? '系统运行中' : '系统待机'} · {dateString}
@@ -254,7 +305,11 @@ export default function DashboardPage() {
         <MetricCard
           label="算力消耗"
           value={loading && !overview ? cardSkeleton() : (overview?.totalTokens ?? system?.stats.totalTokens ?? 0).toLocaleString()}
-          helper={`P: ${(overview?.promptTokens ?? system?.stats.promptTokens ?? 0).toLocaleString()} / C: ${(overview?.completionTokens ?? system?.stats.completionTokens ?? 0).toLocaleString()}`}
+          helper={`输入 ${(
+            overview?.promptTokens ?? system?.stats.promptTokens ?? 0
+          ).toLocaleString()} · 输出 ${(
+            overview?.completionTokens ?? system?.stats.completionTokens ?? 0
+          ).toLocaleString()}`}
           tone="primary"
           icon={<FireOutlined />}
         />
@@ -276,53 +331,65 @@ export default function DashboardPage() {
 
       {/* ── 快捷操作 ── */}
       <div className="dashboard-quick-action-grid">
-        <div className="dashboard-quick-action tone-accent" onClick={() => navigate('/studio')}>
+        <button type="button" className="dashboard-quick-action tone-accent" onClick={() => navigate('/studio')}>
           <div className="dashboard-quick-action-icon">
             <RobotOutlined />
           </div>
-          <div>
-            <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>创建智能体</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>配置并调试核心数字员工角色</Typography.Text>
+          <div className="dashboard-quick-action-copy">
+            <Typography.Text strong className="dashboard-quick-action-title">
+              创建智能体
+            </Typography.Text>
+            <Typography.Text type="secondary" className="dashboard-quick-action-description">
+              配置并调试核心数字员工角色
+            </Typography.Text>
           </div>
-        </div>
-        <div className="dashboard-quick-action tone-warning" onClick={() => navigate('/knowledge')}>
+        </button>
+        <button type="button" className="dashboard-quick-action tone-warning" onClick={() => navigate('/knowledge')}>
           <div className="dashboard-quick-action-icon">
             <DatabaseOutlined />
           </div>
-          <div>
-            <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>构建知识库</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>导入私有语料训练专属大脑</Typography.Text>
+          <div className="dashboard-quick-action-copy">
+            <Typography.Text strong className="dashboard-quick-action-title">
+              构建知识库
+            </Typography.Text>
+            <Typography.Text type="secondary" className="dashboard-quick-action-description">
+              导入私有语料训练专属大脑
+            </Typography.Text>
           </div>
-        </div>
-        <div className="dashboard-quick-action tone-success" onClick={() => navigate('/channels')}>
+        </button>
+        <button type="button" className="dashboard-quick-action tone-success" onClick={() => navigate('/channels')}>
           <div className="dashboard-quick-action-icon">
             <ApiOutlined />
           </div>
-          <div>
-            <Typography.Text strong style={{ display: 'block', fontSize: 'var(--nb-text-sm)' }}>连接发布渠道</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.4, display: 'block' }}>将中枢系统接入办公平台或社群</Typography.Text>
+          <div className="dashboard-quick-action-copy">
+            <Typography.Text strong className="dashboard-quick-action-title">
+              连接发布渠道
+            </Typography.Text>
+            <Typography.Text type="secondary" className="dashboard-quick-action-description">
+              将中枢系统接入办公平台或社群
+            </Typography.Text>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* ── 图表区域 ── */}
       <div className="dashboard-charts-grid">
         {/* 模型调用趋势 (full width) */}
-        <SectionCard title="模型调用趋势">
+        <SectionCard title="模型调用趋势" description="按选定时间粒度统计模型调用量与趋势。">
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <ModelCallTrendChart data={analytics?.timeSeries ?? []} />}
           </Suspense>
         </SectionCard>
 
         {/* Token 消耗分布 */}
-        <SectionCard title="Token 消耗分布">
+        <SectionCard title="Token 消耗分布" description="输入与输出 Token 的消耗结构与占比。">
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <TokenConsumptionPieChart data={analytics?.timeSeries ?? []} />}
           </Suspense>
         </SectionCard>
 
         {/* 工具使用 TOP10 */}
-        <SectionCard title="工具使用 TOP10">
+        <SectionCard title="工具使用 TOP10" description="统计工具调用频次，定位高开销工具链。">
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <ToolUsageBarChart data={analytics?.toolRanking ?? []} />}
           </Suspense>
@@ -332,55 +399,57 @@ export default function DashboardPage() {
       {/* ── 状态区域 ── */}
       <div className="dashboard-status-grid">
         {/* MCP 服务健康度 */}
-        <SectionCard title="MCP 服务健康度">
+        <SectionCard title="连接健康度" description="监控连接可用性与响应健康度。">
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <McpHealthGauge data={mcpHealth} />}
           </Suspense>
         </SectionCard>
 
         {/* 知识库活动 */}
-        <SectionCard title="知识库活动">
+        <SectionCard title="知识库活动" description="最近知识检索与写入活跃度。">
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <KnowledgeActivityHeatmap data={kbActivity} />}
           </Suspense>
         </SectionCard>
 
         {/* 系统状态 */}
-        <SectionCard title="系统状态">
+        <SectionCard title="系统状态" description="核心服务与配置摘要。">
           {loading ? (
             <Skeleton active paragraph={{ rows: 3 }} title={false} />
           ) : (
-            <Flex vertical gap={0}>
+            <div className="dashboard-status-list">
               {[
                 { label: '调度引擎', value: cron?.enabled ? '运行中' : '已离线', color: cron?.enabled ? 'green' : 'default' },
                 { label: '网关服务', value: '运行中', color: 'green' },
                 { label: '接入渠道', value: `${activeChannels.length} 个`, color: activeChannels.length > 0 ? 'blue' : 'default' },
                 { label: '运行版本', value: system?.web.version || '—', color: undefined },
               ].map((row, i, arr) => (
-                <Flex
+                <div
                   key={row.label}
-                  justify="space-between"
-                  align="center"
-                  style={{
-                    padding: '10px 0',
-                    borderBottom: i < arr.length - 1 ? `1px solid ${token.colorBorderSecondary}` : 'none',
-                  }}
+                  className="dashboard-status-row"
+                  data-last={i === arr.length - 1 ? 'true' : 'false'}
                 >
-                  <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>{row.label}</Typography.Text>
+                  <Typography.Text type="secondary" className="dashboard-status-label">
+                    {row.label}
+                  </Typography.Text>
                   {row.color ? (
-                    <Tag color={row.color} style={{ margin: 0 }}>{row.value}</Tag>
+                    <Tag color={row.color} style={{ margin: 0 }}>
+                      {row.value}
+                    </Tag>
                   ) : (
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', fontFamily: 'var(--nb-font-mono)' }}>{row.value}</Typography.Text>
+                    <Typography.Text strong className="dashboard-status-value">
+                      {row.value}
+                    </Typography.Text>
                   )}
-                </Flex>
+                </div>
               ))}
-            </Flex>
+            </div>
           )}
         </SectionCard>
       </div>
 
       {/* ── Agent 效能诊断 ── */}
-      <SectionCard title="Agent 开销与效能分析">
+      <SectionCard title="员工开销与效能分析">
         {loading ? (
           <Skeleton active paragraph={{ rows: 4 }} title={false} />
         ) : Object.keys(agentMetrics).length > 0 ? (
@@ -390,109 +459,70 @@ export default function DashboardPage() {
               if (!metrics || (metrics.tokens.length === 0 && Object.keys(metrics.tools || {}).length === 0 && Object.keys(metrics.mcps || {}).length === 0 && Object.keys(metrics.knowledge || {}).length === 0)) return null
 
               return (
-                <div key={agent.agentId} style={{
-                  background: token.colorFillQuaternary,
-                  borderRadius: 'var(--nb-radius-lg)',
-                  padding: 'var(--nb-spacing-lg)',
-                  border: `1px solid ${token.colorBorderSecondary}`,
-                }}>
-                  <Flex align="center" gap={12} style={{ marginBottom: 'var(--nb-spacing-md)' }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 8, background: 'var(--nb-accent)',
-                      color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
+                <div key={agent.agentId} className="dashboard-agent-diagnostic">
+                  <Flex align="center" gap={12} className="dashboard-agent-diagnostic-head">
+                    <div className="dashboard-agent-diagnostic-badge" aria-hidden="true">
                       <RobotOutlined />
                     </div>
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)' }}>{agent.name}</Typography.Text>
+                    <Typography.Text strong className="dashboard-agent-diagnostic-name">
+                      {agent.name}
+                    </Typography.Text>
                   </Flex>
 
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                    gap: 'var(--nb-spacing-md)'
-                  }}>
+                  <div className="dashboard-agent-diagnostic-grid">
                     {/* Tokens Module */}
-                    <div style={{ background: token.colorBgContainer, padding: 'var(--nb-spacing-md)', borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
-                      <Flex align="center" gap={8} style={{ marginBottom: 12, opacity: 0.85 }}>
-                        <FireOutlined style={{ color: 'var(--nb-accent)' }} />
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', fontWeight: 600, letterSpacing: '0.04em' }}>模型算力消耗 (TOKENS)</Typography.Text>
-                      </Flex>
-                      {metrics.tokens.length > 0 ? (
-                        <Flex vertical gap={8}>
-                          {metrics.tokens.map((t, idx) => (
-                            <Flex justify="space-between" align="center" key={idx} style={{ paddingBottom: 6, borderBottom: idx < metrics.tokens.length - 1 ? `1px dashed ${token.colorBorderSecondary}` : 'none' }}>
-                              <div style={{ fontSize: 'var(--nb-text-xs)' }}>
-                                <div style={{ fontFamily: 'var(--nb-font-mono)', color: token.colorTextSecondary }}>{t.provider}/{t.model}</div>
-                                <div style={{ fontSize: '10px', color: token.colorTextQuaternary }}>P:{t.promptTokens} / C:{t.completionTokens}{t.cachedTokens ? ` / Ca:${t.cachedTokens}` : ''}</div>
+                    <DiagnosticModule
+                      title="模型消耗（Token）"
+                      icon={<FireOutlined />}
+                      iconColor="var(--nb-accent)"
+                      isEmpty={metrics.tokens.length === 0}
+                    >
+                      <Flex vertical gap={8}>
+                        {metrics.tokens.map((t, idx) => (
+                          <div key={idx} className="dashboard-token-row" data-last={idx === metrics.tokens.length - 1 ? 'true' : 'false'}>
+                            <div className="dashboard-token-row-left">
+                              <div className="dashboard-token-row-model">{t.provider}/{t.model}</div>
+                              <div className="dashboard-token-row-breakdown">
+                                输入:{t.promptTokens} · 输出:{t.completionTokens}{t.cachedTokens ? ` · 缓存:${t.cachedTokens}` : ''}
                               </div>
-                              <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', color: token.colorTextHeading }}>{t.totalTokens.toLocaleString()}</Typography.Text>
-                            </Flex>
-                          ))}
-                        </Flex>
-                      ) : (
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>— 无流水 —</Typography.Text>
-                      )}
-                    </div>
+                            </div>
+                            <Typography.Text strong className="dashboard-token-row-total">
+                              {t.totalTokens.toLocaleString()}
+                            </Typography.Text>
+                          </div>
+                        ))}
+                      </Flex>
+                    </DiagnosticModule>
 
                     {/* Tools Module */}
-                    <div style={{ background: token.colorBgContainer, padding: 'var(--nb-spacing-md)', borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
-                      <Flex align="center" gap={8} style={{ marginBottom: 12, opacity: 0.85 }}>
-                        <ApiOutlined style={{ color: '#1677ff' }} />
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', fontWeight: 600, letterSpacing: '0.04em' }}>内部执行工具 (TOOLS)</Typography.Text>
-                      </Flex>
-                      {Object.keys(metrics.tools || {}).length > 0 ? (
-                        <Flex wrap="wrap" gap={6}>
-                          {Object.entries(metrics.tools || {}).map(([t, c]) => (
-                            <div key={t} style={{ background: token.colorFillAlter, border: `1px solid ${token.colorBorderSecondary}`, padding: '4px 10px', borderRadius: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <Typography.Text style={{ fontSize: 'var(--nb-text-xs)' }}>{t}</Typography.Text>
-                              <Tag color="blue" bordered={false} style={{ margin: 0, minWidth: 24, textAlign: 'center' }}>{c}</Tag>
-                            </div>
-                          ))}
-                        </Flex>
-                      ) : (
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>— 无记录 —</Typography.Text>
-                      )}
-                    </div>
+                    <DiagnosticModule
+                      title="工具调用"
+                      icon={<ApiOutlined />}
+                      iconColor="#1677ff"
+                      isEmpty={Object.keys(metrics.tools || {}).length === 0}
+                    >
+                      <BasicTagList items={Object.entries(metrics.tools || {})} color="blue" />
+                    </DiagnosticModule>
 
                     {/* MCPs Module */}
-                    <div style={{ background: token.colorBgContainer, padding: 'var(--nb-spacing-md)', borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
-                      <Flex align="center" gap={8} style={{ marginBottom: 12, opacity: 0.85 }}>
-                        <DatabaseOutlined style={{ color: '#2f54eb' }} />
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', fontWeight: 600, letterSpacing: '0.04em' }}>外联跨端节点 (MCP)</Typography.Text>
-                      </Flex>
-                      {Object.keys(metrics.mcps || {}).length > 0 ? (
-                        <Flex wrap="wrap" gap={6}>
-                          {Object.entries(metrics.mcps || {}).map(([m, c]) => (
-                            <div key={m} style={{ background: token.colorFillAlter, border: `1px solid ${token.colorBorderSecondary}`, padding: '4px 10px', borderRadius: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <Typography.Text style={{ fontSize: 'var(--nb-text-xs)' }}>{m}</Typography.Text>
-                              <Tag color="geekblue" bordered={false} style={{ margin: 0, minWidth: 24, textAlign: 'center' }}>{c}</Tag>
-                            </div>
-                          ))}
-                        </Flex>
-                      ) : (
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>— 无记录 —</Typography.Text>
-                      )}
-                    </div>
+                    <DiagnosticModule
+                      title="连接节点"
+                      icon={<DatabaseOutlined />}
+                      iconColor="#2f54eb"
+                      isEmpty={Object.keys(metrics.mcps || {}).length === 0}
+                    >
+                      <BasicTagList items={Object.entries(metrics.mcps || {})} color="geekblue" />
+                    </DiagnosticModule>
 
                     {/* KB Module */}
-                    <div style={{ background: token.colorBgContainer, padding: 'var(--nb-spacing-md)', borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
-                      <Flex align="center" gap={8} style={{ marginBottom: 12, opacity: 0.85 }}>
-                        <DatabaseOutlined style={{ color: '#13c2c2' }} />
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', fontWeight: 600, letterSpacing: '0.04em' }}>知识检索引擎 (KB)</Typography.Text>
-                      </Flex>
-                      {Object.keys(metrics.knowledge || {}).length > 0 ? (
-                        <Flex wrap="wrap" gap={6}>
-                          {Object.entries(metrics.knowledge || {}).map(([k, c]) => (
-                            <div key={k} style={{ background: token.colorFillAlter, border: `1px solid ${token.colorBorderSecondary}`, padding: '4px 10px', borderRadius: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <Typography.Text style={{ fontSize: 'var(--nb-text-xs)' }}>{k}</Typography.Text>
-                              <Tag color="cyan" bordered={false} style={{ margin: 0, minWidth: 24, textAlign: 'center' }}>{c}</Tag>
-                            </div>
-                          ))}
-                        </Flex>
-                      ) : (
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>— 无记录 —</Typography.Text>
-                      )}
-                    </div>
+                    <DiagnosticModule
+                      title="知识检索"
+                      icon={<DatabaseOutlined />}
+                      iconColor="#13c2c2"
+                      isEmpty={Object.keys(metrics.knowledge || {}).length === 0}
+                    >
+                      <BasicTagList items={Object.entries(metrics.knowledge || {})} color="cyan" />
+                    </DiagnosticModule>
                   </div>
                 </div>
               )

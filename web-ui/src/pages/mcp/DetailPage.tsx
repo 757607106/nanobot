@@ -102,7 +102,7 @@ export default function McpServerDetailDrawer({
   useEffect(() => {
     if (!serverName || !open) {
       setLoading(false)
-      setError('缺少 MCP 名称')
+      setError('缺少连接名称')
       return
     }
     void loadServer(serverName)
@@ -238,7 +238,7 @@ export default function McpServerDetailDrawer({
           {error ? (
             <Alert type="error" message="加载失败" description={error} />
           ) : (
-            <Empty description="MCP 不存在" />
+            <Empty description="连接不存在" />
           )}
         </div>
       </Drawer>

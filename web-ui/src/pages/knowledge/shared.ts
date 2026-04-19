@@ -7,7 +7,7 @@ import type {
   KnowledgeQueryParams,
 } from '../../types'
 
-export const KNOWLEDGE_ARCHITECTURE_LABEL = 'LightRAG'
+export const KNOWLEDGE_ARCHITECTURE_LABEL = '知识引擎'
 export const DEFAULT_KNOWLEDGE_CHUNK_SIZE = 1000
 export const DEFAULT_KNOWLEDGE_CHUNK_OVERLAP = 200
 
@@ -28,10 +28,10 @@ export const DEFAULT_QUERY_PARAMS: KnowledgeQueryParams = {
 }
 
 export const CHUNK_PRESET_OPTIONS = [
-  { value: 'general', label: 'General', description: '通用分块，适合大多数普通文档。' },
-  { value: 'qa', label: 'QA', description: '问答分块，适合 FAQ、题库、问答手册。' },
-  { value: 'book', label: 'Book', description: '强化章节结构，适合教材、长手册。' },
-  { value: 'laws', label: 'Laws', description: '法条层级分块，适合法规制度文本。' },
+  { value: 'general', label: '通用', description: '适合大多数文档。' },
+  { value: 'qa', label: '问答', description: '适合 FAQ、题库、问答手册。' },
+  { value: 'book', label: '长文', description: '适合教材、长手册等长文本。' },
+  { value: 'laws', label: '法规', description: '适合法规、制度、条款类文本。' },
 ]
 
 export const LANGUAGE_OPTIONS = [
@@ -207,7 +207,7 @@ export function parseTags(value: string) {
   return Array.from(
     new Set(
       value
-        .split(',')
+        .split(/[,，]/)
         .map((item) => item.trim())
         .filter(Boolean),
     ),
@@ -241,11 +241,11 @@ export function statusLabel(status: string) {
     uploaded: '待解析',
     parsing: '解析中',
     parsed: '已解析',
-    indexing: '索引中',
-    indexed: '已索引',
+    indexing: '入库中',
+    indexed: '已入库',
     folder: '文件夹',
     error_parsing: '解析失败',
-    error_indexing: '索引失败',
+    error_indexing: '入库失败',
     queued: '排队中',
     running: '运行中',
     completed: '已完成',

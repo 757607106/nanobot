@@ -52,8 +52,8 @@ export function buildKnowledgeBenchmarkColumns({
       width: 180,
       render: (_value, record) => (
         <Space wrap size={4}>
-          <Tag color={(record.hasGoldChunks || record.has_gold_chunks) ? 'blue' : 'default'}>检索黄金集</Tag>
-          <Tag color={(record.hasGoldAnswers || record.has_gold_answers) ? 'green' : 'default'}>标准答案</Tag>
+          <Tag color={(record.hasGoldChunks || record.has_gold_chunks) ? 'blue' : 'default'}>含参考片段</Tag>
+          <Tag color={(record.hasGoldAnswers || record.has_gold_answers) ? 'green' : 'default'}>含标准答案</Tag>
         </Space>
       ),
     },
@@ -88,22 +88,36 @@ export function buildKnowledgeBenchmarkColumns({
 interface KnowledgeEvaluationColumnsOptions {
   onViewEvaluationResult: (taskId: string) => void
   onDeleteEvaluationResult: (taskId: string) => void
+  benchmarkNameById?: Record<string, string>
 }
 
 export function buildKnowledgeEvaluationColumns({
   onViewEvaluationResult,
   onDeleteEvaluationResult,
+  benchmarkNameById,
 }: KnowledgeEvaluationColumnsOptions): ColumnsType<KnowledgeEvaluationSummary> {
   return [
     {
-      title: '任务 ID',
+      title: '记录 ID',
       key: 'taskId',
       render: (_value, record) => <Text code>{record.taskId}</Text>,
     },
     {
-      title: '基准',
+      title: '题库',
       key: 'benchmarkId',
-      render: (_value, record) => record.benchmarkId,
+      render: (_value, record) => {
+        const name = benchmarkNameById?.[record.benchmarkId]
+        return name ? (
+          <div>
+            <Text strong>{name}</Text>
+            <div>
+              <Text type="secondary">{record.benchmarkId}</Text>
+            </div>
+          </div>
+        ) : (
+          record.benchmarkId
+        )
+      },
     },
     {
       title: '状态',
@@ -113,7 +127,7 @@ export function buildKnowledgeEvaluationColumns({
       render: (value: string) => <Tag color={statusColor(value)}>{statusLabel(value)}</Tag>,
     },
     {
-      title: '总体评分',
+      title: '总分',
       key: 'overallScore',
       width: 120,
       render: (_value, record) => formatScorePercent(record.overallScore ?? record.overall_score),

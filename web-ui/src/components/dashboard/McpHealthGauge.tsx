@@ -33,7 +33,7 @@ export default function McpHealthGauge({ data }: McpHealthGaugeProps) {
   }, [score, ct])
 
   if (!data || servers.length === 0) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 MCP 服务数据" />
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无连接数据" />
   }
 
   const config: GaugeConfig = {

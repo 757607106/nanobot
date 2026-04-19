@@ -4,17 +4,18 @@
 
 | 文件 | 体积 |
 |---|---:|
-| vendor-CG5FlbKr.js | 5.91 MB |
-| antd-BQqqHSJe.js | 1.37 MB |
-| chunk-graph-Cm3RVvSC.js | 1.05 MB |
+| vendor-CaeBtTZW.js | 5.98 MB |
+| chunk-graph-BQHcu3QN.js | 1.53 MB |
+| antd-C6HL0ZZd.js | 1.44 MB |
 | worker-B9qc9nkC.js | 303.5 KB |
 | pkg-html2canvas-Bxw5drDI.js | 179.3 KB |
-| react-core-DMX3MsSR.js | 140.7 KB |
+| react-core-dPa_jv76.js | 140.7 KB |
+| pkg-lodash-D5QRJgcT.js | 117.2 KB |
 | vendor-BU66-h4g.css | 105.6 KB |
 | pkg-yaml-RrwvUN8j.js | 95.9 KB |
-| index-BWBHcvrn.js | 95.1 KB |
+| index-DbHs1hzO.js | 95.3 KB |
 | noto-sans-sc-119-wght-normal-BfzSEbFz.woff2 | 75.0 KB |
-| pkg-ml-matrix-D2NwDeVa.js | 66.2 KB |
+| pkg-ml-matrix-CBReAOch.js | 66.2 KB |
 | noto-sans-sc-45-wght-normal-MKIEVRIC.woff2 | 66.0 KB |
 | noto-sans-sc-22-wght-normal-VXjdYcT-.woff2 | 63.9 KB |
 | noto-sans-sc-108-wght-normal-7aXvqIa2.woff2 | 63.0 KB |
@@ -28,7 +29,6 @@
 | noto-sans-sc-110-wght-normal-D2JBr045.woff2 | 60.0 KB |
 | noto-sans-sc-107-wght-normal-kFQzJDLH.woff2 | 59.6 KB |
 | noto-sans-sc-102-wght-normal-C1RtbCZr.woff2 | 59.3 KB |
-| noto-sans-sc-109-wght-normal-CnjNbNmw.woff2 | 59.0 KB |
 
 - >500KB 文件数：3
 

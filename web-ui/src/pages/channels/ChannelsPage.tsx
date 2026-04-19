@@ -58,8 +58,10 @@ import {
 } from './shared'
 import { designTokens } from '../../ui/design/tokens'
 import { useToast } from '../../toast'
+import ChannelMetricsGrid from './components/ChannelMetricsGrid'
+import ChannelCardGrid from './components/ChannelCardGrid'
 
-interface ChannelRow {
+export interface ChannelRow {
   key: string
   name: string
   label: string
@@ -401,6 +403,7 @@ export default function ChannelsPage() {
                 onChange={(e) => updateDraft(channelName, field.path, parseListValue(e.target.value))}
                 placeholder={field.placeholder}
                 autoSize={{ minRows: 3, maxRows: 6 }}
+                style={{ lineHeight: '22px' }}
               />
             </Form.Item>
           )
@@ -413,6 +416,7 @@ export default function ChannelsPage() {
                 onChange={(e) => updateDraft(channelName, field.path, e.target.value)}
                 placeholder={field.placeholder}
                 autoSize={{ minRows: 3, maxRows: 6 }}
+                style={{ lineHeight: '22px' }}
               />
             </Form.Item>
           )
@@ -513,66 +517,15 @@ export default function ChannelsPage() {
       />
 
       {/* 统计卡片 */}
-      <div className="channels-metrics-grid">
-        <MetricCard
-          label="已接入"
-          value={channels.filter((c) => c.configured).length}
-          tone="primary"
-          icon={<CheckCircleOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
-        />
-        <MetricCard
-          label="运行中"
-          value={channels.filter((c) => c.enabled).length}
-          tone="success"
-          icon={<CheckCircleOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
-        />
-        <MetricCard
-          label="待补全"
-          value={channels.filter((c) => c.missingFields.length > 0).length}
-          tone="warning"
-          icon={<WarningOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
-        />
-      </div>
+      <ChannelMetricsGrid channels={channels} />
 
       {/* 渠道卡片网格 */}
       <SectionCard title="接入渠道">
-        {channels.length === 0 ? (
-          <Empty description="无匹配项" />
-        ) : (
-          <div className="channel-card-grid">
-            {channels.map((channel, index) => (
-              <motion.div
-                key={channel.key}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.04, duration: 0.2 }}
-                onClick={() => openChannelDrawer(channel.name)}
-                className={`channel-card interactive-lift ${selectedChannel === channel.name ? 'is-selected' : ''}`}
-              >
-                {/* 图标 + 状态 */}
-                <Flex align="flex-start" justify="space-between">
-                  <ChannelAvatar channelName={channel.name} label={channel.label} size={44} />
-                  <Tag
-                    bordered={false}
-                    color={channel.enabled ? 'success' : channel.configured ? 'processing' : 'default'}
-                    style={{ margin: 0, borderRadius: 8, fontSize: 'var(--nb-text-2xs)' }}
-                  >
-                    {channel.enabled ? '运行中' : channel.configured ? '已配置' : '未配置'}
-                  </Tag>
-                </Flex>
-
-                {/* 渠道名 */}
-                <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)' }}>
-                  {channel.label}
-                </Typography.Text>
-
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', lineHeight: 1.5 }}>
-                  {channel.description}
-                </Typography.Text>
-              </motion.div>
-            ))}
-          </div>
-        )}
+        <ChannelCardGrid
+          channels={channels}
+          selectedChannel={selectedChannel}
+          onSelect={openChannelDrawer}
+        />
       </SectionCard>
 
       {/* 渠道配置 Drawer */}

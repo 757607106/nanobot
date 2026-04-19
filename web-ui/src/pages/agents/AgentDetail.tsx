@@ -358,7 +358,7 @@ export default function AgentDetail({
         items={[
             {
               key: 'basic',
-              label: <span style={{ fontWeight: 'var(--nb-font-weight-medium)', fontSize: 'var(--nb-text-md)' }}>核心配置 (Engine & Rules)</span>,
+              label: <span style={{ fontWeight: 'var(--nb-font-weight-medium)', fontSize: 'var(--nb-text-md)' }}>核心配置</span>,
               children: (
                 <AgentEditor
                   form={form}

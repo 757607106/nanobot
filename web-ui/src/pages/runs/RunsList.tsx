@@ -113,7 +113,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       ),
     },
     {
-      title: 'Agent',
+      title: '员工',
       key: 'agentId',
       width: 150,
       render: (_, record) =>
@@ -155,7 +155,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
           <Space>
             <Select
               allowClear
-              placeholder="通过 Agent 筛选"
+              placeholder="按员工筛选"
               value={agentFilter || undefined}
               onChange={handleAgentChange}
               style={{ width: 200 }}
@@ -194,7 +194,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
                   setSearchParams(next)
                 }}
               >
-                Thread: {threadFilter}
+                会话 ID：{threadFilter}
               </Tag>
             </div>
           )}

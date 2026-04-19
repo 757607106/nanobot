@@ -71,7 +71,7 @@ export function isCancelable(status: AgentRunSummary['status']) {
   return status === 'queued' || status === 'running'
 }
 
-export function eventLabel(eventType: string, devMode = true) {
+export function eventLabel(eventType: string, devMode = false) {
   switch (eventType) {
     case 'queued':
       return '已排队'
@@ -86,35 +86,35 @@ export function eventLabel(eventType: string, devMode = true) {
     case 'cancelled':
       return '已取消'
     case 'bindings_resolved':
-      return devMode ? '已装配绑定能力' : '准备就绪'
+      return devMode ? '能力已加载' : '准备就绪'
     case 'knowledge_retrieved':
-      return devMode ? '已检索知识库' : '准备就绪'
+      return devMode ? '已检索知识' : '准备就绪'
     case 'retry_requested':
       return '已发起重跑'
     case 'memory_candidate_proposed':
       return '已生成记忆候选'
     case 'execution_context_materialized':
-      return devMode ? '已物化执行上下文' : '执行边界已确认'
+      return devMode ? '执行上下文已就绪' : '执行边界已确认'
     case 'channel_dispatch_resolved':
-      return devMode ? '已解析渠道路由' : '渠道入口已确认'
+      return devMode ? '渠道路由已确认' : '渠道入口已确认'
     case 'artifact_written':
-      return devMode ? '已写入运行产物' : '产物已归档'
+      return devMode ? '运行产物已写入' : '产物已归档'
     case 'artifact_quarantined':
-      return devMode ? '已隔离运行产物' : '产物已隔离'
+      return devMode ? '运行产物已隔离' : '产物已隔离'
     case 'artifact_archived':
-      return devMode ? '已归档运行产物' : '产物已归档'
+      return devMode ? '运行产物已归档' : '产物已归档'
     case 'artifact_restored':
-      return devMode ? '已恢复运行产物' : '产物已恢复'
+      return devMode ? '运行产物已恢复' : '产物已恢复'
     case 'artifact_deleted':
-      return devMode ? '已删除运行产物' : '产物已删除'
+      return devMode ? '运行产物已删除' : '产物已删除'
     case 'artifact_retention_policy_set':
-      return devMode ? '已更新产物保留策略' : '产物保留策略已更新'
+      return devMode ? '产物保留策略已更新' : '产物保留策略已更新'
     default:
       return eventType
   }
 }
 
-export function eventPayloadSummary(eventType: string, payload?: Record<string, unknown>, devMode = true) {
+export function eventPayloadSummary(eventType: string, payload?: Record<string, unknown>, devMode = false) {
   if (!payload) {
     return null
   }
@@ -131,37 +131,38 @@ export function eventPayloadSummary(eventType: string, payload?: Record<string, 
         return `已加载 ${total} 项能力`
       }
       return [
-        `tools: ${Array.isArray(payload.toolAllowlist) ? payload.toolAllowlist.length : 0}`,
-        `mcp: ${Array.isArray(payload.mcpServerIds) ? payload.mcpServerIds.length : 0}`,
-        `skills: ${Array.isArray(payload.skillIds) ? payload.skillIds.length : 0}`,
-        `kb: ${Array.isArray(payload.knowledgeBindingIds) ? payload.knowledgeBindingIds.length : 0}`,
+        `工具 ${Array.isArray(payload.toolAllowlist) ? payload.toolAllowlist.length : 0}`,
+        `MCP ${Array.isArray(payload.mcpServerIds) ? payload.mcpServerIds.length : 0}`,
+        `技能 ${Array.isArray(payload.skillIds) ? payload.skillIds.length : 0}`,
+        `知识库 ${Array.isArray(payload.knowledgeBindingIds) ? payload.knowledgeBindingIds.length : 0}`,
       ].join(' · ')
     }
     case 'knowledge_retrieved':
-      return `mode: ${payload.effectiveMode || payload.requestedMode || 'keyword'} · hits: ${payload.hitCount || 0}`
+      return `模式：${payload.effectiveMode || payload.requestedMode || 'keyword'} · 命中：${payload.hitCount || 0}`
     case 'retry_requested':
       return [
-        `source: ${payload.sourceRunId || 'n/a'}`,
-        payload.appendContextProvided ? 'with append context' : 'direct retry',
+        `来源：${payload.sourceRunId || '—'}`,
+        payload.appendContextProvided ? '追加上下文' : '直接重试',
       ].join(' · ')
     case 'memory_candidate_proposed':
       return [payload.candidateId, payload.agentId, payload.runId].filter(Boolean).join(' · ')
     case 'execution_context_materialized':
       return [
-        String(payload.principalKind || payload.principal_kind || 'agent'),
-        `workspace: ${payload.workspaceScope || 'shared'}`,
-        `sandbox: ${payload.sandboxKind || 'local'}`,
+        `主体：${payload.principalKind || payload.principal_kind || 'agent'}`,
+        `空间：${payload.workspaceScope || 'shared'}`,
+        `沙箱：${payload.sandboxKind || 'local'}`,
       ].join(' · ')
     case 'channel_dispatch_resolved':
       return [
-        `${payload.channelName || 'channel'}:${payload.chatId || 'chat'}`,
-        `${payload.targetType || 'target'} -> ${payload.targetId || 'unknown'}`,
-        `tenant: ${payload.tenantId || 'default'}`,
+        `渠道：${payload.channelName || '—'}`,
+        `会话：${payload.chatId || '—'}`,
+        `目标：${payload.targetId || '—'}`,
+        `租户：${payload.tenantId || 'default'}`,
       ].join(' · ')
     case 'artifact_written':
       return [
-        `${payload.storageScope || 'scoped'}`,
-        String(payload.fileName || payload.artifactPath || ''),
+        `范围：${payload.storageScope || 'scoped'}`,
+        `文件：${String(payload.fileName || payload.artifactPath || '')}`,
       ].filter(Boolean).join(' · ')
     case 'artifact_quarantined':
     case 'artifact_archived':
@@ -174,8 +175,8 @@ export function eventPayloadSummary(eventType: string, payload?: Record<string, 
       ].filter(Boolean).join(' · ')
     case 'artifact_retention_policy_set':
       return [
-        payload.archiveAfterDays != null ? `archive: ${payload.archiveAfterDays}d` : 'archive: off',
-        payload.deleteAfterDays != null ? `delete: ${payload.deleteAfterDays}d` : 'delete: off',
+        payload.archiveAfterDays != null ? `归档：${payload.archiveAfterDays} 天` : '归档：关闭',
+        payload.deleteAfterDays != null ? `清理：${payload.deleteAfterDays} 天` : '清理：关闭',
         String(payload.reason || ''),
       ].filter(Boolean).join(' · ')
     default:

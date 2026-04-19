@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Flex, Typography } from 'antd'
+import { Typography } from 'antd'
 
 type MetricTone = 'primary' | 'success' | 'warning' | 'error' | 'neutral'
 
@@ -19,28 +19,26 @@ export default function MetricCard({
   tone = 'primary',
 }: MetricCardProps) {
   return (
-    <div className={`metric-item metric-item-${tone}`}>
-      <Flex align="center" gap={8} className="metric-item-head">
+    <div
+      className="metric-card"
+      data-tone={tone}
+    >
+      <div className="metric-card-head">
         {icon ? (
-          <div className="metric-item-icon">
+          <div className="metric-card-icon" aria-hidden="true">
             {icon}
           </div>
         ) : null}
-        <Typography.Text
-          className="metric-item-label"
-          type="secondary"
-        >
+        <Typography.Text className="metric-card-label" type="secondary">
           {label}
         </Typography.Text>
-      </Flex>
-
-      <div className="metric-item-value">
-        {value}
       </div>
+
+      <div className="metric-card-value">{value}</div>
 
       {helper ? (
         <Typography.Text
-          className="metric-item-helper"
+          className="metric-card-helper"
           type="secondary"
         >
           {helper}

@@ -14,10 +14,26 @@
   min-height: 100vh;
 }
 
+body {
+  font-family: var(--nb-font-body) !important;
+  font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
 .page-content-wrapper {
   max-width: var(--nb-layout-content-max-width, 1600px);
   margin: 0 auto;
   width: 100%;
+}
+
+h1, h2, h3, h4, h5, h6, .ant-typography {
+  font-family: var(--nb-font-display) !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.02em;
+}
+
+strong, .ant-typography strong {
+  font-weight: 600 !important;
 }
 
 /* ──────────────────── Antd Impeccable Overrides ──────────────────── */
@@ -26,7 +42,8 @@
 .ant-card {
   background: var(--nb-card-bg);
   border-color: var(--nb-card-border);
-  box-shadow: none;
+  box-shadow: none !important;
+  border-radius: 0;
 }
 
 .ant-input,
@@ -37,11 +54,11 @@
 }
 
 .ant-btn {
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .ant-btn-primary {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 /* Remove default heavy modal mask */

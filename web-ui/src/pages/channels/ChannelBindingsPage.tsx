@@ -213,7 +213,7 @@ export default function ChannelBindingsPage() {
   )
 
   const selectedTargetLabel = useMemo(
-    () => targetOptions.find((target) => target.value === formState.targetId)?.label || formState.targetId || '待选择',
+    () => targetOptions.find((target) => target.value === formState.targetId)?.label || formState.targetId || '未设置',
     [formState.targetId, targetOptions],
   )
 
@@ -302,28 +302,28 @@ export default function ChannelBindingsPage() {
         )}
       />
 
-      <div className="console-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+      <div className="console-metrics-grid">
         <MetricCard label="路由总数" value={bindings.length} icon={<LinkOutlined />} tone="neutral" />
         <MetricCard label="启用规则" value={enabledBindingCount} icon={<SaveOutlined />} tone="success" />
         <MetricCard label="覆盖渠道" value={boundChannelCount} icon={<SearchOutlined />} tone="primary" />
         <MetricCard label="通配规则" value={wildcardBindingCount} icon={<PlusOutlined />} tone="warning" />
       </div>
 
-      <Flex gap={16} align="stretch" style={{ minHeight: 560 }}>
-        <div style={{ width: 380, flexShrink: 0 }}>
+      <div className="channel-bindings-layout">
+        <div className="channel-bindings-rail">
           <SectionCard
             title="绑定目录"
-            action={<span className="console-inline-code">{filteredBindings.length} rules</span>}
+            action={<span className="console-inline-code">{filteredBindings.length} 条规则</span>}
           >
             <Flex vertical gap={14}>
-              <Flex gap={12} wrap="wrap">
+              <Flex gap={12} wrap="wrap" className="channel-bindings-filter-row">
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="搜索渠道、会话或员工"
                   prefix={<SearchOutlined />}
                   allowClear
-                  style={{ flex: '1 1 220px' }}
+                  className="channel-bindings-filter-input"
                 />
                 <Switch
                   checked={showEnabledOnly}
@@ -394,12 +394,12 @@ export default function ChannelBindingsPage() {
           </SectionCard>
         </div>
 
-        <Flex vertical gap={16} style={{ flex: 1, minWidth: 0 }}>
+        <Flex vertical gap={16} className="channel-bindings-editor">
           <SectionCard
             title={currentBinding ? '规则详情' : '新建规则'}
             action={currentBinding ? <Tag color="purple">{currentBinding.bindingId}</Tag> : null}
           >
-            <div className="console-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+            <div className="channel-bindings-summary-grid">
               <MetricCard
                 label="来源渠道"
                 value={formState.channelName || '待选择'}
@@ -430,7 +430,7 @@ export default function ChannelBindingsPage() {
           </SectionCard>
 
           <Form form={form} layout="vertical" requiredMark={false} component={false}>
-            <Flex vertical gap={16}>
+            <Flex vertical gap={16} className="channel-bindings-form-stack">
               <SectionCard
                 title="命中条件"
               >
@@ -523,7 +523,7 @@ export default function ChannelBindingsPage() {
             )}
           />
         </Flex>
-      </Flex>
+      </div>
     </div>
   )
 }

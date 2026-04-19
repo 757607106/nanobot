@@ -347,7 +347,7 @@ export default function SetupPage() {
           <SectionCard
             title="1. 模型接入"
             description="连接至模型供应方"
-            action={<Tag color="blue" bordered={false} style={{ borderRadius: 6 }}>REQUIRED</Tag>}
+            action={<Tag color="blue" bordered={false} style={{ borderRadius: 6 }}>必填</Tag>}
           >
             <div style={{ marginTop: 8 }}>
               <Form
@@ -382,7 +382,7 @@ export default function SetupPage() {
                   <Form.Item label="访问密钥">
                     <Input.Password
                       value={currentBinding?.apiKey || ''}
-                      placeholder={providerMeta?.isLocal ? '无需配置' : 'API Key'}
+                      placeholder={providerMeta?.isLocal ? '无需配置' : '请输入密钥'}
                       onChange={(event) => updateProviderField('apiKey', event.target.value)}
                       data-testid={testIds.setup.apiKeyInput}
                       style={{ borderRadius: 12 }}
@@ -426,9 +426,9 @@ export default function SetupPage() {
           >
              {/* Agent 默认值 */}
             <SectionCard
-              title="2. Agent 工作参数"
-              description="配置 Agent 默认行为"
-              action={<Tag color="blue" bordered={false} style={{ borderRadius: 6 }}>REQUIRED</Tag>}
+              title="2. 员工运行参数"
+              description="配置默认运行行为"
+              action={<Tag color="blue" bordered={false} style={{ borderRadius: 6 }}>必填</Tag>}
             >
               <div style={{ marginTop: 8 }}>
                 <Form
@@ -437,7 +437,7 @@ export default function SetupPage() {
                   layout="vertical"
                   size="large"
                 >
-                  <Form.Item label="工作区文件路径" tooltip="Nanobot 将在该目录下存储索引和临时数据">
+                  <Form.Item label="工作区路径" tooltip="系统会在该目录下存储索引与临时数据">
                     <Input
                       value={String(config.agents.defaults.workspace || '')}
                       onChange={(event) => updateDefaults('workspace', event.target.value)}
@@ -473,7 +473,7 @@ export default function SetupPage() {
                         />
                       </Flex>
                       <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>温度 (创意性)</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>创意强度</Typography.Text>
                         <InputNumber
                           min={0}
                           max={2}
@@ -488,9 +488,9 @@ export default function SetupPage() {
                         <Select
                           value={String(config.agents.defaults.reasoningEffort || 'medium')}
                           options={[
-                            { label: 'Low (快)', value: 'low' },
-                            { label: 'Medium (均衡)', value: 'medium' },
-                            { label: 'High (深)', value: 'high' },
+                            { label: '快速', value: 'low' },
+                            { label: '均衡', value: 'medium' },
+                            { label: '深入', value: 'high' },
                           ]}
                           onChange={(value) => updateDefaults('reasoningEffort', value)}
                           style={{ borderRadius: 10 }}

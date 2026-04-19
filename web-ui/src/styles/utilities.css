@@ -37,7 +37,7 @@
 }
 
 .page-section-title .ant-typography {
-  margin-bottom: 0 !important;
+  margin-bottom: 0;
 }
 
 .page-section-title h4.ant-typography {
@@ -54,7 +54,7 @@
 
 .page-section-title .ant-typography-secondary,
 .page-section-title > .ant-typography:last-child {
-  color: var(--nb-muted) !important;
+  color: var(--nb-muted);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -114,20 +114,20 @@
 
 :root:not([data-theme='dark']) .config-card-header .page-section-title h4.ant-typography,
 :root:not([data-theme='dark']) .config-card-header .page-section-title h5.ant-typography {
-  color: #3f2b24 !important;
+  color: #3f2b24;
 }
 
 .config-card-header .page-section-title h4.ant-typography,
 .config-card-header .page-section-title h5.ant-typography {
-  color: var(--nb-ink) !important;
+  color: var(--nb-ink);
 }
 
 .config-card-header .ant-tag,
 .tag-cloud .ant-tag,
 .page-stack .ant-tag:not(.ant-tag-has-color) {
-  background: var(--nb-card-subtle-bg) !important;
-  border-color: var(--nb-card-subtle-border) !important;
-  color: var(--nb-ink) !important;
+  background: var(--nb-card-subtle-bg);
+  border-color: var(--nb-card-subtle-border);
+  color: var(--nb-ink);
 }
 
 @media (max-width: 768px) {

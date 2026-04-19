@@ -64,7 +64,7 @@ export default function AddServerModal({
   return (
     <Drawer
       open={open}
-      title={editingEntry ? '编辑 MCP 服务器' : '添加 MCP 服务器'}
+      title={editingEntry ? '编辑服务连接' : '添加服务连接'}
       onClose={onClose}
       destroyOnClose
       width={520}
@@ -101,7 +101,7 @@ export default function AddServerModal({
           />
           {editingEntry && (
             <span style={{ fontSize: 'var(--nb-text-xs)', color: token.colorTextTertiary }}>
-              服务 ID: {editingEntry.name}
+              连接 ID：{editingEntry.name}
             </span>
           )}
           {!editingEntry && existingNames.has(draft.name.trim()) && (
@@ -182,13 +182,31 @@ export default function AddServerModal({
           <label style={{ ...labelStyle, marginBottom: 0, flexShrink: 0 }}>
             超时时间
           </label>
-          <InputNumber
-            min={1}
-            max={300}
-            value={draft.toolTimeout}
-            onChange={(value) => onDraftChange({ ...draft, toolTimeout: Number(value || 30) })}
-            addonAfter="秒"
-          />
+          <Space.Compact>
+            <InputNumber
+              min={1}
+              max={300}
+              value={draft.toolTimeout}
+              onChange={(value) => onDraftChange({ ...draft, toolTimeout: Number(value || 30) })}
+            />
+            <span
+              style={{
+                paddingInline: 10,
+                display: 'inline-flex',
+                alignItems: 'center',
+                border: `1px solid ${token.colorBorder}`,
+                borderInlineStart: 'none',
+                borderTopRightRadius: 8,
+                borderBottomRightRadius: 8,
+                background: token.colorFillTertiary,
+                color: token.colorTextSecondary,
+                fontSize: 'var(--nb-text-xs)',
+                lineHeight: 1,
+              }}
+            >
+              秒
+            </span>
+          </Space.Compact>
         </div>
       </div>
     </Drawer>

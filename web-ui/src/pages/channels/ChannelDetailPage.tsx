@@ -424,9 +424,11 @@ export default function ChannelDetailPage() {
         )}
       />
 
-      <Flex align="center" gap={12} style={{ marginBottom: 8 }}>
-        <Typography.Text type="secondary">当前状态</Typography.Text>
-        <Tag color={getChannelStatusColor(detail.channel.status)} style={{ borderRadius: 8, fontSize: 'var(--nb-text-sm)' }}>
+      <Flex align="center" gap={12} style={{ marginBottom: 8 }} className="channel-detail-statusbar">
+        <Typography.Text type="secondary" className="channel-detail-statusbar-label">
+          当前状态
+        </Typography.Text>
+        <Tag color={getChannelStatusColor(detail.channel.status)} className="channel-detail-status-tag">
           {detail.channel.statusLabel}
         </Tag>
         <Switch
@@ -496,7 +498,7 @@ export default function ChannelDetailPage() {
             >
               {probeResult ? (
                 <Flex vertical gap={12}>
-                  <div className="console-metrics-grid" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                  <div className="console-metrics-grid" style={{ marginBottom: 16 }}>
                     <MetricCard
                       label="检测结论"
                       value={probeResult.statusLabel}
@@ -577,7 +579,7 @@ export default function ChannelDetailPage() {
               >
                 {whatsappBinding ? (
                   <Flex vertical gap={12}>
-                    <div className="console-metrics-grid" style={{ marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                    <div className="console-metrics-grid" style={{ marginBottom: 12 }}>
                       <MetricCard
                         label="桥接进程"
                         value={whatsappBinding.running ? '运行中' : '未运行'}

@@ -229,7 +229,7 @@ export default function ChannelAuditPage() {
         }
       />
 
-      <div className="console-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+      <div className="console-metrics-grid">
         <MetricCard label="审计总量" value={summary.total} icon={<MessageOutlined />} tone="neutral" />
         <MetricCard label="已派发" value={summary.dispatched} icon={<ApartmentOutlined />} tone="success" />
         <MetricCard label="需排查" value={summary.failed} icon={<WarningOutlined />} tone={summary.failed > 0 ? 'error' : 'neutral'} />
@@ -239,21 +239,21 @@ export default function ChannelAuditPage() {
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
       <SectionCard title="筛选与记录">
-        <Flex justify="space-between" align="center" gap={12} wrap="wrap">
-          <Space>
+        <Flex justify="space-between" align="center" gap={12} wrap="wrap" className="channel-audit-toolbar">
+          <Space wrap size={[8, 8]}>
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onPressEnter={() => void loadAudit()}
               prefix={<SearchOutlined />}
-              placeholder="搜索 chatId、目标、消息或错误"
-              style={{ width: 260 }}
+              placeholder="搜索会话 ID、目标、消息或错误"
+              className="channel-audit-search"
               allowClear
             />
             <Select
               value={channelName}
               onChange={setChannelName}
-              style={{ width: 150 }}
+              className="channel-audit-filter"
               options={channels.map((item) => ({
                 value: item,
                 label: item === 'all' ? '全部渠道' : item,
@@ -262,7 +262,7 @@ export default function ChannelAuditPage() {
             <Select
               value={status}
               onChange={setStatus}
-              style={{ width: 160 }}
+              className="channel-audit-filter"
               options={[
                 { value: 'all', label: '全部状态' },
                 { value: 'dispatched', label: '已派发' },
@@ -279,46 +279,46 @@ export default function ChannelAuditPage() {
           <Typography.Text type="secondary">最近 {data.limit} 条</Typography.Text>
         </Flex>
 
-        <Flex style={{ minWidth: 0 }}><Table
-          dataSource={filteredItems}
-          columns={allColumns}
-          rowKey="auditId"
-          size="small"
-          pagination={{ pageSize: 20, showSizeChanger: false }}
-          scroll={{ x: 1320 }}
-          locale={{
-            emptyText: error ? '审计记录加载失败，请刷新后重试。' : '当前筛选条件下没有记录。',
-          }}
-          expandable={{
-            expandedRowRender: (record) => (
-              <Flex vertical gap={8} style={{ padding: '8px 0' }}>
-                {record.responsePreview ? (
-                  <div>
-                    <Typography.Text strong>返回：</Typography.Text>
-                    <Typography.Text>{record.responsePreview}</Typography.Text>
-                  </div>
-                ) : null}
-                {record.errorMessage ? (
-                  <div>
-                    <Typography.Text type="danger" strong>错误：</Typography.Text>
-                    <Typography.Text type="danger">{record.errorMessage}</Typography.Text>
-                  </div>
-                ) : null}
-                <Space split={<Typography.Text type="secondary">|</Typography.Text>}>
-                  <Typography.Text type="secondary">tenant: {record.tenantId}</Typography.Text>
-                  <Typography.Text type="secondary">sender: {record.senderId}</Typography.Text>
-                  <Typography.Text type="secondary">session: {record.sessionKey}</Typography.Text>
-                  {record.bindingId ? (
-                    <Typography.Text type="secondary">binding: {record.bindingId}</Typography.Text>
+        <div className="channel-audit-table-shell">
+          <Table
+            dataSource={filteredItems}
+            columns={allColumns}
+            rowKey="auditId"
+            size="small"
+            pagination={{ pageSize: 20, showSizeChanger: false }}
+            scroll={{ x: 1320 }}
+            locale={{
+              emptyText: error ? '审计记录加载失败，请刷新后重试。' : '当前筛选条件下没有记录。',
+            }}
+            expandable={{
+              expandedRowRender: (record) => (
+                <Flex vertical gap={8} style={{ padding: '8px 0' }}>
+                  {record.responsePreview ? (
+                    <div>
+                      <Typography.Text strong>返回：</Typography.Text>
+                      <Typography.Text>{record.responsePreview}</Typography.Text>
+                    </div>
                   ) : null}
-                </Space>
-              </Flex>
-            ),
-            rowExpandable: (record) => Boolean(record.responsePreview || record.errorMessage),
-          }}
-          style={{ marginTop: 18 }}
-        />
-        </Flex>
+                  {record.errorMessage ? (
+                    <div>
+                      <Typography.Text type="danger" strong>错误：</Typography.Text>
+                      <Typography.Text type="danger">{record.errorMessage}</Typography.Text>
+                    </div>
+                  ) : null}
+                  <Space split={<Typography.Text type="secondary">|</Typography.Text>}>
+                    <Typography.Text type="secondary">租户：{record.tenantId}</Typography.Text>
+                    <Typography.Text type="secondary">发送方：{record.senderId}</Typography.Text>
+                    <Typography.Text type="secondary">会话：{record.sessionKey}</Typography.Text>
+                    {record.bindingId ? (
+                      <Typography.Text type="secondary">路由规则：{record.bindingId}</Typography.Text>
+                    ) : null}
+                  </Space>
+                </Flex>
+              ),
+              rowExpandable: (record) => Boolean(record.responsePreview || record.errorMessage),
+            }}
+          />
+        </div>
       </SectionCard>
     </div>
   )

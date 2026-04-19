@@ -125,7 +125,7 @@ export default function AgentsPage() {
       setForm(agentToForm(detail))
       setError(null)
     } catch (loadError) {
-      setError(getErrorMessage(loadError, '加载 Agent 详情失败'))
+      setError(getErrorMessage(loadError, '加载员工详情失败'))
     } finally {
       setLoadingDetail(false)
     }
@@ -210,13 +210,13 @@ export default function AgentsPage() {
       const saved = currentAgent
         ? await api.updateAgent(currentAgent.agentId, payload)
         : await api.createAgent(payload)
-      message.success(currentAgent ? 'Agent 已更新' : 'Agent 已创建')
+      message.success(currentAgent ? '员工已更新' : '员工已创建')
       await loadWorkspace()
       navigate(`/studio/agents/${saved.agentId}`, { replace: true })
       await loadAgentDetail(saved.agentId)
       await loadAgentMemoryGovernance(saved.agentId)
     } catch (saveError) {
-      const nextError = getErrorMessage(saveError, '保存 Agent 失败')
+      const nextError = getErrorMessage(saveError, '保存员工失败')
       setError(nextError)
       message.error(nextError)
     } finally {
@@ -229,7 +229,7 @@ export default function AgentsPage() {
     try {
       setDeleting(true)
       await api.deleteAgent(currentAgent.agentId)
-      message.success('Agent 已删除')
+      message.success('员工已删除')
       const remaining = agents.filter((item) => item.agentId !== currentAgent.agentId)
       await loadWorkspace()
       if (remaining[0]) {
@@ -238,7 +238,7 @@ export default function AgentsPage() {
         navigate('/studio/agents', { replace: true })
       }
     } catch (deleteError) {
-      const nextError = getErrorMessage(deleteError, '删除 Agent 失败')
+      const nextError = getErrorMessage(deleteError, '删除员工失败')
       setError(nextError)
       message.error(nextError)
     } finally {
@@ -251,11 +251,11 @@ export default function AgentsPage() {
     try {
       setCopying(true)
       const copied = await api.copyAgent(currentAgent.agentId)
-      message.success('Agent 已复制')
+      message.success('员工已复制')
       await loadWorkspace()
       navigate(`/studio/agents/${copied.agentId}`, { replace: true })
     } catch (copyError) {
-      const nextError = getErrorMessage(copyError, '复制 Agent 失败')
+      const nextError = getErrorMessage(copyError, '复制员工失败')
       setError(nextError)
       message.error(nextError)
     } finally {

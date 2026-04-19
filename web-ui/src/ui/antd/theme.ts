@@ -26,21 +26,21 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       colorTextBase: palette.ink,
       colorText: palette.ink,
       colorTextSecondary: palette.muted,
-      colorTextTertiary: isDark ? 'rgba(238, 242, 251, 0.58)' : 'rgba(21, 24, 33, 0.58)',
+      colorTextTertiary: palette.quaternary,
       colorTextQuaternary: palette.quaternary,
       colorTextDescription: palette.muted,
-      colorTextPlaceholder: isDark ? 'rgba(238, 242, 251, 0.50)' : 'rgba(21, 24, 33, 0.50)',
-      colorTextDisabled: isDark ? 'rgba(238, 242, 251, 0.34)' : 'rgba(21, 24, 33, 0.34)',
+      colorTextPlaceholder: palette.quaternary,
+      colorTextDisabled: palette.borderStrong,
       colorTextLightSolid: '#ffffff',
 
       // === Border ===
       colorBorderSecondary: palette.surfacePanelBorder,
 
       // === Radius ===
-      borderRadius: designTokens.radius.md,
-      borderRadiusLG: designTokens.radius.lg,
-      borderRadiusSM: designTokens.radius.sm,
-      borderRadiusXS: designTokens.radius.xs,
+      borderRadius: designTokens.radius.sm,
+      borderRadiusLG: designTokens.radius.md,
+      borderRadiusSM: designTokens.radius.xs,
+      borderRadiusXS: designTokens.radius['3xs'],
 
       // === Typography ===
       fontSize: designTokens.fontSize.sm,
@@ -125,7 +125,7 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
         borderRadius: designTokens.radius.md,
         paddingInline: designTokens.space.lg,
         paddingBlock: 10,
-        activeShadow: `0 0 0 2px ${isDark ? 'rgba(142, 166, 255, 0.22)' : 'rgba(63, 108, 255, 0.18)'}`,
+        activeShadow: `0 0 0 2px ${palette.selectedBg}`,
       },
       InputNumber: {
         borderRadius: designTokens.radius.md,

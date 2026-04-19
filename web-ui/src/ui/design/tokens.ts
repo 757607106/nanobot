@@ -11,10 +11,10 @@ export type DesignMode = 'light' | 'dark'
 export const designTokens = {
   /* ──────────────────── Typography ──────────────────── */
   font: {
-    body: '"Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif',
+    body: '"Geist Sans", "Manrope Variable", "Manrope", "Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif',
     display:
-      '"Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", system-ui, sans-serif',
-    mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+      '"Geist Sans", "Manrope Variable", "Manrope", "Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", system-ui, sans-serif',
+    mono: '"Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
   },
   fontSize: {
     '2xs': 12, // 0.75rem — captions, footnotes
@@ -57,6 +57,8 @@ export const designTokens = {
 
   /* ──────────────────── Border Radius ──────────────────── */
   radius: {
+    '3xs': 2,
+    '2xs': 4,
     xs: 6,
     sm: 8,
     md: 10,
@@ -68,11 +70,11 @@ export const designTokens = {
 
   /* ──────────────────── Layout ──────────────────── */
   layout: {
-    siderWidth: 240,
+    siderWidth: 208,
     headerHeight: 56,
     contentMaxWidth: 1600,
-    gutter: 24,
-    gutterMobile: 16,
+    gutter: 16,
+    gutterMobile: 12,
     sectionGap: 16,
     panelPadding: 16,
     cardPadding: 16,
@@ -90,69 +92,69 @@ export const designTokens = {
   color: {
     light: {
       // Brand
-      accent: '#355fe6',
-      accentSoft: 'rgba(53, 95, 230, 0.12)',
+      accent: '#2563EB', // Enterprise Blue
+      accentSoft: '#EFF6FF',
       // Semantic
-      success: '#1f8f5f',
-      warning: '#c9831b',
-      error: '#d14343',
+      success: '#16A34A',
+      warning: '#D97706',
+      error: '#DC2626',
       // Text
-      ink: '#151821',
-      muted: '#5f6778',
-      quaternary: '#95a3b5',
+      ink: '#0F172A',
+      muted: '#475569',
+      quaternary: '#94A3B8',
       // Surfaces
-      bodyBg: '#F5F7FA',
-      surfacePanel: 'rgba(255, 255, 255, 0.85)',
-      surfacePanelBorder: 'rgba(0, 0, 0, 0.04)',
-      surfaceSoft: 'rgba(255, 255, 255, 0.8)',
-      surfaceSubtle: 'rgba(248, 250, 252, 0.94)',
-      surfaceSubtleBorder: 'rgba(24, 36, 51, 0.06)',
-      surfaceElevated: 'rgba(255, 255, 255, 0.99)',
-      cardBg: '#ffffff',
+      bodyBg: '#F8FAFC',
+      surfacePanel: '#FFFFFF',
+      surfacePanelBorder: '#E2E8F0',
+      surfaceSoft: '#F1F5F9',
+      surfaceSubtle: '#F8FAFC',
+      surfaceSubtleBorder: '#E2E8F0',
+      surfaceElevated: '#FFFFFF',
+      cardBg: '#FFFFFF',
       // Borders
-      border: 'color-mix(in srgb, #101828 10%, #ffffff 90%)',
-      borderStrong: 'color-mix(in srgb, #101828 18%, #ffffff 82%)',
-      cardBorder: 'color-mix(in srgb, #101828 8%, #ffffff 92%)',
-      cardSubtleBorder: 'color-mix(in srgb, #101828 6%, #ffffff 94%)',
+      border: '#CBD5E1',
+      borderStrong: '#94A3B8',
+      cardBorder: '#E2E8F0',
+      cardSubtleBorder: '#F1F5F9',
       // Interaction
-      hoverBg: 'rgba(0, 0, 0, 0.04)',
-      selectedBg: 'rgba(53, 95, 230, 0.08)',
+      hoverBg: '#F1F5F9',
+      selectedBg: '#EFF6FF',
       // Scroll
-      scrollThumb: 'rgba(53, 95, 230, 0.18)',
-      scrollThumbHover: 'rgba(53, 95, 230, 0.30)',
+      scrollThumb: '#CBD5E1',
+      scrollThumbHover: '#94A3B8',
     },
     dark: {
       // Brand
-      accent: '#8ea6ff',
-      accentSoft: 'rgba(142, 166, 255, 0.16)',
+      accent: '#3B82F6',
+      accentSoft: '#1E3A8A',
       // Semantic
-      success: '#53c98d',
-      warning: '#e2a24d',
-      error: '#ff8e8e',
+      success: '#22C55E',
+      warning: '#F59E0B',
+      error: '#EF4444',
       // Text
-      ink: '#eef2fb',
-      muted: '#9aa3b5',
-      quaternary: '#71839a',
+      ink: '#F8FAFC',
+      muted: '#94A3B8',
+      quaternary: '#64748B',
       // Surfaces
-      bodyBg: '#0A0A0A',
-      surfacePanel: 'rgba(255, 255, 255, 0.03)',
-      surfacePanelBorder: 'rgba(255, 255, 255, 0.06)',
-      surfaceSoft: 'rgba(20, 31, 48, 0.8)',
-      surfaceSubtle: 'rgba(20, 33, 49, 0.88)',
-      surfaceSubtleBorder: 'rgba(230, 237, 247, 0.06)',
-      surfaceElevated: 'rgba(18, 30, 48, 0.99)',
-      cardBg: '#141f30',
+      bodyBg: '#020617',
+      surfacePanel: '#0F172A',
+      surfacePanelBorder: '#1E293B',
+      surfaceSoft: '#1E293B',
+      surfaceSubtle: '#0F172A',
+      surfaceSubtleBorder: '#1E293B',
+      surfaceElevated: '#1E293B',
+      cardBg: '#0F172A',
       // Borders
-      border: 'color-mix(in srgb, #ffffff 10%, #0f1320 90%)',
-      borderStrong: 'color-mix(in srgb, #ffffff 18%, #0f1320 82%)',
-      cardBorder: 'color-mix(in srgb, #ffffff 10%, #0f1320 90%)',
-      cardSubtleBorder: 'color-mix(in srgb, #ffffff 7%, #0f1320 93%)',
+      border: '#334155',
+      borderStrong: '#475569',
+      cardBorder: '#1E293B',
+      cardSubtleBorder: '#1E293B',
       // Interaction
-      hoverBg: 'rgba(255, 255, 255, 0.06)',
-      selectedBg: 'rgba(142, 166, 255, 0.14)',
+      hoverBg: '#1E293B',
+      selectedBg: '#1E3A8A',
       // Scroll
-      scrollThumb: 'rgba(142, 166, 255, 0.22)',
-      scrollThumbHover: 'rgba(142, 166, 255, 0.34)',
+      scrollThumb: '#334155',
+      scrollThumbHover: '#475569',
     },
   },
 

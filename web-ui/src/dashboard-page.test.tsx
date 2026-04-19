@@ -115,7 +115,7 @@ describe('DashboardPage', () => {
     renderPage()
 
     expect(await screen.findByText('控制台总览')).toBeInTheDocument()
-    expect(screen.getByText('会话总量')).toBeInTheDocument()
+    expect(screen.getByText('总运行数')).toBeInTheDocument()
     expect(screen.getByText('知识库')).toBeInTheDocument()
     expect(screen.getAllByText('接入渠道').length).toBeGreaterThan(0)
     expect(screen.getAllByText('创建智能体').length).toBeGreaterThan(0)

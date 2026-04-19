@@ -32,37 +32,37 @@ export function KnowledgeEvaluationTab({
   const questionCount = selectedBenchmark?.questionCount || selectedBenchmark?.question_count || 0
 
   return (
-    <div className="knowledge-tab-panel">
+    <div className="knowledge-tab-panel knowledge-evaluation-panel">
       <SectionCard
-        title="评测运行"
+        title="评测任务"
         action={(
           <Button icon={<ReloadOutlined />} loading={benchmarkLoading} onClick={onRefresh}>
             刷新
           </Button>
         )}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--nb-border)' }}>
+        <div className="knowledge-eval-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--nb-border)' }}>
           <MetricCard
-            label="当前基准"
+            label="当前题库"
             value={selectedBenchmark?.name || '未选择'}
             icon={<AppstoreOutlined />}
             tone={selectedBenchmarkId ? 'primary' : 'neutral'}
           />
           <MetricCard
-            label="题目数量"
+            label="题目数"
             value={questionCount}
             icon={<ProfileOutlined />}
             tone="neutral"
           />
           <MetricCard
-            label="历史任务"
+            label="历史记录"
             value={evaluationHistory.length}
             icon={<HistoryOutlined />}
             tone="neutral"
           />
           <MetricCard
             label="当前状态"
-            value={runningEvaluation ? '运行中' : selectedBenchmarkId ? '可开始' : '待选择'}
+            value={runningEvaluation ? '进行中' : selectedBenchmarkId ? '可开始' : '未选择'}
             icon={<FieldTimeOutlined />}
             tone={runningEvaluation ? 'warning' : 'neutral'}
           />
@@ -71,7 +71,7 @@ export function KnowledgeEvaluationTab({
         <div className="knowledge-query-topbar">
           <Space wrap>
             <Select
-              placeholder="选择评估基准"
+              placeholder="选择评测题库"
               value={selectedBenchmarkId}
               options={benchmarks.map((item) => ({
                 label: `${item.name} (${item.questionCount || item.question_count || 0} 题)`,
@@ -88,6 +88,7 @@ export function KnowledgeEvaluationTab({
         </div>
 
         <Table
+          className="knowledge-eval-table"
           rowKey="taskId"
           size="small"
           loading={benchmarkLoading}
@@ -96,9 +97,9 @@ export function KnowledgeEvaluationTab({
           columns={columns}
           locale={{
             emptyText: benchmarks.length === 0 ? (
-              <Empty image={false} className="minimal-empty" description="暂无评测基准" />
+              <Empty image={false} className="minimal-empty" description="暂无评测题库" />
             ) : (
-              <Empty image={false} className="minimal-empty" description="暂无评测历史" />
+              <Empty image={false} className="minimal-empty" description="暂无评测记录" />
             ),
           }}
         />

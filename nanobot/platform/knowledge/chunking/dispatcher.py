@@ -64,14 +64,23 @@ def chunk_plain_text(text: str, *, chunk_size: int, chunk_overlap: int) -> list[
     return chunks
 
 
-def chunk_by_headings(text: str) -> list[str]:
-    """Split text by heading lines (markdown headings or Chinese chapter markers)."""
+def chunk_by_headings(
+    text: str,
+    *,
+    chunk_size: int = 0,
+    chunk_overlap: int = 0,
+) -> list[str]:
+    """Split text by heading lines (markdown headings or Chinese chapter markers).
+
+    When *chunk_size* > 0, oversized sections are sub-chunked with
+    ``chunk_plain_text`` so that no single chunk exceeds the limit.
+    """
     sections: list[str] = []
     current: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
         if re.match(
-            r"^(#{1,6}\s+|chapter\s+\d+|section\s+\d+|第.+[章节篇])",
+            r"^(#{1,6}\s+|chapter\s+\d+|section\s+\d+|第.+[章节篇回卷])",
             stripped,
             re.IGNORECASE,
         ):
@@ -82,7 +91,21 @@ def chunk_by_headings(text: str) -> list[str]:
             current.append(line)
     if current:
         sections.append("\n".join(current).strip())
-    return [item for item in sections if item]
+
+    raw = [item for item in sections if item]
+    if chunk_size <= 0:
+        return raw
+
+    # Sub-chunk oversized sections so no chunk exceeds *chunk_size*.
+    result: list[str] = []
+    for section in raw:
+        if len(section) <= chunk_size:
+            result.append(section)
+        else:
+            result.extend(
+                chunk_plain_text(section, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+            )
+    return result
 
 
 def chunk_qa_text(text: str) -> list[str]:
@@ -162,7 +185,7 @@ def build_chunks(
 
     # Priority 4: book preset (heading-based)
     elif preset_id == "book":
-        chunks = chunk_by_headings(text)
+        chunks = chunk_by_headings(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     # Priority 5: law preset (article-based)
     elif preset_id == "laws":

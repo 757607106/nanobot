@@ -201,8 +201,8 @@ describe('McpPage', () => {
   it('renders the reference-style registry layout', async () => {
     renderPage()
 
-    expect(await screen.findByText('MCP 扩展')).toBeInTheDocument()
-    expect(screen.getByText('添加服务器')).toBeInTheDocument()
+    expect(await screen.findByText('服务集成')).toBeInTheDocument()
+    expect(screen.getByText('添加连接')).toBeInTheDocument()
     expect(screen.getByText('Workspace Files')).toBeInTheDocument()
     expect(screen.getByText('filesystem')).toBeInTheDocument()
   })
@@ -226,9 +226,9 @@ describe('McpPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('暂无 MCP 服务器')).toBeInTheDocument()
+    expect(await screen.findByText('暂无服务连接')).toBeInTheDocument()
     // Click the empty state button
-    const addButton = await screen.findByText(/添加第一个服务器/)
+    const addButton = await screen.findByText(/添加第一个连接/)
     await user.click(addButton)
     await user.type(screen.getByPlaceholderText('唯一标识，如 weather-api'), 'github')
     await user.type(screen.getByPlaceholderText('uvx 或 npx'), 'npx')
