@@ -12,7 +12,6 @@ import {
   Spin
 } from 'antd'
 import SectionCard from '../../components/console/SectionCard'
-import DevOnly from '../../components/DevOnly'
 import { SaveOutlined } from '@ant-design/icons'
 import { api } from '../../api'
 import type { AgentTemplate } from '../../types'
@@ -130,19 +129,17 @@ export default function TemplateEditorDrawer({ open, onClose, templateName, onSa
               </Form.Item>
             </SectionCard>
 
-            <DevOnly>
-              <SectionCard title="高级能力配置">
-                <Form.Item name="tools" label="工具（可选）" tooltip="输入工具名称，回车添加">
-                  <Select mode="tags" placeholder="添加工具" style={{ width: '100%' }} tokenSeparators={[',', ' ']} />
-                </Form.Item>
-                <Form.Item name="skills" label="技能（可选）" tooltip="输入技能 ID，回车添加">
-                  <Select mode="tags" placeholder="添加技能" style={{ width: '100%' }} tokenSeparators={[',', ' ']} />
-                </Form.Item>
-                <Form.Item name="rules" label="规则（可选）" tooltip="输入规则名，回车添加" style={{ marginBottom: 0 }}>
-                  <Select mode="tags" placeholder="添加规则" style={{ width: '100%' }} tokenSeparators={[',', ' ']} />
-                </Form.Item>
-              </SectionCard>
-            </DevOnly>
+            <SectionCard title="高级能力配置">
+              <Form.Item name="tools" label="工具（可选）" tooltip="输入工具名称，回车添加">
+                <Select mode="tags" placeholder="添加工具" style={{ width: '100%' }} tokenSeparators={[',', ' ']} />
+              </Form.Item>
+              <Form.Item name="skills" label="技能（可选）" tooltip="输入技能 ID，回车添加">
+                <Select mode="tags" placeholder="添加技能" style={{ width: '100%' }} tokenSeparators={[',', ' ']} />
+              </Form.Item>
+              <Form.Item name="rules" label="规则（可选）" tooltip="输入规则名，回车添加" style={{ marginBottom: 0 }}>
+                <Select mode="tags" placeholder="添加规则" style={{ width: '100%' }} tokenSeparators={[',', ' ']} />
+              </Form.Item>
+            </SectionCard>
           </Col>
 
           <Col xs={24} lg={14} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>

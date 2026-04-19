@@ -114,18 +114,33 @@ const XMARKDOWN_COMPONENTS: Record<string, React.ComponentType<XMarkdownComponen
   code: CodeBlockComponent as unknown as React.ComponentType<XMarkdownComponentProps>,
 }
 
+export type MarkdownRenderComponentProps = XMarkdownComponentProps
+export type MarkdownRenderComponents = Record<string, React.ComponentType<XMarkdownComponentProps>>
+
 /* ── Markdown 渲染 ── */
-function MarkdownBubble({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+export function MarkdownBubble({
+  content,
+  isStreaming,
+  components,
+  className,
+}: {
+  content: string
+  isStreaming?: boolean
+  components?: MarkdownRenderComponents
+  className?: string
+}) {
+  const mergedComponents = components ? { ...XMARKDOWN_COMPONENTS, ...components } : XMARKDOWN_COMPONENTS
+  const markdownClassName = className ? `x-markdown-light ${className}` : 'x-markdown-light'
   return (
     <div className="markdown-bubble">
       <XMarkdown
         content={content}
-        className="x-markdown-light"
+        className={markdownClassName}
         streaming={{
           hasNextChunk: !!isStreaming,
           tail: true,
         }}
-        components={XMARKDOWN_COMPONENTS}
+        components={mergedComponents}
         openLinksInNewTab
         escapeRawHtml
       />

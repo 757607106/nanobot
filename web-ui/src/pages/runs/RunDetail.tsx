@@ -1,8 +1,5 @@
 import { Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd'
 import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  InfoCircleOutlined,
   PauseCircleOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
@@ -11,8 +8,9 @@ import { formatDateTimeZh } from '../../locale'
 import type { AgentRunSummary } from '../../types'
 import { statusLabel, isCancelable } from './utils'
 import { useDevMode } from '../../devMode'
+import { MarkdownBubble } from '../../chat/chatPresentation'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 interface RunDetailProps {
   run: AgentRunSummary
@@ -49,17 +47,6 @@ export default function RunDetail({
   children,
 }: RunDetailProps) {
   const { devMode } = useDevMode()
-
-  const getStatusIcon = () => {
-    switch (run.status) {
-      case 'succeeded':
-        return <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
-      case 'failed':
-        return <CloseCircleOutlined style={{ color: 'var(--ant-color-error)' }} />
-      default:
-        return <InfoCircleOutlined />
-    }
-  }
 
   return (
     <div className="page-stack">
@@ -101,17 +88,7 @@ export default function RunDetail({
                   borderRadius: 8,
                 }}
               >
-                <div
-                  style={{
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    fontSize: 'var(--nb-text-sm)',
-                    lineHeight: 1.7,
-                  }}
-                  dangerouslySetInnerHTML={{
-                    __html: simpleMarkdown(run.resultSummary.content),
-                  }}
-                />
+                  <MarkdownBubble content={run.resultSummary.content} isStreaming={false} />
               </div>
             </Card>
           ) : (
@@ -197,18 +174,4 @@ export default function RunDetail({
       </div>
     </div>
   )
-}
-
-/**
- * 极简 Markdown → HTML：处理 **bold**, `code`, 换行
- * 仅用于执行结果的基本排版，不引入完整 Markdown 库
- */
-function simpleMarkdown(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.06);padding:2px 6px;border-radius:4px;font-size:13px">$1</code>')
-    .replace(/\n/g, '<br />')
 }

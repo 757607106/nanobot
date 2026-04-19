@@ -1,11 +1,11 @@
-export const PLATFORM_BRAND_NAME = 'NanoCrew'
-export const PLATFORM_ASSISTANT_NAME = 'NanoCrew'
+export const PLATFORM_BRAND_NAME = '芯同事'
+export const PLATFORM_ASSISTANT_NAME = '芯同事'
 export const PLATFORM_BRAND_MARK = 'N'
 export const PLATFORM_BADGE_LABEL = 'SELF-HOSTED CONSOLE'
 export const PLATFORM_SUBTITLE = 'Console'
 export const PLATFORM_CONSOLE_LABEL = `${PLATFORM_BRAND_NAME} 控制台`
-export const PLATFORM_BRAND_LOGO_SRC = '/unnamed.png'
-export const PLATFORM_BRAND_ICON_SRC = '/unnamed.png'
+export const PLATFORM_BRAND_LOGO_SRC = '/brand-robot-logo.svg'
+export const PLATFORM_BRAND_ICON_SRC = '/favicon.svg'
 
 export function replaceBrandText(value: string) {
   return value

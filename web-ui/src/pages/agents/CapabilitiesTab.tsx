@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { Flex } from 'antd'
-import DevOnly from '../../components/DevOnly'
 import type { AgentTemplateTool, InstalledSkill, KnowledgeBaseDefinition, McpServerEntry } from '../../types'
 import type { AgentFormState } from './types'
 import CapabilitySection from './CapabilitySection'
@@ -88,24 +87,22 @@ export default function CapabilitiesTab({
 
   return (
     <Flex vertical gap={6}>
-      <DevOnly>
-        <CapabilitySection
-          title={`工具（${form.toolAllowlist.length}）`}
-          description="仅用于高级配置。一般情况下无需手动选择。"
-          items={toolItems}
-          selectedKeys={form.toolAllowlist}
-          onToggle={(key) => onToggleArrayItem('toolAllowlist', key)}
-          emptyText="暂无可用工具。"
-        />
-        <CapabilitySection
-          title={`技能（${form.skillIds.length}）`}
-          description="仅用于高级配置。一般情况下无需手动选择。"
-          items={skillItems}
-          selectedKeys={form.skillIds}
-          onToggle={(key) => onToggleArrayItem('skillIds', key)}
-          emptyText="暂无可用技能。"
-        />
-      </DevOnly>
+      <CapabilitySection
+        title={`工具（${form.toolAllowlist.length}）`}
+        description="仅用于高级配置。一般情况下无需手动选择。"
+        items={toolItems}
+        selectedKeys={form.toolAllowlist}
+        onToggle={(key) => onToggleArrayItem('toolAllowlist', key)}
+        emptyText="暂无可用工具。"
+      />
+      <CapabilitySection
+        title={`技能（${form.skillIds.length}）`}
+        description="仅用于高级配置。一般情况下无需手动选择。"
+        items={skillItems}
+        selectedKeys={form.skillIds}
+        onToggle={(key) => onToggleArrayItem('skillIds', key)}
+        emptyText="暂无可用技能。"
+      />
       <CapabilitySection
         title={`连接（${form.mcpServerIds.length}）`}
         items={mcpItems}

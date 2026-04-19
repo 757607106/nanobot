@@ -11,6 +11,7 @@ import { api } from '../../api'
 import type { AgentTestRunResult } from '../../types'
 import { useToast } from '../../toast'
 import { designTokens } from '../../ui/design/tokens'
+import { MarkdownBubble } from '../../chat/chatPresentation'
 
 interface Props {
   open: boolean
@@ -89,9 +90,7 @@ export default function AgentTestRunDrawer({ open, onClose, agentId, agentName }
               <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
                 回答内容:
               </Typography.Text>
-              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, wordBreak: 'break-word', fontFamily: 'var(--nb-font-family)' }}>
-                {result.assistantMessage?.content || '(无文本回答)'}
-              </div>
+              <MarkdownBubble content={result.assistantMessage?.content || '*(无文本回答)*'} isStreaming={false} />
             </div>
             
             {result.run && (

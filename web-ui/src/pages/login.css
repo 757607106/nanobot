@@ -9,7 +9,13 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background-color: var(--nb-bg); /* Pure solid app background */
+  background-color: var(--nb-bg);
+  /* Tech Luxury background pattern: subtle dot grid + center accent glow */
+  background-image: 
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--nb-accent) 12%, transparent) 0%, transparent 50%),
+    radial-gradient(color-mix(in srgb, var(--nb-text-tertiary) 20%, transparent) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px;
+  background-position: center top, center center;
   overflow: hidden;
 }
 
@@ -33,10 +39,15 @@
 .login-card {
   position: relative;
   padding: var(--nb-spacing-3xl) var(--nb-spacing-2xl);
-  border-radius: 8px; /* Strict standard radius */
-  background: var(--nb-surface-panel-bg);
-  border: 1px solid var(--nb-surface-panel-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Very subtle depth, no glow */
+  border-radius: 16px; /* Slightly softer radius for premium glass feel */
+  /* Elegant glassmorphism to show off the background grid */
+  background: color-mix(in srgb, var(--nb-surface-panel-bg) 80%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in srgb, var(--nb-surface-panel-border) 60%, transparent);
+  box-shadow: 
+    0 24px 48px color-mix(in srgb, var(--nb-ink) 5%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 15%, transparent);
   overflow: hidden;
   z-index: 1;
 }

@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Alert, Button, Empty, Segmented, Space, Spin, Tag, Typography } from 'antd'
 import { DownloadOutlined, FileSearchOutlined } from '@ant-design/icons'
 import { useParams } from 'react-router-dom'
-import type { ComponentProps as XMarkdownComponentProps } from '@ant-design/x-markdown'
-import { XMarkdown } from '@ant-design/x-markdown'
 import { api } from '../../api'
 import { getErrorMessage } from '../../errorMessage'
 import type { KnowledgeFilePreview } from '../../types'
+import { MarkdownBubble, type MarkdownRenderComponentProps, type MarkdownRenderComponents } from '../../chat/chatPresentation'
 import { buildPreviewHtmlDocument, resolvePreviewUrl } from './preview'
 import './knowledge.css'
 
@@ -23,13 +22,13 @@ const PREVIEW_KIND_LABELS: Record<KnowledgeFilePreview['previewKind'], string> =
 
 const TEXTUAL_PREVIEW_KINDS: KnowledgeFilePreview['previewKind'][] = ['html', 'markdown', 'text']
 
-type MarkdownAnchorProps = XMarkdownComponentProps & {
+type MarkdownAnchorProps = MarkdownRenderComponentProps & {
   href?: string
   children?: ReactNode
   class?: string
 }
 
-type MarkdownImageProps = XMarkdownComponentProps & {
+type MarkdownImageProps = MarkdownRenderComponentProps & {
   src?: string
   alt?: string
   class?: string
@@ -52,9 +51,9 @@ export default function KnowledgeFilePreviewPage() {
         : '',
     [content, htmlPreviewMode, preview],
   )
-  const markdownComponents = useMemo<Record<string, React.ComponentType<XMarkdownComponentProps>>>(
+  const markdownComponents = useMemo<MarkdownRenderComponents>(
     () => ({
-      a: ((props: XMarkdownComponentProps) => {
+      a: ((props: MarkdownRenderComponentProps) => {
         const { href, children, class: htmlClass, ...rest } = props as MarkdownAnchorProps
         const resolvedHref = resolvePreviewUrl(href, preview?.baseUrl, 'link')
         const isFragment = typeof resolvedHref === 'string' && resolvedHref.startsWith('#')
@@ -72,15 +71,15 @@ export default function KnowledgeFilePreviewPage() {
             {children}
           </a>
         )
-      }) as React.ComponentType<XMarkdownComponentProps>,
-      img: ((props: XMarkdownComponentProps) => {
+      }) as React.ComponentType<MarkdownRenderComponentProps>,
+      img: ((props: MarkdownRenderComponentProps) => {
         const { src, alt, class: htmlClass, ...rest } = props as MarkdownImageProps
         const resolvedSrc = resolvePreviewUrl(src, preview?.baseUrl, 'resource')
         if (!resolvedSrc) {
           return <Text type="secondary">[图片资源不可用]</Text>
         }
         return <img {...rest} className={htmlClass} src={resolvedSrc} alt={alt || ''} loading="lazy" />
-      }) as React.ComponentType<XMarkdownComponentProps>,
+      }) as React.ComponentType<MarkdownRenderComponentProps>,
     }),
     [preview?.baseUrl],
   )
@@ -136,13 +135,7 @@ export default function KnowledgeFilePreviewPage() {
   function renderMarkdownPreview() {
     return (
       <div className="knowledge-file-preview-markdown">
-        <XMarkdown
-          content={content}
-          className="x-markdown-light"
-          components={markdownComponents}
-          openLinksInNewTab
-          escapeRawHtml
-        />
+        <MarkdownBubble content={content} isStreaming={false} components={markdownComponents} />
       </div>
     )
   }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Empty, Flex, Input, Space, Spin, Tag } from 'antd'
+import { Alert, Button, Empty, Flex, Input, Space, Spin, Tag, Typography } from 'antd'
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import SectionCard from '../../components/console/SectionCard'
@@ -7,6 +7,7 @@ import { formatDateTimeZh } from '../../locale'
 import type { AgentDefinition, AgentMemorySnapshot, MemoryCandidate } from '../../types'
 import MemoryCandidateCard from './MemoryCandidateCard'
 import { memoryScopeLabel } from './utils'
+import { MarkdownBubble } from '../../chat/chatPresentation'
 
 interface MemoryTabProps {
   currentAgent: AgentDefinition | null
@@ -78,6 +79,12 @@ export default function MemoryTab({
                     aria-label="员工长期记忆"
                     style={{ borderRadius: 12, border: 'none', background: 'transparent', lineHeight: 1.6 }}
                   />
+                </div>
+                <div style={{ padding: 16, borderRadius: 12, background: 'var(--nb-surface-strong)' }}>
+                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                    Markdown 预览
+                  </Typography.Text>
+                  <MarkdownBubble content={draft || '*(暂无内容)*'} isStreaming={false} />
                 </div>
                 <Space wrap size={[8, 8]}>
                   <Button icon={<ReloadOutlined />} onClick={() => currentAgent && onRefresh(currentAgent.agentId)} loading={loadingMemory} style={{ borderRadius: 12 }}>

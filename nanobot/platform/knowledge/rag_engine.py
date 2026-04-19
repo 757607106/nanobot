@@ -526,6 +526,11 @@ class RAGEngine:
                     return status
         return None
 
+    _STATUS_POLL_MAX_WAIT: float = 120.0  # seconds
+    _STATUS_POLL_INITIAL_INTERVAL: float = 1.0  # seconds
+    _STATUS_POLL_MAX_INTERVAL: float = 4.0  # seconds
+    _STATUS_POLL_BACKOFF_FACTOR: float = 2.0
+
     async def _require_processed_status(
         self,
         rag: Any,
@@ -534,33 +539,62 @@ class RAGEngine:
         operation: str,
         doc_id: str | None = None,
         file_path: str | None = None,
+        max_wait: float | None = None,
     ) -> dict[str, Any]:
-        status = await self._lookup_doc_status(rag, doc_id=doc_id, file_path=file_path)
-        if status is None:
-            identity = str(doc_id or file_path or "<unknown>").strip()
-            raise RuntimeError(
-                f"RAGAnything {operation} finished without a persisted doc_status record "
-                f"for kb_id={kb_id}, identity={identity}."
-            )
+        """Wait for a document to reach 'processed' status with polling.
 
-        normalized_status = self._normalize_status(status.get("status"))
-        error_msg = str(status.get("error_msg") or "").strip()
-        if normalized_status == "failed":
-            detail = error_msg or self._status_detail(status)
-            raise RuntimeError(
-                f"RAGAnything {operation} failed for kb_id={kb_id}: {detail}"
+        When LightRAG uses a background document queue, ``insert_content_list``
+        may return before the document is fully processed (status='pending').
+        This method polls ``doc_status`` with exponential back-off until the
+        status becomes 'processed', 'failed', or the timeout is reached.
+        """
+        effective_max_wait = max_wait if max_wait is not None else self._STATUS_POLL_MAX_WAIT
+        poll_interval = self._STATUS_POLL_INITIAL_INTERVAL
+        elapsed = 0.0
+
+        while True:
+            status = await self._lookup_doc_status(rag, doc_id=doc_id, file_path=file_path)
+            if status is None:
+                # On the first check the record may not be persisted yet;
+                # allow the polling loop to retry until timeout.
+                if elapsed >= effective_max_wait:
+                    identity = str(doc_id or file_path or "<unknown>").strip()
+                    raise RuntimeError(
+                        f"RAGAnything {operation} finished without a persisted doc_status record "
+                        f"for kb_id={kb_id}, identity={identity}."
+                    )
+            else:
+                normalized_status = self._normalize_status(status.get("status"))
+                error_msg = str(status.get("error_msg") or "").strip()
+
+                if normalized_status == "failed":
+                    detail = error_msg or self._status_detail(status)
+                    raise RuntimeError(
+                        f"RAGAnything {operation} failed for kb_id={kb_id}: {detail}"
+                    )
+
+                if normalized_status == "processed":
+                    if status.get("multimodal_processed") is False:
+                        raise RuntimeError(
+                            f"RAGAnything {operation} left multimodal processing incomplete for kb_id={kb_id}: "
+                            f"{self._status_detail(status)}"
+                        )
+                    return status
+
+                # Status is still pending/processing — continue polling unless timed out
+                if elapsed >= effective_max_wait:
+                    raise RuntimeError(
+                        f"RAGAnything {operation} did not reach a fully processed state for kb_id={kb_id} "
+                        f"after {elapsed:.0f}s: {self._status_detail(status)}"
+                    )
+
+            logger.debug(
+                "RAGEngine: {} status not ready for kb_id={}, polling in {:.1f}s (elapsed {:.1f}s/{:.0f}s)",
+                operation, kb_id, poll_interval, elapsed, effective_max_wait,
             )
-        if normalized_status != "processed":
-            raise RuntimeError(
-                f"RAGAnything {operation} did not reach a fully processed state for kb_id={kb_id}: "
-                f"{self._status_detail(status)}"
-            )
-        if status.get("multimodal_processed") is False:
-            raise RuntimeError(
-                f"RAGAnything {operation} left multimodal processing incomplete for kb_id={kb_id}: "
-                f"{self._status_detail(status)}"
-            )
-        return status
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+            poll_interval = min(poll_interval * self._STATUS_POLL_BACKOFF_FACTOR, self._STATUS_POLL_MAX_INTERVAL)
 
     async def _evict_cached_instance_if_needed(self, keep_kb_id: str) -> None:
         if len(self._instances) < self._max_cached_instances:
@@ -1748,7 +1782,12 @@ class RAGEngine:
         return []
 
     @staticmethod
-    def _normalize_graph(graph: Any, *, labels: list[str]) -> dict[str, Any]:
+    def _normalize_graph(
+        graph: Any,
+        *,
+        labels: list[str],
+        workspace: str | None = None,
+    ) -> dict[str, Any]:
         nodes = []
         edges = []
         for item in getattr(graph, "nodes", []) or []:
@@ -1772,6 +1811,31 @@ class RAGEngine:
                     "properties": properties,
                 }
             )
+
+        # ── Workspace-based filtering for shared graph backends (Neo4J) ──
+        # When multiple KBs share the same graph database, nodes may carry a
+        # workspace label (e.g. "kb_knowledge_base_1").  Filter to keep only
+        # nodes belonging to the current KB and prune orphaned edges.
+        if workspace and nodes:
+            ws_lower = workspace.strip().lower()
+            filtered_nodes = [
+                node for node in nodes
+                if any(
+                    lbl.strip().lower() == ws_lower
+                    for lbl in node.get("labels", [])
+                )
+            ]
+            # If filtering produced results, apply it; otherwise assume the
+            # backend already provides isolated data (e.g. NetworkXStorage).
+            if filtered_nodes:
+                valid_ids = {node["id"] for node in filtered_nodes}
+                filtered_edges = [
+                    edge for edge in edges
+                    if edge["source"] in valid_ids and edge["target"] in valid_ids
+                ]
+                nodes = filtered_nodes
+                edges = filtered_edges
+
         return {
             "nodes": nodes,
             "edges": edges,
@@ -1790,12 +1854,13 @@ class RAGEngine:
         """Return a normalized LightRAG graph payload."""
         rag = await self._ensure_ready(kb_id)
         labels = await self.get_graph_labels(kb_id)
+        workspace = self._kb_storage_workspace(kb_id)
         graph = await rag.lightrag.get_knowledge_graph(
             node_label=label,
             max_depth=max(1, int(max_depth)),
             max_nodes=max(10, int(max_nodes)),
         )
-        return self._normalize_graph(graph, labels=labels)
+        return self._normalize_graph(graph, labels=labels, workspace=workspace)
 
     @staticmethod
     async def _drop_storage_data(storage: Any) -> None:

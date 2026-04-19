@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 96" role="img" aria-labelledby="title desc">
+  <title id="title">芯同事品牌标识</title>
+  <desc id="desc">机器人头像与芯同事文字组合标志</desc>
+  <defs>
+    <linearGradient id="panel" x1="10" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a" />
+      <stop offset="1" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="shell" x1="20" y1="14" x2="66" y2="66" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="0.45" stop-color="#f1f5f9" />
+      <stop offset="1" stop-color="#cbd5e1" />
+    </linearGradient>
+    <linearGradient id="ear" x1="0" y1="20" x2="0" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e2e8f0" />
+      <stop offset="1" stop-color="#94a3b8" />
+    </linearGradient>
+    <linearGradient id="visor" x1="24" y1="28" x2="60" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111827" />
+      <stop offset="1" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="wordmark" x1="118" y1="20" x2="360" y2="76" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a" />
+      <stop offset="0.55" stop-color="#1e3a8a" />
+      <stop offset="1" stop-color="#0f766e" />
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="8" y="8" width="80" height="80" rx="26" fill="url(#panel)" />
+
+  <rect x="22" y="32" width="8" height="24" rx="4" fill="url(#ear)" />
+  <rect x="66" y="32" width="8" height="24" rx="4" fill="url(#ear)" />
+  <circle cx="26" cy="28" r="4" fill="#22d3ee" filter="url(#glow)" />
+  <circle cx="70" cy="28" r="4" fill="#22d3ee" filter="url(#glow)" />
+
+  <path
+    d="M28 18h40c7.732 0 14 6.268 14 14v20c0 9.941-8.059 18-18 18H32c-9.941 0-18-8.059-18-18V32c0-7.732 6.268-14 14-14Z"
+    fill="url(#shell)"
+  />
+  <rect x="22" y="26" width="52" height="24" rx="12" fill="url(#visor)" stroke="#334155" stroke-width="2" />
+  <path d="M26 29h44c-2.6 4.6-7.4 7.2-13.1 7.2H39.2c-5.3 0-10-2.4-13.2-7.2Z" fill="rgba(255,255,255,0.14)" />
+  <rect x="31" y="33" width="8" height="10" rx="4" fill="#22d3ee" filter="url(#glow)" />
+  <rect x="57" y="33" width="8" height="10" rx="4" fill="#22d3ee" filter="url(#glow)" />
+  <rect x="34" y="57" width="4" height="4" rx="2" fill="#94a3b8" />
+  <rect x="44" y="57" width="4" height="4" rx="2" fill="#94a3b8" />
+  <rect x="54" y="57" width="4" height="4" rx="2" fill="#94a3b8" />
+
+  <text
+    x="112"
+    y="60"
+    font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans SC',sans-serif"
+    font-size="42"
+    font-weight="700"
+    letter-spacing="1"
+    fill="url(#wordmark)"
+  >
+    芯同事
+  </text>
+</svg>
