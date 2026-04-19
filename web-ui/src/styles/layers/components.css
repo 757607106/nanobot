@@ -573,6 +573,22 @@
   min-width: 0;
 }
 
+.dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--nb-spacing-lg);
+}
+
+.dashboard-charts-grid > :first-child {
+  grid-column: 1 / -1;
+}
+
+.dashboard-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--nb-spacing-lg);
+}
+
 @media (max-width: 1100px) {
   .dashboard-main-grid {
     grid-template-columns: 1fr;
@@ -581,6 +597,20 @@
   .dashboard-side-rail {
     position: static !important;
     top: auto !important;
+  }
+
+  .dashboard-charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1400px) {
+  .dashboard-status-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 

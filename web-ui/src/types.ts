@@ -1677,3 +1677,59 @@ export interface AgentExecutionMetrics {
   mcps: Record<string, number>
   knowledge: Record<string, number>
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard Analytics
+// ---------------------------------------------------------------------------
+
+export type DashboardTimeBucket = 'hour' | 'day' | 'week' | 'month'
+
+export interface DashboardTimeSeriesPoint {
+  bucket: string
+  agentId: string | null
+  model: string | null
+  runCount: number
+  totalTokens: number
+  promptTokens: number
+  completionTokens: number
+  cachedTokens: number
+}
+
+export interface DashboardToolRankingItem {
+  tool: string
+  count: number
+  agents: string[]
+}
+
+export interface DashboardOverview {
+  totalRuns: number
+  activeAgents: number
+  activeModels: number
+  totalTokens: number
+  promptTokens: number
+  completionTokens: number
+  cachedTokens: number
+  runsByStatus: Record<string, number>
+}
+
+export interface DashboardAnalyticsResponse {
+  timeSeries: DashboardTimeSeriesPoint[]
+  toolRanking: DashboardToolRankingItem[]
+  overview: DashboardOverview
+  agentMetrics: Record<string, AgentExecutionMetrics>
+}
+
+export interface DashboardMcpHealthResponse {
+  servers: McpServerEntry[]
+  summary: McpServerSummary
+  healthScore: number
+}
+
+export interface DashboardKbActivityItem {
+  kbId: string
+  name: string
+  totalCount: number
+  fileCount: number
+  indexedCount: number
+  updatedAt: string | null
+}

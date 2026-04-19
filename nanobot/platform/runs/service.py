@@ -1117,6 +1117,52 @@ class RunService:
             until=until,
         )
 
+    def get_time_series_metrics(
+        self,
+        *,
+        bucket: str = "day",
+        since: str | None = None,
+        until: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get time-bucketed run/token metrics for trend charts."""
+        return self.store.get_time_series_metrics(
+            bucket=bucket,
+            since=since,
+            until=until,
+            tenant_id=self.tenant_id if self._scope_enforced else None,
+            instance_id=self.instance_id if self._scope_enforced else None,
+        )
+
+    def get_tool_usage_ranking(
+        self,
+        *,
+        limit: int = 10,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get top-N tool usage ranking across all agents."""
+        return self.store.get_tool_usage_ranking(
+            limit=limit,
+            since=since,
+            until=until,
+            tenant_id=self.tenant_id if self._scope_enforced else None,
+            instance_id=self.instance_id if self._scope_enforced else None,
+        )
+
+    def get_overview_metrics(
+        self,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> dict[str, Any]:
+        """Get global overview metrics (total runs, active agents, tokens, etc.)."""
+        return self.store.get_overview_metrics(
+            since=since,
+            until=until,
+            tenant_id=self.tenant_id if self._scope_enforced else None,
+            instance_id=self.instance_id if self._scope_enforced else None,
+        )
+
     def list_runs(
         self,
         *,

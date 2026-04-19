@@ -487,6 +487,220 @@ class RunStore:
         finally:
             conn.close()
 
+    # ------------------------------------------------------------------
+    # Dashboard analytics queries
+    # ------------------------------------------------------------------
+
+    _BUCKET_FORMATS: dict[str, str] = {
+        "hour": "%Y-%m-%dT%H:00:00Z",
+        "day": "%Y-%m-%d",
+        "week": "%Y-W%W",
+        "month": "%Y-%m",
+    }
+
+    def get_time_series_metrics(
+        self,
+        *,
+        bucket: str = "day",
+        since: str | None = None,
+        until: str | None = None,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Aggregate run metrics into time buckets for trend charts."""
+        fmt = self._BUCKET_FORMATS.get(bucket, self._BUCKET_FORMATS["day"])
+        where: list[str] = []
+        values: list[object] = []
+        if tenant_id is not None:
+            where.append("tenant_id = ?")
+            values.append(tenant_id)
+        if instance_id is not None:
+            where.append("instance_id = ?")
+            values.append(instance_id)
+        if since is not None:
+            where.append("created_at >= ?")
+            values.append(since)
+        if until is not None:
+            where.append("created_at <= ?")
+            values.append(until)
+
+        where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT strftime('{fmt}', created_at) AS bucket,
+                       agent_id, model,
+                       COUNT(*) AS run_count,
+                       SUM(prompt_tokens) AS p,
+                       SUM(completion_tokens) AS c,
+                       SUM(cached_tokens) AS ca,
+                       SUM(total_tokens) AS t
+                FROM run_records
+                {where_clause}
+                GROUP BY bucket, agent_id, model
+                ORDER BY bucket ASC
+                """,
+                values,
+            ).fetchall()
+            return [
+                {
+                    "bucket": r["bucket"] or "",
+                    "agentId": r["agent_id"],
+                    "model": r["model"],
+                    "runCount": int(r["run_count"] or 0),
+                    "totalTokens": int(r["t"] or 0),
+                    "promptTokens": int(r["p"] or 0),
+                    "completionTokens": int(r["c"] or 0),
+                    "cachedTokens": int(r["ca"] or 0),
+                }
+                for r in rows
+            ]
+        except Exception:
+            return []
+        finally:
+            conn.close()
+
+    def get_tool_usage_ranking(
+        self,
+        *,
+        limit: int = 10,
+        since: str | None = None,
+        until: str | None = None,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Rank tools by total call frequency across all agents."""
+        where: list[str] = ["result_summary_json IS NOT NULL"]
+        values: list[object] = []
+        if tenant_id is not None:
+            where.append("tenant_id = ?")
+            values.append(tenant_id)
+        if instance_id is not None:
+            where.append("instance_id = ?")
+            values.append(instance_id)
+        if since is not None:
+            where.append("created_at >= ?")
+            values.append(since)
+        if until is not None:
+            where.append("created_at <= ?")
+            values.append(until)
+
+        where_clause = f"WHERE {' AND '.join(where)}"
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT agent_id,
+                       json_extract(result_summary_json, '$.tools_call_counts') AS tools_json
+                FROM run_records
+                {where_clause}
+                """,
+                values,
+            ).fetchall()
+
+            tool_counts: dict[str, int] = {}
+            tool_agents: dict[str, set[str]] = {}
+            for r in rows:
+                tools_json = r["tools_json"]
+                if not tools_json:
+                    continue
+                try:
+                    parsed = json.loads(tools_json)
+                    if not isinstance(parsed, dict):
+                        continue
+                    aid = r["agent_id"] or "unknown"
+                    for tool_name, count_val in parsed.items():
+                        count = int(count_val) if str(count_val).isdigit() else 0
+                        if count > 0:
+                            tool_counts[tool_name] = tool_counts.get(tool_name, 0) + count
+                            tool_agents.setdefault(tool_name, set()).add(aid)
+                except Exception:
+                    pass
+
+            ranked = sorted(tool_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
+            return [
+                {"tool": name, "count": cnt, "agents": sorted(tool_agents.get(name, set()))}
+                for name, cnt in ranked
+            ]
+        except Exception:
+            return []
+        finally:
+            conn.close()
+
+    def get_overview_metrics(
+        self,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+        tenant_id: str | None = None,
+        instance_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Global overview metrics for the dashboard top-level cards."""
+        where: list[str] = []
+        values: list[object] = []
+        if tenant_id is not None:
+            where.append("tenant_id = ?")
+            values.append(tenant_id)
+        if instance_id is not None:
+            where.append("instance_id = ?")
+            values.append(instance_id)
+        if since is not None:
+            where.append("created_at >= ?")
+            values.append(since)
+        if until is not None:
+            where.append("created_at <= ?")
+            values.append(until)
+
+        where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                f"""
+                SELECT COUNT(*) AS total_runs,
+                       COUNT(DISTINCT agent_id) AS active_agents,
+                       COUNT(DISTINCT model) AS active_models,
+                       SUM(prompt_tokens) AS p,
+                       SUM(completion_tokens) AS c,
+                       SUM(cached_tokens) AS ca,
+                       SUM(total_tokens) AS t
+                FROM run_records {where_clause}
+                """,
+                values,
+            ).fetchone()
+
+            status_rows = conn.execute(
+                f"""
+                SELECT status, COUNT(*) AS cnt
+                FROM run_records {where_clause}
+                GROUP BY status
+                """,
+                values,
+            ).fetchall()
+
+            runs_by_status: dict[str, int] = {}
+            for sr in status_rows:
+                runs_by_status[sr["status"]] = int(sr["cnt"] or 0)
+
+            return {
+                "totalRuns": int(row["total_runs"] or 0) if row else 0,
+                "activeAgents": int(row["active_agents"] or 0) if row else 0,
+                "activeModels": int(row["active_models"] or 0) if row else 0,
+                "totalTokens": int(row["t"] or 0) if row else 0,
+                "promptTokens": int(row["p"] or 0) if row else 0,
+                "completionTokens": int(row["c"] or 0) if row else 0,
+                "cachedTokens": int(row["ca"] or 0) if row else 0,
+                "runsByStatus": runs_by_status,
+            }
+        except Exception:
+            return {
+                "totalRuns": 0, "activeAgents": 0, "activeModels": 0,
+                "totalTokens": 0, "promptTokens": 0, "completionTokens": 0,
+                "cachedTokens": 0, "runsByStatus": {},
+            }
+        finally:
+            conn.close()
+
     def insert_event(self, event: RunEvent) -> RunEvent:
         conn = self._connect()
         cursor = conn.cursor()

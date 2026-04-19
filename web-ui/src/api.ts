@@ -90,6 +90,10 @@ import type {
   AgentTemplate,
   AgentTemplateMutationInput,
   AgentExecutionMetrics,
+  DashboardTimeBucket,
+  DashboardAnalyticsResponse,
+  DashboardMcpHealthResponse,
+  DashboardKbActivityItem,
 } from './types'
 
 const API_BASE = '/api/v1'
@@ -879,6 +883,22 @@ export const api = {
       },
     ),
   getAgentsMetrics: () => request<Record<string, AgentExecutionMetrics>>('/agents/metrics'),
+  getDashboardAnalytics: (params?: { bucket?: DashboardTimeBucket; since?: string; until?: string }) => {
+    const search = new URLSearchParams()
+    if (params?.bucket) search.set('bucket', params.bucket)
+    if (params?.since) search.set('since', params.since)
+    if (params?.until) search.set('until', params.until)
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request<DashboardAnalyticsResponse>(`/dashboard/analytics${suffix}`)
+  },
+  getDashboardMcpHealth: () => request<DashboardMcpHealthResponse>('/dashboard/mcp-health'),
+  getDashboardKbActivity: (params?: { since?: string; until?: string }) => {
+    const search = new URLSearchParams()
+    if (params?.since) search.set('since', params.since)
+    if (params?.until) search.set('until', params.until)
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request<DashboardKbActivityItem[]>(`/dashboard/kb-activity${suffix}`)
+  },
   getAgents: (enabled?: boolean) => {
     const params = new URLSearchParams()
     if (typeof enabled === 'boolean') {
