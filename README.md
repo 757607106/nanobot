@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="nanobot_logo.png" alt="nanobot" width="500">
-  <h1>Nanobot | 多智能体管理面板</h1>
+  <img src="web-ui/public/brand-robot-logo.svg" alt="芯同事" width="500">
+  <h1>芯同事 | 多智能体管理面板</h1>
   <p>
     <img src="https://img.shields.io/badge/react-18.x-blue" alt="React">
     <img src="https://img.shields.io/badge/python-≥3.11-blue" alt="Python">
@@ -15,7 +15,7 @@ This project is a secondary development based on [HKUDS/nanobot](https://github.
 
 ## ✨ Features / 核心功能
 
-我们对 Nanobot 进行了深度的定制化与二次开发，着重强化了多智能体管理与控制面板的用户体验，引入了全新的 **Tech Luxury** 语言设计。
+我们对 芯同事 进行了深度的定制化与二次开发，着重强化了多智能体管理与控制面板的用户体验，引入了全新的 **Tech Luxury** 语言设计。
 
 <table align="center">
   <tr align="center">

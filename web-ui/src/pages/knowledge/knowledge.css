@@ -290,7 +290,39 @@
   display: grid;
   grid-template-columns: 1fr 320px;
   gap: 14px;
-  min-height: 560px;
+  /* Give the grid a concrete height so the canvas can size correctly (no "only top part draggable"). */
+  height: clamp(560px, calc(100vh - 320px), 860px);
+}
+
+.knowledge-graph-browser-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.knowledge-graph-browser-sidebar-hidden {
+  grid-template-columns: 1fr;
+}
+
+.knowledge-graph-browser-sidebar-hidden .knowledge-graph-browser-sidebar {
+  display: none;
+}
+
+.knowledge-graph-browser-fullscreen .knowledge-graph-browser-sidebar {
+  max-height: 100%;
+}
+
+.knowledge-graph-browser-fullscreen .knowledge-graph-browser-stage {
+  height: 100%;
+}
+
+.knowledge-graph-browser-fullscreen .knowledge-graph-canvas-shell {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .knowledge-graph-browser-stage {
@@ -308,6 +340,8 @@
 .knowledge-graph-canvas-shell,
 .knowledge-mindmap-shell {
   position: relative;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--nb-border);
   border-radius: var(--nb-radius-lg);
   background: var(--nb-surface);
@@ -318,8 +352,8 @@
 
 .knowledge-graph-canvas {
   width: 100%;
-  min-height: 440px;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .knowledge-graph-floating-tools {
@@ -343,6 +377,14 @@
   border-top: none;
   border-radius: 0 0 var(--nb-radius-lg) var(--nb-radius-lg);
   background: var(--nb-surface-strong);
+  flex-wrap: wrap;
+}
+
+.knowledge-graph-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 /* ── Sidebar ── */
@@ -351,7 +393,8 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-  max-height: calc(100vh - 320px);
+  height: 100%;
+  max-height: none;
   overflow-y: auto;
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Empty, Input, InputNumber, Segmented, Select, Space, Spin, Statistic, Tag, Typography, theme } from 'antd'
-import { AimOutlined, ReloadOutlined, RightOutlined, SearchOutlined, ApartmentOutlined, ShareAltOutlined, DesktopOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
+import { AimOutlined, ReloadOutlined, RightOutlined, SearchOutlined, ApartmentOutlined, ShareAltOutlined, DesktopOutlined, EyeInvisibleOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons'
 import MetricCard from '../../components/console/MetricCard'
 import type { KnowledgeGraphData, KnowledgeGraphEdge, KnowledgeGraphNode, KnowledgeGraphStats } from '../../types'
 
@@ -184,95 +184,65 @@ function getGraphLayoutLabel(layoutMode: GraphLayoutMode) {
   return GRAPH_LAYOUT_OPTIONS.find((option) => option.value === layoutMode)?.label || '力导向'
 }
 
-function getGraphLayoutConfig(mode: GraphLayoutMode, width: number, height: number) {
-  switch (mode) {
-    case 'circular':
-      return {
-        type: 'circular',
-      }
-    case 'dendrogram':
-      return {
-        type: 'dendrogram',
-        radial: true,
-        nodeSep: 40,
-        rankSep: 140,
-      }
-    case 'circlepack':
-      return { type: 'concentric', sortBy: 'degree', preventOverlap: true }
-    case 'random':
-      return { type: 'random' }
-    case 'noverlap':
-      return { type: 'grid', preventOverlap: true }
-    case 'forceAtlas':
-      return { type: 'force-atlas2', preventOverlap: true }
-    case 'force':
-    default:
-      return {
-        type: 'force',
-        linkDistance: 50,
-        clustering: true,
-        nodeClusterBy: 'cluster',
-        clusterNodeStrength: 70,
-      }
+function getGraphLayoutConfig(_mode: GraphLayoutMode, _width: number, _height: number, nodeCount = 0) {
+  // Spread nodes wide so labels are readable, not clumped in a ball.
+  // Large graphs use slightly weaker force but still strong enough to separate.
+  const isLarge = nodeCount > 150
+  return {
+    type: 'd3-force',
+    link: {
+      distance: isLarge ? 200 : 280,
+    },
+    charge: {
+      strength: isLarge ? -800 : -1200,
+      distanceMax: 1200,
+    },
+    collide: {
+      radius: isLarge ? 50 : 60,
+      strength: 0.9,
+    },
+    simulation: {
+      alphaDecay: isLarge ? 0.04 : 0.015,
+      velocityDecay: 0.35,
+    },
   }
 }
 
-function getGraphNodeConfig(mode: GraphLayoutMode, token: any): any {
+function getGraphNodeConfig(_mode: GraphLayoutMode, token: any, nodeCount = 0): any {
   const commonState = {
     active: { opacity: 1, shadowColor: 'rgba(0,0,0,0.1)', shadowBlur: 10 },
-    inactive: { opacity: 0.2 },
+    inactive: { opacity: 0.3 },
     neighbor: { opacity: 0.9, lineWidth: 2, stroke: token.colorPrimary },
     selected: { opacity: 1, lineWidth: 3, stroke: token.colorPrimary },
-    dimmed: { opacity: 0.1 }
+    dimmed: { opacity: 0.35 }
   }
 
-  switch (mode) {
-    case 'circular':
-      return {
-        style: {
-          labelText: (d: any) => d.data?.label || d.id,
-          labelFill: '#fff',
-          labelPlacement: 'center',
-        },
-        state: commonState,
-      }
-    case 'dendrogram':
-      return {
-        style: {
-          labelText: (d: any) => d.data?.label || d.id,
-          labelBackground: true,
-        },
-        animation: {
-          enter: false,
-        },
-        state: commonState,
-      }
-    case 'force':
-    default:
-      return {
-        style: {
-          labelText: (d: any) => d.data?.label || d.id,
-          ports: [],
-        },
-        palette: {
-          type: 'group',
-          field: 'cluster',
-        },
-        state: commonState,
-      }
+  return {
+    style: {
+      labelText: (d: any) => d.data?.label || d.id,
+      size: (d: any) => d.data?.size || 16,
+      ports: [],
+    },
+    palette: {
+      type: 'group',
+      field: 'cluster',
+    },
+    // Disable enter/exit animations for large graphs to prevent jank
+    animation: nodeCount > 100 ? { enter: false, exit: false, update: false } : undefined,
+    state: commonState,
   }
 }
 
-function getGraphBehaviorsConfig(mode: GraphLayoutMode) {
-  switch (mode) {
-    case 'circular':
-      return ['drag-canvas', 'drag-element']
-    case 'dendrogram':
-      return ['drag-canvas', 'zoom-canvas', 'drag-element']
-    case 'force':
-    default:
-      return ['zoom-canvas', 'drag-canvas']
-  }
+function getGraphBehaviorsConfig() {
+  return [
+    'zoom-canvas',
+    'drag-canvas',
+    'drag-element',
+    {
+      type: 'hover-activate',
+      degree: 1,
+    },
+  ]
 }
 
 export function KnowledgeGraphTab({
@@ -290,10 +260,13 @@ export function KnowledgeGraphTab({
   const { token } = theme.useToken()
   const graphColors = useMemo(() => getGraphColors(token), [token])
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const browserRef = useRef<HTMLDivElement | null>(null)
   const graphRef = useRef<any>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [renderError, setRenderError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<GraphViewMode>('core')
   const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>('force')
@@ -445,14 +418,19 @@ export function KnowledgeGraphTab({
         .map((node) => node.id),
     )
 
-    return {
-      nodes: filteredGraphData.nodes.map((node) => {
+      return {
+          nodes: filteredGraphData.nodes.map((node) => {
         const degree = degreeMap.get(node.id) || 0
+        const size = Math.max(12, Math.min(16 + degree * 3, 48))
         return {
           id: node.id,
           data: {
             cluster: getNodeType(node),
             label: truncateText(getNodeLabel(node), 36),
+            size,
+            degree,
+            description: truncateText(getNodeDescription(node), 80),
+            entityType: getNodeTypeLabel(node),
           },
           children: Array.from(childrenMap.get(node.id) || []),
         }
@@ -479,6 +457,41 @@ export function KnowledgeGraphTab({
       setSelectedEdgeId(null)
     }
   }, [filteredGraphData.edges, filteredGraphData.nodes, selectedEdgeId, selectedNodeId])
+
+  useEffect(() => {
+    function onFullscreenChange() {
+      const nextFullscreen = !!document.fullscreenElement
+      setIsFullscreen(nextFullscreen)
+      // Critical: after fullscreen transition, resize the G6 canvas to match
+      // the new container dimensions and re-fit the view.
+      setTimeout(() => {
+        if (containerRef.current && graphRef.current) {
+          const w = containerRef.current.clientWidth
+          const h = containerRef.current.clientHeight
+          if (w > 0 && h > 0) {
+            graphRef.current.setSize(w, h)
+            void graphRef.current.fitView?.()
+          }
+        }
+      }, 300)
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      if (browserRef.current?.requestFullscreen) {
+        browserRef.current.requestFullscreen().catch((err) => {
+          console.error(`Error attempting to enable fullscreen: ${err.message}`)
+        })
+      }
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen().catch((err) => {
+        console.error(`Error attempting to exit fullscreen: ${err.message}`)
+      })
+    }
+  }
 
   useEffect(() => {
     let disposed = false
@@ -524,19 +537,20 @@ export function KnowledgeGraphTab({
           height,
           data: baseGraphPayload,
           autoFit: 'view',
-          layout: getGraphLayoutConfig(layoutMode, width, height),
-          node: getGraphNodeConfig(layoutMode, token),
+          animation: baseGraphPayload.nodes.length > 100 ? false : undefined,
+          layout: getGraphLayoutConfig(layoutMode, width, height, baseGraphPayload.nodes.length),
+          node: getGraphNodeConfig(layoutMode, token, baseGraphPayload.nodes.length),
           edge: {
             // Keep edge incredibly clean, just provide state targets so selection highlights work!
             state: {
               active: { opacity: 0.9, lineWidth: 2, stroke: token.colorTextSecondary },
-              inactive: { opacity: 0.2 },
+              inactive: { opacity: 0.3 },
               neighbor: { opacity: 0.8, lineWidth: 2, stroke: token.colorPrimaryText },
               selected: { stroke: token.colorPrimary, lineWidth: 2.5, opacity: 1 },
-              dimmed: { opacity: 0.05 }
+              dimmed: { opacity: 0.15 }
             }
           },
-          behaviors: getGraphBehaviorsConfig(layoutMode),
+          behaviors: getGraphBehaviorsConfig(),
         })
 
         instance.on('node:click', (event: any) => {
@@ -604,10 +618,14 @@ export function KnowledgeGraphTab({
     const graph = graphRef.current
 
     if (!focusState.active) {
+       // Clear ALL states (including hover-activate residual states)
        const updates: Record<string, string[]> = {}
        for (const node of baseGraphPayload.nodes) updates[node.id] = []
        for (const edge of baseGraphPayload.edges) updates[edge.id] = []
-       try { graph.setElementState(updates) } catch (e) {}
+       try {
+         graph.setElementState(updates)
+         void graph.draw?.()
+       } catch (e) {}
        return
     }
 
@@ -640,6 +658,38 @@ export function KnowledgeGraphTab({
     return String(selectedNodeRelations.length)
   }, [selectedNode, selectedNodeRelations.length])
 
+  // Collect unique entity types for the color legend
+  const entityTypes = useMemo(() => {
+    const typeSet = new Set<string>()
+    for (const node of filteredGraphData.nodes) {
+      typeSet.add(getNodeTypeLabel(node))
+    }
+    return Array.from(typeSet).slice(0, 10)
+  }, [filteredGraphData.nodes])
+
+  const graphSummary = useMemo(() => {
+    const nodeCount = baseGraphPayload.nodes.length
+    const edgeCount = baseGraphPayload.edges.length
+    return `${nodeCount} 个实体 · ${edgeCount} 条关系 · ${entityTypes.length} 种类型`
+  }, [baseGraphPayload.nodes.length, baseGraphPayload.edges.length, entityTypes.length])
+
+  const handleViewModeChange = (value: GraphViewMode) => {
+    setViewMode(value)
+    if (value === 'all') {
+      // "全部实体" bypasses depth/maxNodes limits
+      onGraphDepthChange(10)
+      onGraphMaxNodesChange(9999)
+      // Trigger reload after config change propagates
+      setTimeout(() => onReload(), 50)
+    }
+  }
+
+  const handleFitView = () => {
+    if (graphRef.current) {
+      void graphRef.current.fitView?.()
+    }
+  }
+
   return (
     <div className="knowledge-tab-panel knowledge-graph-tab-panel">
       <div className="knowledge-graph-toolbar knowledge-graph-toolbar-compact">
@@ -649,29 +699,29 @@ export function KnowledgeGraphTab({
           prefix={<SearchOutlined />}
           placeholder="搜索实体"
         />
-        <Space.Compact>
-          <Button disabled>层级</Button>
-          <InputNumber min={1} max={5} value={graphDepth} onChange={(value) => onGraphDepthChange(Number(value || 2))} />
-        </Space.Compact>
-        <Space.Compact>
-          <Button disabled>实体数</Button>
-          <InputNumber min={10} max={300} value={graphMaxNodes} onChange={(value) => onGraphMaxNodesChange(Number(value || 50))} />
-        </Space.Compact>
-        <Select
-          value={layoutMode}
-          onChange={(value) => setLayoutMode(value as GraphLayoutMode)}
-          options={GRAPH_LAYOUT_OPTIONS}
-          className="knowledge-graph-layout-select"
-          popupMatchSelectWidth={false}
-        />
+        {viewMode !== 'all' ? (
+          <>
+            <Space.Compact>
+              <Button disabled>层级</Button>
+              <InputNumber min={1} max={5} value={graphDepth} onChange={(value) => onGraphDepthChange(Number(value || 2))} />
+            </Space.Compact>
+            <Space.Compact>
+              <Button disabled>实体数</Button>
+              <InputNumber min={10} max={300} value={graphMaxNodes} onChange={(value) => onGraphMaxNodesChange(Number(value || 50))} />
+            </Space.Compact>
+          </>
+        ) : null}
         <Segmented
           value={viewMode}
-          onChange={(value) => setViewMode(value as GraphViewMode)}
+          onChange={(value) => handleViewModeChange(value as GraphViewMode)}
           options={[
             { label: '核心关系', value: 'core' },
             { label: '全部实体', value: 'all' },
           ]}
         />
+        <Button icon={<AimOutlined />} onClick={handleFitView}>
+          优化显示
+        </Button>
         <Button icon={<ReloadOutlined />} loading={graphLoading} onClick={onReload}>
           刷新图谱
         </Button>
@@ -691,9 +741,17 @@ export function KnowledgeGraphTab({
       {graphLoading ? (
         <div className="knowledge-loading-panel"><Spin /></div>
       ) : baseGraphPayload.nodes.length > 0 ? (
-        <div className="knowledge-graph-browser">
-          <div className="knowledge-graph-browser-stage">
-            <div className="knowledge-graph-canvas-shell knowledge-graph-browser-shell">
+        <div 
+          ref={browserRef} 
+          className={[
+            'knowledge-graph-browser',
+            isFullscreen ? 'knowledge-graph-browser-fullscreen' : '',
+            sidebarOpen ? '' : 'knowledge-graph-browser-sidebar-hidden',
+          ].filter(Boolean).join(' ')}
+          style={{ backgroundColor: isFullscreen ? token.colorBgContainer : undefined }}
+        >
+          <div className="knowledge-graph-browser-stage" style={isFullscreen ? { height: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } : undefined}>
+            <div className="knowledge-graph-canvas-shell knowledge-graph-browser-shell" style={isFullscreen ? { flex: 1, height: '100%', minHeight: 0 } : undefined}>
               {renderError ? (
                 <Alert
                   type="error"
@@ -704,22 +762,44 @@ export function KnowledgeGraphTab({
                 />
               ) : null}
               <div className="knowledge-graph-floating-tools">
-                <Button size="small" icon={<AimOutlined />} onClick={() => void graphRef.current?.fitView?.()} />
+                <Button size="small" icon={<AimOutlined />} title="适配视图" onClick={() => void graphRef.current?.fitView?.()} />
+                <Button
+                  size="small"
+                  icon={sidebarOpen ? <EyeInvisibleOutlined /> : <DesktopOutlined />}
+                  title={sidebarOpen ? '隐藏侧栏' : '显示侧栏'}
+                  onClick={() => {
+                    setSidebarOpen((prev) => !prev)
+                    // 等布局稳定后再 fit 一次，避免出现“只在局部可拖拽”的错觉
+                    setTimeout(() => void graphRef.current?.fitView?.(), 0)
+                  }}
+                />
+                <Button 
+                  size="small" 
+                  icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} 
+                  title={isFullscreen ? '退出全屏' : '全屏预览'} 
+                  onClick={toggleFullscreen} 
+                />
                 <Button size="small" onClick={() => {
                   setSelectedNodeId(null)
                   setSelectedEdgeId(null)
                 }}>
                   清空
                 </Button>
+                <Button size="small" icon={<ReloadOutlined />} title="刷新图谱" loading={graphLoading} onClick={onReload} />
               </div>
               <div ref={containerRef} className="knowledge-graph-canvas" />
             </div>
             <div className="knowledge-graph-stage-footer">
               <Text type="secondary">
                 {focusState.active
-                  ? `焦点视图：${selectedNode ? getNodeLabel(selectedNode) : '当前关系'} · ${getGraphLayoutLabel(layoutMode)}`
-                  : `当前渲染：${getGraphLayoutLabel(layoutMode)}。点击一个实体后，会切换到它的一跳关系视图。`}
+                  ? `焦点视图：${selectedNode ? getNodeLabel(selectedNode) : '当前关系'}`
+                  : graphSummary}
               </Text>
+              <div className="knowledge-graph-legend">
+                {entityTypes.map((type) => (
+                  <Tag key={type} bordered={false} style={{ fontSize: 11 }}>{type}</Tag>
+                ))}
+              </div>
               {focusState.active ? (
                 <Button
                   size="small"
@@ -736,60 +816,6 @@ export function KnowledgeGraphTab({
 
           <aside className="knowledge-graph-browser-sidebar">
             <div className="knowledge-graph-inspector-shell">
-              <div className="knowledge-graph-inspector-header">
-                <div className="knowledge-graph-inspector-copy">
-                  <Text strong>图谱检查器</Text>
-                  <Text type="secondary">
-                    {selectedNode
-                      ? `当前聚焦 ${truncateText(getNodeLabel(selectedNode), 18)} 的一跳关系`
-                      : selectedRelation
-                        ? '已切换到关系查看模式'
-                        : '点击左侧实体后，在这里查看属性和关系'}
-                  </Text>
-                </div>
-                {selectedNode ? <Tag>{getNodeTypeLabel(selectedNode)}</Tag> : <Tag>{focusState.active ? '焦点' : '全图'}</Tag>}
-              </div>
-
-              <div className="knowledge-graph-side-panel knowledge-graph-side-panel-compact">
-                {selectedNode ? (
-                  <div className="knowledge-graph-properties">
-                    <div className="knowledge-graph-side-list">
-                      <div className="knowledge-graph-side-row"><span>名称</span><strong>{truncateText(getNodeLabel(selectedNode), 24)}</strong></div>
-                      <div className="knowledge-graph-side-row"><span>类型</span><strong>{getNodeTypeLabel(selectedNode)}</strong></div>
-                      <div className="knowledge-graph-side-row"><span>关系数</span><strong>{relationCountByNode.get(selectedNode.id) || 0}</strong></div>
-                      {getNodeFilePath(selectedNode) ? (
-                        <div className="knowledge-graph-side-row"><span>来源</span><strong>{truncateText(getFileName(getNodeFilePath(selectedNode)), 22)}</strong></div>
-                      ) : null}
-                    </div>
-                    {getNodeDescription(selectedNode) ? (
-                      <Paragraph className="knowledge-graph-property-block knowledge-graph-property-block-clamped">
-                        {truncateText(getNodeDescription(selectedNode), 160)}
-                      </Paragraph>
-                    ) : null}
-                  </div>
-                ) : selectedRelation ? (
-                  <div className="knowledge-graph-side-list">
-                    <div className="knowledge-graph-side-row"><span>起点</span><strong>{truncateText(selectedRelation.sourceLabel, 18)}</strong></div>
-                    <div className="knowledge-graph-side-row"><span>终点</span><strong>{truncateText(selectedRelation.targetLabel, 18)}</strong></div>
-                    <div className="knowledge-graph-side-row"><span>关系</span><strong>{selectedRelation.relationTitle}</strong></div>
-                    {selectedRelation.filePath ? (
-                      <div className="knowledge-graph-side-row"><span>来源</span><strong>{truncateText(getFileName(selectedRelation.filePath), 22)}</strong></div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <>
-                    <Text type="secondary" className="knowledge-graph-compact-hint">
-                      默认显示核心关系。点击一个实体后，这里会自动切换成它的关系检查面板。
-                    </Text>
-                    <div className="knowledge-graph-chip-row">
-                      <Tag>点击实体</Tag>
-                      <Tag>展开关系</Tag>
-                      <Tag>回到全图</Tag>
-                    </div>
-                  </>
-                )}
-              </div>
-
               <div className="knowledge-graph-side-panel knowledge-graph-relations-panel">
                 <div className="knowledge-graph-relations-header">
                   <Text strong>{selectedNode ? '实体关系' : '核心关系'}</Text>
