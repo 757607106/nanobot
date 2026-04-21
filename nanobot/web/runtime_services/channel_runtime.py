@@ -157,23 +157,12 @@ class WebChannelRuntimeService:
                 audit_service=self.state.channel_audit_service,
             )
 
-            provider = self.state.config_runtime.make_provider(config)
-            self._agent = AgentLoop(
+            self._agent = self.state.agent_runtime.build_default_agent_loop(
+                config=config,
                 bus=self._bus,
-                provider=provider,
-                workspace=config.workspace_path,
-                model=config.agents.defaults.model,
-                max_iterations=config.agents.defaults.max_tool_iterations,
-                context_window_tokens=config.agents.defaults.context_window_tokens,
-                web_config=config.tools.web,
-                exec_config=config.tools.exec,
-                restrict_to_workspace=config.tools.restrict_to_workspace,
                 session_manager=self.state.sessions,
-                mcp_servers=config.tools.mcp_servers,
-                channels_config=config.channels,
-                channel_dispatcher=dispatcher,
                 run_registry=self.state.runs,
-                cron_service=self.state.cron,
+                channel_dispatcher=dispatcher,
             )
 
             self._channel_manager = ChannelManager(

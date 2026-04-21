@@ -16,25 +16,19 @@ from loguru import logger
 from nanobot.agent.autocompact import AutoCompact
 from nanobot.agent.context import ContextBuilder
 from nanobot.agent.hook import AgentHook, AgentHookContext, CompositeHook
-from nanobot.agent.memory import Consolidator, Dream, PostConversationMemoryExtractor
+from nanobot.agent.memory import Consolidator, Dream, PostConversationMemoryExtractor, TurnMaintenanceCoordinator
 from nanobot.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
-from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 from nanobot.agent.subagent import SubagentManager
 from nanobot.agent.tools.base import Tool
 from nanobot.agent.tools.cron import CronTool
-from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from nanobot.agent.tools.message import MessageTool
-from nanobot.agent.tools.notebook import NotebookEditTool
 from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.agent.tools.search import GlobTool, GrepTool
-from nanobot.agent.tools.shell import ExecTool
-from nanobot.agent.tools.spawn import SpawnTool
-from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.chat_payload import normalize_chat_attachments
 from nanobot.command import CommandContext, CommandRouter, register_builtin_commands
 from nanobot.config.schema import AgentDefaults
+from nanobot.harness import build_workspace_tool_registry
 from nanobot.harness.environment import resolve_execution_environment
 from nanobot.harness.sandbox import SandboxBinding, build_sandbox_provider
 from nanobot.harness.workspace import WorkspaceContext
@@ -328,7 +322,6 @@ class AgentLoop:
             include_skills_summary=include_skills_summary,
         )
         self.sessions = session_manager or SessionManager(workspace)
-        self.tools = ToolRegistry()
         self.runner = AgentRunner(provider)
         self.subagents = SubagentManager(
             provider=provider,
@@ -363,6 +356,7 @@ class AgentLoop:
         self._concurrency_gate: asyncio.Semaphore | None = (
             asyncio.Semaphore(_max) if _max > 0 else None
         )
+        self.tools = self._build_tool_registry()
         self.consolidator = Consolidator(
             store=self.context.memory,
             provider=provider,
@@ -388,57 +382,34 @@ class AgentLoop:
             provider=provider,
             model=self.model,
         )
-        self._register_default_tools()
+        self.turn_maintenance = TurnMaintenanceCoordinator(
+            consolidator=self.consolidator,
+            memory_extractor=self.memory_extractor,
+        )
         self.commands = CommandRouter()
         register_builtin_commands(self.commands)
 
-    def _register_default_tools(self) -> None:
-        """Register the default set of tools."""
-        allowed_dir = (
-            self.workspace if (self.restrict_to_workspace or self.exec_config.sandbox) else None
+    def _build_tool_registry(self) -> ToolRegistry:
+        """Build the canonical tool registry for this loop."""
+        return build_workspace_tool_registry(
+            workspace=self.workspace,
+            restrict_to_workspace=self.restrict_to_workspace,
+            exec_timeout=self.exec_config.timeout,
+            exec_path_append=self.exec_config.path_append,
+            web_enabled=self.web_config.enable,
+            web_search_config=self.web_config.search,
+            web_proxy=self.web_config.proxy,
+            sandbox_binding=self.sandbox_binding,
+            sandbox_provider=self._sandbox_provider,
+            exec_enabled=self.exec_config.enable,
+            tool_allowlist=self.tool_allowlist,
+            message_send_callback=self.bus.publish_outbound,
+            spawn_manager=self.subagents,
+            cron_service=self.cron_service,
+            extra_tools=self._extra_tools,
+            timezone=self.context.timezone,
+            allowed_env_keys=self.exec_config.allowed_env_keys,
         )
-        extra_read = [BUILTIN_SKILLS_DIR] if allowed_dir else None
-        self.tools.register(
-            ReadFileTool(
-                workspace=self.workspace, allowed_dir=allowed_dir, extra_allowed_dirs=extra_read
-            )
-        )
-        for cls in (WriteFileTool, EditFileTool, ListDirTool):
-            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
-        for cls in (GlobTool, GrepTool):
-            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
-        self.tools.register(NotebookEditTool(workspace=self.workspace, allowed_dir=allowed_dir))
-        if self.exec_config.enable:
-            self.tools.register(
-                ExecTool(
-                    working_dir=str(self.workspace),
-                    timeout=self.exec_config.timeout,
-                    restrict_to_workspace=self.restrict_to_workspace,
-                    path_append=self.exec_config.path_append,
-                    allowed_env_keys=self.exec_config.allowed_env_keys,
-                )
-            )
-        if self.web_config.enable:
-            self.tools.register(
-                WebSearchTool(config=self.web_config.search, proxy=self.web_config.proxy)
-            )
-            self.tools.register(WebFetchTool(proxy=self.web_config.proxy))
-        self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
-        self.tools.register(SpawnTool(manager=self.subagents))
-        if self.cron_service:
-            self.tools.register(
-                CronTool(self.cron_service, default_timezone=self.context.timezone or "UTC")
-            )
-
-        # --- Custom extra tools (e.g. knowledge-base binding) ---
-        for tool in self._extra_tools:
-            self.tools.register(tool)
-
-        # --- Tool allowlist filtering ---
-        if self.tool_allowlist is not None:
-            for name in list(self.tools.tool_names):
-                if name not in self.tool_allowlist:
-                    self.tools.unregister(name)
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -837,7 +808,7 @@ class AgentLoop:
 
             session, pending = self.auto_compact.prepare_session(session, key)
 
-            await self.consolidator.maybe_consolidate_by_tokens(session)
+            await self.turn_maintenance.prepare_session(session)
             self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
             history = session.get_history(max_messages=0)
             current_role = "assistant" if msg.sender_id == "subagent" else "user"
@@ -861,7 +832,10 @@ class AgentLoop:
             self._save_turn(session, all_msgs, 1 + len(history))
             self._clear_runtime_checkpoint(session)
             self.sessions.save(session)
-            self._schedule_background(self.consolidator.maybe_consolidate_by_tokens(session))
+            self.turn_maintenance.schedule_after_system_turn(
+                schedule_background=self._schedule_background,
+                session=session,
+            )
             return OutboundMessage(
                 channel=channel,
                 chat_id=chat_id,
@@ -892,7 +866,7 @@ class AgentLoop:
         if result := await self.commands.dispatch(ctx):
             return result
 
-        await self.consolidator.maybe_consolidate_by_tokens(session)
+        await self.turn_maintenance.prepare_session(session)
 
         self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
         if message_tool := self.tools.get("message"):
@@ -967,8 +941,11 @@ class AgentLoop:
         self._clear_runtime_checkpoint(session)
         self.sessions.save(session)
         turn_skip = max(0, save_skip - (1 if user_persisted_early else 0))
-        self._schedule_background(self.memory_extractor.run(all_msgs[turn_skip:]))
-        self._schedule_background(self.consolidator.maybe_consolidate_by_tokens(session))
+        self.turn_maintenance.schedule_after_user_turn(
+            schedule_background=self._schedule_background,
+            session=session,
+            turn_messages=all_msgs[turn_skip:],
+        )
 
         # When follow-up messages were injected mid-turn, a later natural
         # language reply may address those follow-ups and should not be

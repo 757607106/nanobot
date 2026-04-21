@@ -14,21 +14,7 @@ import yaml
 from loguru import logger
 
 from nanobot.agent.skills import SkillsLoader
-
-FALLBACK_TOOL_CATALOG: dict[str, str] = {
-    "read_file": "Read a file from the workspace.",
-    "write_file": "Create or overwrite a file in the workspace.",
-    "edit_file": "Edit an existing file using patch-style operations.",
-    "list_dir": "Inspect files and directories in the workspace.",
-    "exec": "Run a shell command inside the workspace.",
-    "web_search": "Search the web for public information.",
-    "web_fetch": "Fetch and summarize a web page.",
-    "list_kbs": "List the knowledge bases bound to the current agent.",
-    "get_mindmap": "Read the current knowledge mindmap for a bound knowledge base.",
-    "query_kb": "Query a bound knowledge base for evidence and structured results.",
-    "message": "Send a message back to the active user or chat session.",
-    "cron": "Create or manage scheduled jobs.",
-}
+from nanobot.harness.runtime_tools import RUNTIME_TOOL_CATALOG
 
 DEFAULT_BUILTIN_TEMPLATES: dict[str, dict[str, Any]] = {
     "minimal": {
@@ -295,11 +281,11 @@ class AgentTemplateManager:
             if not name:
                 continue
             desc = str(entry.get("description") or "").strip()
-            if not desc and name in FALLBACK_TOOL_CATALOG:
-                desc = FALLBACK_TOOL_CATALOG[name]
+            if not desc and name in RUNTIME_TOOL_CATALOG:
+                desc = RUNTIME_TOOL_CATALOG[name]
             items[name] = desc
 
-        for name, description in FALLBACK_TOOL_CATALOG.items():
+        for name, description in RUNTIME_TOOL_CATALOG.items():
             items.setdefault(name, description)
 
         return [{"name": name, "description": desc} for name, desc in items.items()]

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from nanobot.agent.factory import build_agent_loop_from_config
 from nanobot.agent.hook import AgentHook
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
@@ -64,26 +65,11 @@ class Nanobot:
 
         provider = _make_provider(config)
         bus = MessageBus()
-        defaults = config.agents.defaults
-
-        loop = AgentLoop(
+        loop = build_agent_loop_from_config(
+            config=config,
             bus=bus,
             provider=provider,
             workspace=config.workspace_path,
-            model=defaults.model,
-            max_iterations=defaults.max_tool_iterations,
-            context_window_tokens=defaults.context_window_tokens,
-            context_block_limit=defaults.context_block_limit,
-            max_tool_result_chars=defaults.max_tool_result_chars,
-            provider_retry_mode=defaults.provider_retry_mode,
-            web_config=config.tools.web,
-            exec_config=config.tools.exec,
-            restrict_to_workspace=config.tools.restrict_to_workspace,
-            mcp_servers=config.tools.mcp_servers,
-            timezone=defaults.timezone,
-            unified_session=defaults.unified_session,
-            disabled_skills=defaults.disabled_skills,
-            session_ttl_minutes=defaults.session_ttl_minutes,
         )
         return cls(loop)
 

@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
+from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.harness import (
     AgentWorkspaceProvider,
@@ -87,6 +89,55 @@ def test_prepare_agent_execution_builds_explicit_policy_objects() -> None:
         "RuntimePromptFragmentsMiddleware",
         "PromptAssemblyMiddleware",
     ]
+
+
+def test_prepare_root_agent_execution_keeps_bootstrap_prompt_empty() -> None:
+    runtime = WebAgentRuntimeService(_make_runtime_state())
+    config = runtime.state.config
+    default_agent = runtime.build_default_agent_definition(config=config)
+
+    prepared = runtime.prepare_root_agent_execution(default_agent, config=config)
+
+    assert prepared.system_prompt_override is None
+    assert prepared.middleware_stages == [
+        "PromptSeedMiddleware",
+        "MemoryPolicyMiddleware",
+        "KnowledgePolicyMiddleware",
+        "ToolPolicyMiddleware",
+        "RuntimePromptFragmentsMiddleware",
+        "PromptAssemblyMiddleware",
+    ]
+    assert "message" in prepared.effective_tool_allowlist
+
+
+def test_build_default_agent_loop_uses_shared_runtime_builder(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    config = Config()
+    config.agents.defaults.workspace = str(workspace)
+    provider = MagicMock()
+    provider.get_default_model.return_value = config.agents.defaults.model
+    provider.generation.max_tokens = config.agents.defaults.max_tokens
+    sessions = SessionManager(workspace)
+    state = SimpleNamespace(
+        app_agents=SimpleNamespace(instance_id="instance-demo"),
+        app_memory=SimpleNamespace(get_agent_memory=lambda agent_id: {"agentId": agent_id, "content": ""}),
+        app_knowledge=None,
+        config=config,
+        bus=MessageBus(),
+        sessions=sessions,
+        runs=None,
+        cron=None,
+        workspace_runtime=SimpleNamespace(get_valid_template_tools=lambda: []),
+        config_runtime=SimpleNamespace(make_provider=lambda _cfg: provider),
+    )
+    runtime = WebAgentRuntimeService(state)
+
+    loop = runtime.build_default_agent_loop(config=config, bus=state.bus, session_manager=sessions)
+
+    assert {"read_file", "grep", "glob", "notebook_edit", "message", "spawn"} <= set(loop.tools.tool_names)
+    assert loop.context.workspace == workspace
+    assert loop.system_prompt_override is None
 
 
 def test_materialize_execution_context_omits_removed_depth_fields() -> None:

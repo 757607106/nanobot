@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nanobot.agent.loop import AgentLoop
 from nanobot.bus.events import InboundMessage, extract_outbound_content
 from nanobot.chat_payload import normalize_chat_attachments
 from nanobot.session.manager import Session
@@ -533,22 +532,15 @@ class WebChatRuntimeService:
 
         isolated_config = self.state.config.model_copy(deep=True)
         isolated_target = isolated_config.tools.mcp_servers.get(server_name)
+        if isolated_target is not None:
+            isolated_target = isolated_target.model_copy(update={"enabled": True})
         isolated_config.tools.mcp_servers = {server_name: isolated_target} if isolated_target else {}
 
-        isolated_agent = AgentLoop(
+        isolated_agent = self.state.agent_runtime.build_default_agent_loop(
+            config=isolated_config,
             bus=self.state.bus,
-            provider=self.state.config_runtime.make_provider(isolated_config),
-            workspace=isolated_config.workspace_path,
-            model=isolated_config.agents.defaults.model,
-            max_iterations=isolated_config.agents.defaults.max_tool_iterations,
-            context_window_tokens=isolated_config.agents.defaults.context_window_tokens,
-            web_config=isolated_config.tools.web,
-            exec_config=isolated_config.tools.exec,
-            cron_service=self.state.cron,
-            restrict_to_workspace=isolated_config.tools.restrict_to_workspace,
             session_manager=self.state.sessions,
-            mcp_servers=isolated_config.tools.mcp_servers,
-            channels_config=isolated_config.channels,
+            mcp_server_ids=[server_name],
         )
         try:
             response = await isolated_agent.process_direct(

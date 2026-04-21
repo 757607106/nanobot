@@ -524,7 +524,7 @@ def serve(
 
     from loguru import logger
 
-    from nanobot.agent.loop import AgentLoop
+    from nanobot.agent.factory import build_agent_loop_from_config
     from nanobot.api.server import create_app
     from nanobot.bus.queue import MessageBus
     from nanobot.session.manager import SessionManager
@@ -543,26 +543,12 @@ def serve(
     bus = MessageBus()
     provider = _make_provider(runtime_config)
     session_manager = SessionManager(runtime_config.workspace_path)
-    agent_loop = AgentLoop(
+    agent_loop = build_agent_loop_from_config(
+        config=runtime_config,
         bus=bus,
         provider=provider,
         workspace=runtime_config.workspace_path,
-        model=runtime_config.agents.defaults.model,
-        max_iterations=runtime_config.agents.defaults.max_tool_iterations,
-        context_window_tokens=runtime_config.agents.defaults.context_window_tokens,
-        context_block_limit=runtime_config.agents.defaults.context_block_limit,
-        max_tool_result_chars=runtime_config.agents.defaults.max_tool_result_chars,
-        provider_retry_mode=runtime_config.agents.defaults.provider_retry_mode,
-        web_config=runtime_config.tools.web,
-        exec_config=runtime_config.tools.exec,
-        restrict_to_workspace=runtime_config.tools.restrict_to_workspace,
         session_manager=session_manager,
-        mcp_servers=runtime_config.tools.mcp_servers,
-        channels_config=runtime_config.channels,
-        timezone=runtime_config.agents.defaults.timezone,
-        unified_session=runtime_config.agents.defaults.unified_session,
-        disabled_skills=runtime_config.agents.defaults.disabled_skills,
-        session_ttl_minutes=runtime_config.agents.defaults.session_ttl_minutes,
     )
 
     model_name = runtime_config.agents.defaults.model
@@ -605,7 +591,7 @@ def gateway(
     config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
 ):
     """Start the nanobot gateway."""
-    from nanobot.agent.loop import AgentLoop
+    from nanobot.agent.factory import build_agent_loop_from_config
     from nanobot.bus.queue import MessageBus
     from nanobot.channels.dispatch import ChannelMessageDispatcher
     from nanobot.channels.manager import ChannelManager
@@ -657,28 +643,14 @@ def gateway(
     )
 
     # Create agent with cron service
-    agent = AgentLoop(
+    agent = build_agent_loop_from_config(
+        config=config,
         bus=bus,
         provider=provider,
         workspace=config.workspace_path,
-        model=config.agents.defaults.model,
-        max_iterations=config.agents.defaults.max_tool_iterations,
-        context_window_tokens=config.agents.defaults.context_window_tokens,
-        web_config=config.tools.web,
-        context_block_limit=config.agents.defaults.context_block_limit,
-        max_tool_result_chars=config.agents.defaults.max_tool_result_chars,
-        provider_retry_mode=config.agents.defaults.provider_retry_mode,
-        exec_config=config.tools.exec,
         cron_service=cron,
-        restrict_to_workspace=config.tools.restrict_to_workspace,
         session_manager=session_manager,
-        mcp_servers=config.tools.mcp_servers,
-        channels_config=config.channels,
         channel_dispatcher=dispatcher,
-        timezone=config.agents.defaults.timezone,
-        unified_session=config.agents.defaults.unified_session,
-        disabled_skills=config.agents.defaults.disabled_skills,
-        session_ttl_minutes=config.agents.defaults.session_ttl_minutes,
     )
     platform_runtime.bind_main_agent(agent)
 
@@ -950,7 +922,7 @@ def agent(
     """Interact with the agent directly."""
     from loguru import logger
 
-    from nanobot.agent.loop import AgentLoop
+    from nanobot.agent.factory import build_agent_loop_from_config
     from nanobot.bus.queue import MessageBus
     from nanobot.cron.service import CronService
 
@@ -974,26 +946,12 @@ def agent(
     else:
         logger.disable("nanobot")
 
-    agent_loop = AgentLoop(
+    agent_loop = build_agent_loop_from_config(
+        config=config,
         bus=bus,
         provider=provider,
         workspace=config.workspace_path,
-        model=config.agents.defaults.model,
-        max_iterations=config.agents.defaults.max_tool_iterations,
-        context_window_tokens=config.agents.defaults.context_window_tokens,
-        web_config=config.tools.web,
-        context_block_limit=config.agents.defaults.context_block_limit,
-        max_tool_result_chars=config.agents.defaults.max_tool_result_chars,
-        provider_retry_mode=config.agents.defaults.provider_retry_mode,
-        exec_config=config.tools.exec,
         cron_service=cron,
-        restrict_to_workspace=config.tools.restrict_to_workspace,
-        mcp_servers=config.tools.mcp_servers,
-        channels_config=config.channels,
-        timezone=config.agents.defaults.timezone,
-        unified_session=config.agents.defaults.unified_session,
-        disabled_skills=config.agents.defaults.disabled_skills,
-        session_ttl_minutes=config.agents.defaults.session_ttl_minutes,
     )
     restart_notice = consume_restart_notice_from_env()
     if restart_notice and should_show_cli_restart_notice(restart_notice, session_id):

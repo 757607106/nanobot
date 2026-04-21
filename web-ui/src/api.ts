@@ -135,12 +135,12 @@ function notifyAuthRequired() {
 }
 
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
-  const { skipJsonContentType, cache, ...fetchOptions } = options ?? {}
+  const { skipJsonContentType, cache, headers: rawHeaders, ...fetchOptions } = options ?? {}
   const headers = skipJsonContentType
-    ? { ...(options?.headers ?? {}) }
+    ? { ...(rawHeaders ?? {}) }
     : {
         'Content-Type': 'application/json',
-        ...(options?.headers ?? {}),
+        ...(rawHeaders ?? {}),
       }
   const response = await fetch(`${API_BASE}${path}`, {
     headers,
@@ -165,8 +165,8 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
 }
 
 async function requestText(path: string, options?: RequestOptions): Promise<string> {
-  const { skipJsonContentType, cache, ...fetchOptions } = options ?? {}
-  const headers = skipJsonContentType ? { ...(options?.headers ?? {}) } : { ...(options?.headers ?? {}) }
+  const { skipJsonContentType, cache, headers: rawHeaders, ...fetchOptions } = options ?? {}
+  const headers = skipJsonContentType ? { ...(rawHeaders ?? {}) } : { ...(rawHeaders ?? {}) }
   const response = await fetch(`${API_BASE}${path}`, {
     headers,
     cache: cache ?? 'no-store',
@@ -191,6 +191,12 @@ async function requestText(path: string, options?: RequestOptions): Promise<stri
     throw new ApiError(message, response.status, code, details)
   }
   return response.text()
+}
+
+function tenantControlPlaneHeaders(tenantId = 'default'): HeadersInit {
+  return {
+    'x-tenant-id': tenantId,
+  }
 }
 
 function buildKnowledgeFileDownloadPath(
@@ -1066,39 +1072,59 @@ export const api = {
     }),
 
   // Tenants
-  getTenants: () => request<Tenant[]>('/tenants'),
+  getTenants: () =>
+    request<Tenant[]>('/tenants', {
+      headers: tenantControlPlaneHeaders(),
+    }),
   createTenant: (payload: Record<string, unknown>) =>
     request<Tenant>('/tenants', {
       method: 'POST',
       body: JSON.stringify(payload),
+      headers: tenantControlPlaneHeaders(),
     }),
-  getTenant: (tenantId: string) => request<Tenant>(`/tenants/${encodeURIComponent(tenantId)}`),
+  getTenant: (tenantId: string) =>
+    request<Tenant>(`/tenants/${encodeURIComponent(tenantId)}`, {
+      headers: tenantControlPlaneHeaders(tenantId),
+    }),
   updateTenant: (tenantId: string, payload: Record<string, unknown>) =>
     request<Tenant>(`/tenants/${encodeURIComponent(tenantId)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
+      headers: tenantControlPlaneHeaders(tenantId),
     }),
   deleteTenant: (tenantId: string) =>
     request<{ deleted: boolean }>(`/tenants/${encodeURIComponent(tenantId)}`, {
       method: 'DELETE',
+      headers: tenantControlPlaneHeaders(tenantId),
     }),
   getTenantArtifactRetentionPolicy: (tenantId: string) =>
-    request<ArtifactRetentionPolicy>(`/tenants/${encodeURIComponent(tenantId)}/artifact-retention-policy`),
+    request<ArtifactRetentionPolicy>(`/tenants/${encodeURIComponent(tenantId)}/artifact-retention-policy`, {
+      headers: tenantControlPlaneHeaders(tenantId),
+    }),
   updateTenantArtifactRetentionPolicy: (tenantId: string, payload: Record<string, unknown>) =>
     request<ArtifactRetentionPolicy>(`/tenants/${encodeURIComponent(tenantId)}/artifact-retention-policy`, {
       method: 'PUT',
       body: JSON.stringify(payload),
+      headers: tenantControlPlaneHeaders(tenantId),
     }),
-  getTenantAudit: (tenantId: string) => request<TenantAuditLog[]>(`/tenants/${encodeURIComponent(tenantId)}/audit`),
-  getTenantApiKeys: (tenantId: string) => request<TenantApiKey[]>(`/tenants/${encodeURIComponent(tenantId)}/api-keys`),
+  getTenantAudit: (tenantId: string) =>
+    request<TenantAuditLog[]>(`/tenants/${encodeURIComponent(tenantId)}/audit`, {
+      headers: tenantControlPlaneHeaders(tenantId),
+    }),
+  getTenantApiKeys: (tenantId: string) =>
+    request<TenantApiKey[]>(`/tenants/${encodeURIComponent(tenantId)}/api-keys`, {
+      headers: tenantControlPlaneHeaders(tenantId),
+    }),
   createTenantApiKey: (tenantId: string, payload: Record<string, unknown>) =>
     request<TenantApiKey>(`/tenants/${encodeURIComponent(tenantId)}/api-keys`, {
       method: 'POST',
       body: JSON.stringify(payload),
+      headers: tenantControlPlaneHeaders(tenantId),
     }),
-  revokeApiKey: (keyId: string) =>
+  revokeApiKey: (keyId: string, tenantId = 'default') =>
     request<{ deleted: boolean }>(`/api-keys/${encodeURIComponent(keyId)}`, {
       method: 'DELETE',
+      headers: tenantControlPlaneHeaders(tenantId),
     }),
 
   // Agent Templates

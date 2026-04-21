@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import Config, ModelBindingConfig, normalize_api_base_url
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
@@ -95,20 +94,10 @@ class WebConfigRuntimeService:
         self.state.calendar_repo = get_calendar_repository(config.workspace_path)
         bus = MessageBus()
         sessions = SessionManager(config.workspace_path)
-        agent = AgentLoop(
+        agent = self.state.agent_runtime.build_default_agent_loop(
+            config=config,
             bus=bus,
-            provider=self.make_provider(config),
-            workspace=config.workspace_path,
-            model=config.agents.defaults.model,
-            max_iterations=config.agents.defaults.max_tool_iterations,
-            context_window_tokens=config.agents.defaults.context_window_tokens,
-            web_config=config.tools.web,
-            exec_config=config.tools.exec,
-            cron_service=self.state.cron,
-            restrict_to_workspace=config.tools.restrict_to_workspace,
             session_manager=sessions,
-            mcp_servers=config.tools.mcp_servers,
-            channels_config=config.channels,
             run_registry=self.state.runs,
         )
         self.state.config = config

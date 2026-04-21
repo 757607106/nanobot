@@ -582,6 +582,41 @@ class PostConversationMemoryExtractor:
             return changed or bool(daily_note.strip())
 
 
+class TurnMaintenanceCoordinator:
+    """Coordinate short-term consolidation and post-turn memory upkeep."""
+
+    def __init__(
+        self,
+        *,
+        consolidator: Consolidator,
+        memory_extractor: PostConversationMemoryExtractor,
+    ) -> None:
+        self.consolidator = consolidator
+        self.memory_extractor = memory_extractor
+
+    async def prepare_session(self, session: Session) -> None:
+        await self.consolidator.maybe_consolidate_by_tokens(session)
+
+    def schedule_after_system_turn(
+        self,
+        *,
+        schedule_background: Callable[[Any], None],
+        session: Session,
+    ) -> None:
+        schedule_background(self.consolidator.maybe_consolidate_by_tokens(session))
+
+    def schedule_after_user_turn(
+        self,
+        *,
+        schedule_background: Callable[[Any], None],
+        session: Session,
+        turn_messages: list[dict[str, Any]],
+    ) -> None:
+        if turn_messages:
+            schedule_background(self.memory_extractor.run(turn_messages))
+        schedule_background(self.consolidator.maybe_consolidate_by_tokens(session))
+
+
 class Dream:
     """Periodic emergence that consolidates daily notes into MEMORY.md."""
 

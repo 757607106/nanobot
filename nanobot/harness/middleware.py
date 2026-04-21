@@ -71,9 +71,14 @@ class ExecutionMiddlewareChain:
 class PromptSeedMiddleware:
     """Seed prompt sections with static agent prompt and caller additions."""
 
+    fallback_system_prompt: str | None = "You are a helpful AI assistant."
+
     def apply(self, state: ExecutionAssemblyState) -> None:
         system_prompt = str(state.agent.get("systemPrompt") or "").strip()
-        state.prompt_sections.append(system_prompt or "You are a helpful AI assistant.")
+        if system_prompt:
+            state.prompt_sections.append(system_prompt)
+        elif self.fallback_system_prompt:
+            state.prompt_sections.append(self.fallback_system_prompt)
         for section in state.additional_prompt_sections:
             text = str(section or "").strip()
             if text:

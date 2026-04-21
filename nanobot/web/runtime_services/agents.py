@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
+from nanobot.agent.factory import build_agent_loop_from_config
 from nanobot.agent.loop import AgentLoop
 from nanobot.agent.skills import SkillsLoader
 from nanobot.bus.events import InboundMessage, extract_outbound_content
@@ -37,6 +38,7 @@ from nanobot.harness import (
     build_sandbox_provider,
     resolve_execution_environment,
 )
+from nanobot.harness.runtime_tools import RUNTIME_TOOL_CATALOG, list_runtime_tool_names
 from nanobot.platform.agents import AgentDefinitionNotFoundError
 from nanobot.platform.agents.model_selection import canonicalize_agent_model_selection
 from nanobot.platform.runs import RunControlScope, RunKind, RunResultSummary
@@ -99,6 +101,182 @@ class WebAgentRuntimeService:
 
     def __init__(self, state: WebAppState):
         self.state = state
+
+    @staticmethod
+    def _default_agent_id() -> str:
+        return "default-agent"
+
+    @staticmethod
+    def _default_agent_name() -> str:
+        return "Default Agent"
+
+    @staticmethod
+    def _default_instance_id(state: WebAppState) -> str:
+        return str(
+            getattr(getattr(state, "app_agents", None), "instance_id", "default")
+            or "default"
+        ).strip() or "default"
+
+    def _default_runtime_tool_allowlist(self, config: Config) -> list[str]:
+        return list_runtime_tool_names(
+            exec_enabled=bool(config.tools.exec.enable),
+            web_enabled=bool(config.tools.web.enable),
+            include_message=True,
+            include_spawn=True,
+            include_cron=getattr(self.state, "cron", None) is not None,
+        )
+
+    def build_default_agent_definition(
+        self,
+        *,
+        config: Config | None = None,
+        system_prompt: str | None = None,
+        tool_allowlist: list[str] | None = None,
+        skill_ids: list[str] | None = None,
+        mcp_server_ids: list[str] | None = None,
+        knowledge_binding_ids: list[str] | None = None,
+        tenant_id: str = "default",
+        instance_id: str | None = None,
+    ) -> dict[str, Any]:
+        active_config = config or self.state.config
+        defaults = active_config.agents.defaults
+        return {
+            "agentId": self._default_agent_id(),
+            "tenantId": tenant_id,
+            "instanceId": instance_id or self._default_instance_id(self.state),
+            "name": self._default_agent_name(),
+            "systemPrompt": str(system_prompt or "").strip(),
+            "toolAllowlist": list(
+                tool_allowlist
+                if tool_allowlist is not None
+                else self._default_runtime_tool_allowlist(active_config)
+            ),
+            "skillIds": list(skill_ids or []),
+            "mcpServerIds": list(
+                mcp_server_ids
+                if mcp_server_ids is not None
+                else [
+                    name
+                    for name, entry in active_config.tools.mcp_servers.items()
+                    if getattr(entry, "enabled", True)
+                ]
+            ),
+            "knowledgeBindingIds": list(knowledge_binding_ids or []),
+            "model": defaults.model,
+            "binding": defaults.binding,
+            "provider": defaults.provider,
+        }
+
+    def build_configured_agent_loop(
+        self,
+        *,
+        config: Config,
+        workspace_binding: WorkspaceBinding,
+        sandbox_binding: SandboxBinding,
+        memory_binding: WorkspaceBinding | None = None,
+        bus: Any | None = None,
+        provider: Any | None = None,
+        run_registry: Any | None = None,
+        session_manager: Any | None = None,
+        tool_allowlist: list[str] | None = None,
+        skill_names: list[str] | None = None,
+        system_prompt_override: str | None = None,
+        include_workspace_memory: bool = True,
+        memory_sections: list[tuple[str, str]] | None = None,
+        extra_tools: list[Any] | None = None,
+        mcp_servers: dict[str, Any] | None = None,
+        channel_dispatcher: Any | None = None,
+        include_always_skills: bool = True,
+        include_skills_summary: bool = True,
+        disabled_skills: list[str] | None = None,
+        unified_session: bool | None = None,
+        session_ttl_minutes: int | None = None,
+    ) -> AgentLoop:
+        runtime_bus = bus or self.state.bus
+        if runtime_bus is None:
+            raise RuntimeError("Web agent runtime bus is not available.")
+        resolved_memory_binding = memory_binding or workspace_binding
+        return build_agent_loop_from_config(
+            config=config,
+            bus=runtime_bus,
+            provider=provider or self.state.config_runtime.make_provider(config),
+            agent_loop_cls=AgentLoop,
+            workspace=workspace_binding.path,
+            context_workspace=config.workspace_path,
+            memory_workspace=resolved_memory_binding.path,
+            cron_service=self.state.cron,
+            restrict_to_workspace=sandbox_binding.restrict_to_workspace,
+            session_manager=session_manager or self.state.sessions,
+            mcp_servers=mcp_servers,
+            run_registry=run_registry or getattr(self.state, "runs", None),
+            tool_allowlist=tool_allowlist,
+            skill_names=skill_names,
+            system_prompt_override=system_prompt_override,
+            include_workspace_memory=include_workspace_memory,
+            memory_sections=memory_sections,
+            channel_dispatcher=channel_dispatcher,
+            extra_tools=extra_tools,
+            workspace_provider=self._get_workspace_provider(),
+            sandbox_binding=sandbox_binding,
+            sandbox_provider=self._get_sandbox_provider(),
+            session_ttl_minutes=session_ttl_minutes,
+            unified_session=unified_session,
+            disabled_skills=disabled_skills,
+            include_always_skills=include_always_skills,
+            include_skills_summary=include_skills_summary,
+        )
+
+    def build_default_agent_loop(
+        self,
+        *,
+        config: Config | None = None,
+        bus: Any | None = None,
+        provider: Any | None = None,
+        run_registry: Any | None = None,
+        session_manager: Any | None = None,
+        channel_dispatcher: Any | None = None,
+        system_prompt_override: str | None = None,
+        tool_allowlist: list[str] | None = None,
+        skill_names: list[str] | None = None,
+        mcp_server_ids: list[str] | None = None,
+        include_always_skills: bool = True,
+        include_skills_summary: bool = True,
+    ) -> AgentLoop:
+        active_config = config or self.state.config
+        default_agent = self.build_default_agent_definition(
+            config=active_config,
+            tool_allowlist=tool_allowlist,
+            skill_ids=skill_names,
+            mcp_server_ids=mcp_server_ids,
+        )
+        prepared = self.prepare_root_agent_execution(default_agent, config=active_config)
+        environment = self.resolve_environment_binding(
+            workspace=active_config.workspace_path,
+            restrict_to_workspace=active_config.tools.restrict_to_workspace,
+            exec_config=active_config.tools.exec,
+            principal_kind="agent",
+            tenant_id=str(default_agent.get("tenantId") or "default"),
+            instance_id=str(default_agent.get("instanceId") or "default"),
+            principal_id=str(default_agent.get("agentId") or self._default_agent_id()),
+        )
+        return self.build_configured_agent_loop(
+            config=prepared.config,
+            workspace_binding=environment.workspace,
+            sandbox_binding=environment.sandbox,
+            memory_binding=environment.workspace,
+            bus=bus,
+            provider=provider,
+            run_registry=run_registry,
+            session_manager=session_manager,
+            tool_allowlist=prepared.effective_tool_allowlist,
+            skill_names=list(default_agent.get("skillIds") or []),
+            system_prompt_override=system_prompt_override or prepared.system_prompt_override,
+            include_workspace_memory=prepared.include_workspace_memory,
+            memory_sections=prepared.memory_sections,
+            channel_dispatcher=channel_dispatcher,
+            include_always_skills=include_always_skills,
+            include_skills_summary=include_skills_summary,
+        )
 
     def _get_workspace_provider(self):
         return getattr(self.state, "workspace_provider", None) or SharedWorkspaceProvider()
@@ -243,6 +421,7 @@ class WebAgentRuntimeService:
             item["name"]
             for item in self.state.workspace_runtime.get_valid_template_tools()
         }
+        valid_tool_names.update(RUNTIME_TOOL_CATALOG)
         invalid_tools = [name for name in agent.get("toolAllowlist", []) if name not in valid_tool_names]
         if invalid_tools:
             raise ValueError(f"Agent has invalid tools: {', '.join(invalid_tools)}")
@@ -348,8 +527,8 @@ class WebAgentRuntimeService:
         resolved_sections = self._normalize_memory_sections(memory_sections or [])
         return bool(include_workspace_memory), resolved_sections
 
-    def _build_agent_config(self, agent: dict[str, Any]) -> Config:
-        config = self.state.config.model_copy(deep=True)
+    def _build_agent_config(self, agent: dict[str, Any], *, base_config: Config | None = None) -> Config:
+        config = (base_config or self.state.config).model_copy(deep=True)
         selection = canonicalize_agent_model_selection(
             config,
             model=agent.get("model"),
@@ -462,10 +641,11 @@ class WebAgentRuntimeService:
         knowledge_service: Any | None,
         *,
         workspace_memory_resolver: Callable[[], list[tuple[str, str]]] | None = None,
+        fallback_system_prompt: str | None = "You are a helpful AI assistant.",
     ) -> ExecutionMiddlewareChain:
         return ExecutionMiddlewareChain(
             (
-                PromptSeedMiddleware(),
+                PromptSeedMiddleware(fallback_system_prompt=fallback_system_prompt),
                 MemoryPolicyMiddleware(self.resolve_agent_memory_context),
                 KnowledgePolicyMiddleware(knowledge_service),
                 ToolPolicyMiddleware(),
@@ -523,6 +703,60 @@ class WebAgentRuntimeService:
         )
         return PreparedAgentExecution(
             config=config,
+            knowledge_binding=knowledge_binding,
+            tool_policy=assembly.tool_policy,
+            memory_policy=assembly.memory_policy,
+            knowledge_policy=assembly.knowledge_policy,
+            runtime_prompt_sections=tuple(assembly.runtime_prompt_sections),
+            runtime_memory_sections=tuple(assembly.runtime_memory_sections),
+            system_prompt_override=assembly.system_prompt_override,
+            middleware_trace=tuple(assembly.middleware_trace),
+        )
+
+    def prepare_root_agent_execution(
+        self,
+        agent: dict[str, Any],
+        *,
+        config: Config | None = None,
+        additional_prompt_sections: list[str] | None = None,
+        include_workspace_memory: bool | None = None,
+        memory_sections: list[tuple[str, str]] | None = None,
+        workspace_memory_resolver: Callable[[], list[tuple[str, str]]] | None = None,
+    ) -> PreparedAgentExecution:
+        """Resolve config-backed runtime policies for the default/root agent."""
+        resolved_config = self._build_agent_config(agent, base_config=config)
+        self._validate_agent_bindings(agent, resolved_config)
+        knowledge_service = self._knowledge_service_for_tenant(agent.get("tenantId"))
+        assembly = self._build_execution_middleware_chain(
+            knowledge_service,
+            workspace_memory_resolver=workspace_memory_resolver,
+            fallback_system_prompt=None,
+        ).apply(
+            ExecutionAssemblyState(
+                agent=agent,
+                task="[default runtime]",
+                config=resolved_config,
+                additional_prompt_sections=tuple(additional_prompt_sections or []),
+                include_workspace_memory_override=include_workspace_memory,
+                requested_memory_sections=tuple(memory_sections or []),
+            )
+        )
+        knowledge_binding = assembly.knowledge_binding or KnowledgeBindingResult(
+            binding_context=None,
+            extra_tools=[],
+            effective_tool_allowlist=list(agent.get("toolAllowlist", [])),
+            knowledge_hits=[],
+            prompt_sections=[],
+            event_payload={
+                "knowledgeBindingIds": list(agent.get("knowledgeBindingIds") or []),
+                "knowledgeNames": [],
+                "requestedMode": "auto",
+                "effectiveMode": "mixed",
+                "hitCount": 0,
+            },
+        )
+        return PreparedAgentExecution(
+            config=resolved_config,
             knowledge_binding=knowledge_binding,
             tool_policy=assembly.tool_policy,
             memory_policy=assembly.memory_policy,
@@ -715,22 +949,12 @@ class WebAgentRuntimeService:
             agent,
             session_key=resolved_workspace.session_key,
         )
-        isolated_agent = AgentLoop(
+        isolated_agent = self.build_configured_agent_loop(
+            config=prepared.config,
+            workspace_binding=resolved_workspace,
+            sandbox_binding=resolved_sandbox,
+            memory_binding=memory_binding,
             bus=runtime_bus,
-            provider=self.state.config_runtime.make_provider(prepared.config),
-            workspace=resolved_workspace.path,
-            context_workspace=prepared.config.workspace_path,
-            memory_workspace=memory_binding.path,
-            model=prepared.config.agents.defaults.model,
-            max_iterations=prepared.config.agents.defaults.max_tool_iterations,
-            context_window_tokens=prepared.config.agents.defaults.context_window_tokens,
-            web_config=prepared.config.tools.web,
-            exec_config=prepared.config.tools.exec,
-            cron_service=self.state.cron,
-            restrict_to_workspace=resolved_sandbox.restrict_to_workspace,
-            session_manager=self.state.sessions,
-            mcp_servers=prepared.config.tools.mcp_servers,
-            channels_config=prepared.config.channels,
             run_registry=run_registry,
             tool_allowlist=prepared.effective_tool_allowlist,
             skill_names=list(agent.get("skillIds", [])),
@@ -738,9 +962,6 @@ class WebAgentRuntimeService:
             include_workspace_memory=prepared.include_workspace_memory,
             memory_sections=prepared.memory_sections,
             extra_tools=prepared.knowledge_binding.extra_tools,
-            workspace_provider=self._get_workspace_provider(),
-            sandbox_binding=resolved_sandbox,
-            sandbox_provider=self._get_sandbox_provider(),
             include_always_skills=False,
             include_skills_summary=False,
         )
@@ -1197,12 +1418,9 @@ class WebAgentRuntimeService:
 2. 你必须直接返回最终优化好的 System Prompt 内容，并且**只返回优化后的 System Prompt 本身文本**。不要将最终结果包裹在解释说明中，也不要包裹在 markdown xml 代码块中。最终返回的全部内容将被系统直接写入该Agent的系统提示词数据库，所以如果里面掺杂了你的分析语或者前后缀，就会导致该数字员工失控。
 3. 如果模板本身建议输出 xml 结构表示，你可以使用结构化的标签来排版你要返回的内容。但永远保持输出就只是这个数字员工将要继承的系统设定本身。
 """
-        agent = AgentLoop(
-            bus=self.state.bus,
+        agent = self.build_default_agent_loop(
+            config=config_override,
             provider=provider_instance,
-            model=model,
-            workspace=self.state.config.workspace_path,
-            memory_workspace=self.state.config.workspace_path,
             system_prompt_override=instructions,
             skill_names=["prompt-optimizer"],
         )

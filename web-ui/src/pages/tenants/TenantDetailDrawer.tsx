@@ -136,7 +136,7 @@ export default function TenantDetailDrawer({ open, onClose, tenantId, onSaved }:
 
   async function handleRevokeApiKey(keyId: string) {
     try {
-      await api.revokeApiKey(keyId)
+      await api.revokeApiKey(keyId, tenantId ?? 'default')
       message.success('API Key 已吊销')
       if (tenantId) {
         const keys = await api.getTenantApiKeys(tenantId)
