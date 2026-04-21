@@ -82,20 +82,24 @@ function safeJsonParse(value?: string) {
 
 /* ── Code block component: intercepts mermaid fenced blocks ── */
 function CodeBlockComponent(props: XMarkdownComponentProps) {
-  // Destructure XMarkdown-specific props and the DOM `class` attribute (renamed to className for React)
+  // Destructure XMarkdown-specific props to prevent them from leaking to the native <code> DOM element.
+  // domNode, block, lang, streamStatus are internal props from @ant-design/x-markdown.
   const {
     lang,
     block,
     children,
     streamStatus,
     class: htmlClass,
+    domNode: _domNode,
     ...rest
-  } = props as XMarkdownComponentProps & { class?: string }
+  } = props as XMarkdownComponentProps & { class?: string; domNode?: unknown }
+  // Suppress unused variable — `rest` captures any future unknown props to prevent DOM leaks
+  void rest
 
   // For fenced ```mermaid code blocks, delegate to the Mermaid component
   if (block && lang === 'mermaid' && children) {
     if (streamStatus !== 'done') {
-      return <code {...rest} className={htmlClass}>{children}</code>
+      return <code className={htmlClass}>{children}</code>
     }
     const codeText = typeof children === 'string'
       ? children
@@ -107,8 +111,8 @@ function CodeBlockComponent(props: XMarkdownComponentProps) {
     }
   }
 
-  // Default code rendering — convert `class` to `className` for React
-  return <code {...rest} className={htmlClass}>{children}</code>
+  // Default code rendering — only pass safe DOM-compatible props
+  return <code className={htmlClass}>{children}</code>
 }
 
 const XMARKDOWN_COMPONENTS: Record<string, React.ComponentType<XMarkdownComponentProps>> = {

@@ -230,7 +230,7 @@ export function KnowledgeQueryTab({
         {queryResult ? (
           <>
             {/* Console-style inline summary bar - Replacing heavy metric cards */}
-            <Flex className="knowledge-summary-bar" align="center" gap={32} wrap="wrap" style={{ marginBottom: token.marginLG, paddingBottom: token.margin, borderBottom: `1px solid ${token.colorBorder}` }}>
+            <Flex className="knowledge-summary-bar" align="center" gap={32} wrap="wrap" style={{ marginBottom: token.marginLG, paddingBottom: token.margin }}>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
                 <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, textTransform: 'uppercase', letterSpacing: '0.05em' }}>回答</Typography.Text>
                 <Typography.Text style={{ fontSize: token.fontSizeHeading5, fontWeight: token.fontWeightStrong, letterSpacing: '-0.02em', color: answerMessage ? token.colorSuccess : 'inherit' }}>{answerMessage ? '已生成' : '—'}</Typography.Text>

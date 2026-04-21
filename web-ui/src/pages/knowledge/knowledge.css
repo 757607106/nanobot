@@ -142,7 +142,7 @@
   min-height: 100vh;
   padding: 24px;
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--nb-warm) 12%, transparent), transparent 34%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--ant-color-primary) 10%, transparent), transparent 38%),
     linear-gradient(180deg, var(--ant-color-bg-container) 0%, var(--ant-color-bg-layout) 100%);
 }
 
@@ -155,7 +155,7 @@
   padding: 18px 20px;
   border: 1px solid var(--ant-color-border);
   border-radius: var(--nb-radius-xl);
-  background: color-mix(in srgb, var(--ant-color-bg-container) 92%, white 8%);
+  background: color-mix(in srgb, var(--ant-color-bg-container) 92%, var(--ant-color-bg-layout) 8%);
   box-shadow: var(--nb-shadow-soft);
 }
 
@@ -179,7 +179,7 @@
   width: 100%;
   min-height: calc(100vh - 180px);
   border: 0;
-  background: #fff;
+  background: var(--ant-color-bg-container);
 }
 
 .knowledge-file-preview-image-shell,
@@ -250,7 +250,7 @@
 }
 
 .knowledge-upload-dropzone:hover {
-  border-color: var(--nb-warm);
+  border-color: var(--ant-color-primary-border-hover);
   background: var(--ant-color-bg-container);
 }
 
@@ -563,8 +563,8 @@
 }
 
 .knowledge-graph-relation-row.is-active {
-  border-color: var(--nb-warm);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--nb-warm) 8%, transparent), var(--ant-color-bg-container));
+  border-color: var(--ant-color-primary-border);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ant-color-primary) 6%, transparent), var(--ant-color-bg-container));
 }
 
 .knowledge-graph-relation-toggle {
@@ -847,7 +847,7 @@
 /* ── Knowledge Card Grid ── */
 .knowledge-nav-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--ant-padding-lg);
   padding-top: var(--ant-padding-sm);
 }
@@ -885,8 +885,9 @@
 }
 
 .knowledge-card.is-selected {
-  border-color: var(--ant-color-primary);
-  background: color-mix(in oklch, var(--ant-color-primary) 6%, var(--ant-color-bg-container));
+  background: var(--ant-color-bg-container);
+  border-color: transparent;
+  box-shadow: 0 0 0 1.5px var(--ant-color-primary), var(--nb-shadow-sm);
 }
 
 .knowledge-card.is-create {
@@ -922,11 +923,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--ant-color-text-light-solid);
   font-size: var(--ant-font-size-lg);
   font-weight: bold;
   flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ant-color-text) 10%, transparent);
 }
 
 .knowledge-card-status {

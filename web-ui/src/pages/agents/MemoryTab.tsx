@@ -176,7 +176,7 @@ export default function MemoryTab({
       <SectionCard title="Daily Notes">
         {loadingMemory && latestNotes.length === 0 ? (
           <Flex justify="center" align="center" style={{ minHeight: 160 }}>
-            <Spin tip="正在加载 daily notes..." size="large"><div /></Spin>
+            <Spin tip="正在加载 daily notes..." size="large" />
           </Flex>
         ) : latestNotes.length === 0 ? (
           <Empty image={false} className="minimal-empty" description="暂无 daily notes。" />

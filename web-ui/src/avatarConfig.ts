@@ -16,10 +16,7 @@ export interface AvatarPreset {
   src: string
   /** 匹配关键词列表 */
   keywords: string[]
-  /** 主色（用于色带 / 标签底色） */
-  color: string
-  /** 渐变色（用于卡片色带背景） */
-  gradient: string
+  tone: 'primary' | 'info' | 'success' | 'warning' | 'error' | 'neutral'
 }
 
 const AVATAR_PRESETS: AvatarPreset[] = [
@@ -28,104 +25,91 @@ const AVATAR_PRESETS: AvatarPreset[] = [
     label: '客服专员',
     src: '/avatars/chibi-service-rep.png',
     keywords: ['客服', '售后', '售前', '服务', 'service', 'support', 'customer'],
-    color: '#FF6B6B',
-    gradient: 'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 100%)',
+    tone: 'warning',
   },
   {
     key: 'ops-engineer',
     label: '运维工程师',
     src: '/avatars/chibi-ops-engineer.png',
     keywords: ['运维', '故障', '排查', '监控', 'ops', 'devops', 'sre', 'infra', '基础设施'],
-    color: '#20C997',
-    gradient: 'linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)',
+    tone: 'success',
   },
   {
     key: 'sales-expert',
     label: '销售精英',
     src: '/avatars/chibi-sales-expert.png',
     keywords: ['销售', '商务', '报价', 'sales', 'business', '营销'],
-    color: '#FFD93D',
-    gradient: 'linear-gradient(135deg, #F6D365 0%, #FDA085 100%)',
+    tone: 'info',
   },
   {
     key: 'detective',
     label: '分析侦探',
     src: '/avatars/chibi-detective.png',
     keywords: ['分析', '排查', '线索', '筛选', 'detect', 'analyze', 'investigate'],
-    color: '#845EF7',
-    gradient: 'linear-gradient(135deg, #A18CD1 0%, #FBC2EB 100%)',
+    tone: 'info',
   },
   {
     key: 'consultant',
     label: '专家顾问',
     src: '/avatars/chibi-consultant.png',
     keywords: ['顾问', '咨询', '方案', '推荐', 'consult', 'advisor', '建议'],
-    color: '#12B886',
-    gradient: 'linear-gradient(135deg, #84FAB0 0%, #8FD3F4 100%)',
+    tone: 'primary',
   },
   {
     key: 'inspector',
     label: '质检审核员',
     src: '/avatars/chibi-inspector.png',
     keywords: ['审核', '质检', '检查', 'review', 'inspect', 'audit', '合规'],
-    color: '#339AF0',
-    gradient: 'linear-gradient(135deg, #A1C4FD 0%, #C2E9FB 100%)',
+    tone: 'primary',
   },
   {
     key: 'release-mgr',
     label: '发布专员',
     src: '/avatars/chibi-release-mgr.png',
     keywords: ['发布', '变更', '部署', 'release', 'deploy', 'cicd', '上线'],
-    color: '#FF922B',
-    gradient: 'linear-gradient(135deg, #FCCB90 0%, #D57EEB 100%)',
+    tone: 'warning',
   },
   {
     key: 'researcher',
     label: '调研员',
     src: '/avatars/chibi-researcher.png',
     keywords: ['调研', '研究', '收集', 'research', 'survey', '信息'],
-    color: '#51CF66',
-    gradient: 'linear-gradient(135deg, #D4FC79 0%, #96E6A1 100%)',
+    tone: 'success',
   },
   {
     key: 'content-writer',
     label: '内容创作',
     src: '/avatars/flat-content-writer.png',
     keywords: ['内容', '写作', '文案', '编辑', 'content', 'writer', 'copywriting', '文章'],
-    color: '#F06595',
-    gradient: 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
+    tone: 'primary',
   },
   {
     key: 'data-analyst',
     label: '数据分析师',
     src: '/avatars/flat-data-analyst.png',
     keywords: ['数据', '报表', '统计', 'data', 'analytics', 'bi', 'dashboard', '可视化'],
-    color: '#4C6EF5',
-    gradient: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+    tone: 'info',
   },
   {
     key: 'hr-people',
     label: '人事助理',
     src: '/avatars/flat-hr-people.png',
     keywords: ['人事', '招聘', 'hr', '入职', '员工', '人力', '面试'],
-    color: '#E64980',
-    gradient: 'linear-gradient(135deg, #FF9A9E 0%, #FAD0C4 100%)',
+    tone: 'primary',
   },
   {
     key: 'security',
     label: '安全专家',
     src: '/avatars/flat-security.png',
     keywords: ['安全', '防护', '漏洞', 'security', 'firewall', '防火墙', '威胁'],
-    color: '#495057',
-    gradient: 'linear-gradient(135deg, #4B6CB7 0%, #182848 100%)',
+    tone: 'neutral',
   },
   {
     key: 'tech-support',
     label: '技术支持',
     src: '/avatars/flat-tech-support.png',
     keywords: ['技术', '工程', '开发', 'tech', 'engineer', 'developer', '编程', '代码'],
-    color: '#228BE6',
-    gradient: 'linear-gradient(135deg, #89F7FE 0%, #66A6FF 100%)',
+    tone: 'primary',
   },
 ]
 

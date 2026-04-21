@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Alert, Button, Empty, Segmented, Space, Spin, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Segmented, Space, Spin, Tag, Typography, theme } from 'antd'
 import { DownloadOutlined, FileSearchOutlined } from '@ant-design/icons'
 import { useParams } from 'react-router-dom'
 import { api } from '../../api'
@@ -36,6 +36,7 @@ type MarkdownImageProps = MarkdownRenderComponentProps & {
 
 export default function KnowledgeFilePreviewPage() {
   const { kbId = '', fileId = '' } = useParams()
+  const { token } = theme.useToken()
   const [preview, setPreview] = useState<KnowledgeFilePreview | null>(null)
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
@@ -47,9 +48,18 @@ export default function KnowledgeFilePreviewPage() {
   const htmlDocument = useMemo(
     () =>
       preview?.previewKind === 'html' && htmlPreviewMode === 'render'
-        ? buildPreviewHtmlDocument(content, { baseUrl: preview.baseUrl })
+        ? buildPreviewHtmlDocument(content, {
+          baseUrl: preview.baseUrl,
+          theme: {
+            background: token.colorBgContainer,
+            text: token.colorText,
+            link: token.colorPrimary,
+            fontFamily: token.fontFamily,
+            fontSize: token.fontSize,
+          },
+        })
         : '',
-    [content, htmlPreviewMode, preview],
+    [content, htmlPreviewMode, preview, token.colorBgContainer, token.colorPrimary, token.colorText, token.fontFamily, token.fontSize],
   )
   const markdownComponents = useMemo<MarkdownRenderComponents>(
     () => ({

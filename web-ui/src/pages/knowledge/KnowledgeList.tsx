@@ -53,9 +53,7 @@ export default function KnowledgeList({
 
           {loading ? (
             <Flex justify="center" align="center" className="knowledge-list-loading">
-              <Spin tip="正在加载知识库目录..." size="large">
-                <div style={{ width: 1, height: 1 }} />
-              </Spin>
+              <Spin tip="正在加载知识库目录..." size="large" />
             </Flex>
           ) : visibleKnowledgeBases.length === 0 ? (
             <Empty
@@ -74,7 +72,7 @@ export default function KnowledgeList({
             <div className="knowledge-nav-list">
               {visibleKnowledgeBases.map((item, index) => {
                 const isSelected = item.kbId === selectedKbId
-                const hue = ((item.name.charCodeAt(0) || 65) * 137) % 360
+                const avatarBg = item.enabled ? token.colorPrimary : token.colorFillTertiary
                 return (
                   <motion.button
                     key={item.kbId}
@@ -90,7 +88,7 @@ export default function KnowledgeList({
                       <div
                         className="knowledge-card-avatar"
                         style={{
-                          background: `oklch(0.66 0.14 ${hue})`,
+                          background: avatarBg,
                         }}
                       >
                         {item.name.charAt(0).toUpperCase()}

@@ -35,16 +35,16 @@ export function useChartTheme(): ChartThemeTokens {
       colorBorderSecondary: token.colorBorderSecondary,
       fontFamily: token.fontFamily,
       palette10: [
-        token.colorPrimary,   // blue
-        '#52c41a',            // green
-        '#faad14',            // gold
-        '#eb2f96',            // magenta
-        '#722ed1',            // purple
-        '#13c2c2',            // cyan
-        '#fa541c',            // volcano
-        '#2f54eb',            // geekblue
-        '#a0d911',            // lime
-        '#fa8c16',            // orange
+        token.colorPrimary,
+        token.colorSuccess,
+        token.colorWarning,
+        token.colorError,
+        token.colorInfo,
+        token.colorPrimaryBorderHover,
+        token.colorSuccessBorder,
+        token.colorWarningBorder,
+        token.colorErrorBorder,
+        token.colorPrimaryTextHover,
       ],
     }),
     [
@@ -57,6 +57,12 @@ export function useChartTheme(): ChartThemeTokens {
       token.colorBgContainer,
       token.colorBorderSecondary,
       token.fontFamily,
+      token.colorInfo,
+      token.colorPrimaryBorderHover,
+      token.colorSuccessBorder,
+      token.colorWarningBorder,
+      token.colorErrorBorder,
+      token.colorPrimaryTextHover,
     ],
   )
 }

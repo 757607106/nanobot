@@ -627,7 +627,6 @@ export default function ModelsPage() {
               <div
                 style={{
                   padding: '20px 24px 16px',
-                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorFillAlter,
                   flexShrink: 0,
                 }}
@@ -705,7 +704,6 @@ export default function ModelsPage() {
               <div
                 style={{
                   padding: '16px 24px',
-                  borderTop: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorFillAlter,
                   flexShrink: 0,
                 }}

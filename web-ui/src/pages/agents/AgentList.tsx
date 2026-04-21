@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import type { AgentDefinition } from '../../types'
 import { getAgentAvatar } from '../../avatarConfig'
+import { resolveToneColor } from '../../ui/kit/tone'
 
 interface AgentListProps {
   agents: AgentDefinition[]
@@ -94,6 +95,7 @@ export default function AgentList({
         <div className="agent-card-grid">
           {filteredAgents.map((record, index) => {
             const avatar = getAgentAvatar(record.agentId, record.name, record.description, record.tags)
+            const agentColor = resolveToneColor(token as any, avatar.tone)
             const displayRole = record.tags?.[0] || avatar.label
             const isSelected = record.agentId === selectedAgentId
             const capabilityCount =
@@ -125,8 +127,7 @@ export default function AgentList({
                 className={`agent-tile ${record.enabled ? '' : 'is-disabled'} ${isSelected ? 'is-selected' : ''}`}
                 style={
                   {
-                    ['--agent-color' as any]: avatar.color,
-                    ['--agent-gradient' as any]: avatar.gradient,
+                    ['--agent-color' as any]: agentColor,
                   } as CSSProperties
                 }
               >

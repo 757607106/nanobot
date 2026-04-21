@@ -33,8 +33,9 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
       colorTextDisabled: palette.borderStrong,
       colorTextLightSolid: '#ffffff',
 
-      // === Border ===
-      colorBorderSecondary: palette.surfacePanelBorder,
+      // === Border === 去线：透明化
+      colorBorder: palette.border,
+      colorBorderSecondary: 'transparent',
 
       // === Radius ===
       borderRadius: designTokens.radius.sm,
@@ -82,6 +83,7 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
         headerHeightSM: 44,
         headerFontSize: designTokens.fontSize.lg,
         headerPadding: designTokens.space.lg,
+        colorBorderSecondary: 'transparent',
       },
       Layout: {
         headerBg: 'transparent',
@@ -118,7 +120,7 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
         paddingInlineLG: designTokens.space.xl,
         primaryColor: '#ffffff',
         defaultBg: palette.cardBg,
-        defaultBorderColor: palette.surfacePanelBorder,
+        defaultBorderColor: 'transparent',
         defaultColor: palette.ink,
       },
       Input: {
@@ -174,6 +176,8 @@ export function buildAntdThemeConfig(mode: ResolvedTheme): ThemeConfig {
         borderRadiusLG: designTokens.radius.md,
         cellPaddingBlock: designTokens.space.md,
         cellPaddingInline: designTokens.space.lg,
+        borderColor: 'transparent',
+        headerBorderRadius: designTokens.radius.md,
       },
       Form: {
         labelColor: palette.muted,

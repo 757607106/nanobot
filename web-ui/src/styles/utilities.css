@@ -112,11 +112,6 @@
   padding-right: 4px;
 }
 
-:root:not([data-theme='dark']) .config-card-header .page-section-title h4.ant-typography,
-:root:not([data-theme='dark']) .config-card-header .page-section-title h5.ant-typography {
-  color: #3f2b24;
-}
-
 .config-card-header .page-section-title h4.ant-typography,
 .config-card-header .page-section-title h5.ant-typography {
   color: var(--ant-color-text);

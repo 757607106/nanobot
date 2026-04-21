@@ -533,9 +533,7 @@ export default function KnowledgeWorkspace() {
         <Suspense
           fallback={(
             <Flex justify="center" align="center" style={{ minHeight: 400 }}>
-              <Spin tip="正在加载知识图谱引擎..." size="large">
-                <div style={{ width: 1, height: 1 }} />
-              </Spin>
+              <Spin tip="正在加载知识图谱引擎..." size="large" />
             </Flex>
           )}
         >
@@ -866,9 +864,7 @@ export default function KnowledgeWorkspace() {
     return (
       <div className="knowledge-workspace-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Flex justify="center" align="center" className="knowledge-workspace-loading">
-          <Spin tip="正在加载知识库详情..." size="large">
-            <div style={{ width: 1, height: 1 }} />
-          </Spin>
+          <Spin tip="正在加载知识库..." size="large" />
         </Flex>
       </div>
     )

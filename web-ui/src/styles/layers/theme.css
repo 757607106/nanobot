@@ -110,218 +110,123 @@
   --nb-surface-strong: var(--ant-color-bg-container);
   --nb-surface-elevated: var(--ant-color-bg-elevated);
 
-  /* Borders */
-  --nb-card-border: var(--ant-color-border-secondary);
-  --nb-card-subtle-border: var(--ant-color-border-secondary);
-  --nb-surface-panel-border: var(--ant-color-border-secondary);
-  --nb-surface-row-border: var(--ant-color-border-secondary);
+  /* Borders — 全部透明化，用背景色差异代替 */
+  --nb-card-border: transparent;
+  --nb-card-subtle-border: transparent;
+  --nb-surface-panel-border: transparent;
+  --nb-surface-row-border: transparent;
 }
 
 /* ─────────────────────────────────────────────────────────
-   Section 3: Semantic custom vars (need explicit dark overrides)
-   These use hardcoded colors, gradients, rgba, or color-mix
-   that have no direct Ant Design token equivalent.
+   Section 3: Semantic custom vars (derived from Ant Design tokens)
    ───────────────────────────────────────────────────────── */
-:root,
-:root[data-theme='light'] {
-  color-scheme: light;
-
+:root {
   --nb-body-overlay: none;
 
-  /* Borders without exact Ant Design equivalent */
-  --nb-border: #CBD5E1;
-  --nb-border-strong: #94A3B8;
+  --nb-border: transparent;
+  --nb-border-strong: transparent;
 
-  /* Subtle surfaces */
-  --nb-card-subtle-bg: #F1F5F9;
-  --nb-surface-soft-bg: #F1F5F9;
+  --nb-card-subtle-bg: color-mix(in srgb, var(--ant-color-bg-container) 62%, var(--ant-color-bg-layout));
+  --nb-surface-soft-bg: color-mix(in srgb, var(--ant-color-bg-container) 52%, var(--ant-color-bg-layout));
   --nb-surface-soft-border: transparent;
   --nb-surface-soft-shadow: none;
-  --nb-surface-panel-shadow: none;
-  --nb-surface-row-bg: #F8FAFC;
+  --nb-surface-panel-shadow: var(--ant-box-shadow);
+  --nb-surface-row-bg: color-mix(in srgb, var(--ant-color-bg-container) 35%, var(--ant-color-bg-layout));
 
-  /* Shadows */
-  --nb-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --nb-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.1);
-  --nb-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
-  --nb-shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1);
-  --nb-shadow-soft: var(--nb-shadow-sm);
+  --nb-shadow-xs: var(--ant-box-shadow);
+  --nb-shadow-sm: var(--ant-box-shadow);
+  --nb-shadow-md: var(--ant-box-shadow-secondary);
+  --nb-shadow-lg: var(--ant-box-shadow-secondary);
+  --nb-shadow-soft: var(--ant-box-shadow);
 
-  /* Sidebar */
-  --nb-sider-bg: #FFFFFF;
-  --nb-sider-border: #E2E8F0;
-  --nb-sider-shadow: none;
+  --nb-sider-bg: var(--ant-color-bg-container);
+  --nb-sider-border: transparent;
+  --nb-sider-shadow: 1px 0 3px rgba(15, 23, 42, 0.04);
 
-  /* Page hero */
-  --nb-page-hero-bg: #FFFFFF;
-  --nb-page-hero-border: #E2E8F0;
+  --nb-page-hero-bg: var(--ant-color-bg-container);
+  --nb-page-hero-border: transparent;
   --nb-page-hero-overlay: none;
-  --nb-page-hero-text: #0F172A;
-  --nb-page-hero-subtext: #475569;
+  --nb-page-hero-text: var(--ant-color-text);
+  --nb-page-hero-subtext: var(--ant-color-text-secondary);
 
-  /* Notes */
-  --nb-note-bg: #F8FAFC;
-  --nb-note-text: #475569;
+  --nb-note-bg: color-mix(in srgb, var(--ant-color-bg-container) 40%, var(--ant-color-bg-layout));
+  --nb-note-text: var(--ant-color-text-secondary);
 
-  /* Scrollbar */
-  --nb-scroll-thumb: #CBD5E1;
-  --nb-scroll-thumb-hover: #94A3B8;
+  --nb-scroll-thumb: var(--ant-color-border);
+  --nb-scroll-thumb-hover: var(--ant-color-text-tertiary);
 
-  /* Navigation */
-  --nb-nav-hover-bg: #F1F5F9;
-  --nb-nav-selected-bg: #EFF6FF;
-  --nb-nav-selected-border: #BFDBFE;
-  --nb-nav-title: #0F172A;
-  --nb-nav-summary: #475569;
-  --nb-nav-icon: #475569;
-  --nb-nav-selected-text: #2563EB;
+  --nb-nav-hover-bg: var(--ant-color-fill-tertiary);
+  --nb-nav-selected-bg: var(--ant-color-primary-bg);
+  --nb-nav-selected-border: var(--ant-color-primary-border);
+  --nb-nav-title: var(--ant-color-text);
+  --nb-nav-summary: var(--ant-color-text-secondary);
+  --nb-nav-icon: var(--ant-color-text-secondary);
+  --nb-nav-selected-text: var(--ant-color-primary);
 
-  /* Conversation sidebar */
-  --nb-conversation-active-bg: #F1F5F9;
-  --nb-conversation-active-border: #E2E8F0;
-  --nb-conversation-active-text: #0F172A;
+  --nb-conversation-active-bg: var(--ant-color-fill-tertiary);
+  --nb-conversation-active-border: var(--ant-color-border-secondary);
+  --nb-conversation-active-text: var(--ant-color-text);
 
-  /* Chat surfaces (gradients / rgba) */
-  --nb-chat-surface: linear-gradient(180deg, rgba(252, 253, 255, 0.7), rgba(247, 250, 253, 0.7));
-  --nb-chat-focus-bg: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
-  --nb-chat-focus-border: rgba(24, 36, 51, 0.08);
-  --nb-assistant-bubble-bg: rgba(255, 255, 255, 0.96);
-  --nb-assistant-bubble-border: rgba(24, 36, 51, 0.08);
-  --nb-composer-bg: rgba(255, 255, 255, 0.95);
-  --nb-composer-border: rgba(24, 36, 51, 0.08);
-  --nb-sender-bg: rgba(255, 255, 255, 0.98);
-  --nb-sender-border: rgba(24, 36, 51, 0.08);
-  --nb-sender-shadow: 0 18px 42px rgba(15, 35, 67, 0.08);
-  --nb-starter-card-bg: rgba(255, 255, 255, 0.98);
-  --nb-starter-card-border: rgba(24, 36, 51, 0.08);
-  --nb-starter-card-shadow: var(--nb-shadow-sm);
-  --nb-starter-card-hover-border: rgba(63, 108, 255, 0.16);
-  --nb-quick-chip-bg: rgba(247, 250, 253, 0.96);
-  --nb-quick-chip-border: rgba(24, 36, 51, 0.08);
-  --nb-quick-chip-text: #324154;
-  --nb-quick-chip-hover-bg: rgba(63, 108, 255, 0.08);
-  --nb-quick-chip-hover-border: rgba(63, 108, 255, 0.12);
-  --nb-quick-chip-hover-text: #355fe6;
+  --nb-chat-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ant-color-bg-layout) 78%, transparent),
+    color-mix(in srgb, var(--ant-color-bg-container) 76%, transparent)
+  );
+  --nb-chat-focus-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ant-color-bg-container) 92%, transparent),
+    color-mix(in srgb, var(--ant-color-bg-elevated) 88%, transparent)
+  );
+  --nb-chat-focus-border: color-mix(in srgb, var(--ant-color-border) 58%, transparent);
+  --nb-assistant-bubble-bg: color-mix(in srgb, var(--ant-color-bg-container) 94%, transparent);
+  --nb-assistant-bubble-border: color-mix(in srgb, var(--ant-color-border) 58%, transparent);
+  --nb-composer-bg: color-mix(in srgb, var(--ant-color-bg-container) 92%, transparent);
+  --nb-composer-border: color-mix(in srgb, var(--ant-color-border) 58%, transparent);
+  --nb-sender-bg: color-mix(in srgb, var(--ant-color-bg-container) 94%, transparent);
+  --nb-sender-border: color-mix(in srgb, var(--ant-color-border) 58%, transparent);
+  --nb-sender-shadow: var(--ant-box-shadow-secondary);
+  --nb-starter-card-bg: color-mix(in srgb, var(--ant-color-bg-container) 94%, transparent);
+  --nb-starter-card-border: color-mix(in srgb, var(--ant-color-border) 58%, transparent);
+  --nb-starter-card-shadow: var(--ant-box-shadow);
+  --nb-starter-card-hover-border: color-mix(in srgb, var(--ant-color-primary-border) 70%, transparent);
+  --nb-quick-chip-bg: color-mix(in srgb, var(--ant-color-fill-quaternary) 80%, transparent);
+  --nb-quick-chip-border: color-mix(in srgb, var(--ant-color-border) 52%, transparent);
+  --nb-quick-chip-text: var(--ant-color-text-secondary);
+  --nb-quick-chip-hover-bg: color-mix(in srgb, var(--ant-color-primary) 7%, var(--ant-color-fill-quaternary));
+  --nb-quick-chip-hover-border: color-mix(in srgb, var(--ant-color-primary-border) 62%, transparent);
+  --nb-quick-chip-hover-text: var(--ant-color-text);
 
-  /* Code blocks */
-  --nb-code-bg: #182433;
-  --nb-code-text: #f5f8fc;
-  --nb-mono-bg: rgba(247, 250, 253, 0.96);
-  --nb-mono-color: #324154;
-  --nb-mono-border: rgba(24, 36, 51, 0.08);
+  --nb-code-bg: color-mix(in srgb, var(--ant-color-text) 9%, var(--ant-color-bg-container));
+  --nb-code-text: var(--ant-color-text);
+  --nb-mono-bg: var(--ant-color-fill-quaternary);
+  --nb-mono-color: var(--ant-color-text);
+  --nb-mono-border: var(--ant-color-border-secondary);
 
-  /* Avatars */
-  --nb-user-avatar-bg: linear-gradient(135deg, #4b83f5 0%, #355fe6 100%);
-  --nb-assistant-avatar-bg: linear-gradient(135deg, #eff5ff 0%, #bfd2ec 100%);
+  --nb-user-avatar-bg: linear-gradient(
+    135deg,
+    var(--ant-color-primary) 0%,
+    color-mix(in srgb, var(--ant-color-primary) 74%, var(--ant-color-text) 26%) 100%
+  );
+  --nb-assistant-avatar-bg: linear-gradient(135deg, var(--ant-color-bg-elevated) 0%, var(--ant-color-bg-container) 100%);
 
-  /* Decorative */
-  --nb-icon-soft-bg: rgba(63, 108, 255, 0.08);
-  --nb-icon-soft-text: #151821;
-  --nb-warm: oklch(0.78 0.11 70);
+  --nb-icon-soft-bg: color-mix(in srgb, var(--ant-color-primary) 9%, transparent);
+  --nb-icon-soft-text: var(--ant-color-text);
 
-  /* Status badges */
-  --nb-state-success-bg: color-mix(in srgb, #58D68D 22%, #ffffff 78%);
-  --nb-state-success-text: #1f8f5f;
-  --nb-state-success-border: color-mix(in srgb, #58D68D 32%, #ffffff 68%);
-  --nb-state-warning-bg: color-mix(in srgb, #F39C12 22%, #ffffff 78%);
-  --nb-state-warning-text: #b4760d;
-  --nb-state-warning-border: color-mix(in srgb, #F39C12 32%, #ffffff 68%);
-  --nb-state-muted-bg: rgba(0, 0, 0, 0.04);
-  --nb-state-muted-text: #6c7485;
-  --nb-state-muted-border: rgba(24, 36, 51, 0.08);
+  --nb-state-success-bg: var(--ant-color-success-bg);
+  --nb-state-success-text: var(--ant-color-success);
+  --nb-state-success-border: var(--ant-color-success-border);
+  --nb-state-warning-bg: var(--ant-color-warning-bg);
+  --nb-state-warning-text: var(--ant-color-warning);
+  --nb-state-warning-border: var(--ant-color-warning-border);
+  --nb-state-muted-bg: var(--ant-color-fill-quaternary);
+  --nb-state-muted-text: var(--ant-color-text-tertiary);
+  --nb-state-muted-border: var(--ant-color-border-secondary);
 }
 
-/* ─── Dark Theme (only custom vars that can't alias Ant Design) ─── */
 :root[data-theme='dark'] {
   color-scheme: dark;
+}
 
-  --nb-body-overlay: none;
-
-  --nb-border: #334155;
-  --nb-border-strong: #475569;
-
-  --nb-card-subtle-bg: #020617;
-  --nb-surface-soft-bg: #1E293B;
-  --nb-surface-soft-border: transparent;
-  --nb-surface-soft-shadow: none;
-  --nb-surface-panel-shadow: none;
-  --nb-surface-row-bg: #1E293B;
-
-  --nb-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --nb-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.6);
-  --nb-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
-  --nb-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.8);
-  --nb-shadow-soft: var(--nb-shadow-sm);
-
-  --nb-sider-bg: #0F172A;
-  --nb-sider-border: #1E293B;
-  --nb-sider-shadow: none;
-
-  --nb-page-hero-bg: #0F172A;
-  --nb-page-hero-border: #1E293B;
-  --nb-page-hero-overlay: none;
-  --nb-page-hero-text: #F8FAFC;
-  --nb-page-hero-subtext: #94A3B8;
-
-  --nb-note-bg: #1E293B;
-  --nb-note-text: #94A3B8;
-
-  --nb-scroll-thumb: #334155;
-  --nb-scroll-thumb-hover: #475569;
-
-  --nb-nav-hover-bg: #1E293B;
-  --nb-nav-selected-bg: #1E3A8A;
-  --nb-nav-selected-border: #2563EB;
-  --nb-nav-title: #F8FAFC;
-  --nb-nav-summary: #94A3B8;
-  --nb-nav-icon: #94A3B8;
-  --nb-nav-selected-text: #F8FAFC;
-
-  --nb-conversation-active-bg: #1E293B;
-  --nb-conversation-active-border: #334155;
-  --nb-conversation-active-text: #F8FAFC;
-
-  --nb-chat-surface: linear-gradient(180deg, rgba(11, 19, 30, 0.92), rgba(14, 24, 38, 0.96));
-  --nb-chat-focus-bg: linear-gradient(180deg, rgba(17, 28, 42, 0.98), rgba(14, 24, 38, 0.96));
-  --nb-chat-focus-border: rgba(230, 237, 247, 0.08);
-  --nb-assistant-bubble-bg: rgba(20, 33, 49, 0.96);
-  --nb-assistant-bubble-border: rgba(230, 237, 247, 0.08);
-  --nb-composer-bg: rgba(17, 28, 42, 0.96);
-  --nb-composer-border: rgba(230, 237, 247, 0.08);
-  --nb-sender-bg: rgba(17, 28, 42, 0.98);
-  --nb-sender-border: rgba(230, 237, 247, 0.08);
-  --nb-sender-shadow: 0 18px 42px rgba(2, 10, 20, 0.34);
-  --nb-starter-card-bg: rgba(20, 33, 49, 0.96);
-  --nb-starter-card-border: rgba(230, 237, 247, 0.08);
-  --nb-starter-card-shadow: var(--nb-shadow-sm);
-  --nb-starter-card-hover-border: rgba(142, 166, 255, 0.18);
-  --nb-quick-chip-bg: rgba(20, 33, 49, 0.96);
-  --nb-quick-chip-border: rgba(230, 237, 247, 0.08);
-  --nb-quick-chip-text: #b5d0ff;
-  --nb-quick-chip-hover-bg: rgba(142, 166, 255, 0.14);
-  --nb-quick-chip-hover-border: rgba(142, 166, 255, 0.2);
-  --nb-quick-chip-hover-text: #eef2fb;
-
-  --nb-code-bg: #08101a;
-  --nb-code-text: #f5f8fc;
-  --nb-mono-bg: rgba(20, 33, 49, 0.96);
-  --nb-mono-color: #b5d0ff;
-  --nb-mono-border: rgba(230, 237, 247, 0.08);
-
-  --nb-user-avatar-bg: linear-gradient(135deg, #8ea6ff 0%, #5f8de7 100%);
-  --nb-assistant-avatar-bg: linear-gradient(135deg, #18283e 0%, #22344e 100%);
-
-  --nb-icon-soft-bg: rgba(255, 255, 255, 0.08);
-  --nb-icon-soft-text: #eef2fb;
-  --nb-warm: oklch(0.72 0.10 70);
-
-  --nb-state-success-bg: rgba(16, 185, 129, 0.18);
-  --nb-state-success-text: #6EE7B7;
-  --nb-state-success-border: rgba(16, 185, 129, 0.28);
-  --nb-state-warning-bg: rgba(245, 158, 11, 0.2);
-  --nb-state-warning-text: #FCD34D;
-  --nb-state-warning-border: rgba(245, 158, 11, 0.3);
-  --nb-state-muted-bg: rgba(255, 255, 255, 0.08);
-  --nb-state-muted-text: #9aa3b5;
-  --nb-state-muted-border: rgba(255, 255, 255, 0.12);
+:root[data-theme='light'] {
+  color-scheme: light;
 }

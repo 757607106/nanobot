@@ -88,10 +88,23 @@ function sanitizeSrcset(element: Element, baseUrl?: string | null) {
   element.setAttribute(SRCSET_ATTR, sanitized)
 }
 
-export function buildPreviewHtmlDocument(rawHtml: string, options?: { baseUrl?: string | null }) {
+export function buildPreviewHtmlDocument(
+  rawHtml: string,
+  options?: {
+    baseUrl?: string | null
+    theme?: {
+      background: string
+      text: string
+      link: string
+      fontFamily: string
+      fontSize: number
+    }
+  },
+) {
   const parser = new DOMParser()
   const doc = parser.parseFromString(rawHtml || '<!doctype html><html><body></body></html>', 'text/html')
   const { baseUrl } = options || {}
+  const theme = options?.theme
 
   doc.querySelectorAll(BLOCKED_TAGS.join(',')).forEach((node) => node.remove())
   doc.querySelectorAll('*').forEach((element) => {
@@ -144,13 +157,18 @@ export function buildPreviewHtmlDocument(rawHtml: string, options?: { baseUrl?: 
   }
 
   const style = doc.createElement('style')
+  const background = theme?.background ?? 'white'
+  const text = theme?.text ?? 'rgb(31, 41, 55)'
+  const link = theme?.link ?? 'rgb(29, 78, 216)'
+  const fontFamily = theme?.fontFamily ?? 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif'
+  const fontSize = theme?.fontSize ?? 15
   style.textContent = `
     html, body {
       margin: 0;
       padding: 0;
-      background: #ffffff;
-      color: #1f2937;
-      font: 15px/1.65 "SF Pro Text", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      background: ${background};
+      color: ${text};
+      font: ${fontSize}px/1.65 ${fontFamily};
     }
     body {
       padding: 24px;
@@ -165,7 +183,7 @@ export function buildPreviewHtmlDocument(rawHtml: string, options?: { baseUrl?: 
       word-break: break-word;
     }
     a {
-      color: #1d4ed8;
+      color: ${link};
     }
   `
   head.appendChild(style)

@@ -44,10 +44,10 @@
   background: color-mix(in srgb, var(--ant-color-bg-container) 80%, transparent);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid color-mix(in srgb, var(--ant-color-border-secondary) 60%, transparent);
+  border: none;
   box-shadow: 
     0 24px 48px color-mix(in srgb, var(--ant-color-text) 5%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 15%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--ant-color-text-light-solid) 15%, transparent);
   overflow: hidden;
   z-index: 1;
 }
@@ -142,19 +142,19 @@
   font-weight: 500;
   margin-top: 12px;
   background: var(--ant-color-primary);
-  color: #fff;
+  color: var(--ant-color-text-light-solid);
   border: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--ant-box-shadow);
   transition: all 150ms ease;
 }
 
 .login-submit.ant-btn:hover {
-  background: color-mix(in srgb, var(--ant-color-primary) 80%, #fff);
-  color: #fff;
+  background: color-mix(in srgb, var(--ant-color-primary) 86%, var(--ant-color-bg-container));
+  color: var(--ant-color-text-light-solid);
 }
 
 .login-submit.ant-btn:active {
-  background: color-mix(in srgb, var(--ant-color-primary) 80%, #000);
+  background: color-mix(in srgb, var(--ant-color-primary) 84%, var(--ant-color-text));
 }
 
 .login-alert.ant-alert {

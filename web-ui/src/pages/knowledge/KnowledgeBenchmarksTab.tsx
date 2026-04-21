@@ -44,7 +44,7 @@ export function KnowledgeBenchmarksTab({
           </Space>
         )}
       >
-        <div className="knowledge-benchmark-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: `1px solid ${token.colorBorder}` }}>
+        <div className="knowledge-benchmark-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24 }}>
           <MetricCard
             label="题库数量"
             value={benchmarks.length}

@@ -74,7 +74,7 @@ export function AnimatedCats({
   // When looking down or hiding, eye shape becomes a line
   const eyeHeight = currentBlink ? 4 : (isTyping ? 20 : 16)
   const eyeWidth = currentBlink ? 20 : (isTyping ? 18 : 16)
-  const eyeColor = isHidingPassword ? '#f43f5e' : (isTyping ? '#38bdf8' : '#06b6d4')
+  const eyeColor = isHidingPassword ? 'var(--ant-color-error)' : (isTyping ? 'var(--ant-color-primary-hover)' : 'var(--ant-color-primary)')
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', width: "100%", height: "140px", pointerEvents: 'none' }} ref={containerRef}>
@@ -107,7 +107,7 @@ export function AnimatedCats({
               right: side === 1 ? -12 : 'auto',
               width: 14,
               height: 35,
-              background: 'linear-gradient(180deg, #e2e8f0, #94a3b8)',
+              background: 'linear-gradient(180deg, var(--ant-color-border-secondary), var(--ant-color-text-tertiary))',
               borderRadius: 7,
               boxShadow: 'inset -2px -2px 6px rgba(0,0,0,0.2), 0 4px 6px rgba(0,0,0,0.1)',
               zIndex: -1
@@ -121,7 +121,7 @@ export function AnimatedCats({
         {/* Main Helmet / Head */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 40%, #cbd5e1 100%)',
+          background: 'linear-gradient(135deg, var(--ant-color-bg-container) 0%, var(--ant-color-fill-quaternary) 40%, var(--ant-color-border) 100%)',
           borderRadius: '50px 50px 35px 35px',
           boxShadow: 'inset -8px -8px 20px rgba(0,0,0,0.08), inset 8px 8px 20px rgba(255,255,255,0.8), 0 10px 25px rgba(0,0,0,0.1)',
           display: 'flex', justifyContent: 'center', alignItems: 'center'
@@ -131,11 +131,11 @@ export function AnimatedCats({
           <div style={{
             position: 'relative',
             width: 110, height: 65,
-            background: 'linear-gradient(145deg, #0f172a, #000000)',
+            background: 'linear-gradient(145deg, var(--ant-color-text), color-mix(in srgb, var(--ant-color-text) 82%, var(--ant-color-bg-layout)))',
             borderRadius: 24,
             boxShadow: 'inset 0 4px 10px rgba(255,255,255,0.15), inset 0 -4px 10px rgba(0,0,0,0.8), 0 4px 8px rgba(0,0,0,0.1)',
             overflow: 'hidden',
-            border: '2px solid #334155'
+            border: '2px solid var(--ant-color-border)'
           }}>
              {/* Glass reflection curving over top */}
              <div style={{
@@ -181,9 +181,9 @@ export function AnimatedCats({
           
           {/* Subtle Mouth / Speaker Grill */}
           <div style={{ position:'absolute', bottom: 12, display:'flex', gap: 4 }}>
-             <div style={{width:4, height:4, borderRadius:2, background: '#94a3b8', boxShadow:'inset 0 1px 2px rgba(0,0,0,0.2)'}}/>
-             <div style={{width:4, height:4, borderRadius:2, background: '#94a3b8', boxShadow:'inset 0 1px 2px rgba(0,0,0,0.2)'}}/>
-             <div style={{width:4, height:4, borderRadius:2, background: '#94a3b8', boxShadow:'inset 0 1px 2px rgba(0,0,0,0.2)'}}/>
+             <div style={{width:4, height:4, borderRadius:2, background: 'var(--ant-color-text-tertiary)', boxShadow:'inset 0 1px 2px rgba(0,0,0,0.2)'}}/>
+             <div style={{width:4, height:4, borderRadius:2, background: 'var(--ant-color-text-tertiary)', boxShadow:'inset 0 1px 2px rgba(0,0,0,0.2)'}}/>
+             <div style={{width:4, height:4, borderRadius:2, background: 'var(--ant-color-text-tertiary)', boxShadow:'inset 0 1px 2px rgba(0,0,0,0.2)'}}/>
           </div>
         </div>
 
@@ -200,7 +200,7 @@ export function AnimatedCats({
                 style={{
                   position: 'absolute', bottom: 10, left: -5,
                   width: 45, height: 60,
-                  background: 'linear-gradient(135deg, #ffffff, #e2e8f0)',
+                  background: 'linear-gradient(135deg, var(--ant-color-bg-container), var(--ant-color-border-secondary))',
                   borderRadius: 22,
                   boxShadow: '-4px 4px 10px rgba(0,0,0,0.15), inset -2px -2px 10px rgba(0,0,0,0.1)',
                   zIndex: 20
@@ -215,7 +215,7 @@ export function AnimatedCats({
                 style={{
                   position: 'absolute', bottom: 10, right: -5,
                   width: 45, height: 60,
-                  background: 'linear-gradient(135deg, #ffffff, #e2e8f0)',
+                  background: 'linear-gradient(135deg, var(--ant-color-bg-container), var(--ant-color-border-secondary))',
                   borderRadius: 22,
                   boxShadow: '4px 4px 10px rgba(0,0,0,0.15), inset 2px -2px 10px rgba(0,0,0,0.1)',
                   zIndex: 20

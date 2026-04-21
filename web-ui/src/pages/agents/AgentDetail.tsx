@@ -20,6 +20,7 @@ import MemoryTab from './MemoryTab'
 import type { AgentFormState, AgentTab } from './types'
 import { getAgentAvatar, AVATAR_PRESETS, setAgentAvatarOverride, type AvatarPreset } from '../../avatarConfig'
 import AgentTestRunDrawer from './AgentTestRunDrawer'
+import { resolveToneBg, resolveToneBorder } from '../../ui/kit/tone'
 
 interface AgentDetailProps {
   isCreateRoute: boolean
@@ -109,7 +110,7 @@ export default function AgentDetail({
     return (
       <SectionCard title="员工详情">
         <Flex justify="center" align="center" style={{ minHeight: 220 }}>
-          <Spin tip="正在加载员工详情..." size="large"><div /></Spin>
+          <Spin tip="正在加载员工详情..." size="large" />
         </Flex>
       </SectionCard>
     )
@@ -167,8 +168,8 @@ export default function AgentDetail({
               cursor: 'pointer',
               borderRadius: 14,
               padding: 3,
-              background: avatar.key === preset.key ? preset.gradient : 'transparent',
-              border: avatar.key === preset.key ? `2px solid ${preset.color}` : '2px solid transparent',
+              background: avatar.key === preset.key ? resolveToneBg(token as any, preset.tone) : 'transparent',
+              border: avatar.key === preset.key ? `2px solid ${resolveToneBorder(token as any, preset.tone)}` : '2px solid transparent',
               transition: 'all 0.2s ease',
               aspectRatio: '1',
             }}
@@ -205,11 +206,11 @@ export default function AgentDetail({
                 width: 60,
                 height: 60,
                 borderRadius: 16,
-                background: avatar.gradient,
+                background: resolveToneBg(token as any, avatar.tone),
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: `0 10px 30px -5px ${avatar.color}33`,
+                boxShadow: token.boxShadowSecondary,
                 flexShrink: 0,
                 padding: 3,
                 cursor: 'pointer',

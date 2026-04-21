@@ -10,6 +10,7 @@ import AddServerModal from './AddServerModal'
 import McpServerDetailPage from './DetailPage'
 
 import PageHeader from '../../components/console/PageHeader'
+import { EntityAvatar } from '../../ui/kit'
 
 import { useToast } from '../../toast'
 import { formatDateTimeZh } from '../../locale'
@@ -41,39 +42,21 @@ function McpCard({
       : entry.url || '未配置地址'
   const statusInfo = statusTone[entry.status] ?? { label: entry.status, color: 'default' }
 
-  // Use the same avatar color logic as SkillCard
-  const avatarColor = `hsl(${(entry.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`
-
   return (
     <motion.div
-      className="skill-card"
-      whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
+      className={`skill-card ${actingName === entry.name ? 'is-selected' : ''}`}
+      whileHover={{ y: -2, boxShadow: token.boxShadowSecondary }}
       style={{ cursor: 'pointer' }}
       onClick={onClick}
     >
       <Flex justify="space-between" align="flex-start" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: avatarColor,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontSize: 20,
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </div>
+          <EntityAvatar size={44} icon={icon} tone={entry.transport === 'stdio' ? 'info' : 'primary'} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <Typography.Text strong style={{ fontSize: 16, display: 'block', letterSpacing: '-0.01em' }}>
               {entry.displayName || entry.name}
             </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4, fontFamily: 'monospace' }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4, fontFamily: token.fontFamilyCode }}>
               {entry.name}
             </Typography.Text>
             <Flex gap={6} wrap="wrap">
@@ -115,12 +98,12 @@ function McpCard({
       <Typography.Paragraph
         type="secondary"
         ellipsis={{ rows: 2 }}
-        style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 20, fontFamily: 'monospace' }}
+        style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 20, fontFamily: token.fontFamilyCode }}
       >
         {preview}
       </Typography.Paragraph>
 
-      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+      <div style={{ marginTop: 'auto', paddingTop: 16 }}>
         <Flex justify="space-between" align="center">
           <Typography.Text type="secondary" style={{ fontSize: 12, opacity: 0.6 }}>
             {entry.toolCountKnown ? `${entry.toolCount || 0} Tools` : '未同步工具'}
@@ -298,7 +281,7 @@ export default function McpPage() {
       <div className="page-stack" style={{ paddingInline: token.paddingLG }}>
         <div style={{ paddingTop: token.paddingLG }}>
           <PageHeader title="服务集成" />
-          <div style={{ borderBottom: `1px solid ${token.colorBorderSecondary}`, marginBottom: 24 }}>
+          <div style={{ marginBottom: 24 }}>
             <Tabs items={[{ key: 'loading', label: '加载中...' }]} />
           </div>
         </div>
@@ -323,7 +306,7 @@ export default function McpPage() {
     <div className="page-stack" style={{ paddingInline: token.paddingLG }}>
       <div style={{ paddingTop: token.paddingLG }}>
         <PageHeader title="服务集成" />
-        <div style={{ borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+        <div>
           <Tabs
             activeKey={viewMode}
             onChange={(key) => setViewMode(key as any)}

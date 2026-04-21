@@ -1,12 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
    index.css — Essential Structure & Overrides
    ═══════════════════════════════════════════════════════════
-   All legacy styling logic has been migrated:
-   - Tokens & Colors: ui/design/tokens.ts & styles/layers/theme.css
-   - Foundation & Resets: styles/layers/base.css
-   - Components & Layouts: styles/layers/components.css
-   - Interactive Utilities: styles/layers/interactions.css
-   - Theming mapping: ui/antd/theme.ts
+   设计原则：用背景色层级 + 阴影替代边框线条
+   一套主题，禁止多套混合
    ═══════════════════════════════════════════════════════════ */
 
 /* ──────────────────── Layout Core ──────────────────── */
@@ -36,14 +32,13 @@ strong, .ant-typography strong {
   font-weight: 600 !important;
 }
 
-/* ──────────────────── Antd Impeccable Overrides ──────────────────── */
-/* Use sparingly. Values should ideally come from ConfigProvider */
+/* ──────────────────── Antd 全局去线 ──────────────────── */
 
 .ant-card {
   background: var(--ant-color-bg-container);
-  border-color: var(--ant-color-border-secondary);
-  box-shadow: none !important;
-  border-radius: 0;
+  border: none !important;
+  box-shadow: var(--nb-shadow-xs) !important;
+  border-radius: var(--nb-radius-lg);
 }
 
 .ant-input,
@@ -55,27 +50,63 @@ strong, .ant-typography strong {
 
 .ant-btn {
   box-shadow: none;
+  border-color: transparent;
+}
+
+.ant-btn-default {
+  background: var(--ant-color-fill-quaternary);
+  border-color: transparent;
+}
+
+.ant-btn-default:hover {
+  background: var(--ant-color-fill-tertiary);
+  border-color: transparent;
 }
 
 .ant-btn-primary {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.18);
+  border: none;
 }
 
-/* Remove default heavy modal mask */
+/* Modal mask — 毛玻璃遮罩 */
 .ant-modal-mask {
-  backdrop-filter: blur(4px);
-  background-color: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(6px);
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
-/* Impeccable Table Polish */
+/* Table — 去线，靠 hover bg 区分行 */
+.ant-table-wrapper .ant-table {
+  border: none;
+}
+
+.ant-table-wrapper .ant-table-container {
+  border: none !important;
+}
+
 .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td,
 .ant-table-wrapper .ant-table-tbody > tr > td.ant-table-cell-row-hover {
-  background: color-mix(in srgb, var(--ant-color-text) 4%, transparent);
+  background: color-mix(in srgb, var(--ant-color-text) 3%, transparent);
 }
 
-.ant-table-wrapper .ant-table-thead > tr > th,
-.ant-table-wrapper .ant-table-tbody > tr > td {
+.ant-table-wrapper .ant-table-thead > tr > th {
+  border-bottom: none;
   padding: 12px 16px;
+  background: var(--ant-color-bg-layout);
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  border-bottom: 1px solid color-mix(in srgb, var(--ant-color-text) 4%, transparent);
+  padding: 14px 16px;
+}
+
+/* Tag — 去 border */
+.ant-tag {
+  border: none;
+}
+
+/* Segmented — 去 border */
+.ant-segmented {
+  border: none;
 }
 
 /* ──────────────────── Typography Flow ──────────────────── */

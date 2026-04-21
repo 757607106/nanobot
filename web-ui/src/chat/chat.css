@@ -93,8 +93,8 @@
 
 .chat-bubble-content-user .chat-attachment-tag {
   color: var(--ant-color-text);
-  border-color: var(--ant-color-border-secondary);
-  background: var(--ant-color-fill-quaternary);
+  border: none;
+  border-radius: var(--nb-radius-lg);
 }
 
 /* User Bubbles - Stark high contrast */
@@ -116,7 +116,7 @@
 /* AI Bubbles - Solid Structural Border */
 .chat-bubble-list .ant-x-bubble-start .ant-x-bubble-content-wrapper {
   background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border);
+  border: none;
   box-shadow: none;
   padding: 12px 16px;
   border-radius: var(--nb-radius-lg);
@@ -144,7 +144,7 @@
   min-height: 0;
   border-radius: var(--nb-radius-lg);
   background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
+  border: none;
   box-shadow: var(--nb-shadow-sm);
   display: flex;
   flex-direction: column;
@@ -153,7 +153,7 @@
 
 .chat-workspace-header {
   padding: 16px 24px;
-  border-bottom: 1px solid var(--ant-color-border);
+  border-bottom: none;
   flex-shrink: 0;
   background: var(--ant-color-bg-container);
 }

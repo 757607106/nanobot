@@ -84,7 +84,7 @@ export default function SectionTabs({
       <div
         className="section-tabs-bar"
         style={{
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          borderBottom: 'none',
         }}
       >
         <Tabs

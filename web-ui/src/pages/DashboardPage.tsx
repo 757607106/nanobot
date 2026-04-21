@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
+  Badge,
   Button,
   Flex,
   Segmented,
@@ -239,12 +240,7 @@ export default function DashboardPage() {
         title="控制台总览"
         subtitle={
           <Flex align="center" gap={8}>
-            <div style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: isSystemOnline ? token.colorSuccess : token.colorWarning,
-            }} />
+            <Badge status={isSystemOnline ? 'success' : 'warning'} />
             <Typography.Text type="secondary" style={{ fontFamily: token.fontFamilyCode }}>
               {isSystemOnline ? '系统运行中' : '系统待机'} · {dateString}
             </Typography.Text>

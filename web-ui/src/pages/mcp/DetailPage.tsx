@@ -507,7 +507,7 @@ export default function McpServerDetailPage({
                 />
 
                 {/* Action buttons */}
-                <Flex gap={8} wrap="wrap" style={{ paddingTop: 8, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+                <Flex gap={8} wrap="wrap" style={{ paddingTop: 8 }}>
                   <Button
                     onClick={() => void handleToggle(!entry.enabled)}
                     loading={toggling}

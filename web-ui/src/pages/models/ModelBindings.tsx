@@ -124,7 +124,7 @@ export default function ModelBindings({
                 </div>
 
                 {/* 底部操作 */}
-                <Flex justify="space-between" align="center" style={{ marginTop: 'auto', paddingTop: token.padding, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+                <Flex justify="space-between" align="center" style={{ marginTop: 'auto', paddingTop: token.padding }}>
                   <Space size={4}>
                     <Button type="text" size="small" onClick={() => onTest(binding.model || '')} style={{ opacity: 0.7 }}>
                       测试连接

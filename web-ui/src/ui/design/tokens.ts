@@ -103,19 +103,19 @@ export const designTokens = {
       muted: '#475569',
       quaternary: '#94A3B8',
       // Surfaces
-      bodyBg: '#F8FAFC',
+      bodyBg: '#F1F5F9',
       surfacePanel: '#FFFFFF',
-      surfacePanelBorder: '#E2E8F0',
+      surfacePanelBorder: 'transparent',
       surfaceSoft: '#F1F5F9',
       surfaceSubtle: '#F8FAFC',
-      surfaceSubtleBorder: '#E2E8F0',
+      surfaceSubtleBorder: 'transparent',
       surfaceElevated: '#FFFFFF',
       cardBg: '#FFFFFF',
-      // Borders
-      border: '#CBD5E1',
+      // Borders — 极度克制，仅用于输入框 focus 等场景
+      border: 'rgba(203, 213, 225, 0.45)',
       borderStrong: '#94A3B8',
-      cardBorder: '#E2E8F0',
-      cardSubtleBorder: '#F1F5F9',
+      cardBorder: 'transparent',
+      cardSubtleBorder: 'transparent',
       // Interaction
       hoverBg: '#F1F5F9',
       selectedBg: '#EFF6FF',
@@ -138,17 +138,17 @@ export const designTokens = {
       // Surfaces
       bodyBg: '#020617',
       surfacePanel: '#0F172A',
-      surfacePanelBorder: '#1E293B',
+      surfacePanelBorder: 'transparent',
       surfaceSoft: '#1E293B',
       surfaceSubtle: '#0F172A',
-      surfaceSubtleBorder: '#1E293B',
+      surfaceSubtleBorder: 'transparent',
       surfaceElevated: '#1E293B',
       cardBg: '#0F172A',
       // Borders
-      border: '#334155',
+      border: 'rgba(51, 65, 85, 0.5)',
       borderStrong: '#475569',
-      cardBorder: '#1E293B',
-      cardSubtleBorder: '#1E293B',
+      cardBorder: 'transparent',
+      cardSubtleBorder: 'transparent',
       // Interaction
       hoverBg: '#1E293B',
       selectedBg: '#1E3A8A',
@@ -161,16 +161,16 @@ export const designTokens = {
   /* ──────────────────── Shadows ──────────────────── */
   shadow: {
     light: {
-      xs: '0 1px 2px rgba(0, 0, 0, 0.04)',
-      sm: '0 4px 16px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04)',
-      md: '0 8px 24px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.03)',
-      lg: '0 18px 40px rgba(15, 23, 42, 0.06), 0 8px 20px rgba(15, 23, 42, 0.03)',
+      xs: '0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)',
+      sm: '0 2px 8px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)',
+      md: '0 6px 20px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.03)',
+      lg: '0 16px 40px rgba(15, 23, 42, 0.08), 0 6px 16px rgba(15, 23, 42, 0.04)',
     },
     dark: {
-      xs: '0 1px 2px rgba(0, 0, 0, 0.3)',
-      sm: '0 8px 32px rgba(0, 0, 0, 0.4)',
-      md: '0 16px 40px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2)',
-      lg: '0 22px 48px rgba(0, 0, 0, 0.38), 0 10px 22px rgba(0, 0, 0, 0.18)',
+      xs: '0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15)',
+      sm: '0 4px 16px rgba(0, 0, 0, 0.32), 0 2px 4px rgba(0, 0, 0, 0.16)',
+      md: '0 12px 32px rgba(0, 0, 0, 0.28), 0 4px 10px rgba(0, 0, 0, 0.18)',
+      lg: '0 20px 44px rgba(0, 0, 0, 0.36), 0 8px 20px rgba(0, 0, 0, 0.16)',
     },
   },
 

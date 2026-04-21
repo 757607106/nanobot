@@ -35,6 +35,7 @@ import { PLATFORM_BRAND_NAME, replaceBrandText } from '../branding'
 import PageHeader from '../components/console/PageHeader'
 import MetricCard from '../components/console/MetricCard'
 import SectionCard from '../components/console/SectionCard'
+import { EntityAvatar } from '../ui/kit'
 import { formatDateTimeZh } from '../locale'
 import type { InstalledSkill, MarketplaceSkill } from '../types'
 import { useToast } from '../toast'
@@ -74,8 +75,6 @@ function SkillCard({
   const compatibility = 'compatibility' in skill ? skill.compatibility : undefined
   const compatibilityLabel = 'compatibilityLabel' in skill ? skill.compatibilityLabel : undefined
 
-  const avatarColor = `hsl(${(skill.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`
-
   const bg = type === 'marketplace' && installed ? token.colorPrimaryBg : token.colorFillAlter
   const border = type === 'marketplace' && installed ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorBorderSecondary}`
 
@@ -86,23 +85,11 @@ function SkillCard({
     >
       <Flex justify="space-between" align="flex-start" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: avatarColor,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontSize: token.fontSizeHeading4,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            {skill.name.charAt(0).toUpperCase()}
-          </div>
+          <EntityAvatar
+            size={44}
+            text={skill.name}
+            tone={type === 'installed' ? (isWorkspace ? 'success' : 'info') : installed ? 'primary' : 'neutral'}
+          />
           <div style={{ minWidth: 0, flex: 1 }}>
             <Typography.Text strong style={{ fontSize: token.fontSizeLG, display: 'block', letterSpacing: '-0.01em' }}>
               {skill.name}
@@ -164,7 +151,7 @@ function SkillCard({
         {skill.description || '—'}
       </Typography.Paragraph>
 
-      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+      <div style={{ marginTop: 'auto', paddingTop: 16 }}>
         {type === 'installed' ? (
           <>
             {'author' in skill && skill.author && (

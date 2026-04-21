@@ -6,9 +6,9 @@ type AnimatedLogoProps = {
   isTyping?: boolean
 }
 
-const HEAD_GRADIENT = 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 40%, #cbd5e1 100%)'
-const VISOR_GRADIENT = 'linear-gradient(145deg, #0f172a, #000000)'
-const EAR_GRADIENT = 'linear-gradient(180deg, #e2e8f0, #94a3b8)'
+const HEAD_GRADIENT = 'linear-gradient(135deg, var(--ant-color-bg-container) 0%, var(--ant-color-fill-quaternary) 40%, var(--ant-color-border) 100%)'
+const VISOR_GRADIENT = 'linear-gradient(145deg, var(--ant-color-text), color-mix(in srgb, var(--ant-color-text) 82%, var(--ant-color-bg-layout)))'
+const EAR_GRADIENT = 'linear-gradient(180deg, var(--ant-color-border-secondary), var(--ant-color-text-tertiary))'
 const SPRING = { type: 'spring', stiffness: 180, damping: 18, mass: 0.6 } as const
 
 export function AnimatedLogo({ size = 72, isTyping = false }: AnimatedLogoProps) {
@@ -81,7 +81,7 @@ export function AnimatedLogo({ size = 72, isTyping = false }: AnimatedLogoProps)
     }
   })()
 
-  const eyeColor = isTyping ? '#38bdf8' : '#06b6d4'
+  const eyeColor = isTyping ? 'var(--ant-color-primary-hover)' : 'var(--ant-color-primary)'
   const eyeWidth = isBlinking ? base * 0.17 : base * 0.13
   const eyeHeight = isBlinking ? Math.max(2, base * 0.025) : Math.max(3, base * 0.105)
   const helmetStyle = {
@@ -168,7 +168,7 @@ export function AnimatedLogo({ size = 72, isTyping = false }: AnimatedLogoProps)
               borderRadius: base * 0.16,
               boxShadow: 'inset 0 4px 10px rgba(255,255,255,0.15), inset 0 -4px 10px rgba(0,0,0,0.8), 0 4px 8px rgba(0,0,0,0.1)',
               overflow: 'hidden',
-              border: `${Math.max(1, base * 0.02)}px solid #334155`,
+              border: `${Math.max(1, base * 0.02)}px solid var(--ant-color-border)`,
             }}
           >
             <div
@@ -235,7 +235,7 @@ export function AnimatedLogo({ size = 72, isTyping = false }: AnimatedLogoProps)
                   width: Math.max(2, base * 0.03),
                   height: Math.max(2, base * 0.03),
                   borderRadius: Math.max(1, base * 0.015),
-                  background: '#94a3b8',
+                  background: 'var(--ant-color-text-tertiary)',
                   boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.2)',
                 }}
               />

@@ -42,7 +42,7 @@ export function KnowledgeEvaluationTab({
           </Button>
         )}
       >
-        <div className="knowledge-eval-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: `1px solid ${token.colorBorder}` }}>
+        <div className="knowledge-eval-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24 }}>
           <MetricCard
             label="当前题库"
             value={selectedBenchmark?.name || '未选择'}

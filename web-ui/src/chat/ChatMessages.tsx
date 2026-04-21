@@ -137,7 +137,7 @@ export function ChatMessages({
           icon={isUser ? <UserOutlined /> : <RobotOutlined />}
           style={{
             background: isUser ? token.colorPrimary : token.colorBgContainer,
-            color: isUser ? '#fff' : token.colorText,
+            color: isUser ? token.colorTextLightSolid : token.colorText,
             boxShadow: token.boxShadow,
           }}
         />
@@ -161,7 +161,7 @@ export function ChatMessages({
           background,
           border: isTool ? 'none' : `1px solid ${borderColor}`,
           color,
-          boxShadow: isUser ? '0 12px 24px rgba(36, 88, 198, 0.12)' : isTool ? 'none' : token.boxShadow,
+          boxShadow: isUser ? token.boxShadowSecondary : isTool ? 'none' : token.boxShadow,
           backdropFilter: isUser ? 'none' : isTool ? 'none' : 'blur(28px) saturate(140%)',
         },
         header: {

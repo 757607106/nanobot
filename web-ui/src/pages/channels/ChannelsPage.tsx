@@ -555,7 +555,6 @@ export default function ChannelsPage() {
               <div
                 style={{
                   padding: '20px 24px 16px',
-                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorFillAlter,
                 }}
               >
@@ -753,7 +752,6 @@ export default function ChannelsPage() {
               <div
                 style={{
                   padding: '14px 24px',
-                  borderTop: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorFillAlter,
                 }}
               >

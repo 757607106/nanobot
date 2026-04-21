@@ -22,7 +22,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div
       style={{
         padding: '12px 0',
-        borderBottom: `1px solid ${token.colorBorderSecondary}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -169,7 +168,7 @@ export default function SystemPage() {
               {devMode ? <DetailRow label="平台" value={status.environment.platform} /> : null}
             </div>
 
-            <div style={{ paddingTop: 20, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+            <div style={{ paddingTop: 20 }}>
               <Typography.Text className="nb-section-label" style={{ marginBottom: 0 }}>
                 已启用渠道
               </Typography.Text>
@@ -191,7 +190,6 @@ export default function SystemPage() {
                 padding: '20px',
                 borderRadius: 16,
                 background: token.colorFillAlter,
-                border: `1px solid ${token.colorBorderSecondary}`,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 8,
@@ -220,7 +218,6 @@ export default function SystemPage() {
               <div
                 style={{
                   padding: '20px 0',
-                  borderTop: `1px solid ${token.colorBorderSecondary}`,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 4,
