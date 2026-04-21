@@ -13,6 +13,7 @@ from nanobot.agent.loop import AgentLoop
 from nanobot.agent.skills import SkillsLoader
 from nanobot.bus.events import InboundMessage, extract_outbound_content
 from nanobot.harness import (
+    AgentWorkspaceProvider,
     AgentThreadWorkspaceProvider,
     ExecutionAssemblyState,
     ExecutionContext,
@@ -28,6 +29,7 @@ from nanobot.harness import (
     RuntimePromptFragmentsMiddleware,
     SandboxBinding,
     SharedWorkspaceProvider,
+    TenantScopedWorkspaceProvider,
     ToolPolicy,
     ToolPolicyMiddleware,
     WorkspaceBinding,
@@ -111,29 +113,15 @@ class WebAgentRuntimeService:
             return None
         return service.with_tenant(tenant_id) if hasattr(service, "with_tenant") else service
 
-    def _memory_service_for_tenant(self, tenant_id: str | None) -> Any | None:
-        service = getattr(self.state, "app_memory", None)
-        if service is None:
-            return None
-        return service.with_tenant(tenant_id) if hasattr(service, "with_tenant") else service
-
     def _schedule_agent_dream(
         self,
         *,
         agent_id: str,
-        tenant_id: str,
-        workspace_path: Path,
+        memory_workspace_path: Path,
         config: Config,
         session_key: str,
     ) -> None:
-        """Schedule a background Dream run for a custom agent after execution.
-
-        The Consolidator only archives messages when tokens overflow the context
-        window — which rarely happens for single-turn agent executions.  This
-        method first archives the current session to ``history.jsonl`` so Dream
-        always has data to process, then runs Dream's two-phase LLM pipeline and
-        syncs the result to the platform-level ``agent-memory/{agent_id}.md``.
-        """
+        """Schedule a background Dream run for a custom agent after execution."""
 
         async def _run() -> None:
             lock = self._dream_locks.setdefault(agent_id, asyncio.Lock())
@@ -144,9 +132,9 @@ class WebAgentRuntimeService:
                 try:
                     from nanobot.agent.memory import Dream, MemoryStore as AgentMemoryStore
 
-                    store = AgentMemoryStore(workspace_path)
+                    store = AgentMemoryStore(memory_workspace_path)
 
-                    # Archive session messages so Dream has data even for short runs 
+                    # Archive session messages so Dream has data even for short runs.
                     if self.state.sessions:
                         session = self.state.sessions.get_or_create(session_key)
                         if session.messages:
@@ -157,9 +145,9 @@ class WebAgentRuntimeService:
                                 if role and content.strip():
                                     summary_lines.append(f"{role}: {content}")
                             if summary_lines:
-                                store.append_history("\n".join(summary_lines))
+                                store.append_daily_note("\n".join(summary_lines))
 
-                    if not store.read_unprocessed_history(since_cursor=store.get_last_dream_cursor()):
+                    if not store.read_unprocessed_notes(since_cursor=store.get_last_dream_cursor()):
                         return
 
                     provider = self.state.config_runtime.make_provider(config)
@@ -169,19 +157,10 @@ class WebAgentRuntimeService:
                         model=config.agents.defaults.model,
                         max_batch_size=config.agents.defaults.dream.max_batch_size,
                         max_iterations=config.agents.defaults.dream.max_iterations,
-                        skip_identity_files=True,
                     )
                     did_work = await dream.run()
                     if not did_work:
                         return
-
-                    # Sync workspace MEMORY.md → platform agent-memory file
-                    workspace_memory = store.read_memory().strip()
-                    if workspace_memory:
-                        memory_service = self._memory_service_for_tenant(tenant_id)
-                        if memory_service is not None:
-                            memory_service.update_agent_memory(agent_id, workspace_memory)
-                            logger.info("Dream: synced memory for agent {}", agent_id)
                 except Exception:
                     logger.exception("Dream: background run failed for agent {}", agent_id)
 
@@ -396,7 +375,7 @@ class WebAgentRuntimeService:
         heading: str = "Workspace Shared Memory",
     ) -> list[tuple[str, str]]:
         try:
-            memory_file = workspace_path / "memory" / "MEMORY.md"
+            memory_file = workspace_path / "MEMORY.md"
             if not memory_file.is_file():
                 return []
             content = memory_file.read_text(encoding="utf-8").strip()
@@ -412,19 +391,6 @@ class WebAgentRuntimeService:
         except Exception:
             return []
 
-    def get_agent_profile_memory_sections(self, agent_id: str, *, tenant_id: str | None = None) -> list[tuple[str, str]]:
-        memory_service = self._memory_service_for_tenant(tenant_id)
-        if not memory_service:
-            return []
-        try:
-            snapshot = memory_service.get_agent_memory(agent_id)
-        except Exception:
-            return []
-        content = str(snapshot.get("content") or "").strip()
-        if not content:
-            return []
-        return [("Agent Profile Memory", content)]
-
     def resolve_agent_memory_context(
         self,
         agent: dict[str, Any],
@@ -432,24 +398,9 @@ class WebAgentRuntimeService:
         include_workspace_memory: bool | None = None,
         memory_sections: list[tuple[str, str]] | None = None,
     ) -> tuple[bool, list[tuple[str, str]]]:
-        memory_scope = str(agent.get("memoryScope") or "agent_profile")
-        if memory_scope not in {"agent_profile", "workspace_shared"}:
-            memory_scope = "agent_profile"
-        effective_include_workspace_memory = (
-            include_workspace_memory
-            if include_workspace_memory is not None
-            else memory_scope == "workspace_shared"
-        )
-        resolved_sections: list[tuple[str, str]] = []
-        if memory_scope == "agent_profile":
-            resolved_sections.extend(
-                self.get_agent_profile_memory_sections(
-                    str(agent.get("agentId") or ""),
-                    tenant_id=agent.get("tenantId"),
-                )
-            )
-        resolved_sections.extend(memory_sections or [])
-        return effective_include_workspace_memory, self._normalize_memory_sections(resolved_sections)
+        del agent
+        resolved_sections = self._normalize_memory_sections(memory_sections or [])
+        return bool(include_workspace_memory), resolved_sections
 
     def _build_agent_config(self, agent: dict[str, Any]) -> Config:
         config = self.state.config.model_copy(deep=True)
@@ -545,6 +496,20 @@ class WebAgentRuntimeService:
             session_key=session_key,
             workspace_provider=AgentThreadWorkspaceProvider(),
         )
+
+    def resolve_agent_memory_binding(
+        self,
+        agent: dict[str, Any],
+        *,
+        root_run_id: str | None = None,
+        session_key: str | None = None,
+    ) -> WorkspaceBinding:
+        return self.resolve_agent_environment(
+            agent,
+            root_run_id=root_run_id,
+            session_key=session_key,
+            workspace_provider=TenantScopedWorkspaceProvider(delegate=AgentWorkspaceProvider()),
+        ).workspace
 
     def _build_execution_middleware_chain(
         self,
@@ -800,11 +765,16 @@ class WebAgentRuntimeService:
                 ),
                 principal_id=str(agent.get("agentId") or agent.get("name") or "agent"),
             )
+        memory_binding = self.resolve_agent_memory_binding(
+            agent,
+            session_key=resolved_workspace.session_key,
+        )
         isolated_agent = AgentLoop(
             bus=runtime_bus,
             provider=self.state.config_runtime.make_provider(prepared.config),
             workspace=resolved_workspace.path,
             context_workspace=prepared.config.workspace_path,
+            memory_workspace=memory_binding.path,
             model=prepared.config.agents.defaults.model,
             max_iterations=prepared.config.agents.defaults.max_tool_iterations,
             context_window_tokens=prepared.config.agents.defaults.context_window_tokens,
@@ -895,6 +865,11 @@ class WebAgentRuntimeService:
             sandbox_binding = sandbox_binding or environment.sandbox
         assert workspace_binding is not None
         assert sandbox_binding is not None
+        memory_binding = self.resolve_agent_memory_binding(
+            agent,
+            root_run_id=root_run_id,
+            session_key=session_key,
+        )
 
         if prepared is None:
             effective_workspace_memory_resolver = workspace_memory_resolver
@@ -1128,12 +1103,10 @@ class WebAgentRuntimeService:
             raise
         finally:
             await isolated_agent.close_mcp()
-            # Schedule background Dream for agent_profile-scoped agents
-            if agent_id and str(agent.get("memoryScope") or "agent_profile") == "agent_profile":
+            if agent_id:
                 self._schedule_agent_dream(
                     agent_id=agent_id,
-                    tenant_id=tenant_id,
-                    workspace_path=workspace_binding.path,
+                    memory_workspace_path=memory_binding.path,
                     config=config,
                     session_key=execution_context.session_key,
                 )
@@ -1288,7 +1261,7 @@ class WebAgentRuntimeService:
             provider=provider_instance,
             model=model,
             workspace=self.state.config.workspace_path,
-            context_workspace=self.state.config.workspace_path,
+            memory_workspace=self.state.config.workspace_path,
             system_prompt_override=instructions,
             skill_names=["prompt-optimizer"],
         )

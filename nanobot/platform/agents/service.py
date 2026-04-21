@@ -281,12 +281,6 @@ class AgentDefinitionService:
         ) or None
         enabled_value = self._get_value(payload, "enabled")
         enabled = True if enabled_value is None else bool(enabled_value)
-        memory_scope = self._normalize_text(
-            self._get_value(payload, "memoryScope", "memory_scope"),
-            field_name="memoryScope",
-        ) or "agent_profile"
-        if memory_scope not in {"agent_profile", "workspace_shared"}:
-            memory_scope = "agent_profile"
         source_template_name = self._normalize_text(
             self._get_value(payload, "sourceTemplateName", "source_template_name")
             if "sourceTemplateName" in payload or "source_template_name" in payload
@@ -329,7 +323,6 @@ class AgentDefinitionService:
             skill_ids=skill_ids,
             knowledge_binding_ids=knowledge_binding_ids,
             tags=tags,
-            memory_scope=memory_scope,
             source_template_name=source_template_name,
             max_execution_timeout_seconds=max_execution_timeout_seconds,
             output_format_hint=output_format_hint,
@@ -354,7 +347,6 @@ class AgentDefinitionService:
             "skill_ids": self._get_optional_value(payload, "skillIds", "skill_ids"),
             "knowledge_binding_ids": self._get_optional_value(payload, "knowledgeBindingIds", "knowledge_binding_ids"),
             "tags": self._get_optional_value(payload, "tags"),
-            "memory_scope": self._get_optional_value(payload, "memoryScope", "memory_scope"),
             "source_template_name": self._get_optional_value(payload, "sourceTemplateName", "source_template_name"),
             "max_execution_timeout_seconds": self._get_optional_value(
                 payload, "maxExecutionTimeoutSeconds", "max_execution_timeout_seconds",
@@ -425,13 +417,6 @@ class AgentDefinitionService:
             tags=existing.tags
             if updates["tags"] is _MISSING
             else self._normalize_string_list(updates["tags"], field_name="tags"),
-            memory_scope=existing.memory_scope
-            if updates["memory_scope"] is _MISSING
-            else (
-                (normalized if normalized in {"agent_profile", "workspace_shared"} else "agent_profile")
-                if (normalized := (self._normalize_text(updates["memory_scope"], field_name="memoryScope") or "agent_profile"))
-                else "agent_profile"
-            ),
             source_template_name=existing.source_template_name
             if updates["source_template_name"] is _MISSING
             else (self._normalize_text(updates["source_template_name"], field_name="sourceTemplateName") or None),

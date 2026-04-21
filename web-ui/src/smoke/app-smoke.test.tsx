@@ -6,9 +6,7 @@ import { testIds } from '../testIds'
 
 const mockApi = vi.hoisted(() => ({
   createSession: vi.fn(),
-  applyMemoryCandidate: vi.fn(),
   createAgent: vi.fn(),
-  createAgentMemoryCandidate: vi.fn(),
   createCalendarEvent: vi.fn(),
   createKnowledgeBase: vi.fn(),
   copyAgent: vi.fn(),
@@ -42,8 +40,6 @@ const mockApi = vi.hoisted(() => ({
   getKnowledgeGraphStats: vi.fn(),
   getKnowledgeBenchmarks: vi.fn(),
   getKnowledgeEvaluationHistory: vi.fn(),
-  getMemoryCandidates: vi.fn(),
-  getMemorySource: vi.fn(),
 
   getKnowledgeDocuments: vi.fn(),
   getKnowledgeJobs: vi.fn(),
@@ -57,10 +53,8 @@ const mockApi = vi.hoisted(() => ({
   getOpsLogs: vi.fn(),
   getProfile: vi.fn(),
   searchMarketplaceSkills: vi.fn(),
-  searchMemory: vi.fn(),
   getSetupStatus: vi.fn(),
   probeMcpServer: vi.fn(),
-  rejectMemoryCandidate: vi.fn(),
   runMcpRepair: vi.fn(),
   sendMcpTestChatMessage: vi.fn(),
   clearMcpTestChat: vi.fn(),
@@ -1112,7 +1106,6 @@ import OperationsPage from '../pages/OperationsPage'
 import ProfilePage from '../pages/ProfilePage'
 import AgentsPage from '../pages/agents'
 import KnowledgePage from '../pages/knowledge/KnowledgePage'
-import MemoryAuditPage from '../pages/memory'
 import RunsPage from '../pages/runs'
 import SkillsPage from '../pages/SkillsPage'
 import SetupPage from '../pages/SetupPage'
@@ -1680,7 +1673,6 @@ function makeAgents() {
       skillIds: [],
       knowledgeBindingIds: ['support-kb'],
       tags: ['support'],
-      memoryScope: 'agent_profile',
       sourceTemplateName: null,
       createdAt: '2026-03-14T09:00:00Z',
       updatedAt: '2026-03-14T09:00:00Z',
@@ -1701,7 +1693,6 @@ function makeAgents() {
       skillIds: [],
       knowledgeBindingIds: ['support-kb'],
       tags: ['support'],
-      memoryScope: 'agent_profile',
       sourceTemplateName: null,
       createdAt: '2026-03-14T09:05:00Z',
       updatedAt: '2026-03-14T09:05:00Z',
@@ -1712,33 +1703,37 @@ function makeAgents() {
 function makeAgentMemory() {
   return {
     agentId: 'support-lead',
-    content: 'Keep support summaries terse, evidence-based, and action-oriented.',
-    fileName: 'support-lead.md',
-    candidateCount: 1,
-    updatedAt: '2026-03-14T10:08:00Z',
-  }
-}
-
-function makeAgentMemoryCandidates() {
-  return {
-    total: 1,
-    items: [
+    rootPath: '/workspace/agents/support-lead',
+    files: {
+      'AGENTS.md': {
+        fileName: 'AGENTS.md',
+        content: '# AGENTS\n\nUse memory carefully.',
+        updatedAt: '2026-03-14T10:02:00Z',
+      },
+      'SOUL.md': {
+        fileName: 'SOUL.md',
+        content: '# SOUL\n\nYou are calm and methodical.',
+        updatedAt: '2026-03-14T10:04:00Z',
+      },
+      'PROFILE.md': {
+        fileName: 'PROFILE.md',
+        content: '# PROFILE\n\n- Operator prefers concise status updates.',
+        updatedAt: '2026-03-14T10:06:00Z',
+      },
+      'MEMORY.md': {
+        fileName: 'MEMORY.md',
+        content: '# MEMORY\n\n- Keep support summaries terse, evidence-based, and action-oriented.',
+        updatedAt: '2026-03-14T10:08:00Z',
+      },
+    },
+    dailyNotes: [
       {
-        candidateId: 'memcand_agent_1',
-        tenantId: 'default',
-        instanceId: 'instance-default',
-        scope: 'agent_profile',
-        sourceKind: 'manual_note',
-        title: 'Support Lead candidate',
-        content: 'Prefer numbered remediation steps in operator-facing replies.',
-        agentId: 'support-lead',
-        runId: 'run_123',
-        status: 'proposed',
-        createdAt: '2026-03-14T10:09:00Z',
+        fileName: '2026-03-14.md',
+        content: 'Captured operator preference for concise status updates.',
         updatedAt: '2026-03-14T10:09:00Z',
-        appliedAt: null,
       },
     ],
+    updatedAt: '2026-03-14T10:08:00Z',
   }
 }
 
@@ -2213,59 +2208,6 @@ describe('web app smoke pages', () => {
       },
     ])
     mockApi.getKnowledgeJobs.mockResolvedValue([])
-    mockApi.getMemoryCandidates.mockResolvedValue(makeAgentMemoryCandidates())
-    mockApi.applyMemoryCandidate.mockResolvedValue({
-      candidateId: 'memcand_agent_1',
-      tenantId: 'default',
-      instanceId: 'instance-default',
-      scope: 'agent_profile',
-      sourceKind: 'manual_note',
-      title: 'Support Lead candidate',
-      content: 'Prefer numbered remediation steps in operator-facing replies.',
-      agentId: 'support-lead',
-      runId: 'run_123',
-      status: 'applied',
-      createdAt: '2026-03-14T10:09:00Z',
-      updatedAt: '2026-03-14T10:12:00Z',
-      appliedAt: '2026-03-14T10:12:00Z',
-    })
-    mockApi.rejectMemoryCandidate.mockResolvedValue({
-      candidateId: 'memcand_agent_1',
-      tenantId: 'default',
-      instanceId: 'instance-default',
-      scope: 'agent_profile',
-      sourceKind: 'manual_note',
-      title: 'Support Lead candidate',
-      content: 'Prefer numbered remediation steps in operator-facing replies.',
-      agentId: 'support-lead',
-      runId: 'run_123',
-      status: 'rejected',
-      createdAt: '2026-03-14T10:09:00Z',
-      updatedAt: '2026-03-14T10:12:00Z',
-      appliedAt: null,
-    })
-    mockApi.searchMemory.mockResolvedValue({
-      query: 'impact',
-      total: 1,
-      items: [
-        {
-          sourceType: 'agent_memory',
-          sourceId: 'support-lead',
-          title: 'Agent Memory · support-lead',
-          content: 'Triage first, then summarize impact and next actions clearly.',
-          preview: 'Triage first, then summarize impact and next actions clearly.',
-          score: 2,
-          metadata: {},
-        },
-      ],
-    })
-    mockApi.getMemorySource.mockResolvedValue({
-      sourceType: 'agent_memory',
-      sourceId: 'support-lead',
-      title: 'Agent Memory · support-lead',
-      content: 'Triage first, then summarize impact and next actions clearly.',
-      metadata: {},
-    })
     mockApi.getRuns.mockResolvedValue({
       items: [
         {
@@ -2285,7 +2227,6 @@ describe('web app smoke pages', () => {
           originChatId: 'run-session',
           controlScope: 'top_level',
           workspacePath: '/tmp/workspace',
-          memoryScope: 'agent_profile',
           knowledgeScope: 'support-kb',
           resultSummary: {
             content: 'Knowledge retrieval completed successfully.',
@@ -2320,7 +2261,6 @@ describe('web app smoke pages', () => {
       originChatId: 'run-session',
       controlScope: 'top_level',
       workspacePath: '/tmp/workspace',
-      memoryScope: 'agent_profile',
       knowledgeScope: 'support-kb',
       resultSummary: {
         content: 'Knowledge retrieval completed successfully.',
@@ -2621,7 +2561,6 @@ describe('web app smoke pages', () => {
         execTimeoutSeconds: 30,
       },
       governance: {
-        memoryScope: 'agent_profile',
         knowledgeScope: 'support-kb',
         knowledgeBindingIds: ['support-kb'],
         knowledgeNames: ['Support KB'],
@@ -2699,7 +2638,6 @@ describe('web app smoke pages', () => {
       originChatId: 'run-session',
       controlScope: 'top_level',
       workspacePath: '/tmp/workspace',
-      memoryScope: 'agent_profile',
       knowledgeScope: 'support-kb',
       resultSummary: {
         content: 'Knowledge retrieval completed successfully.',
@@ -2731,7 +2669,6 @@ describe('web app smoke pages', () => {
           originChatId: 'run-session',
           controlScope: 'child',
           workspacePath: '/tmp/workspace',
-          memoryScope: 'agent_profile',
           knowledgeScope: 'support-kb',
           resultSummary: {
             content: 'Collected relevant knowledge chunks.',
@@ -2768,7 +2705,6 @@ describe('web app smoke pages', () => {
           originChatId: 'run-session',
           controlScope: 'child',
           workspacePath: '/tmp/workspace',
-          memoryScope: 'agent_profile',
           knowledgeScope: 'support-kb',
           resultSummary: {
             content: 'Collected relevant knowledge chunks.',
@@ -2803,7 +2739,6 @@ describe('web app smoke pages', () => {
       originChatId: 'run-session',
       controlScope: 'top_level',
       workspacePath: '/tmp/workspace',
-      memoryScope: 'agent_profile',
       knowledgeScope: 'support-kb',
       resultSummary: {
         content: 'Knowledge retrieval completed successfully.',
@@ -2881,7 +2816,6 @@ describe('web app smoke pages', () => {
     mockApi.createAgent.mockResolvedValue(makeAgents()[0])
     mockApi.updateAgent.mockResolvedValue(makeAgents()[0])
     mockApi.updateAgentMemory.mockResolvedValue(makeAgentMemory())
-    mockApi.createAgentMemoryCandidate.mockResolvedValue(makeAgentMemoryCandidates().items[0])
     mockApi.copyAgent.mockResolvedValue({
       ...makeAgents()[0],
       agentId: 'support-lead-copy',
@@ -3254,7 +3188,7 @@ describe('web app smoke pages', () => {
     expect(screen.getByRole('button', { name: /保存|创建/ })).toBeInTheDocument()
   })
 
-  it('renders agent memory governance inside the agent drawer', async () => {
+  it('renders agent long-term memory inside the agent drawer', async () => {
     installMatchMedia(false)
 
     renderWithProviders(
@@ -3267,63 +3201,16 @@ describe('web app smoke pages', () => {
       >
         <Routes>
           <Route path="/studio/agents/:agentId" element={<AgentsPage />} />
-          <Route path="/studio/memory/agents/:agentId" element={<MemoryAuditPage />} />
         </Routes>
       </MemoryRouter>,
     )
 
     expect(await screen.findByText('选择数字员工形象')).toBeInTheDocument()
-    expect(screen.getByText(/统一审计|审计/)).toBeInTheDocument()
-  })
-
-  it('renders memory audit page with candidate and search panels', async () => {
-    installMatchMedia(false)
-
-    renderWithProviders(
-      <MemoryRouter
-        initialEntries={['/studio/memory/agents/support-lead']}
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      >
-        <Routes>
-          <Route path="/studio/memory/agents/:agentId" element={<MemoryAuditPage />} />
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText(/审计/)).toBeInTheDocument()
-    expect((await screen.findAllByText('Support Lead')).length).toBeGreaterThan(0)
-
-    const candidatesTab = await screen.findByRole('tab', { name: '候选审核' })
-    fireEvent.click(candidatesTab)
-    expect(await screen.findByRole('tab', { name: '检索取证' })).toBeInTheDocument()
-  })
-
-  it('renders agent memory audit page with agent-specific overview panels', async () => {
-    installMatchMedia(false)
-
-    renderWithProviders(
-      <MemoryRouter
-        initialEntries={['/studio/memory/agents/support-lead']}
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      >
-        <Routes>
-          <Route path="/studio/memory/agents/:agentId" element={<MemoryAuditPage />} />
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText(/审计/)).toBeInTheDocument()
-    expect((await screen.findAllByText('Support Lead')).length).toBeGreaterThan(0)
-
-    const candidatesTab = await screen.findByRole('tab', { name: '候选审核' })
-    fireEvent.click(candidatesTab)
-    expect(await screen.findByRole('tab', { name: '检索取证' })).toBeInTheDocument()
+    const memoryTab = await screen.findByRole('tab', { name: '长期记忆' })
+    fireEvent.click(memoryTab)
+    expect(await screen.findByText('长期记忆骨架')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'AGENTS.md' })).toBeInTheDocument()
+    expect(screen.getByText('Daily Notes')).toBeInTheDocument()
   })
 
   it('renders knowledge page with catalog and retrieval panels', async () => {
@@ -3671,8 +3558,8 @@ describe('web app smoke pages', () => {
     mockApi.getKnowledgeBases.mockResolvedValue([])
     renderPage(<DashboardPage />)
     expect((await screen.findAllByText(/总览|控制台|仪表板/)).length).toBeGreaterThan(0)
-    expect(screen.getByText('员工开销与效能分析')).toBeInTheDocument()
-    expect(screen.getByText('系统状态')).toBeInTheDocument()
+    expect(screen.getByText('AI智能体分析')).toBeInTheDocument()
+    expect(screen.getByText('工具调用监控')).toBeInTheDocument()
   })
 
   it('renders the chat page', async () => {

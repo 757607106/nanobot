@@ -16,7 +16,7 @@ import {
 import { getModelSuggestions } from '../../modelCatalog'
 import type { AgentDefinition, ConfigData, ConfigMeta } from '../../types'
 import type { AgentFormState } from './types'
-import { memoryScopeLabel, memoryScopeOptions, parseTags } from './utils'
+import { parseTags } from './utils'
 
 interface AgentEditorProps {
   form: AgentFormState
@@ -255,16 +255,6 @@ export default function AgentEditor({
                       </FormField>
                     </>
                   ) : null}
-
-                  <FormField label="自动记忆提取">
-                    <Select
-                      value={form.memoryScope}
-                      onChange={(value) => onUpdateForm('memoryScope', value)}
-                      options={memoryScopeOptions}
-                      aria-label="记忆范围"
-                      style={{ width: '100%' }}
-                    />
-                  </FormField>
 
                   <FormField label="产物归档天数">
                     <Input

@@ -1298,7 +1298,6 @@ class RunService:
                 "execTimeoutSeconds": execution_payload.get("execTimeoutSeconds"),
             },
             "governance": {
-                "memoryScope": record.memory_scope,
                 "knowledgeScope": record.knowledge_scope,
                 "knowledgeBindingIds": bindings_payload.get("knowledgeBindingIds") or [],
                 "knowledgeNames": bindings_payload.get("knowledgeNames") or [],

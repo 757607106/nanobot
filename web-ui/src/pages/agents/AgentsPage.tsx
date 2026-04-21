@@ -9,7 +9,6 @@ import type {
   ConfigMeta,
   InstalledSkill,
   KnowledgeBaseDefinition,
-  MemoryCandidate,
   McpServerEntry,
   AgentTemplate,
 } from '../../types'
@@ -37,7 +36,6 @@ export default function AgentsPage() {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDefinition[]>([])
   const [currentAgent, setCurrentAgent] = useState<AgentDefinition | null>(null)
   const [agentMemory, setAgentMemory] = useState<AgentMemorySnapshot | null>(null)
-  const [agentMemoryCandidates, setAgentMemoryCandidates] = useState<MemoryCandidate[]>([])
   const [form, setForm] = useState<AgentFormState>(() => createEmptyForm())
   const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([])
   const [globalConfig, setGlobalConfig] = useState<ConfigData | null>(null)
@@ -64,7 +62,6 @@ export default function AgentsPage() {
       setLoadingDetail(false)
       setCurrentAgent(null)
       setAgentMemory(null)
-      setAgentMemoryCandidates([])
       setForm(createEmptyForm())
       return
     }
@@ -74,7 +71,6 @@ export default function AgentsPage() {
       setLoadingDetail(false)
       setCurrentAgent(null)
       setAgentMemory(null)
-      setAgentMemoryCandidates([])
       return
     }
 
@@ -83,10 +79,9 @@ export default function AgentsPage() {
     setCurrentAgent(null)
     setForm(createEmptyForm())
     setAgentMemory(null)
-    setAgentMemoryCandidates([])
     setMemoryError(null)
     void loadAgentDetail(selectedAgentId)
-    void loadAgentMemoryGovernance(selectedAgentId)
+    void loadAgentMemory(selectedAgentId)
   }, [isCreateRoute, loadingWorkspace, selectedAgentId])
 
   // Removed automatic redirect to detail view to support the Master Grid view.
@@ -133,19 +128,11 @@ export default function AgentsPage() {
     }
   }
 
-  async function loadAgentMemoryGovernance(nextAgentId: string) {
+  async function loadAgentMemory(nextAgentId: string) {
     try {
       setLoadingMemory(true)
-      const [snapshot, candidates] = await Promise.all([
-        api.getAgentMemory(nextAgentId),
-        api.getMemoryCandidates({
-          agentId: nextAgentId,
-          scope: 'agent_profile',
-          limit: 50,
-        }),
-      ])
+      const snapshot = await api.getAgentMemory(nextAgentId)
       setAgentMemory(snapshot)
-      setAgentMemoryCandidates(candidates.items)
       setMemoryError(null)
     } catch (loadError) {
       setMemoryError(getErrorMessage(loadError, '加载员工记忆失败'))
@@ -216,7 +203,7 @@ export default function AgentsPage() {
       await loadWorkspace()
       navigate(`/studio/agents/${saved.agentId}`, { replace: true })
       await loadAgentDetail(saved.agentId)
-      await loadAgentMemoryGovernance(saved.agentId)
+      await loadAgentMemory(saved.agentId)
     } catch (saveError) {
       const nextError = getErrorMessage(saveError, '保存员工失败')
       setError(nextError)
@@ -265,57 +252,13 @@ export default function AgentsPage() {
     }
   }
 
-  async function handleSaveAgentMemory(agentId: string, content: string) {
+  async function handleSaveAgentMemory(agentId: string, files: Record<string, string>) {
     try {
-      const snapshot = await api.updateAgentMemory(agentId, content)
+      const snapshot = await api.updateAgentMemory(agentId, files)
       setAgentMemory(snapshot)
-      message.success('员工记忆已保存')
-      await loadAgentMemoryGovernance(agentId)
+      message.success('长期记忆已保存')
     } catch (saveError) {
       const nextError = getErrorMessage(saveError, '保存员工记忆失败')
-      setMemoryError(nextError)
-      message.error(nextError)
-    }
-  }
-
-  async function handleCreateAgentMemoryCandidate(agentId: string, content: string) {
-    if (!content.trim()) {
-      setMemoryError('请输入候选记忆内容。')
-      return
-    }
-    try {
-      await api.createAgentMemoryCandidate(agentId, {
-        content: content.trim(),
-        sourceKind: 'manual_note',
-      })
-      message.success('员工记忆候选已提交')
-      await loadAgentMemoryGovernance(agentId)
-    } catch (createError) {
-      const nextError = getErrorMessage(createError, '提交员工记忆候选失败')
-      setMemoryError(nextError)
-      message.error(nextError)
-    }
-  }
-
-  async function handleApplyAgentMemoryCandidate(agentId: string, candidateId: string) {
-    try {
-      await api.applyMemoryCandidate(candidateId)
-      message.success('候选已应用到员工记忆')
-      await loadAgentMemoryGovernance(agentId)
-    } catch (applyError) {
-      const nextError = getErrorMessage(applyError, '应用员工记忆候选失败')
-      setMemoryError(nextError)
-      message.error(nextError)
-    }
-  }
-
-  async function handleRejectAgentMemoryCandidate(agentId: string, candidateId: string) {
-    try {
-      await api.rejectMemoryCandidate(candidateId)
-      message.success('候选已忽略')
-      await loadAgentMemoryGovernance(agentId)
-    } catch (rejectError) {
-      const nextError = getErrorMessage(rejectError, '忽略员工记忆候选失败')
       setMemoryError(nextError)
       message.error(nextError)
     }
@@ -331,7 +274,6 @@ export default function AgentsPage() {
             currentAgent={currentAgent}
             form={form}
             agentMemory={agentMemory}
-            agentMemoryCandidates={agentMemoryCandidates}
             validTools={validTools}
             skills={skills}
             mcpServers={mcpServers}
@@ -353,11 +295,8 @@ export default function AgentsPage() {
             onSave={handleSave}
             onCopy={handleCopy}
             onDelete={handleDelete}
-            onRefreshMemory={loadAgentMemoryGovernance}
+            onRefreshMemory={loadAgentMemory}
             onSaveMemory={handleSaveAgentMemory}
-            onCreateCandidate={handleCreateAgentMemoryCandidate}
-            onApplyCandidate={handleApplyAgentMemoryCandidate}
-            onRejectCandidate={handleRejectAgentMemoryCandidate}
           />
         </div>
       ) : (

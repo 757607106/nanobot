@@ -52,7 +52,6 @@ def test_prepare_agent_execution_builds_explicit_policy_objects() -> None:
             "systemPrompt": "You are an ops agent.",
             "toolAllowlist": ["read_file"],
             "mcpServerIds": ["ops-mcp"],
-            "memoryScope": "agent_profile",
         },
         task="Summarize the remediation plan.",
     )
@@ -63,9 +62,9 @@ def test_prepare_agent_execution_builds_explicit_policy_objects() -> None:
         skill_ids=(),
     )
     assert prepared.memory_policy == MemoryPolicy(
-        scope="agent_profile",
+        scope="agent_workspace",
         include_workspace_memory=False,
-        sections=(("Agent Profile Memory", "Prefer numbered summaries."),),
+        sections=(),
     )
     assert prepared.knowledge_policy == KnowledgePolicy(
         scope="workspace",
@@ -99,7 +98,6 @@ def test_materialize_execution_context_omits_removed_depth_fields() -> None:
         "name": "Ops Agent",
         "systemPrompt": "You are an ops agent.",
         "toolAllowlist": ["read_file"],
-        "memoryScope": "agent_profile",
     }
     prepared = runtime.prepare_agent_execution(agent, task="Summarize the remediation plan.")
 
@@ -139,7 +137,7 @@ def test_materialize_execution_context_omits_removed_depth_fields() -> None:
         "principal_kind": "agent",
         "principal_id": "ops-agent",
         "control_scope": "top_level",
-        "memory_scope": "agent_profile",
+        "memory_scope": "agent_workspace",
         "knowledge_scope": "workspace",
         "workspace_scope": "shared",
         "sandbox_kind": "local",
@@ -167,7 +165,7 @@ def test_execution_context_artifact_metadata_tracks_agent_scope() -> None:
         exec_working_dir="/workspace",
         restrict_to_workspace=True,
         exec_timeout_seconds=120,
-        memory_policy=MemoryPolicy(scope="workspace_shared", include_workspace_memory=True),
+        memory_policy=MemoryPolicy(scope="agent_workspace", include_workspace_memory=False),
         knowledge_policy=KnowledgePolicy(scope="bindings", binding_ids=("kb-1",), names=("Support KB",)),
     )
 
@@ -188,8 +186,8 @@ def test_execution_context_artifact_metadata_tracks_agent_scope() -> None:
         "exec_working_dir": "/workspace",
         "restrict_to_workspace": True,
         "exec_timeout_seconds": 120,
-        "memory_scope": "workspace_shared",
-        "workspace_memory_included": True,
+        "memory_scope": "agent_workspace",
+        "workspace_memory_included": False,
         "memory_section_count": 0,
         "knowledge_scope": "bindings",
         "knowledge_binding_ids": ["kb-1"],
@@ -327,16 +325,12 @@ def test_run_agent_definition_uses_isolated_workspace_and_scoped_memory(tmp_path
         "systemPrompt": "System prompt.",
         "toolAllowlist": [],
         "mcpServerIds": [],
-        "memoryScope": "workspace_shared",
     }
     environment = runtime.resolve_isolated_agent_environment(
         agent,
         thread_id="thread-a",
         session_key="agent:agent-a:session:session-a",
     )
-    memory_dir = environment.workspace.path / "memory"
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    (memory_dir / "MEMORY.md").write_text("WORKSPACE SECRET", encoding="utf-8")
 
     captured: dict[str, Any] = {}
 
@@ -378,7 +372,7 @@ def test_run_agent_definition_uses_isolated_workspace_and_scoped_memory(tmp_path
     prepared = captured["prepared"]
     assert workspace_binding.scope == "agent_thread"
     assert "/agents/agent-a/threads/thread-a" in workspace_binding.path.as_posix()
-    assert ("Agent Workspace Memory", "WORKSPACE SECRET") in prepared.runtime_memory_sections
+    assert prepared.runtime_memory_sections == ()
 
 def test_build_sandbox_provider_uses_configured_kind() -> None:
     config = Config()

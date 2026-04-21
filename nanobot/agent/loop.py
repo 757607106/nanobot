@@ -217,6 +217,7 @@ class AgentLoop:
         provider: LLMProvider,
         workspace: Path,
         context_workspace: Path | None = None,
+        memory_workspace: Path | None = None,
         model: str | None = None,
         max_iterations: int | None = None,
         context_window_tokens: int | None = None,
@@ -303,14 +304,20 @@ class AgentLoop:
 
         virtual_workspace_path = str(getattr(self.sandbox_binding, "runtime_workdir", workspace) or workspace)
         resolved_context_workspace = Path(context_workspace) if context_workspace is not None else workspace
+        resolved_memory_workspace = (
+            Path(memory_workspace)
+            if memory_workspace is not None
+            else resolved_context_workspace
+        )
         self._ws_ctx = WorkspaceContext(
-            identity_root=resolved_context_workspace,
-            agent_root=workspace,
+            memory_root=resolved_memory_workspace,
+            work_root=workspace,
             virtual_path=Path(virtual_workspace_path),
         )
         self.context = ContextBuilder(
-            resolved_context_workspace,
-            memory_workspace=workspace,
+            resolved_memory_workspace,
+            memory_workspace=resolved_memory_workspace,
+            skills_workspace=resolved_context_workspace,
             virtual_workspace_path=virtual_workspace_path,
             timezone=timezone,
             workspace_context=self._ws_ctx,
@@ -371,7 +378,6 @@ class AgentLoop:
             store=self.context.memory,
             provider=provider,
             model=self.model,
-            skip_identity_files=bool(self.system_prompt_override)
         )
         self._register_default_tools()
         self.commands = CommandRouter()

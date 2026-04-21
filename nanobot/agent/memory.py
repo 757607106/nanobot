@@ -1,9 +1,8 @@
-"""Memory system: pure file I/O store, lightweight Consolidator, and Dream processor."""
+"""Agent memory store, token-pressure consolidation, and Dream processing."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 import weakref
 from datetime import datetime
@@ -28,57 +27,36 @@ if TYPE_CHECKING:
     from nanobot.session.manager import Session, SessionManager
 
 
-# ---------------------------------------------------------------------------
-# MemoryStore — pure file I/O layer
-# ---------------------------------------------------------------------------
-
 class MemoryStore:
-    """Pure file I/O for memory files: MEMORY.md, history.jsonl, SOUL.md, USER.md."""
+    """File-backed memory rooted at one stable agent workspace."""
 
-    _DEFAULT_MAX_HISTORY = 1000
-    _LEGACY_ENTRY_START_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}[^\]]*)\]\s*")
-    _LEGACY_TIMESTAMP_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\]\s*")
-    _LEGACY_RAW_MESSAGE_RE = re.compile(
-        r"^\[\d{4}-\d{2}-\d{2}[^\]]*\]\s+[A-Z][A-Z0-9_]*(?:\s+\[tools:\s*[^\]]+\])?:"
+    _NOTE_ENTRY_RE = re.compile(
+        r"^## (?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}) \[#(?P<cursor>\d+)\]\s*$",
+        re.MULTILINE,
     )
 
-    def __init__(self, workspace: Path, max_history_entries: int = _DEFAULT_MAX_HISTORY):
-        self.workspace = workspace
-        self.max_history_entries = max_history_entries
-        self.memory_dir = ensure_dir(workspace / "memory")
-        self.memory_file = self.memory_dir / "MEMORY.md"
-        self.history_file = self.memory_dir / "history.jsonl"
-        self.legacy_history_file = self.memory_dir / "HISTORY.md"
-        self.soul_file = workspace / "SOUL.md"
-        self.user_file = workspace / "USER.md"
+    def __init__(self, workspace: Path):
+        self.workspace = Path(workspace)
+        self.memory_dir = ensure_dir(self.workspace / "memory")
+        self.agents_file = self.workspace / "AGENTS.md"
+        self.soul_file = self.workspace / "SOUL.md"
+        self.profile_file = self.workspace / "PROFILE.md"
+        self.memory_file = self.workspace / "MEMORY.md"
         self._cursor_file = self.memory_dir / ".cursor"
         self._dream_cursor_file = self.memory_dir / ".dream_cursor"
-        self._git = GitStore(workspace, tracked_files=[
-            "SOUL.md", "USER.md", "memory/MEMORY.md",
-        ])
-        self._maybe_migrate_legacy_history()
-
-    def set_identity_root(self, identity_root: Path) -> None:
-        """Redirect SOUL.md / USER.md lookups to a separate identity directory.
-
-        Called by ContextBuilder when the agent's identity root differs from
-        its data root (multi-agent isolation scenario).  When *identity_root*
-        equals *self.workspace* this is a no-op in practice — the paths stay
-        the same as the defaults set in ``__init__``.
-        """
-        self.soul_file = identity_root / "SOUL.md"
-        self.user_file = identity_root / "USER.md"
-        # Only track identity files via git when they live inside our workspace
-        tracked = ["memory/MEMORY.md"]
-        if identity_root == self.workspace:
-            tracked.extend(["SOUL.md", "USER.md"])
-        self._git = GitStore(self.workspace, tracked_files=tracked)
+        self._git = GitStore(
+            self.workspace,
+            tracked_files=[
+                "AGENTS.md",
+                "SOUL.md",
+                "PROFILE.md",
+                "MEMORY.md",
+            ],
+        )
 
     @property
     def git(self) -> GitStore:
         return self._git
-
-    # -- generic helpers -----------------------------------------------------
 
     @staticmethod
     def read_file(path: Path) -> str:
@@ -87,136 +65,11 @@ class MemoryStore:
         except FileNotFoundError:
             return ""
 
-    def _maybe_migrate_legacy_history(self) -> None:
-        """One-time upgrade from legacy HISTORY.md to history.jsonl.
+    def read_agents(self) -> str:
+        return self.read_file(self.agents_file)
 
-        The migration is best-effort and prioritizes preserving as much content
-        as possible over perfect parsing.
-        """
-        if not self.legacy_history_file.exists():
-            return
-        if self.history_file.exists() and self.history_file.stat().st_size > 0:
-            return
-
-        try:
-            legacy_text = self.legacy_history_file.read_text(
-                encoding="utf-8",
-                errors="replace",
-            )
-        except OSError:
-            logger.exception("Failed to read legacy HISTORY.md for migration")
-            return
-
-        entries = self._parse_legacy_history(legacy_text)
-        try:
-            if entries:
-                self._write_entries(entries)
-                last_cursor = entries[-1]["cursor"]
-                self._cursor_file.write_text(str(last_cursor), encoding="utf-8")
-                # Default to "already processed" so upgrades do not replay the
-                # user's entire historical archive into Dream on first start.
-                self._dream_cursor_file.write_text(str(last_cursor), encoding="utf-8")
-
-            backup_path = self._next_legacy_backup_path()
-            self.legacy_history_file.replace(backup_path)
-            logger.info(
-                "Migrated legacy HISTORY.md to history.jsonl ({} entries)",
-                len(entries),
-            )
-        except Exception:
-            logger.exception("Failed to migrate legacy HISTORY.md")
-
-    def _parse_legacy_history(self, text: str) -> list[dict[str, Any]]:
-        normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
-        if not normalized:
-            return []
-
-        fallback_timestamp = self._legacy_fallback_timestamp()
-        entries: list[dict[str, Any]] = []
-        chunks = self._split_legacy_history_chunks(normalized)
-
-        for cursor, chunk in enumerate(chunks, start=1):
-            timestamp = fallback_timestamp
-            content = chunk
-            match = self._LEGACY_TIMESTAMP_RE.match(chunk)
-            if match:
-                timestamp = match.group(1)
-                remainder = chunk[match.end():].lstrip()
-                if remainder:
-                    content = remainder
-
-            entries.append({
-                "cursor": cursor,
-                "timestamp": timestamp,
-                "content": content,
-            })
-        return entries
-
-    def _split_legacy_history_chunks(self, text: str) -> list[str]:
-        lines = text.split("\n")
-        chunks: list[str] = []
-        current: list[str] = []
-        saw_blank_separator = False
-
-        for line in lines:
-            if saw_blank_separator and line.strip() and current:
-                chunks.append("\n".join(current).strip())
-                current = [line]
-                saw_blank_separator = False
-                continue
-            if self._should_start_new_legacy_chunk(line, current):
-                chunks.append("\n".join(current).strip())
-                current = [line]
-                saw_blank_separator = False
-                continue
-            current.append(line)
-            saw_blank_separator = not line.strip()
-
-        if current:
-            chunks.append("\n".join(current).strip())
-        return [chunk for chunk in chunks if chunk]
-
-    def _should_start_new_legacy_chunk(self, line: str, current: list[str]) -> bool:
-        if not current:
-            return False
-        if not self._LEGACY_ENTRY_START_RE.match(line):
-            return False
-        if self._is_raw_legacy_chunk(current) and self._LEGACY_RAW_MESSAGE_RE.match(line):
-            return False
-        return True
-
-    def _is_raw_legacy_chunk(self, lines: list[str]) -> bool:
-        first_nonempty = next((line for line in lines if line.strip()), "")
-        match = self._LEGACY_TIMESTAMP_RE.match(first_nonempty)
-        if not match:
-            return False
-        return first_nonempty[match.end():].lstrip().startswith("[RAW]")
-
-    def _legacy_fallback_timestamp(self) -> str:
-        try:
-            return datetime.fromtimestamp(
-                self.legacy_history_file.stat().st_mtime,
-            ).strftime("%Y-%m-%d %H:%M")
-        except OSError:
-            return datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    def _next_legacy_backup_path(self) -> Path:
-        candidate = self.memory_dir / "HISTORY.md.bak"
-        suffix = 2
-        while candidate.exists():
-            candidate = self.memory_dir / f"HISTORY.md.bak.{suffix}"
-            suffix += 1
-        return candidate
-
-    # -- MEMORY.md (long-term facts) -----------------------------------------
-
-    def read_memory(self) -> str:
-        return self.read_file(self.memory_file)
-
-    def write_memory(self, content: str) -> None:
-        self.memory_file.write_text(content, encoding="utf-8")
-
-    # -- SOUL.md -------------------------------------------------------------
+    def write_agents(self, content: str) -> None:
+        self.agents_file.write_text(content, encoding="utf-8")
 
     def read_soul(self) -> str:
         return self.read_file(self.soul_file)
@@ -224,102 +77,79 @@ class MemoryStore:
     def write_soul(self, content: str) -> None:
         self.soul_file.write_text(content, encoding="utf-8")
 
-    # -- USER.md -------------------------------------------------------------
+    def read_profile(self) -> str:
+        return self.read_file(self.profile_file)
 
-    def read_user(self) -> str:
-        return self.read_file(self.user_file)
+    def write_profile(self, content: str) -> None:
+        self.profile_file.write_text(content, encoding="utf-8")
 
-    def write_user(self, content: str) -> None:
-        self.user_file.write_text(content, encoding="utf-8")
+    def read_memory(self) -> str:
+        return self.read_file(self.memory_file)
 
-    # -- context injection (used by context.py) ------------------------------
+    def write_memory(self, content: str) -> None:
+        self.memory_file.write_text(content, encoding="utf-8")
 
-    def get_memory_context(self) -> str:
-        long_term = self.read_memory()
-        return f"## Long-term Memory\n{long_term}" if long_term else ""
+    def note_file_for_date(self, when: datetime | None = None) -> Path:
+        stamp = when or datetime.now()
+        return self.memory_dir / f"{stamp.strftime('%Y-%m-%d')}.md"
 
-    # -- history.jsonl — append-only, JSONL format ---------------------------
+    def list_note_files(self) -> list[Path]:
+        return sorted(
+            path
+            for path in self.memory_dir.glob("*.md")
+            if path.name != "HISTORY.md"
+        )
 
-    def append_history(self, entry: str) -> int:
-        """Append *entry* to history.jsonl and return its auto-incrementing cursor."""
+    def append_daily_note(self, entry: str, *, timestamp: datetime | None = None) -> int:
         cursor = self._next_cursor()
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-        record = {"cursor": cursor, "timestamp": ts, "content": strip_think(entry.rstrip()) or entry.rstrip()}
-        with open(self.history_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        when = timestamp or datetime.now()
+        target = self.note_file_for_date(when)
+        content = strip_think(entry.rstrip()) or entry.rstrip()
+        heading = f"## {when.strftime('%Y-%m-%d %H:%M')} [#{cursor}]"
+        block = f"{heading}\n\n{content}\n"
+        if target.exists() and target.stat().st_size > 0:
+            block = f"\n{block}"
+        with open(target, "a", encoding="utf-8") as handle:
+            handle.write(block)
         self._cursor_file.write_text(str(cursor), encoding="utf-8")
         return cursor
 
+    def read_unprocessed_notes(self, since_cursor: int) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        for note_file in self.list_note_files():
+            text = self.read_file(note_file)
+            if not text.strip():
+                continue
+            matches = list(self._NOTE_ENTRY_RE.finditer(text))
+            for index, match in enumerate(matches):
+                start = match.end()
+                end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+                cursor = int(match.group("cursor"))
+                if cursor <= since_cursor:
+                    continue
+                body = text[start:end].strip()
+                if not body:
+                    continue
+                entries.append(
+                    {
+                        "cursor": cursor,
+                        "timestamp": match.group("timestamp"),
+                        "content": body,
+                        "path": str(note_file),
+                    }
+                )
+        return entries
+
     def _next_cursor(self) -> int:
-        """Read the current cursor counter and return next value."""
         if self._cursor_file.exists():
             try:
                 return int(self._cursor_file.read_text(encoding="utf-8").strip()) + 1
             except (ValueError, OSError):
                 pass
-        # Fallback: read last line's cursor from the JSONL file.
-        last = self._read_last_entry()
-        if last:
-            return last["cursor"] + 1
-        return 1
-
-    def read_unprocessed_history(self, since_cursor: int) -> list[dict[str, Any]]:
-        """Return history entries with cursor > *since_cursor*."""
-        return [e for e in self._read_entries() if e["cursor"] > since_cursor]
-
-    def compact_history(self) -> None:
-        """Drop oldest entries if the file exceeds *max_history_entries*."""
-        if self.max_history_entries <= 0:
-            return
-        entries = self._read_entries()
-        if len(entries) <= self.max_history_entries:
-            return
-        kept = entries[-self.max_history_entries:]
-        self._write_entries(kept)
-
-    # -- JSONL helpers -------------------------------------------------------
-
-    def _read_entries(self) -> list[dict[str, Any]]:
-        """Read all entries from history.jsonl."""
-        entries: list[dict[str, Any]] = []
-        try:
-            with open(self.history_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entries.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            continue
-        except FileNotFoundError:
-            pass
-        return entries
-
-    def _read_last_entry(self) -> dict[str, Any] | None:
-        """Read the last entry from the JSONL file efficiently."""
-        try:
-            with open(self.history_file, "rb") as f:
-                f.seek(0, 2)
-                size = f.tell()
-                if size == 0:
-                    return None
-                read_size = min(size, 4096)
-                f.seek(size - read_size)
-                data = f.read().decode("utf-8")
-                lines = [l for l in data.split("\n") if l.strip()]
-                if not lines:
-                    return None
-                return json.loads(lines[-1])
-        except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError):
-            return None
-
-    def _write_entries(self, entries: list[dict[str, Any]]) -> None:
-        """Overwrite history.jsonl with the given entries."""
-        with open(self.history_file, "w", encoding="utf-8") as f:
-            for entry in entries:
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    # -- dream cursor --------------------------------------------------------
+        last_cursor = 0
+        for entry in self.read_unprocessed_notes(0):
+            last_cursor = max(last_cursor, int(entry["cursor"]))
+        return last_cursor + 1
 
     def get_last_dream_cursor(self) -> int:
         if self._dream_cursor_file.exists():
@@ -332,44 +162,39 @@ class MemoryStore:
     def set_last_dream_cursor(self, cursor: int) -> None:
         self._dream_cursor_file.write_text(str(cursor), encoding="utf-8")
 
-    # -- message formatting utility ------------------------------------------
-
     @staticmethod
     def _format_messages(messages: list[dict]) -> str:
         lines = []
         for message in messages:
             if not message.get("content"):
                 continue
-            tools = f" [tools: {', '.join(message['tools_used'])}]" if message.get("tools_used") else ""
+            tools = (
+                f" [tools: {', '.join(message['tools_used'])}]"
+                if message.get("tools_used")
+                else ""
+            )
             lines.append(
-                f"[{message.get('timestamp', '?')[:16]}] {message['role'].upper()}{tools}: {message['content']}"
+                f"[{message.get('timestamp', '?')[:16]}] "
+                f"{message['role'].upper()}{tools}: {message['content']}"
             )
         return "\n".join(lines)
 
     def raw_archive(self, messages: list[dict]) -> None:
-        """Fallback: dump raw messages to history.jsonl without LLM summarization."""
-        self.append_history(
-            f"[RAW] {len(messages)} messages\n"
-            f"{self._format_messages(messages)}"
+        self.append_daily_note(
+            f"[RAW] {len(messages)} messages\n{self._format_messages(messages)}"
         )
         logger.warning(
-            "Memory consolidation degraded: raw-archived {} messages", len(messages)
+            "Memory consolidation degraded: raw-archived {} messages",
+            len(messages),
         )
-
-
-
-# ---------------------------------------------------------------------------
-# Consolidator — lightweight token-budget triggered consolidation
-# ---------------------------------------------------------------------------
 
 
 class Consolidator:
-    """Lightweight consolidation: summarizes evicted messages into history.jsonl."""
+    """Lightweight token-budget triggered consolidation into daily notes."""
 
     _MAX_CONSOLIDATION_ROUNDS = 5
-    _MAX_CHUNK_MESSAGES = 60  # hard cap per consolidation round
-
-    _SAFETY_BUFFER = 1024  # extra headroom for tokenizer estimation drift
+    _MAX_CHUNK_MESSAGES = 60
+    _SAFETY_BUFFER = 1024
 
     def __init__(
         self,
@@ -395,7 +220,6 @@ class Consolidator:
         )
 
     def get_lock(self, session_key: str) -> asyncio.Lock:
-        """Return the shared consolidation lock for one session."""
         return self._locks.setdefault(session_key, asyncio.Lock())
 
     def pick_consolidation_boundary(
@@ -403,7 +227,6 @@ class Consolidator:
         session: Session,
         tokens_to_remove: int,
     ) -> tuple[int, int] | None:
-        """Pick a user-turn boundary that removes enough old prompt tokens."""
         start = session.last_consolidated
         if start >= len(session.messages) or tokens_to_remove <= 0:
             return None
@@ -425,7 +248,6 @@ class Consolidator:
         session: Session,
         end_idx: int,
     ) -> int | None:
-        """Clamp the chunk size without breaking the user-turn boundary."""
         start = session.last_consolidated
         if end_idx - start <= self._MAX_CHUNK_MESSAGES:
             return end_idx
@@ -437,9 +259,10 @@ class Consolidator:
         return None
 
     def estimate_session_prompt_tokens(self, session: Session) -> tuple[int, str]:
-        """Estimate current prompt size for the normal session history view."""
         history = session.get_history(max_messages=0)
-        channel, chat_id = (session.key.split(":", 1) if ":" in session.key else (None, None))
+        channel, chat_id = (
+            session.key.split(":", 1) if ":" in session.key else (None, None)
+        )
         probe_messages = self._build_messages(
             history=history,
             current_message="[token-probe]",
@@ -454,10 +277,6 @@ class Consolidator:
         )
 
     async def archive(self, messages: list[dict]) -> str | None:
-        """Summarize messages via LLM and append to history.jsonl.
-
-        Returns the summary text on success, None if nothing to archive.
-        """
         if not messages:
             return None
         try:
@@ -478,19 +297,14 @@ class Consolidator:
                 tool_choice=None,
             )
             summary = response.content or "[no summary]"
-            self.store.append_history(summary)
+            self.store.append_daily_note(summary)
             return summary
         except Exception:
-            logger.warning("Consolidation LLM call failed, raw-dumping to history")
+            logger.warning("Consolidation LLM call failed, raw-dumping to notes")
             self.store.raw_archive(messages)
             return None
 
     async def maybe_consolidate_by_tokens(self, session: Session) -> None:
-        """Loop: archive old messages until prompt fits within safe budget.
-
-        The budget reserves space for completion tokens and a safety buffer
-        so the LLM request never exceeds the context window.
-        """
         if not session.messages:
             return
 
@@ -500,7 +314,11 @@ class Consolidator:
 
         lock = self.get_lock(session.key)
         async with lock:
-            budget = context_window_tokens - self.max_completion_tokens - self._SAFETY_BUFFER
+            budget = (
+                context_window_tokens
+                - self.max_completion_tokens
+                - self._SAFETY_BUFFER
+            )
             target = budget // 2
             try:
                 estimated, source = self.estimate_session_prompt_tokens(session)
@@ -525,7 +343,10 @@ class Consolidator:
                 if estimated <= target:
                     return
 
-                boundary = self.pick_consolidation_boundary(session, max(1, estimated - target))
+                boundary = self.pick_consolidation_boundary(
+                    session,
+                    max(1, estimated - target),
+                )
                 if boundary is None:
                     logger.debug(
                         "Token consolidation: no safe boundary for {} (round {})",
@@ -534,8 +355,7 @@ class Consolidator:
                     )
                     return
 
-                end_idx = boundary[0]
-                end_idx = self._cap_consolidation_boundary(session, end_idx)
+                end_idx = self._cap_consolidation_boundary(session, boundary[0])
                 if end_idx is None:
                     logger.debug(
                         "Token consolidation: no capped boundary for {} (round {})",
@@ -571,18 +391,8 @@ class Consolidator:
                     return
 
 
-# ---------------------------------------------------------------------------
-# Dream — heavyweight cron-scheduled memory consolidation
-# ---------------------------------------------------------------------------
-
-
 class Dream:
-    """Two-phase memory processor: analyze history.jsonl, then edit files via AgentRunner.
-
-    Phase 1 produces an analysis summary (plain LLM call).
-    Phase 2 delegates to AgentRunner with read_file / edit_file tools so the
-    LLM can make targeted, incremental edits instead of replacing entire files.
-    """
+    """Two-phase memory processor over daily notes plus stable memory files."""
 
     def __init__(
         self,
@@ -592,7 +402,6 @@ class Dream:
         max_batch_size: int = 20,
         max_iterations: int = 10,
         max_tool_result_chars: int = 16_000,
-        skip_identity_files: bool = False,
     ):
         self.store = store
         self.provider = provider
@@ -600,110 +409,95 @@ class Dream:
         self.max_batch_size = max_batch_size
         self.max_iterations = max_iterations
         self.max_tool_result_chars = max_tool_result_chars
-        self.skip_identity_files = skip_identity_files
         self._runner = AgentRunner(provider)
         self._tools = self._build_tools()
 
-    # -- tool registry -------------------------------------------------------
-
     def _build_tools(self) -> ToolRegistry:
-        """Build a minimal tool registry for the Dream agent."""
         from nanobot.agent.skills import BUILTIN_SKILLS_DIR
         from nanobot.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
 
         tools = ToolRegistry()
         workspace = self.store.workspace
-        # When identity files live outside the agent workspace, grant read access
-        # to specific files only (not the entire directory)
-        extra_read_files: list[Path] = []
-        if self.store.soul_file.parent != workspace:
-            extra_read_files.extend([self.store.soul_file, self.store.user_file])
-        # Allow reading builtin skills for reference during skill creation
         extra_read = [BUILTIN_SKILLS_DIR] if BUILTIN_SKILLS_DIR.exists() else None
-        tools.register(ReadFileTool(
-            workspace=workspace,
-            allowed_dir=workspace,
-            extra_allowed_files=extra_read_files or None,
-            extra_allowed_dirs=extra_read,
-        ))
+        tools.register(
+            ReadFileTool(
+                workspace=workspace,
+                allowed_dir=workspace,
+                extra_allowed_dirs=extra_read,
+            )
+        )
         tools.register(EditFileTool(workspace=workspace, allowed_dir=workspace))
-        # write_file resolves relative paths from workspace root, but can only
-        # write under skills/ so the prompt can safely use skills/<name>/SKILL.md.
         skills_dir = workspace / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
         tools.register(WriteFileTool(workspace=workspace, allowed_dir=skills_dir))
         return tools
 
-    # -- skill listing --------------------------------------------------------
-
     def _list_existing_skills(self) -> list[str]:
-        """List existing skills as 'name — description' for dedup context."""
         import re as _re
 
         from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 
-        _DESC_RE = _re.compile(r"^description:\s*(.+)$", _re.MULTILINE | _re.IGNORECASE)
+        desc_re = _re.compile(
+            r"^description:\s*(.+)$",
+            _re.MULTILINE | _re.IGNORECASE,
+        )
         entries: dict[str, str] = {}
         for base in (self.store.workspace / "skills", BUILTIN_SKILLS_DIR):
             if not base.exists():
                 continue
-            for d in base.iterdir():
-                if not d.is_dir():
+            for directory in base.iterdir():
+                if not directory.is_dir():
                     continue
-                skill_md = d / "SKILL.md"
+                skill_md = directory / "SKILL.md"
                 if not skill_md.exists():
                     continue
-                # Prefer workspace skills over builtin (same name)
-                if d.name in entries and base == BUILTIN_SKILLS_DIR:
+                if directory.name in entries and base == BUILTIN_SKILLS_DIR:
                     continue
                 content = skill_md.read_text(encoding="utf-8")[:500]
-                m = _DESC_RE.search(content)
-                desc = m.group(1).strip() if m else "(no description)"
-                entries[d.name] = desc
+                match = desc_re.search(content)
+                entries[directory.name] = (
+                    match.group(1).strip() if match else "(no description)"
+                )
         return [f"{name} — {desc}" for name, desc in sorted(entries.items())]
 
-    # -- main entry ----------------------------------------------------------
-
     async def run(self) -> bool:
-        """Process unprocessed history entries. Returns True if work was done."""
         from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 
         last_cursor = self.store.get_last_dream_cursor()
-        entries = self.store.read_unprocessed_history(since_cursor=last_cursor)
+        entries = self.store.read_unprocessed_notes(since_cursor=last_cursor)
         if not entries:
             return False
 
         batch = entries[: self.max_batch_size]
         logger.info(
-            "Dream: processing {} entries (cursor {}→{}), batch={}",
-            len(entries), last_cursor, batch[-1]["cursor"], len(batch),
+            "Dream: processing {} note entries (cursor {}→{}), batch={}",
+            len(entries),
+            last_cursor,
+            batch[-1]["cursor"],
+            len(batch),
         )
 
-        # Build history text for LLM
-        history_text = "\n".join(
-            f"[{e['timestamp']}] {e['content']}" for e in batch
+        notes_text = "\n\n".join(
+            f"[{entry['timestamp']}] {entry['content']}" for entry in batch
         )
 
-        # Current file contents
         current_date = datetime.now().strftime("%Y-%m-%d")
+        current_agents = self.store.read_agents() or "(empty)"
+        current_soul = self.store.read_soul() or "(empty)"
+        current_profile = self.store.read_profile() or "(empty)"
         current_memory = self.store.read_memory() or "(empty)"
-        current_soul = self.store.read_soul() or "(empty)" if not self.skip_identity_files else None
-        current_user = self.store.read_user() or "(empty)"
 
-        file_context_parts = [
-            f"## Current Date\n{current_date}\n",
-            f"## Current MEMORY.md ({len(current_memory)} chars)\n{current_memory}\n",
-        ]
-        if not self.skip_identity_files:
-            file_context_parts.append(f"## Current SOUL.md ({len(current_soul) if current_soul else 0} chars)\n{current_soul}\n")
-        file_context_parts.append(f"## Current USER.md ({len(current_user)} chars)\n{current_user}")
-
-        file_context = "\n".join(file_context_parts)
-
-        # Phase 1: Analyze (no skills list — dedup is Phase 2's job)
-        phase1_prompt = (
-            f"## Conversation History\n{history_text}\n\n{file_context}"
+        file_context = "\n".join(
+            [
+                f"## Current Date\n{current_date}\n",
+                f"## Current AGENTS.md ({len(current_agents)} chars)\n{current_agents}\n",
+                f"## Current SOUL.md ({len(current_soul)} chars)\n{current_soul}\n",
+                f"## Current PROFILE.md ({len(current_profile)} chars)\n{current_profile}\n",
+                f"## Current MEMORY.md ({len(current_memory)} chars)\n{current_memory}",
+            ]
         )
+
+        phase1_prompt = f"## Daily Notes\n{notes_text}\n\n{file_context}"
 
         try:
             phase1_response = await self.provider.chat_with_retry(
@@ -719,22 +513,22 @@ class Dream:
                 tool_choice=None,
             )
             analysis = phase1_response.content or ""
-            logger.debug("Dream Phase 1 analysis ({} chars): {}", len(analysis), analysis[:500])
+            logger.debug(
+                "Dream Phase 1 analysis ({} chars): {}",
+                len(analysis),
+                analysis[:500],
+            )
         except Exception:
             logger.exception("Dream Phase 1 failed")
             return False
 
-        # Phase 2: Delegate to AgentRunner with read_file / edit_file
         existing_skills = self._list_existing_skills()
         skills_section = ""
         if existing_skills:
-            skills_section = (
-                "\n\n## Existing Skills\n"
-                + "\n".join(f"- {s}" for s in existing_skills)
+            skills_section = "\n\n## Existing Skills\n" + "\n".join(
+                f"- {item}" for item in existing_skills
             )
         phase2_prompt = f"## Analysis Result\n{analysis}\n\n{file_context}{skills_section}"
-
-        tools = self._tools
         skill_creator_path = BUILTIN_SKILLS_DIR / "skill-creator" / "SKILL.md"
         messages: list[dict[str, Any]] = [
             {
@@ -749,52 +543,58 @@ class Dream:
         ]
 
         try:
-            result = await self._runner.run(AgentRunSpec(
-                initial_messages=messages,
-                tools=tools,
-                model=self.model,
-                max_iterations=self.max_iterations,
-                max_tool_result_chars=self.max_tool_result_chars,
-                fail_on_tool_error=False,
-            ))
+            result = await self._runner.run(
+                AgentRunSpec(
+                    initial_messages=messages,
+                    tools=self._tools,
+                    model=self.model,
+                    max_iterations=self.max_iterations,
+                    max_tool_result_chars=self.max_tool_result_chars,
+                    fail_on_tool_error=False,
+                )
+            )
             logger.debug(
                 "Dream Phase 2 complete: stop_reason={}, tool_events={}",
-                result.stop_reason, len(result.tool_events),
+                result.stop_reason,
+                len(result.tool_events),
             )
-            for ev in (result.tool_events or []):
-                logger.info("Dream tool_event: name={}, status={}, detail={}", ev.get("name"), ev.get("status"), ev.get("detail", "")[:200])
+            for event in result.tool_events or []:
+                logger.info(
+                    "Dream tool_event: name={}, status={}, detail={}",
+                    event.get("name"),
+                    event.get("status"),
+                    event.get("detail", "")[:200],
+                )
         except Exception:
             logger.exception("Dream Phase 2 failed")
             result = None
 
-        # Build changelog from tool events
-        changelog: list[str] = []
-        if result and result.tool_events:
-            for event in result.tool_events:
-                if event["status"] == "ok":
-                    changelog.append(f"{event['name']}: {event['detail']}")
+        changelog = [
+            f"{event['name']}: {event['detail']}"
+            for event in (result.tool_events or [])
+            if event.get("status") == "ok"
+        ] if result else []
 
-        # Advance cursor — always, to avoid re-processing Phase 1
         new_cursor = batch[-1]["cursor"]
         self.store.set_last_dream_cursor(new_cursor)
-        self.store.compact_history()
 
         if result and result.stop_reason == "completed":
             logger.info(
                 "Dream done: {} change(s), cursor advanced to {}",
-                len(changelog), new_cursor,
+                len(changelog),
+                new_cursor,
             )
         else:
-            reason = result.stop_reason if result else "exception"
             logger.warning(
                 "Dream incomplete ({}): cursor advanced to {}",
-                reason, new_cursor,
+                result.stop_reason if result else "exception",
+                new_cursor,
             )
 
-        # Git auto-commit (only when there are actual changes)
         if changelog and self.store.git.is_initialized():
-            ts = batch[-1]["timestamp"]
-            sha = self.store.git.auto_commit(f"dream: {ts}, {len(changelog)} change(s)")
+            sha = self.store.git.auto_commit(
+                f"dream: {batch[-1]['timestamp']}, {len(changelog)} change(s)"
+            )
             if sha:
                 logger.info("Dream commit: {}", sha)
 

@@ -241,13 +241,13 @@ class SubagentManager:
 
         time_ctx = ContextBuilder._build_runtime_context(None, None)
         skills_summary = SkillsLoader(
-            self._ws_ctx.agent_root,
+            self._ws_ctx.memory_root,
             disabled_skills=self.disabled_skills,
         ).build_skills_summary()
         return render_template(
             "agent/subagent_system.md",
             time_ctx=time_ctx,
-            workspace=str(self._ws_ctx.agent_root),
+            workspace=str(self._ws_ctx.work_root),
             skills_summary=skills_summary or "",
         )
 

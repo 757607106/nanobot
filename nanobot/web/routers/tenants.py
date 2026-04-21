@@ -53,7 +53,7 @@ def _require_tenant_control_plane(
 
 @router.get("/api/v1/tenants")
 def list_tenants(request: Request) -> JSONResponse:
-    _require_tenant_control_plane(request, require_tenant_selected=False)
+    _require_tenant_control_plane(request)
     data = request.app.state.tenants_service.list_tenants()
     return _json_response(200, _ok(data))
 
@@ -63,7 +63,7 @@ def create_tenant(
     request: Request,
     payload: dict[str, Any] = Body(...),
 ) -> JSONResponse:
-    _require_tenant_control_plane(request, require_tenant_selected=False)
+    _require_tenant_control_plane(request)
     try:
         data = request.app.state.tenants_service.create_tenant(payload)
     except TenantConflictError as exc:

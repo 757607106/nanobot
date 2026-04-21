@@ -10,7 +10,6 @@ from nanobot.web.routers.dashboard import router as dashboard_router
 from nanobot.web.routers.chat import router as chat_router
 from nanobot.web.routers.knowledge import router as knowledge_router
 from nanobot.web.routers.mcp import router as mcp_router
-from nanobot.web.routers.memory import router as memory_router
 from nanobot.web.routers.operations import router as operations_router
 from nanobot.web.routers.runs import router as runs_router
 from nanobot.web.routers.schedule import router as schedule_router
@@ -29,7 +28,6 @@ __all__ = [
     "dashboard_router",
     "knowledge_router",
 
-    "memory_router",
     "mcp_router",
     "operations_router",
     "runs_router",

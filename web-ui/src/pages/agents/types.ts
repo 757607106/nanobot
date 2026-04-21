@@ -8,7 +8,6 @@ import type {
   ConfigMeta,
   InstalledSkill,
   KnowledgeBaseDefinition,
-  MemoryCandidate,
   McpServerEntry,
 } from '../../types'
 
@@ -27,7 +26,6 @@ export interface AgentFormState {
   skillIds: string[]
   knowledgeBindingIds: string[]
   tags: string[]
-  memoryScope: string
   artifactArchiveAfterDays: string
   artifactDeleteAfterDays: string
 }
@@ -49,7 +47,6 @@ export interface AgentsWorkspaceState {
   knowledgeBases: KnowledgeBaseDefinition[]
   currentAgent: AgentDefinition | null
   agentMemory: AgentMemorySnapshot | null
-  agentMemoryCandidates: MemoryCandidate[]
   recentRuns: AgentRunSummary[]
   globalConfig: ConfigData | null
   globalConfigMeta: ConfigMeta | null
@@ -65,14 +62,11 @@ export interface AgentsWorkspaceState {
 export interface AgentsWorkspaceActions {
   loadWorkspace: () => Promise<void>
   loadAgentDetail: (agentId: string) => Promise<void>
-  loadAgentMemoryGovernance: (agentId: string) => Promise<void>
+  loadAgentMemory: (agentId: string) => Promise<void>
   loadRecentRuns: (agentId: string) => Promise<void>
   handleSave: (form: AgentFormState, currentAgent: AgentDefinition | null) => Promise<void>
   handleDelete: (currentAgent: AgentDefinition) => Promise<void>
   handleCopy: (currentAgent: AgentDefinition) => Promise<void>
   handleTestRun: (currentAgent: AgentDefinition, testPrompt: string) => Promise<void>
   handleSaveAgentMemory: (currentAgent: AgentDefinition, content: string) => Promise<void>
-  handleCreateAgentMemoryCandidate: (currentAgent: AgentDefinition, content: string) => Promise<void>
-  handleApplyAgentMemoryCandidate: (currentAgent: AgentDefinition, candidateId: string) => Promise<void>
-  handleRejectAgentMemoryCandidate: (currentAgent: AgentDefinition, candidateId: string) => Promise<void>
 }

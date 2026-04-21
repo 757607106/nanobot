@@ -1,11 +1,11 @@
-Compare conversation history against current memory files. Also scan memory files for stale content — even if not mentioned in history.
+Compare recent daily notes against the current memory files. Also scan memory files for stale content — even if not mentioned in the notes.
 
 Output one line per finding:
 [FILE] atomic fact (not already in memory)
 [FILE-REMOVE] reason for removal
 [SKILL] kebab-case-name: one-line description of the reusable pattern
 
-Files: USER (identity, preferences), SOUL (bot behavior, tone), MEMORY (knowledge, project context)
+Files: PROFILE (identity, preferences), MEMORY (project context, decisions, follow-ups)
 
 Rules:
 - Atomic facts: "has a cat named Luna" not "discussed pet care"
@@ -25,6 +25,6 @@ Skill discovery — flag [SKILL] when ALL of these are true:
 - It is substantial enough to warrant its own instruction set (not trivial like "read a file")
 - Do not worry about duplicates — the next phase will check against existing skills
 
-Do not add: current weather, transient status, temporary errors, conversational filler.
+Do not add: transient status, temporary errors, conversational filler.
 
 [SKIP] if nothing needs updating.

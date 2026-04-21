@@ -143,7 +143,7 @@ class RunRecord:
         payload["originChatId"] = payload.pop("origin_chat_id")
         payload["controlScope"] = payload.pop("control_scope")
         payload["workspacePath"] = payload.pop("workspace_path")
-        payload["memoryScope"] = payload.pop("memory_scope")
+        payload.pop("memory_scope")
         payload["knowledgeScope"] = payload.pop("knowledge_scope")
         payload["createdAt"] = payload.pop("created_at")
         payload["startedAt"] = payload.pop("started_at")

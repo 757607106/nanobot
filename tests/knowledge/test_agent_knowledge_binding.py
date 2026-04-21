@@ -149,7 +149,7 @@ def test_agent_loop_registers_extra_tools(tmp_path) -> None:
     assert "echo_kb" in loop.tools.tool_names
 
 
-def test_prepare_agent_execution_includes_agent_profile_memory() -> None:
+def test_prepare_agent_execution_does_not_inject_platform_profile_memory() -> None:
     runtime = WebAgentRuntimeService(
         SimpleNamespace(
             app_memory=SimpleNamespace(
@@ -170,14 +170,13 @@ def test_prepare_agent_execution_includes_agent_profile_memory() -> None:
             "name": "Ops Agent",
             "systemPrompt": "You are an ops agent.",
             "toolAllowlist": ["read_file"],
-            "memoryScope": "agent_profile",
         },
         task="Summarize the incident response posture.",
     )
 
     assert prepared.include_workspace_memory is False
-    assert prepared.memory_sections == [("Agent Profile Memory", "Agent memory: prefer bullet summaries.")]
-    assert prepared.runtime_memory_fragments == [("Agent Profile Memory", "Agent memory: prefer bullet summaries.")]
+    assert prepared.memory_sections == []
+    assert prepared.runtime_memory_fragments == []
 
 
 def test_prepare_agent_execution_middleware_chain_preserves_prompt_order() -> None:
@@ -196,7 +195,6 @@ def test_prepare_agent_execution_middleware_chain_preserves_prompt_order() -> No
             "name": "Ops Agent",
             "systemPrompt": "You are an ops agent.",
             "toolAllowlist": ["read_file"],
-            "memoryScope": "agent_profile",
             "knowledgeBindingIds": ["kb-ops"],
         },
         task="How do we restart nanobot safely?",
@@ -249,7 +247,6 @@ async def test_channel_runtime_agent_handler_applies_knowledge_binding(monkeypat
                 "toolAllowlist": ["read_file"],
                 "skillIds": [],
                 "mcpServerIds": ["ops-mcp"],
-                "memoryScope": "workspace_shared",
                 "knowledgeBindingIds": ["kb-ops"],
             }
         ),
@@ -290,7 +287,7 @@ async def test_channel_runtime_agent_handler_applies_knowledge_binding(monkeypat
     assert captured["tool_allowlist"] == ["read_file", "list_kbs", "get_mindmap", "query_kb"]
     assert [tool.name for tool in captured["extra_tools"]] == ["list_kbs", "get_mindmap", "query_kb"]
     assert "Retrieved Knowledge" in str(captured["system_prompt_override"])
-    assert captured["include_workspace_memory"] is True
+    assert captured["include_workspace_memory"] is False
     state.agent_runtime.run_agent_definition.assert_awaited_once_with(
         agent_def,
         task="How do we restart nanobot?",

@@ -307,24 +307,18 @@ class TenantScopedWorkspaceProvider:
 
 @dataclass(slots=True)
 class WorkspaceContext:
-    """Unified workspace paths for one agent execution.
+    """Stable agent memory root plus the active execution work root."""
 
-    Attributes:
-        identity_root: Root for global identity files (SOUL.md, AGENTS.md, etc.).
-        agent_root: Root for agent-isolated data (memory, sessions, skills, tool results).
-        virtual_path: Path shown to the LLM in sandboxed environments.
-    """
-
-    identity_root: Path
-    agent_root: Path
+    memory_root: Path
+    work_root: Path
     virtual_path: Path | None = None
 
     @classmethod
     def shared(cls, workspace: Path) -> WorkspaceContext:
-        """Shortcut for CLI single-agent mode: identity and agent share the same root."""
-        return cls(identity_root=workspace, agent_root=workspace)
+        """Shortcut for single-root executions."""
+        return cls(memory_root=workspace, work_root=workspace)
 
     @property
     def display_path(self) -> Path:
-        """Return the path to show the LLM (virtual_path if set, otherwise agent_root)."""
-        return self.virtual_path or self.agent_root
+        """Return the path to show the LLM (virtual_path if set, otherwise work_root)."""
+        return self.virtual_path or self.work_root

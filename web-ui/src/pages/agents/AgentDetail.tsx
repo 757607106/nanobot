@@ -11,7 +11,6 @@ import type {
   ConfigMeta,
   InstalledSkill,
   KnowledgeBaseDefinition,
-  MemoryCandidate,
   McpServerEntry,
   AgentTemplate,
 } from '../../types'
@@ -28,7 +27,6 @@ interface AgentDetailProps {
   currentAgent: AgentDefinition | null
   form: AgentFormState
   agentMemory: AgentMemorySnapshot | null
-  agentMemoryCandidates: MemoryCandidate[]
   validTools: AgentTemplateTool[]
   skills: InstalledSkill[]
   mcpServers: McpServerEntry[]
@@ -54,10 +52,7 @@ interface AgentDetailProps {
   onCopy: () => void
   onDelete: () => void
   onRefreshMemory: (agentId: string) => void
-  onSaveMemory: (agentId: string, content: string) => void
-  onCreateCandidate: (agentId: string, content: string) => void
-  onApplyCandidate: (agentId: string, candidateId: string) => void
-  onRejectCandidate: (agentId: string, candidateId: string) => void
+  onSaveMemory: (agentId: string, files: Record<string, string>) => void
 }
 
 export default function AgentDetail({
@@ -66,7 +61,6 @@ export default function AgentDetail({
   currentAgent,
   form,
   agentMemory,
-  agentMemoryCandidates,
   validTools,
   skills,
   mcpServers,
@@ -90,9 +84,6 @@ export default function AgentDetail({
   onDelete,
   onRefreshMemory,
   onSaveMemory,
-  onCreateCandidate,
-  onApplyCandidate,
-  onRejectCandidate,
 }: AgentDetailProps) {
   const navigate = useNavigate()
   const { token } = theme.useToken()
@@ -101,7 +92,6 @@ export default function AgentDetail({
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [testRunOpen, setTestRunOpen] = useState(false)
   const capabilityCount = form.toolAllowlist.length + form.skillIds.length + form.mcpServerIds.length + form.knowledgeBindingIds.length
-  const pendingMemoryCount = agentMemoryCandidates.filter((item) => item.status === 'proposed').length
 
   const isDetailPending = Boolean(selectedAgentId) && !isCreateRoute && (
     loadingDetail || detailRequestAgentId !== selectedAgentId
@@ -390,20 +380,15 @@ export default function AgentDetail({
             },
             {
               key: 'memory',
-              label: <span style={{ fontWeight: token.fontWeightStrong }}>记忆治理 ({pendingMemoryCount})</span>,
+              label: <span style={{ fontWeight: token.fontWeightStrong }}>长期记忆</span>,
               children: (
                 <MemoryTab
                   currentAgent={currentAgent}
                   agentMemory={agentMemory}
-                  agentMemoryCandidates={agentMemoryCandidates}
-                  formMemoryScope={form.memoryScope}
                   loadingMemory={loadingMemory}
                   memoryError={memoryError}
                   onRefresh={onRefreshMemory}
                   onSaveMemory={onSaveMemory}
-                  onCreateCandidate={onCreateCandidate}
-                  onApplyCandidate={onApplyCandidate}
-                  onRejectCandidate={onRejectCandidate}
                 />
               ),
             },

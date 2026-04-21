@@ -22,7 +22,7 @@ from nanobot.platform.instances import PlatformInstanceService
 from nanobot.platform.knowledge import KnowledgeBaseService
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.knowledge.store import create_knowledge_store
-from nanobot.platform.memory import MemoryService, MemoryStore
+from nanobot.platform.memory import MemoryService
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.platform.tenants import TenantService, TenantStore
 from nanobot.web.channels import WebChannelService
@@ -51,7 +51,6 @@ from nanobot.web.routers import (
     dashboard_router,
     knowledge_router,
     mcp_router,
-    memory_router,
     operations_router,
     runs_router,
     schedule_router,
@@ -141,7 +140,6 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         config=config,
     )
     memory = MemoryService(
-        MemoryStore(instance.memory_db_path()),
         instance=instance,
         instance_id=instance.id,
         agent_lookup=agents.require_agent,
@@ -237,7 +235,6 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
     app.include_router(channel_bindings_router)
     app.include_router(knowledge_router)
 
-    app.include_router(memory_router)
     app.include_router(operations_router)
     app.include_router(runs_router)
     app.include_router(schedule_router)

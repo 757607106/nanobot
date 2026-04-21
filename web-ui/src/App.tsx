@@ -24,7 +24,6 @@ const SkillsPage = lazy(() => import('./pages/SkillsPage'))
 const StudioLayoutPage = lazy(() => import('./pages/StudioLayoutPage'))
 const AgentsPage = lazy(() => import('./pages/agents'))
 const AgentChatPage = lazy(() => import('./pages/AgentChatPage'))
-const MemoryAuditPage = lazy(() => import('./pages/memory'))
 const RunsPage = lazy(() => import('./pages/runs'))
 const KnowledgePage = lazy(() => import('./pages/knowledge').then((m) => ({ default: m.KnowledgePage })))
 const KnowledgeFilePreviewPage = lazy(() => import('./pages/knowledge').then((m) => ({ default: m.KnowledgeFilePreviewPage })))
@@ -293,8 +292,6 @@ export function AppRoutes() {
           <Route path="agents/:agentId" element={withRouteSuspense(<AgentsPage />)} />
           <Route path="agents/:agentId/chat" element={withRouteSuspense(<AgentChatPage />)} />
           <Route path="templates" element={withRouteSuspense(<TemplatesPage />)} />
-          <Route path="memory" element={withRouteSuspense(<MemoryAuditPage />)} />
-          <Route path="memory/agents/:agentId" element={withRouteSuspense(<MemoryAuditPage />)} />
           <Route
             path="runs"
             element={withRouteSuspense(<RunsPage />)}

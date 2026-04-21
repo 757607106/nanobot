@@ -25,14 +25,7 @@ class AgentTestRunRequest(BaseModel):
 
 
 class AgentMemoryUpdateRequest(BaseModel):
-    content: str
-
-
-class AgentMemoryCandidateCreateRequest(BaseModel):
-    title: str | None = None
-    content: str
-    sourceKind: str = "manual_note"
-    runId: str | None = None
+    files: dict[str, str]
 
 
 def _default_tools(request: Request) -> list[str]:
@@ -144,37 +137,12 @@ def update_agent_memory(
     try:
         tenant_id = get_tenant_id(request)
         request.app.state.agents.get_agent(agent_id, tenant_id=tenant_id)
-        data = get_tenant_memory_service(request).update_agent_memory(agent_id, payload.content)
+        data = get_tenant_memory_service(request).update_agent_memory(agent_id, payload.files)
     except AgentDefinitionNotFoundError as exc:
         raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
     except MemoryCandidateValidationError as exc:
         raise APIError(400, "AGENT_MEMORY_INVALID", str(exc)) from exc
     return _json_response(200, _ok(data))
-
-
-@router.post("/api/v1/agents/{agent_id}/memory-candidates")
-def create_agent_memory_candidate(
-    request: Request,
-    agent_id: str,
-    payload: AgentMemoryCandidateCreateRequest,
-) -> JSONResponse:
-    try:
-        tenant_id = get_tenant_id(request)
-        agent = request.app.state.agents.get_agent(agent_id, tenant_id=tenant_id)
-        title = str(payload.title or "").strip() or f"{agent['name']} candidate"
-        data = get_tenant_memory_service(request).create_candidate(
-            scope="agent_profile",
-            agent_id=agent_id,
-            run_id=payload.runId,
-            source_kind=payload.sourceKind,
-            title=title,
-            content=payload.content,
-        )
-    except AgentDefinitionNotFoundError as exc:
-        raise APIError(404, "AGENT_NOT_FOUND", "Agent not found.") from exc
-    except MemoryCandidateValidationError as exc:
-        raise APIError(400, "AGENT_MEMORY_CANDIDATE_INVALID", str(exc)) from exc
-    return _json_response(201, _ok(data))
 
 
 @router.delete("/api/v1/agents/{agent_id}")

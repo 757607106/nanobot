@@ -123,13 +123,6 @@ export default function RunBoundaryAuditPanel({ audit, devMode }: RunBoundaryAud
         <Col xs={24} xl={12}>
           <Card title="治理边界" className="page-card" variant="borderless" size="small">
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="记忆范围">
-                {audit.governance.memoryScope ? (
-                  <Tag bordered={false}>{audit.governance.memoryScope}</Tag>
-                ) : (
-                  <Text type="secondary">-</Text>
-                )}
-              </Descriptions.Item>
               <Descriptions.Item label="知识范围">
                 {audit.governance.knowledgeScope ? (
                   <Tag bordered={false}>{audit.governance.knowledgeScope}</Tag>

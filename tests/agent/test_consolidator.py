@@ -1,4 +1,4 @@
-"""Tests for the lightweight Consolidator — append-only to HISTORY.md."""
+"""Tests for the lightweight Consolidator — append-only daily notes."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -36,8 +36,7 @@ def consolidator(store, mock_provider):
 
 
 class TestConsolidatorSummarize:
-    async def test_summarize_appends_to_history(self, consolidator, mock_provider, store):
-        """Consolidator should call LLM to summarize, then append to HISTORY.md."""
+    async def test_summarize_appends_to_daily_notes(self, consolidator, mock_provider, store):
         mock_provider.chat_with_retry.return_value = MagicMock(
             content="User fixed a bug in the auth module."
         )
@@ -47,16 +46,15 @@ class TestConsolidatorSummarize:
         ]
         result = await consolidator.archive(messages)
         assert result == "User fixed a bug in the auth module."
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.read_unprocessed_notes(since_cursor=0)
         assert len(entries) == 1
 
     async def test_summarize_raw_dumps_on_llm_failure(self, consolidator, mock_provider, store):
-        """On LLM failure, raw-dump messages to HISTORY.md."""
         mock_provider.chat_with_retry.side_effect = Exception("API error")
         messages = [{"role": "user", "content": "hello"}]
         result = await consolidator.archive(messages)
         assert result is None  # no summary on raw dump fallback
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.read_unprocessed_notes(since_cursor=0)
         assert len(entries) == 1
         assert "[RAW]" in entries[0]["content"]
 

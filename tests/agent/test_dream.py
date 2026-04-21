@@ -1,4 +1,4 @@
-"""Tests for the Dream class — two-phase memory consolidation via AgentRunner."""
+"""Tests for Dream over daily notes plus agent-root memory files."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -12,8 +12,9 @@ from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 @pytest.fixture
 def store(tmp_path):
     s = MemoryStore(tmp_path)
+    s.write_agents("# Agents\n- Use memory carefully")
     s.write_soul("# Soul\n- Helpful")
-    s.write_user("# User\n- Developer")
+    s.write_profile("# Profile\n- Developer")
     s.write_memory("# Memory\n- Project X active")
     return s
 
@@ -37,12 +38,7 @@ def dream(store, mock_provider, mock_runner):
     return d
 
 
-def _make_run_result(
-    stop_reason="completed",
-    final_content=None,
-    tool_events=None,
-    usage=None,
-):
+def _make_run_result(stop_reason="completed", final_content=None, tool_events=None):
     return AgentRunResult(
         final_content=final_content or stop_reason,
         stop_reason=stop_reason,
@@ -54,21 +50,23 @@ def _make_run_result(
 
 
 class TestDreamRun:
-    async def test_noop_when_no_unprocessed_history(self, dream, mock_provider, mock_runner, store):
-        """Dream should not call LLM when there's nothing to process."""
+    async def test_noop_when_no_unprocessed_notes(self, dream, mock_provider, mock_runner):
         result = await dream.run()
         assert result is False
         mock_provider.chat_with_retry.assert_not_called()
         mock_runner.run.assert_not_called()
 
-    async def test_calls_runner_for_unprocessed_entries(self, dream, mock_provider, mock_runner, store):
-        """Dream should call AgentRunner when there are unprocessed history entries."""
-        store.append_history("User prefers dark mode")
+    async def test_calls_runner_for_unprocessed_notes(self, dream, mock_provider, mock_runner, store):
+        store.append_daily_note("User prefers dark mode")
         mock_provider.chat_with_retry.return_value = MagicMock(content="New fact")
-        mock_runner.run = AsyncMock(return_value=_make_run_result(
-            tool_events=[{"name": "edit_file", "status": "ok", "detail": "memory/MEMORY.md"}],
-        ))
+        mock_runner.run = AsyncMock(
+            return_value=_make_run_result(
+                tool_events=[{"name": "edit_file", "status": "ok", "detail": "PROFILE.md"}],
+            )
+        )
+
         result = await dream.run()
+
         assert result is True
         mock_runner.run.assert_called_once()
         spec = mock_runner.run.call_args[0][0]
@@ -76,30 +74,29 @@ class TestDreamRun:
         assert spec.fail_on_tool_error is False
 
     async def test_advances_dream_cursor(self, dream, mock_provider, mock_runner, store):
-        """Dream should advance the cursor after processing."""
-        store.append_history("event 1")
-        store.append_history("event 2")
+        store.append_daily_note("event 1")
+        store.append_daily_note("event 2")
         mock_provider.chat_with_retry.return_value = MagicMock(content="Nothing new")
         mock_runner.run = AsyncMock(return_value=_make_run_result())
+
         await dream.run()
+
         assert store.get_last_dream_cursor() == 2
 
-    async def test_compacts_processed_history(self, dream, mock_provider, mock_runner, store):
-        """Dream should compact history after processing."""
-        store.append_history("event 1")
-        store.append_history("event 2")
-        store.append_history("event 3")
+    async def test_notes_remain_searchable_after_processing(self, dream, mock_provider, mock_runner, store):
+        store.append_daily_note("event 1")
+        store.append_daily_note("event 2")
         mock_provider.chat_with_retry.return_value = MagicMock(content="Nothing new")
         mock_runner.run = AsyncMock(return_value=_make_run_result())
+
         await dream.run()
-        # After Dream, cursor is advanced and 3, compact keeps last max_history_entries
-        entries = store.read_unprocessed_history(since_cursor=0)
-        assert all(e["cursor"] > 0 for e in entries)
+
+        entries = store.read_unprocessed_notes(since_cursor=0)
+        assert [entry["cursor"] for entry in entries] == [1, 2]
 
     async def test_skill_phase_uses_builtin_skill_creator_path(self, dream, mock_provider, mock_runner, store):
-        """Dream should point skill creation guidance at the builtin skill-creator template."""
-        store.append_history("Repeated workflow one")
-        store.append_history("Repeated workflow two")
+        store.append_daily_note("Repeated workflow one")
+        store.append_daily_note("Repeated workflow two")
         mock_provider.chat_with_retry.return_value = MagicMock(content="[SKILL] test-skill: test description")
         mock_runner.run = AsyncMock(return_value=_make_run_result())
 
@@ -111,7 +108,6 @@ class TestDreamRun:
         assert expected in system_prompt
 
     async def test_skill_write_tool_accepts_workspace_relative_skill_path(self, dream, store):
-        """Dream skill creation should allow skills/<name>/SKILL.md relative to workspace root."""
         write_tool = dream._tools.get("write_file")
         assert write_tool is not None
 
@@ -122,4 +118,3 @@ class TestDreamRun:
 
         assert "Successfully wrote" in result
         assert (store.workspace / "skills" / "test-skill" / "SKILL.md").exists()
-

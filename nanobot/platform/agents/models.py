@@ -33,7 +33,6 @@ class AgentDefinition:
     skill_ids: list[str] = field(default_factory=list)
     knowledge_binding_ids: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
-    memory_scope: str = "agent_profile"
     source_template_name: str | None = None
     max_execution_timeout_seconds: int = 300
     output_format_hint: str = ""
@@ -56,7 +55,6 @@ class AgentDefinition:
             "skill_ids": self.skill_ids,
             "knowledge_binding_ids": self.knowledge_binding_ids,
             "tags": self.tags,
-            "memory_scope": self.memory_scope,
             "source_template_name": self.source_template_name,
             "max_execution_timeout_seconds": self.max_execution_timeout_seconds,
             "output_format_hint": self.output_format_hint,
@@ -67,9 +65,6 @@ class AgentDefinition:
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> "AgentDefinition":
         stored = json.loads(record["config_json"])
-        memory_scope = stored.get("memory_scope") or "agent_profile"
-        if memory_scope not in {"agent_profile", "workspace_shared"}:
-            memory_scope = "agent_profile"
         return cls(
             agent_id=record["agent_id"],
             tenant_id=record["tenant_id"],
@@ -88,7 +83,6 @@ class AgentDefinition:
             skill_ids=list(stored.get("skill_ids") or []),
             knowledge_binding_ids=list(stored.get("knowledge_binding_ids") or []),
             tags=list(stored.get("tags") or []),
-            memory_scope=memory_scope,
             source_template_name=record.get("source_template_name") or stored.get("source_template_name"),
             max_execution_timeout_seconds=int(stored.get("max_execution_timeout_seconds") or 300),
             output_format_hint=stored.get("output_format_hint") or "",
@@ -107,7 +101,6 @@ class AgentDefinition:
         payload["mcpServerIds"] = payload.pop("mcp_server_ids")
         payload["skillIds"] = payload.pop("skill_ids")
         payload["knowledgeBindingIds"] = payload.pop("knowledge_binding_ids")
-        payload["memoryScope"] = payload.pop("memory_scope")
         payload["sourceTemplateName"] = payload.pop("source_template_name")
         payload["maxExecutionTimeoutSeconds"] = payload.pop("max_execution_timeout_seconds")
         payload["outputFormatHint"] = payload.pop("output_format_hint")

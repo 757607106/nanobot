@@ -192,7 +192,6 @@ function makeAgents() {
       skillIds: [],
       knowledgeBindingIds: [],
       tags: [],
-      memoryScope: 'agent_profile',
     },
     {
       agentId: 'agent-2',
@@ -210,7 +209,6 @@ function makeAgents() {
       skillIds: [],
       knowledgeBindingIds: [],
       tags: [],
-      memoryScope: 'agent_profile',
     },
   ]
 }

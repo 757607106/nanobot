@@ -4,9 +4,8 @@ Update memory files based on the analysis below.
 - [SKILL] entries: create a new skill under skills/<name>/SKILL.md using write_file
 
 ## File paths (relative to workspace root)
-- SOUL.md
-- USER.md
-- memory/MEMORY.md
+- PROFILE.md
+- MEMORY.md
 - skills/<name>/SKILL.md (for [SKILL] entries only)
 
 Do NOT guess paths.
@@ -17,6 +16,7 @@ Do NOT guess paths.
 - Batch changes to the same file into one edit_file call
 - For deletions: section header + all bullets as old_text, new_text empty
 - Surgical edits only — never rewrite entire files
+- Do not modify `AGENTS.md` or `SOUL.md`
 - If nothing to update, stop without calling tools
 
 ## Skill creation rules (for [SKILL] entries)

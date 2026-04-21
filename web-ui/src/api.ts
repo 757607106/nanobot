@@ -61,9 +61,6 @@ import type {
   McpProbeResult,
   McpRepairPlan,
   McpTestChatData,
-  MemoryCandidate,
-  MemorySearchResult,
-  MemorySourceDetail,
   McpServerDeleteResult,
   McpServerEntry,
   McpServerMutationResult,
@@ -925,18 +922,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
-  updateAgentMemory: (agentId: string, content: string) =>
+  updateAgentMemory: (agentId: string, files: Record<string, string>) =>
     request<AgentMemorySnapshot>(`/agents/${encodeURIComponent(agentId)}/memory`, {
       method: 'PUT',
-      body: JSON.stringify({ content }),
-    }),
-  createAgentMemoryCandidate: (
-    agentId: string,
-    payload: { content: string; title?: string; sourceKind?: string; runId?: string | null },
-  ) =>
-    request<MemoryCandidate>(`/agents/${encodeURIComponent(agentId)}/memory-candidates`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ files }),
     }),
   deleteAgent: (agentId: string) =>
     request<{ deleted: boolean }>(`/agents/${encodeURIComponent(agentId)}`, {
@@ -951,46 +940,6 @@ export const api = {
     request<AgentTestRunResult>(`/agents/${encodeURIComponent(agentId)}/test-run`, {
       method: 'POST',
       body: JSON.stringify({ content }),
-    }),
-  getMemoryCandidates: (params?: {
-    agentId?: string
-    status?: string
-    scope?: string
-    limit?: number
-  }) => {
-    const query = new URLSearchParams()
-    if (params?.agentId) {
-      query.set('agentId', params.agentId)
-    }
-    if (params?.status) {
-      query.set('status', params.status)
-    }
-    if (params?.scope) {
-      query.set('scope', params.scope)
-    }
-    if (params?.limit) {
-      query.set('limit', String(params.limit))
-    }
-    const suffix = query.toString() ? `?${query.toString()}` : ''
-    return request<{ items: MemoryCandidate[]; total: number }>(`/memory-candidates${suffix}`)
-  },
-  applyMemoryCandidate: (candidateId: string) =>
-    request<MemoryCandidate>(`/memory-candidates/${encodeURIComponent(candidateId)}/apply`, {
-      method: 'POST',
-    }),
-  rejectMemoryCandidate: (candidateId: string) =>
-    request<MemoryCandidate>(`/memory-candidates/${encodeURIComponent(candidateId)}/reject`, {
-      method: 'POST',
-    }),
-  searchMemory: (payload: { query: string; agentId?: string; limit?: number; mode?: string }) =>
-    request<MemorySearchResult>('/memory-search', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  getMemorySource: (payload: { sourceType: string; sourceId: string; agentId?: string }) =>
-    request<MemorySourceDetail>('/memory-get', {
-      method: 'POST',
-      body: JSON.stringify(payload),
     }),
   getRuns: (params?: {
     status?: string

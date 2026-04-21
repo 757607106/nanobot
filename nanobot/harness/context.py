@@ -30,7 +30,7 @@ class ToolPolicy:
 class MemoryPolicy:
     """Resolved memory-facing policy for one execution."""
 
-    scope: str = "agent_profile"
+    scope: str = "agent_workspace"
     include_workspace_memory: bool = False
     sections: tuple[tuple[str, str], ...] = ()
 
@@ -129,7 +129,6 @@ class ExecutionContext:
             "toolAllowlist": self.tool_policy.allowlist_as_list(),
             "mcpServerIds": self.tool_policy.mcp_server_ids_as_list(),
             "skillIds": self.tool_policy.skill_ids_as_list(),
-            "memoryScope": self.memory_policy.scope,
             "includeWorkspaceMemory": self.memory_policy.include_workspace_memory,
             "memorySectionCount": len(self.memory_policy.sections),
             "knowledgeScope": self.knowledge_policy.scope,

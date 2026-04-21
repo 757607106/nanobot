@@ -123,9 +123,9 @@ async def test_dream_restore_success_mentions_files_and_followup() -> None:
         "@@ -1 +1 @@\n"
         "-old\n"
         "+new\n"
-        "diff --git a/memory/MEMORY.md b/memory/MEMORY.md\n"
-        "--- a/memory/MEMORY.md\n"
-        "+++ b/memory/MEMORY.md\n"
+        "diff --git a/MEMORY.md b/MEMORY.md\n"
+        "--- a/MEMORY.md\n"
+        "+++ b/MEMORY.md\n"
         "@@ -1 +1 @@\n"
         "-old\n"
         "+new\n"
@@ -139,5 +139,5 @@ async def test_dream_restore_success_mentions_files_and_followup() -> None:
 
     assert "Restored Dream memory to the state before `abcd1234`." in out.content
     assert "- New safety commit: `eeee9999`" in out.content
-    assert "- Restored files: `SOUL.md`, `memory/MEMORY.md`" in out.content
+    assert "- Restored files: `SOUL.md`, `MEMORY.md`" in out.content
     assert "Use `/dream-log eeee9999` to inspect the restore diff." in out.content

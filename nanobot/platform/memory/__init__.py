@@ -1,17 +1,8 @@
-"""Memory governance helpers."""
+"""Agent-root memory workspace helpers."""
 
-from nanobot.platform.memory.models import MemoryCandidate
-from nanobot.platform.memory.service import (
-    MemoryCandidateNotFoundError,
-    MemoryCandidateValidationError,
-    MemoryService,
-)
-from nanobot.platform.memory.store import MemoryStore
+from nanobot.platform.memory.service import MemoryCandidateValidationError, MemoryService
 
 __all__ = [
-    "MemoryCandidate",
-    "MemoryCandidateNotFoundError",
     "MemoryCandidateValidationError",
     "MemoryService",
-    "MemoryStore",
 ]

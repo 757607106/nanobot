@@ -19,7 +19,7 @@ from nanobot.platform.instances import PlatformInstance
 from nanobot.platform.knowledge import KnowledgeBaseService
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.knowledge.store import create_knowledge_store
-from nanobot.platform.memory import MemoryService, MemoryStore
+from nanobot.platform.memory import MemoryService
 from nanobot.platform.runs import RunService, RunStore
 from nanobot.session.manager import SessionManager
 from nanobot.web.runtime_services.agents import WebAgentRuntimeService
@@ -131,7 +131,6 @@ def build_cli_gateway_routing_runtime(
         artifact_dir=instance.agent_artifacts_dir(),
     )
     memory_service = MemoryService(
-        MemoryStore(instance.memory_db_path()),
         instance=instance,
         instance_id=instance.id,
         agent_lookup=agents_service.require_agent,

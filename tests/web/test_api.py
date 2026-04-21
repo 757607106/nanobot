@@ -1585,9 +1585,8 @@ def test_web_api_agent_chat_dispatch_uses_isolated_runtime(
         assert thread_id == session_id
         assert workspace_binding.scope == "agent_thread"
         assert f"/agents/{agent_id}/threads/{session_id}" in workspace_binding.path.as_posix()
-        memory_dir = workspace_binding.path / "memory"
-        memory_dir.mkdir(parents=True, exist_ok=True)
-        (memory_dir / "MEMORY.md").write_text("SESSION SECRET", encoding="utf-8")
+        workspace_binding.path.mkdir(parents=True, exist_ok=True)
+        (workspace_binding.path / "MEMORY.md").write_text("SESSION SECRET", encoding="utf-8")
         assert workspace_memory_resolver() == [("Agent Workspace Memory", "SESSION SECRET")]
         await on_progress("isolated agent workspace ready")
         return {
@@ -1656,9 +1655,8 @@ def test_web_api_agent_test_run_uses_unique_isolated_workspace(
         assert thread_id == session_id
         assert workspace_binding.scope == "agent_thread"
         assert f"/agents/{agent_id}/threads/" in workspace_binding.path.as_posix()
-        memory_dir = workspace_binding.path / "memory"
-        memory_dir.mkdir(parents=True, exist_ok=True)
-        (memory_dir / "MEMORY.md").write_text(f"TEST SECRET {run_index}", encoding="utf-8")
+        workspace_binding.path.mkdir(parents=True, exist_ok=True)
+        (workspace_binding.path / "MEMORY.md").write_text(f"TEST SECRET {run_index}", encoding="utf-8")
         assert workspace_memory_resolver() == [("Agent Workspace Memory", f"TEST SECRET {run_index}")]
         captured.append(
             {
@@ -2045,11 +2043,9 @@ def test_web_api_agent_test_run_accepts_legacy_runtime_tools(
 
 
 
-def test_web_api_agent_profile_memory_routes_and_runtime(web_client: TestClient, monkeypatch) -> None:
+def test_web_api_agent_memory_workspace_routes_and_runtime(web_client: TestClient, monkeypatch) -> None:
     workspace = web_client.app.state.web.config.workspace_path
-    memory_dir = workspace / "memory"
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    (memory_dir / "MEMORY.md").write_text("# Workspace Shared Memory\n\nWORKSPACE SECRET\n", encoding="utf-8")
+    (workspace / "MEMORY.md").write_text("# Workspace Shared Memory\n\nWORKSPACE SECRET\n", encoding="utf-8")
 
     created = web_client.post(
         "/api/v1/agents",
@@ -2058,23 +2054,39 @@ def test_web_api_agent_profile_memory_routes_and_runtime(web_client: TestClient,
             "systemPrompt": "You are a profile-aware agent.",
             "toolAllowlist": ["read_file"],
             "model": "openai/gpt-4o-mini",
-            "memoryScope": "agent_profile",
         },
     )
     assert created.status_code == 201
     agent_id = created.json()["data"]["agentId"]
+    agent = web_client.app.state.agents.get_agent(agent_id)
+
+    memory_binding = web_client.app.state.web.agent_runtime.resolve_agent_memory_binding(
+        agent,
+        session_key=f"agent:{agent_id}:session:seed",
+    )
+    memory_binding.path.mkdir(parents=True, exist_ok=True)
+    (memory_binding.path / "PROFILE.md").write_text(
+        "# Profile\n\n- Agent workspace fact: prefer numbered incident checklists.\n",
+        encoding="utf-8",
+    )
 
     updated_memory = web_client.put(
         f"/api/v1/agents/{agent_id}/memory",
-        json={"content": "Agent profile fact: prefer numbered incident checklists."},
+        json={
+            "files": {
+                "MEMORY.md": "# MEMORY\n\n- Agent memory fact: prefer numbered incident checklists.\n",
+            }
+        },
     )
     assert updated_memory.status_code == 200
-    assert "numbered incident checklists" in updated_memory.json()["data"]["content"]
+    assert "numbered incident checklists" in updated_memory.json()["data"]["files"]["MEMORY.md"]["content"]
 
     fetched_memory = web_client.get(f"/api/v1/agents/{agent_id}/memory")
     assert fetched_memory.status_code == 200
-    assert "numbered incident checklists" in fetched_memory.json()["data"]["content"]
-    assert fetched_memory.json()["data"]["candidateCount"] == 0
+    fetched_payload = fetched_memory.json()["data"]
+    assert "numbered incident checklists" in fetched_payload["files"]["MEMORY.md"]["content"]
+    assert "Agent workspace fact" in fetched_payload["files"]["PROFILE.md"]["content"]
+    assert set(fetched_payload["files"]) == {"AGENTS.md", "SOUL.md", "PROFILE.md", "MEMORY.md"}
 
     provider = web_client.app.state.web.agent.provider
 
@@ -2082,9 +2094,14 @@ def test_web_api_agent_profile_memory_routes_and_runtime(web_client: TestClient,
         _ = tools, kwargs
         assert model == "openai/gpt-4o-mini"
         system = messages[0]["content"]
-        assert "Agent Profile Memory" in system
+        if system.startswith("Compare recent daily notes"):
+            return LLMResponse(content="[SKIP]", tool_calls=[])
+        assert "## PROFILE.md" in system
+        assert "Agent workspace fact: prefer numbered incident checklists." in system
         assert "prefer numbered incident checklists" in system
+        assert "## MEMORY.md" in system
         assert "WORKSPACE SECRET" not in system
+        assert "Agent Profile Memory" not in system
         return LLMResponse(content="Agent profile memory acknowledged.", tool_calls=[])
 
     provider.chat_with_retry = fake_chat_with_retry
@@ -2100,85 +2117,6 @@ def test_web_api_agent_profile_memory_routes_and_runtime(web_client: TestClient,
     )
     assert test_run.status_code == 200
     assert test_run.json()["data"]["assistantMessage"]["content"] == "Agent profile memory acknowledged."
-
-    search = web_client.post(
-        "/api/v1/memory-search",
-        json={"query": "incident checklists", "agentId": agent_id, "limit": 5, "mode": "keyword"},
-    )
-    assert search.status_code == 200
-    search_payload = search.json()["data"]
-    assert search_payload["effectiveMode"] == "keyword"
-    assert any(item["sourceType"] == "agent_profile" for item in search_payload["items"])
-
-    source = web_client.post(
-        "/api/v1/memory-get",
-        json={"sourceType": "agent_profile", "sourceId": agent_id, "agentId": agent_id},
-    )
-    assert source.status_code == 200
-    source_payload = source.json()["data"]
-    assert source_payload["sourceType"] == "agent_profile"
-    assert source_payload["sourceId"] == agent_id
-    assert "numbered incident checklists" in source_payload["content"]
-
-
-def test_web_api_agent_profile_memory_candidates_governance(web_client: TestClient) -> None:
-    created = web_client.post(
-        "/api/v1/agents",
-        json={
-            "name": "Candidate Agent",
-            "systemPrompt": "You keep stable operating preferences.",
-            "memoryScope": "agent_profile",
-        },
-    )
-    assert created.status_code == 201
-    agent_id = created.json()["data"]["agentId"]
-
-    proposed = web_client.post(
-        f"/api/v1/agents/{agent_id}/memory-candidates",
-        json={
-            "title": "Incident style preference",
-            "content": "Prefer terse numbered remediation steps.",
-            "sourceKind": "manual_note",
-        },
-    )
-    assert proposed.status_code == 201
-    candidate = proposed.json()["data"]
-    assert candidate["scope"] == "agent_profile"
-    assert candidate["agentId"] == agent_id
-    assert candidate["status"] == "proposed"
-
-    listed = web_client.get(
-        "/api/v1/memory-candidates",
-        params={"agentId": agent_id, "scope": "agent_profile", "status": "proposed"},
-    )
-    assert listed.status_code == 200
-    listed_payload = listed.json()["data"]
-    assert listed_payload["total"] == 1
-    assert listed_payload["items"][0]["candidateId"] == candidate["candidateId"]
-
-    candidate_source = web_client.post(
-        "/api/v1/memory-get",
-        json={"sourceType": "memory_candidate", "sourceId": candidate["candidateId"], "agentId": agent_id},
-    )
-    assert candidate_source.status_code == 200
-    assert candidate_source.json()["data"]["metadata"]["agentId"] == agent_id
-
-    search = web_client.post(
-        "/api/v1/memory-search",
-        json={"query": "numbered remediation steps", "agentId": agent_id, "limit": 10, "mode": "hybrid"},
-    )
-    assert search.status_code == 200
-    assert any(item["sourceType"] == "memory_candidate" for item in search.json()["data"]["items"])
-
-    applied = web_client.post(f"/api/v1/memory-candidates/{candidate['candidateId']}/apply")
-    assert applied.status_code == 200
-    assert applied.json()["data"]["status"] == "applied"
-
-    memory = web_client.get(f"/api/v1/agents/{agent_id}/memory")
-    assert memory.status_code == 200
-    memory_payload = memory.json()["data"]
-    assert memory_payload["candidateCount"] == 0
-    assert "Prefer terse numbered remediation steps." in memory_payload["content"]
 
 
 def test_web_api_tenant_scoped_knowledge_and_agent_memory(web_client: TestClient) -> None:
@@ -2214,7 +2152,6 @@ def test_web_api_tenant_scoped_knowledge_and_agent_memory(web_client: TestClient
         json={
             "name": "Tenant Profile Agent",
             "systemPrompt": "You are tenant scoped.",
-            "memoryScope": "agent_profile",
         },
     )
     assert created_agent.status_code == 201
@@ -2224,7 +2161,7 @@ def test_web_api_tenant_scoped_knowledge_and_agent_memory(web_client: TestClient
     updated_memory = web_client.put(
         f"/api/v1/agents/{agent_id}/memory",
         headers=tenant_headers,
-        json={"content": "Tenant-only memory fact."},
+        json={"files": {"MEMORY.md": "Tenant-only memory fact."}},
     )
     assert updated_memory.status_code == 200
 
@@ -2233,7 +2170,7 @@ def test_web_api_tenant_scoped_knowledge_and_agent_memory(web_client: TestClient
         headers=tenant_headers,
     )
     assert fetched_memory.status_code == 200
-    assert "Tenant-only memory fact." in fetched_memory.json()["data"]["content"]
+    assert "Tenant-only memory fact." in fetched_memory.json()["data"]["files"]["MEMORY.md"]["content"]
 
     missing_default = web_client.get(f"/api/v1/agents/{agent_id}/memory")
     assert missing_default.status_code == 404
@@ -2431,7 +2368,7 @@ def test_web_api_tenant_scoped_runs_artifacts_and_boundary_audit(web_client: Tes
         origin_channel="telegram",
         origin_chat_id="chat-42",
         workspace_path="/tmp/tenant-runs/workspace",
-        memory_scope="agent_profile",
+        memory_scope="agent_workspace",
         knowledge_scope="bindings",
     )
     web_client.app.state.runs.append_event(
@@ -3875,8 +3812,8 @@ def test_web_api_document_center_switch_update_and_reset(web_client: TestClient)
     document_ids = [item["id"] for item in listed.json()["data"]]
     assert "AGENTS.md" in document_ids
     assert "SOUL.md" in document_ids
-    assert "memory/MEMORY.md" in document_ids
-    assert "memory/HISTORY.md" in document_ids
+    assert "PROFILE.md" in document_ids
+    assert "MEMORY.md" in document_ids
 
     soul = web_client.get("/api/v1/documents/SOUL.md")
     assert soul.status_code == 200
@@ -3899,16 +3836,16 @@ def test_web_api_document_center_switch_update_and_reset(web_client: TestClient)
     assert reset.status_code == 200
     assert reset.json()["data"]["content"] != "# Soul\n\nStay practical."
 
-    history_updated = web_client.put(
-        "/api/v1/documents/memory/HISTORY.md",
-        json={"content": "temporary history line"},
+    profile_updated = web_client.put(
+        "/api/v1/documents/PROFILE.md",
+        json={"content": "# User Profile\n\nPrefer terse updates."},
     )
-    assert history_updated.status_code == 200
-    assert history_updated.json()["data"]["content"] == "temporary history line"
+    assert profile_updated.status_code == 200
+    assert profile_updated.json()["data"]["content"] == "# User Profile\n\nPrefer terse updates."
 
-    history_reset = web_client.post("/api/v1/documents/memory/HISTORY.md/reset")
-    assert history_reset.status_code == 200
-    assert history_reset.json()["data"]["content"] == ""
+    profile_reset = web_client.post("/api/v1/documents/PROFILE.md/reset")
+    assert profile_reset.status_code == 200
+    assert "Prefer terse updates." not in profile_reset.json()["data"]["content"]
 
 
 def test_run_server_prefers_frontend_dev_mode_when_ready(tmp_path) -> None:

@@ -25,7 +25,6 @@ export function createEmptyForm(): AgentFormState {
     skillIds: [],
     knowledgeBindingIds: [],
     tags: [],
-    memoryScope: 'agent_profile',
     artifactArchiveAfterDays: '',
     artifactDeleteAfterDays: '',
   }
@@ -48,7 +47,6 @@ export function agentToForm(agent: AgentDefinition): AgentFormState {
     skillIds: [...agent.skillIds],
     knowledgeBindingIds: [...agent.knowledgeBindingIds],
     tags: [...agent.tags],
-    memoryScope: agent.memoryScope || 'agent_profile',
     artifactArchiveAfterDays: artifactRetention.archiveAfterDays,
     artifactDeleteAfterDays: artifactRetention.deleteAfterDays,
   }
@@ -104,7 +102,6 @@ export function toPayload(
     skillIds: [...form.skillIds],
     knowledgeBindingIds: [...form.knowledgeBindingIds],
     tags: [...form.tags],
-    memoryScope: form.memoryScope,
     artifactRetentionPolicy: buildArtifactRetentionPolicyInput(
       form.artifactArchiveAfterDays,
       form.artifactDeleteAfterDays,
@@ -137,13 +134,4 @@ export function statusColor(status: 'succeeded' | 'failed' | 'running' | 'cancel
     default:
       return 'default'
   }
-}
-
-export const memoryScopeOptions = [
-  { value: 'agent_profile', label: '仅员工自身' },
-  { value: 'workspace_shared', label: '工作区共享' },
-]
-
-export function memoryScopeLabel(scope: string): string {
-  return memoryScopeOptions.find((item) => item.value === scope)?.label || scope
 }

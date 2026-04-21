@@ -547,7 +547,6 @@ export interface AgentDefinition {
   skillIds: string[]
   knowledgeBindingIds: string[]
   tags: string[]
-  memoryScope: string
   artifactRetentionPolicy?: ArtifactRetentionPolicyConfig | null
   sourceTemplateName?: string | null
   createdAt?: string
@@ -569,17 +568,22 @@ export interface AgentDefinitionMutationInput {
   skillIds?: string[]
   knowledgeBindingIds?: string[]
   tags?: string[]
-  memoryScope?: string
   artifactRetentionPolicy?: ArtifactRetentionPolicyConfig | null
   templateName?: string
 }
 
 export interface AgentMemorySnapshot {
   agentId: string
-  content: string
-  fileName: string
-  candidateCount: number
+  rootPath: string
+  files: Record<string, AgentMemoryFileSnapshot>
+  dailyNotes: AgentMemoryFileSnapshot[]
   updatedAt?: string
+}
+
+export interface AgentMemoryFileSnapshot {
+  fileName: string
+  content: string
+  updatedAt?: string | null
 }
 
 export interface MemoryCandidate {
@@ -1046,7 +1050,6 @@ export interface AgentRunSummary {
   originChatId?: string | null
   controlScope: 'top_level' | 'child'
   workspacePath?: string | null
-  memoryScope?: string | null
   knowledgeScope?: string | null
   createdAt?: string
   startedAt?: string | null
@@ -1201,7 +1204,6 @@ export interface RunBoundaryAudit {
     execTimeoutSeconds?: number | null
   }
   governance: {
-    memoryScope?: string | null
     knowledgeScope?: string | null
     knowledgeBindingIds: string[]
     knowledgeNames: string[]

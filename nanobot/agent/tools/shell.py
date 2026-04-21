@@ -232,9 +232,9 @@ class ExecTool(Tool):
             r">\s*/dev/sd",                  # write to disk
             r"\b(shutdown|reboot|poweroff)\b",  # system power
             r":\(\)\s*\{.*\};\s*:",          # fork bomb
-            # Block writes to nanobot internal state files (#2989).
-            # history.jsonl / .dream_cursor are managed by append_history();
-            # direct writes corrupt the cursor format and crash /dream.
+            # Block writes to nanobot internal memory state files (#2989).
+            # These files are maintained by the memory pipeline, so direct
+            # shell writes can corrupt Dream bookkeeping.
             r">>?\s*\S*(?:history\.jsonl|\.dream_cursor)",            # > / >> redirect
             r"\btee\b[^|;&<>]*(?:history\.jsonl|\.dream_cursor)",     # tee / tee -a
             r"\b(?:cp|mv)\b(?:\s+[^\s|;&<>]+)+\s+\S*(?:history\.jsonl|\.dream_cursor)",  # cp/mv target

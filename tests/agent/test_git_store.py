@@ -8,7 +8,7 @@ pytest.importorskip("dulwich", reason="dulwich not installed")
 
 from nanobot.utils.gitstore import CommitInfo, GitStore
 
-TRACKED = ["SOUL.md", "USER.md", "memory/MEMORY.md"]
+TRACKED = ["AGENTS.md", "SOUL.md", "PROFILE.md", "MEMORY.md"]
 
 
 @pytest.fixture

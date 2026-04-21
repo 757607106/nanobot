@@ -66,7 +66,8 @@ def test_onboard_fresh_install(mock_paths):
     assert "nanobot is ready" in result.stdout
     assert config_file.exists()
     assert (workspace_dir / "AGENTS.md").exists()
-    assert (workspace_dir / "memory" / "MEMORY.md").exists()
+    assert (workspace_dir / "PROFILE.md").exists()
+    assert (workspace_dir / "MEMORY.md").exists()
     expected_workspace = Config().workspace_path
     assert mock_ws.call_args.args == (expected_workspace,)
 

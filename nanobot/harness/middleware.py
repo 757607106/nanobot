@@ -82,7 +82,7 @@ class PromptSeedMiddleware:
 
 @dataclass(slots=True)
 class MemoryPolicyMiddleware:
-    """Resolve runtime memory policy from the platform memory boundary."""
+    """Resolve runtime memory policy for one agent workspace."""
 
     resolver: Any
 
@@ -93,7 +93,7 @@ class MemoryPolicyMiddleware:
             memory_sections=list(state.requested_memory_sections),
         )
         state.memory_policy = MemoryPolicy(
-            scope=str(state.agent.get("memoryScope") or "agent_profile"),
+            scope="agent_workspace",
             include_workspace_memory=include_workspace_memory,
             sections=tuple(resolved_sections),
         )

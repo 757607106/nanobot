@@ -41,10 +41,10 @@ DOCUMENT_DEFINITIONS: dict[str, dict[str, Any]] = {
         "relative_path": Path("SOUL.md"),
         "template_segments": ("SOUL.md",),
     },
-    "USER.md": {
-        "label": "USER.md",
-        "relative_path": Path("USER.md"),
-        "template_segments": ("USER.md",),
+    "PROFILE.md": {
+        "label": "PROFILE.md",
+        "relative_path": Path("PROFILE.md"),
+        "template_segments": ("PROFILE.md",),
     },
     "TOOLS.md": {
         "label": "TOOLS.md",
@@ -56,15 +56,10 @@ DOCUMENT_DEFINITIONS: dict[str, dict[str, Any]] = {
         "relative_path": Path("HEARTBEAT.md"),
         "template_segments": ("HEARTBEAT.md",),
     },
-    "memory/MEMORY.md": {
+    "MEMORY.md": {
         "label": "MEMORY.md",
-        "relative_path": Path("memory") / "MEMORY.md",
-        "template_segments": ("memory", "MEMORY.md"),
-    },
-    "memory/HISTORY.md": {
-        "label": "HISTORY.md",
-        "relative_path": Path("memory") / "HISTORY.md",
-        "template_segments": None,
+        "relative_path": Path("MEMORY.md"),
+        "template_segments": ("MEMORY.md",),
     },
 }
 
