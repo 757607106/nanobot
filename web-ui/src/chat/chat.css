@@ -8,14 +8,14 @@
   align-items: flex-start;
   padding: 8px 12px;
   margin-bottom: 2px;
-  border-radius: var(--nb-radius-md);
+  border-radius: var(--ant-border-radius-lg);
   border: none;
   background: transparent;
 }
 
 .chat-conversation-list .ant-x-conversations-item:hover,
 .chat-conversation-item:hover {
-  background: var(--nb-card-subtle-bg);
+  background: var(--ant-color-fill-quaternary);
 }
 
 .chat-conversation-list .ant-x-conversations-item-active {
@@ -24,19 +24,19 @@
 }
 
 .chat-conversation-list .ant-x-conversations-menu-icon {
-  color: var(--nb-muted);
+  color: var(--ant-color-text-secondary);
 }
 
 .conversation-title {
   font-weight: 500;
-  color: var(--nb-ink);
-  font-size: var(--nb-text-sm);
+  color: var(--ant-color-text);
+  font-size: var(--ant-font-size);
   line-height: 1.4;
   margin-bottom: 2px;
 }
 
 .conversation-summary {
-  font-size: var(--nb-text-2xs);
+  font-size: var(--ant-font-size-sm);
   line-height: 1.4;
 }
 
@@ -92,15 +92,15 @@
 }
 
 .chat-bubble-content-user .chat-attachment-tag {
-  color: var(--nb-ink);
-  border-color: var(--nb-card-border);
-  background: var(--nb-card-subtle-bg);
+  color: var(--ant-color-text);
+  border-color: var(--ant-color-border-secondary);
+  background: var(--ant-color-fill-quaternary);
 }
 
 /* User Bubbles - Stark high contrast */
 .chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper {
-  background: var(--nb-ink);
-  color: var(--nb-card-bg);
+  background: var(--ant-color-text);
+  color: var(--ant-color-bg-container);
   border: none;
   border-radius: var(--nb-radius-lg);
   padding: 12px 18px;
@@ -110,13 +110,13 @@
 .chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper p,
 .chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper span,
 .chat-bubble-list .ant-x-bubble-end .ant-x-bubble-content-wrapper .ant-x-bubble-content {
-  color: var(--nb-card-bg);
+  color: var(--ant-color-bg-container);
 }
 
 /* AI Bubbles - Solid Structural Border */
 .chat-bubble-list .ant-x-bubble-start .ant-x-bubble-content-wrapper {
-  background: var(--nb-surface-panel);
-  border: 1px solid var(--nb-border);
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border);
   box-shadow: none;
   padding: 12px 16px;
   border-radius: var(--nb-radius-lg);
@@ -134,7 +134,7 @@
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: var(--nb-font-mono);
+  font-family: var(--ant-font-family-code);
   font-size: var(--nb-text-xs);
   line-height: var(--nb-line-relaxed);
 }
@@ -143,8 +143,8 @@
   height: 100%;
   min-height: 0;
   border-radius: var(--nb-radius-lg);
-  background: var(--nb-card-bg);
-  border: 1px solid var(--nb-card-border);
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
   box-shadow: var(--nb-shadow-sm);
   display: flex;
   flex-direction: column;
@@ -153,9 +153,9 @@
 
 .chat-workspace-header {
   padding: 16px 24px;
-  border-bottom: 1px solid var(--nb-border);
+  border-bottom: 1px solid var(--ant-color-border);
   flex-shrink: 0;
-  background: var(--nb-card-bg);
+  background: var(--ant-color-bg-container);
 }
 
 .chat-agent-select {
@@ -165,16 +165,16 @@
 
 .chat-agent-select .ant-select-selector {
   border-radius: var(--nb-radius-xl);
-  background: var(--nb-card-subtle-bg);
+  background: var(--ant-color-fill-quaternary);
 }
 
 .chat-agent-select .ant-select-selection-item {
-  color: var(--nb-ink);
+  color: var(--ant-color-text);
 }
 
 .chat-workspace-panel .ant-welcome-title,
 .chat-workspace-panel .ant-welcome-description {
-  color: var(--nb-ink);
+  color: var(--ant-color-text);
 }
 
 /* ── ThoughtChain 增强样式 ── */
@@ -207,10 +207,10 @@
 
 /* Think 组件块强化 */
 .ant-x-think {
-  border-left: 3px solid var(--nb-borderStrong);
+  border-left: 3px solid var(--ant-color-border);
   margin: 12px 0 16px;
-  background: var(--nb-surfaceSoft);
-  border-radius: 0 var(--nb-radius-md) var(--nb-radius-md) 0;
+  background: var(--ant-color-fill-quaternary);
+  border-radius: 0 var(--ant-border-radius-lg) var(--ant-border-radius-lg) 0;
   padding: 10px 14px;
 }
 
@@ -228,9 +228,9 @@
 .ant-x-think .markdown-bubble li,
 .ant-x-think .markdown-bubble span,
 .ant-x-think .markdown-bubble div {
-  font-size: var(--nb-text-sm, 14px);
+  font-size: var(--ant-font-size);
   font-weight: 400;
-  color: var(--nb-text-tertiary, #8c8c8c);
+  color: var(--ant-color-text-tertiary);
   line-height: var(--nb-line-snug, 1.5);
 }
 
@@ -241,9 +241,9 @@
 .ant-x-think .markdown-bubble h4,
 .ant-x-think .markdown-bubble h5,
 .ant-x-think .markdown-bubble h6 {
-  font-size: var(--nb-text-sm, 14px);
+  font-size: var(--ant-font-size);
   font-weight: 600;
-  color: var(--nb-text-secondary, #595959);
+  color: var(--ant-color-text-secondary);
   margin: 12px 0 4px;
   line-height: var(--nb-line-snug, 1.5);
 }
@@ -252,7 +252,7 @@
 .ant-x-think .markdown-bubble strong,
 .ant-x-think .markdown-bubble b {
   font-weight: 600;
-  color: var(--nb-text-secondary, #595959);
+  color: var(--ant-color-text-secondary);
 }
 
 /* 规整列表缩进，减轻排版负担 */

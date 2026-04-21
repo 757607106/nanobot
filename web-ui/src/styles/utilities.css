@@ -10,7 +10,7 @@
   background: var(--nb-mono-bg);
   color: var(--nb-mono-color);
   border: 1px solid var(--nb-mono-border);
-  font-family: var(--nb-font-mono);
+  font-family: var(--ant-font-family-code);
   overflow-wrap: anywhere;
 }
 
@@ -54,7 +54,7 @@
 
 .page-section-title .ant-typography-secondary,
 .page-section-title > .ant-typography:last-child {
-  color: var(--nb-muted);
+  color: var(--ant-color-text-secondary);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -87,8 +87,8 @@
 .detail-block {
   padding: 11px 13px;
   border-radius: 14px;
-  background: var(--nb-surface-strong);
-  border: 1px solid var(--nb-border);
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border);
 }
 
 .center-box {
@@ -119,15 +119,15 @@
 
 .config-card-header .page-section-title h4.ant-typography,
 .config-card-header .page-section-title h5.ant-typography {
-  color: var(--nb-ink);
+  color: var(--ant-color-text);
 }
 
 .config-card-header .ant-tag,
 .tag-cloud .ant-tag,
 .page-stack .ant-tag:not(.ant-tag-has-color) {
-  background: var(--nb-card-subtle-bg);
-  border-color: var(--nb-card-subtle-border);
-  color: var(--nb-ink);
+  background: var(--ant-color-fill-quaternary);
+  border-color: var(--ant-color-border-secondary);
+  color: var(--ant-color-text);
 }
 
 @media (max-width: 768px) {

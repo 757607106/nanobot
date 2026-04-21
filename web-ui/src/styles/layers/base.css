@@ -12,10 +12,10 @@ body,
 body {
   margin: 0;
   overflow: hidden;
-  color: var(--nb-ink);
-  background: var(--nb-body-bg);
-  font-family: var(--nb-font-body);
-  font-size: var(--nb-text-sm);
+  color: var(--ant-color-text);
+  background: var(--ant-color-bg-layout);
+  font-family: var(--ant-font-family);
+  font-size: var(--ant-font-size);
   line-height: var(--nb-line-body);
   font-kerning: normal;
   font-variant-numeric: tabular-nums;

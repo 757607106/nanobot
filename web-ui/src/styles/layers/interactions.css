@@ -14,7 +14,7 @@
 .interactive-lift:hover {
   transform: translateY(-2px);
   box-shadow: var(--nb-shadow-md);
-  border-color: var(--nb-border-strong);
+  border-color: var(--ant-color-border);
 }
 
 .interactive-lift:active {
@@ -22,7 +22,7 @@
 }
 
 .focus-ring:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--nb-accent) 28%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--ant-color-primary) 28%, transparent);
   outline-offset: 2px;
 }
 
@@ -34,7 +34,7 @@
 
 .interactive-lift-sm:hover {
   transform: translateY(-1px);
-  background-color: var(--nb-surface-row-bg);
+  background-color: var(--ant-color-fill-quaternary);
 }
 
 .interactive-lift-sm:active {
@@ -43,7 +43,7 @@
 
 /* Focus Ring */
 .focus-ring:focus-visible {
-  outline: 2px solid var(--nb-accent);
+  outline: 2px solid var(--ant-color-primary);
   outline-offset: 2px;
 }
 
@@ -66,5 +66,5 @@
 }
 
 .interactive-text:hover {
-  color: var(--nb-accent);
+  color: var(--ant-color-primary);
 }

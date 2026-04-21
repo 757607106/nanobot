@@ -1,18 +1,28 @@
 /* ═══════════════════════════════════════════════════════════
    Theme Tokens (CSS Custom Properties)
    ═══════════════════════════════════════════════════════════
-   Single source for CSS-consumed values. Color, spacing,
-   and component tokens live in tokens.ts → theme.ts (Antd).
-   CSS vars here are for layout, surface, and brand values
-   that raw CSS selectors need directly. */
+   Architecture:
+     designTokens (tokens.ts)
+       → theme.ts → Ant Design ConfigProvider
+           → auto-generates --ant-* CSS variables
 
+   This file provides:
+   1. ALIASES: --nb-* vars that reference --ant-* (auto dark mode)
+   2. CONSTANTS: Mode-independent typography, spacing, layout, motion
+   3. SEMANTIC: Component-specific vars with no Ant Design equivalent
+      (these need explicit [data-theme='dark'] overrides)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────
+   Section 1: Constants (mode-independent, no dark override)
+   ───────────────────────────────────────────────────────── */
 :root {
-  /* Typography stacks */
-  --nb-font-display: "Geist Sans", "Manrope Variable", "Manrope", "Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", system-ui, sans-serif;
-  --nb-font-body: "Geist Sans", "Manrope Variable", "Manrope", "Noto Sans SC Variable", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  --nb-font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* Typography stacks — alias Ant Design token */
+  --nb-font-display: var(--ant-font-family);
+  --nb-font-body: var(--ant-font-family);
+  --nb-font-mono: var(--ant-font-family-code);
 
-  /* Typography scale (rem) */
+  /* Typography scale (rem for CSS compatibility) */
   --nb-text-2xs: 0.75rem;
   --nb-text-xs: 0.8125rem;
   --nb-text-sm: 0.875rem;
@@ -72,65 +82,92 @@
   --nb-ease-decelerate: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ─── Light Theme ─── */
+/* ─────────────────────────────────────────────────────────
+   Section 2: Color Aliases → Ant Design tokens
+   These auto-switch between light/dark via Ant Design's
+   darkAlgorithm. NO [data-theme='dark'] override needed.
+   ───────────────────────────────────────────────────────── */
+:root {
+  /* Core text */
+  --nb-ink: var(--ant-color-text);
+  --nb-muted: var(--ant-color-text-secondary);
+  --nb-text-secondary: var(--ant-color-text-secondary);
+  --nb-text-tertiary: var(--ant-color-text-tertiary);
+
+  /* Brand & semantic */
+  --nb-accent: var(--ant-color-primary);
+  --nb-accent-soft: var(--ant-color-primary-bg);
+  --nb-success: var(--ant-color-success);
+  --nb-warning: var(--ant-color-warning);
+  --nb-error: var(--ant-color-error);
+
+  /* Surfaces */
+  --nb-body-bg: var(--ant-color-bg-layout);
+  --nb-bg: var(--ant-color-bg-layout);
+  --nb-card-bg: var(--ant-color-bg-container);
+  --nb-surface: var(--ant-color-bg-container);
+  --nb-surface-panel-bg: var(--ant-color-bg-container);
+  --nb-surface-strong: var(--ant-color-bg-container);
+  --nb-surface-elevated: var(--ant-color-bg-elevated);
+
+  /* Borders */
+  --nb-card-border: var(--ant-color-border-secondary);
+  --nb-card-subtle-border: var(--ant-color-border-secondary);
+  --nb-surface-panel-border: var(--ant-color-border-secondary);
+  --nb-surface-row-border: var(--ant-color-border-secondary);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Section 3: Semantic custom vars (need explicit dark overrides)
+   These use hardcoded colors, gradients, rgba, or color-mix
+   that have no direct Ant Design token equivalent.
+   ───────────────────────────────────────────────────────── */
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* Primary Brand Hue */
-  --nb-ink: #0F172A;
-  --nb-muted: #475569;
-  --nb-text-secondary: var(--nb-muted);
-  --nb-text-tertiary: #94A3B8;
-  --nb-accent: #2563EB;
-  --nb-accent-soft: #EFF6FF;
-  --nb-success: #16A34A;
-  --nb-warning: #D97706;
-  --nb-error: #DC2626;
-
-  --nb-body-bg: #F8FAFC;
-  --nb-bg: var(--nb-body-bg);
   --nb-body-overlay: none;
 
+  /* Borders without exact Ant Design equivalent */
   --nb-border: #CBD5E1;
   --nb-border-strong: #94A3B8;
-  --nb-card-bg: #FFFFFF;
-  --nb-surface: var(--nb-card-bg);
-  --nb-card-border: #E2E8F0;
-  --nb-card-subtle-bg: #F1F5F9;
-  --nb-card-subtle-border: #E2E8F0;
 
-  --nb-surface-panel-bg: #FFFFFF;
-  --nb-surface-panel-border: #E2E8F0;
-  --nb-surface-panel-shadow: none;
-  --nb-surface-strong: var(--nb-surface-panel-bg);
+  /* Subtle surfaces */
+  --nb-card-subtle-bg: #F1F5F9;
   --nb-surface-soft-bg: #F1F5F9;
   --nb-surface-soft-border: transparent;
   --nb-surface-soft-shadow: none;
-  --nb-surface-elevated: #FFFFFF;
+  --nb-surface-panel-shadow: none;
   --nb-surface-row-bg: #F8FAFC;
-  --nb-surface-row-border: #E2E8F0;
 
+  /* Shadows */
   --nb-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
   --nb-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.1);
   --nb-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
   --nb-shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1);
   --nb-shadow-soft: var(--nb-shadow-sm);
 
+  /* Sidebar */
   --nb-sider-bg: #FFFFFF;
   --nb-sider-border: #E2E8F0;
   --nb-sider-shadow: none;
+
+  /* Page hero */
   --nb-page-hero-bg: #FFFFFF;
   --nb-page-hero-border: #E2E8F0;
   --nb-page-hero-overlay: none;
   --nb-page-hero-text: #0F172A;
   --nb-page-hero-subtext: #475569;
 
+  /* Notes */
   --nb-note-bg: #F8FAFC;
   --nb-note-text: #475569;
+
+  /* Scrollbar */
   --nb-scroll-thumb: #CBD5E1;
   --nb-scroll-thumb-hover: #94A3B8;
 
+  /* Navigation */
   --nb-nav-hover-bg: #F1F5F9;
   --nb-nav-selected-bg: #EFF6FF;
   --nb-nav-selected-border: #BFDBFE;
@@ -139,10 +176,12 @@
   --nb-nav-icon: #475569;
   --nb-nav-selected-text: #2563EB;
 
+  /* Conversation sidebar */
   --nb-conversation-active-bg: #F1F5F9;
   --nb-conversation-active-border: #E2E8F0;
   --nb-conversation-active-text: #0F172A;
 
+  /* Chat surfaces (gradients / rgba) */
   --nb-chat-surface: linear-gradient(180deg, rgba(252, 253, 255, 0.7), rgba(247, 250, 253, 0.7));
   --nb-chat-focus-bg: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
   --nb-chat-focus-border: rgba(24, 36, 51, 0.08);
@@ -164,18 +203,23 @@
   --nb-quick-chip-hover-border: rgba(63, 108, 255, 0.12);
   --nb-quick-chip-hover-text: #355fe6;
 
+  /* Code blocks */
   --nb-code-bg: #182433;
   --nb-code-text: #f5f8fc;
   --nb-mono-bg: rgba(247, 250, 253, 0.96);
   --nb-mono-color: #324154;
   --nb-mono-border: rgba(24, 36, 51, 0.08);
 
+  /* Avatars */
   --nb-user-avatar-bg: linear-gradient(135deg, #4b83f5 0%, #355fe6 100%);
   --nb-assistant-avatar-bg: linear-gradient(135deg, #eff5ff 0%, #bfd2ec 100%);
 
+  /* Decorative */
   --nb-icon-soft-bg: rgba(63, 108, 255, 0.08);
   --nb-icon-soft-text: #151821;
   --nb-warm: oklch(0.78 0.11 70);
+
+  /* Status badges */
   --nb-state-success-bg: color-mix(in srgb, #58D68D 22%, #ffffff 78%);
   --nb-state-success-text: #1f8f5f;
   --nb-state-success-border: color-mix(in srgb, #58D68D 32%, #ffffff 68%);
@@ -187,42 +231,21 @@
   --nb-state-muted-border: rgba(24, 36, 51, 0.08);
 }
 
-/* ─── Dark Theme ─── */
+/* ─── Dark Theme (only custom vars that can't alias Ant Design) ─── */
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --nb-ink: #F8FAFC;
-  --nb-muted: #94A3B8;
-  --nb-text-secondary: var(--nb-muted);
-  --nb-text-tertiary: #64748B;
-  --nb-accent: #3B82F6;
-  --nb-accent-soft: #1E3A8A;
-  --nb-success: #22C55E;
-  --nb-warning: #F59E0B;
-  --nb-error: #EF4444;
-
-  --nb-body-bg: #020617;
-  --nb-bg: var(--nb-body-bg);
   --nb-body-overlay: none;
 
   --nb-border: #334155;
   --nb-border-strong: #475569;
-  --nb-card-bg: #0F172A;
-  --nb-surface: var(--nb-card-bg);
-  --nb-card-border: #1E293B;
-  --nb-card-subtle-bg: #020617;
-  --nb-card-subtle-border: #1E293B;
 
-  --nb-surface-panel-bg: #0F172A;
-  --nb-surface-panel-border: #1E293B;
-  --nb-surface-panel-shadow: none;
-  --nb-surface-strong: var(--nb-surface-panel-bg);
+  --nb-card-subtle-bg: #020617;
   --nb-surface-soft-bg: #1E293B;
   --nb-surface-soft-border: transparent;
   --nb-surface-soft-shadow: none;
-  --nb-surface-elevated: #1E293B;
+  --nb-surface-panel-shadow: none;
   --nb-surface-row-bg: #1E293B;
-  --nb-surface-row-border: #334155;
 
   --nb-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --nb-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.6);
@@ -233,6 +256,7 @@
   --nb-sider-bg: #0F172A;
   --nb-sider-border: #1E293B;
   --nb-sider-shadow: none;
+
   --nb-page-hero-bg: #0F172A;
   --nb-page-hero-border: #1E293B;
   --nb-page-hero-overlay: none;
@@ -241,6 +265,7 @@
 
   --nb-note-bg: #1E293B;
   --nb-note-text: #94A3B8;
+
   --nb-scroll-thumb: #334155;
   --nb-scroll-thumb-hover: #475569;
 
@@ -289,6 +314,7 @@
   --nb-icon-soft-bg: rgba(255, 255, 255, 0.08);
   --nb-icon-soft-text: #eef2fb;
   --nb-warm: oklch(0.72 0.10 70);
+
   --nb-state-success-bg: rgba(16, 185, 129, 0.18);
   --nb-state-success-text: #6EE7B7;
   --nb-state-success-border: rgba(16, 185, 129, 0.28);

@@ -9,11 +9,11 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background-color: var(--nb-bg);
+  background-color: var(--ant-color-bg-layout);
   /* Tech Luxury background pattern: subtle dot grid + center accent glow */
   background-image: 
-    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--nb-accent) 12%, transparent) 0%, transparent 50%),
-    radial-gradient(color-mix(in srgb, var(--nb-text-tertiary) 20%, transparent) 1px, transparent 1px);
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--ant-color-primary) 12%, transparent) 0%, transparent 50%),
+    radial-gradient(color-mix(in srgb, var(--ant-color-text-tertiary) 20%, transparent) 1px, transparent 1px);
   background-size: 100% 100%, 24px 24px;
   background-position: center top, center center;
   overflow: hidden;
@@ -41,12 +41,12 @@
   padding: var(--nb-spacing-3xl) var(--nb-spacing-2xl);
   border-radius: 16px; /* Slightly softer radius for premium glass feel */
   /* Elegant glassmorphism to show off the background grid */
-  background: color-mix(in srgb, var(--nb-surface-panel-bg) 80%, transparent);
+  background: color-mix(in srgb, var(--ant-color-bg-container) 80%, transparent);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid color-mix(in srgb, var(--nb-surface-panel-border) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ant-color-border-secondary) 60%, transparent);
   box-shadow: 
-    0 24px 48px color-mix(in srgb, var(--nb-ink) 5%, transparent),
+    0 24px 48px color-mix(in srgb, var(--ant-color-text) 5%, transparent),
     inset 0 1px 0 color-mix(in srgb, #ffffff 15%, transparent);
   overflow: hidden;
   z-index: 1;
@@ -57,28 +57,28 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: var(--nb-spacing-md);
+  gap: var(--ant-padding);
   margin-bottom: var(--nb-spacing-2xl);
 }
 
 .login-brand-title {
-  color: var(--nb-ink);
+  color: var(--ant-color-text);
   font-size: var(--nb-title-md);
-  font-family: var(--nb-font-display);
+  font-family: var(--ant-font-family);
   font-weight: 600;
   line-height: 1.2;
 }
 
 .login-brand-subtitle {
-  color: var(--nb-text-secondary);
-  font-size: var(--nb-text-sm);
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size);
   line-height: var(--nb-line-relaxed);
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: var(--nb-spacing-xl);
+  gap: var(--ant-padding-xl);
 }
 
 .login-field {
@@ -88,8 +88,8 @@
 }
 
 .login-label {
-  color: var(--nb-text-secondary);
-  font-size: var(--nb-text-sm);
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size);
   font-weight: 500;
 }
 
@@ -97,42 +97,42 @@
 .login-form .ant-input,
 .login-form .ant-input-affix-wrapper {
   height: 48px;
-  padding-inline: var(--nb-spacing-lg);
-  background: var(--nb-surface-row-bg);
-  border: 1px solid var(--nb-surface-panel-border);
+  padding-inline: var(--ant-padding-lg);
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
   border-radius: 6px;
   box-shadow: none;
-  font-family: var(--nb-font-body);
+  font-family: var(--ant-font-family);
   font-size: var(--nb-text-md);
-  color: var(--nb-ink);
+  color: var(--ant-color-text);
   transition: all 150ms ease;
 }
 
 .login-form .ant-input::placeholder {
-  color: var(--nb-text-tertiary);
+  color: var(--ant-color-text-tertiary);
 }
 
 .login-form .ant-input-affix-wrapper > input.ant-input {
   height: auto;
   padding-inline: 0;
   background: transparent;
-  color: var(--nb-ink);
+  color: var(--ant-color-text);
   box-shadow: none;
 }
 
 .login-form .ant-input-affix-wrapper > input.ant-input::placeholder {
-  color: var(--nb-text-tertiary);
+  color: var(--ant-color-text-tertiary);
 }
 
 .login-form .ant-input-affix-wrapper .ant-input-password-icon {
-  color: var(--nb-text-secondary);
+  color: var(--ant-color-text-secondary);
 }
 
 .login-form .ant-input:focus,
 .login-form .ant-input-affix-wrapper-focused {
-  background: var(--nb-surface-panel-bg);
-  border-color: var(--nb-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--nb-accent) 20%, transparent);
+  background: var(--ant-color-bg-container);
+  border-color: var(--ant-color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ant-color-primary) 20%, transparent);
 }
 
 .login-submit.ant-btn {
@@ -141,7 +141,7 @@
   font-size: var(--nb-text-md);
   font-weight: 500;
   margin-top: 12px;
-  background: var(--nb-accent);
+  background: var(--ant-color-primary);
   color: #fff;
   border: none;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -149,24 +149,24 @@
 }
 
 .login-submit.ant-btn:hover {
-  background: color-mix(in srgb, var(--nb-accent) 80%, #fff);
+  background: color-mix(in srgb, var(--ant-color-primary) 80%, #fff);
   color: #fff;
 }
 
 .login-submit.ant-btn:active {
-  background: color-mix(in srgb, var(--nb-accent) 80%, #000);
+  background: color-mix(in srgb, var(--ant-color-primary) 80%, #000);
 }
 
 .login-alert.ant-alert {
   border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--nb-error) 20%, transparent);
-  background: color-mix(in srgb, var(--nb-error) 5%, transparent);
-  color: var(--nb-error);
+  border: 1px solid color-mix(in srgb, var(--ant-color-error) 20%, transparent);
+  background: color-mix(in srgb, var(--ant-color-error) 5%, transparent);
+  color: var(--ant-color-error);
 }
 
 @media (max-width: 480px) {
   .login-card {
-    padding: var(--nb-spacing-2xl) var(--nb-spacing-xl);
+    padding: var(--nb-spacing-2xl) var(--ant-padding-xl);
   }
 }
 

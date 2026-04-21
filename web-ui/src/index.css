@@ -15,7 +15,7 @@
 }
 
 body {
-  font-family: var(--nb-font-body) !important;
+  font-family: var(--ant-font-family) !important;
   font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
   -webkit-font-smoothing: antialiased;
 }
@@ -27,7 +27,7 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6, .ant-typography {
-  font-family: var(--nb-font-display) !important;
+  font-family: var(--ant-font-family) !important;
   font-weight: 500 !important;
   letter-spacing: -0.02em;
 }
@@ -40,8 +40,8 @@ strong, .ant-typography strong {
 /* Use sparingly. Values should ideally come from ConfigProvider */
 
 .ant-card {
-  background: var(--nb-card-bg);
-  border-color: var(--nb-card-border);
+  background: var(--ant-color-bg-container);
+  border-color: var(--ant-color-border-secondary);
   box-shadow: none !important;
   border-radius: 0;
 }
@@ -70,7 +70,7 @@ strong, .ant-typography strong {
 /* Impeccable Table Polish */
 .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td,
 .ant-table-wrapper .ant-table-tbody > tr > td.ant-table-cell-row-hover {
-  background: color-mix(in srgb, var(--nb-ink) 4%, transparent);
+  background: color-mix(in srgb, var(--ant-color-text) 4%, transparent);
 }
 
 .ant-table-wrapper .ant-table-thead > tr > th,
@@ -80,12 +80,12 @@ strong, .ant-typography strong {
 
 /* ──────────────────── Typography Flow ──────────────────── */
 .ant-typography {
-  color: var(--nb-ink);
+  color: var(--ant-color-text);
   letter-spacing: -0.01em;
 }
 
 .ant-typography p {
-  color: var(--nb-muted);
+  color: var(--ant-color-text-secondary);
 }
 
 /* ──────────────────── Responsive Breakpoints ──────────────────── */
