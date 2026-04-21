@@ -94,7 +94,7 @@ export default function ModelTable({
           <Flex align="center" gap={8}>
             {!hasModel && (
               <Tooltip title="模型 ID 未配置，无法使用">
-                <WarningOutlined style={{ color: token.colorWarning, fontSize: 'var(--nb-text-sm)' }} />
+                <WarningOutlined style={{ color: token.colorWarning, fontSize: token.fontSizeSM }} />
               </Tooltip>
             )}
             <Flex vertical gap={2} style={{ minWidth: 0 }}>
@@ -103,21 +103,21 @@ export default function ModelTable({
                   strong
                   ellipsis={{ tooltip: record.model || '未配置' }}
                   style={{
-                    fontSize: 'var(--nb-text-sm)',
-                    fontFamily: hasModel ? 'var(--nb-font-mono)' : undefined,
+                    fontSize: token.fontSizeSM,
+                    fontFamily: hasModel ? token.fontFamilyCode : undefined,
                     color: hasModel ? undefined : token.colorTextQuaternary,
                   }}
                 >
                   {record.model || '未配置模型 ID'}
                 </Typography.Text>
                 {isDefault && (
-                  <Tag color="success" bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)', lineHeight: '18px', padding: '0 6px' }}>
+                  <Tag color="success" bordered={false} style={{ margin: 0, borderRadius: token.borderRadiusSM, fontSize: token.fontSizeSM, lineHeight: '18px', padding: '0 6px' }}>
                     DEFAULT
                   </Tag>
                 )}
               </Flex>
               {record.label && record.label !== record.model && (
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                   {record.label}
                 </Typography.Text>
               )}
@@ -142,7 +142,7 @@ export default function ModelTable({
             onClick={() => onOpenProviderDrawer(providerName)}
           >
             <ProviderAvatar providerName={providerName} label={label} size={28} />
-            <Typography.Text style={{ fontSize: 'var(--nb-text-sm)' }}>{label}</Typography.Text>
+            <Typography.Text style={{ fontSize: token.fontSizeSM }}>{label}</Typography.Text>
           </Flex>
         )
       },
@@ -163,7 +163,7 @@ export default function ModelTable({
             <Tag
               color={capabilityColor(record.capabilityType)}
               bordered={false}
-              style={{ borderRadius: 6, fontSize: 'var(--nb-text-xs)' }}
+              style={{ borderRadius: token.borderRadiusSM, fontSize: token.fontSizeSM }}
             >
               {capabilityLabel(record.capabilityType)}
             </Tag>
@@ -185,7 +185,7 @@ export default function ModelTable({
             <Tag
               color={capabilityColor(record.capabilityType)}
               bordered={false}
-              style={{ borderRadius: 6, fontSize: 'var(--nb-text-xs)', cursor: 'pointer' }}
+              style={{ borderRadius: token.borderRadiusSM, fontSize: token.fontSizeSM, cursor: 'pointer' }}
             >
               {capabilityLabel(record.capabilityType)} ▾
             </Tag>

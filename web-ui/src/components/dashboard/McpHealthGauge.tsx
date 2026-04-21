@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Flex, Tag, Typography, Empty } from 'antd'
+import { Flex, Tag, Typography, Empty, theme } from 'antd'
 import { Gauge } from '@ant-design/charts'
 import type { GaugeConfig } from '@ant-design/charts'
 import { useChartTheme } from './chartTheme'
@@ -22,6 +22,7 @@ function statusColor(status: string): string {
 
 export default function McpHealthGauge({ data }: McpHealthGaugeProps) {
   const ct = useChartTheme()
+  const { token } = theme.useToken()
 
   const score = data?.healthScore ?? 0
   const servers: McpServerEntry[] = data?.servers ?? []
@@ -57,7 +58,7 @@ export default function McpHealthGauge({ data }: McpHealthGaugeProps) {
         <Flex vertical gap={6}>
           {servers.map((s) => (
             <Flex key={s.name} justify="space-between" align="center" style={{ padding: '4px 0' }}>
-              <Typography.Text style={{ fontSize: 'var(--nb-text-xs)', fontFamily: 'var(--nb-font-mono)' }}>
+              <Typography.Text style={{ fontSize: token.fontSizeSM, fontFamily: token.fontFamilyCode }}>
                 {s.displayName || s.name}
               </Typography.Text>
               <Tag color={statusColor(s.status)} style={{ margin: 0 }}>

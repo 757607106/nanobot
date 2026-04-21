@@ -41,8 +41,8 @@ export default function SectionTabs({
               className="section-tabs-eyebrow"
               style={{
                 color: token.colorPrimary,
-                fontSize: 'var(--nb-text-2xs)',
-                fontWeight: 'var(--nb-font-weight-title)',
+                fontSize: token.fontSizeSM,
+                fontWeight: 700,
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
               }}
@@ -57,7 +57,7 @@ export default function SectionTabs({
               className="section-tabs-title"
               style={{
                 margin: eyebrow ? '4px 0 0' : 0,
-                fontSize: 'var(--nb-text-lg)',
+                fontSize: token.fontSizeHeading4,
                 lineHeight: 1.15,
               }}
             >

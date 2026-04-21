@@ -19,9 +19,11 @@ import type { AgentFormState } from './types'
 import { agentToForm, createEmptyForm, getErrorMessage, toPayload } from './utils'
 import { getAllModelBindings } from '../../modelConfig'
 import { useToast } from '../../toast'
+import { theme, Flex } from 'antd'
 
 export default function AgentsPage() {
   const message = useToast()
+  const { token } = theme.useToken()
   const location = useLocation()
   const navigate = useNavigate()
   const { agentId } = useParams()
@@ -320,9 +322,9 @@ export default function AgentsPage() {
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Flex vertical style={{ height: '100%' }}>
       {isCreateRoute || selectedAgentId ? (
-        <div style={{ flex: 1, overflow: 'auto', background: 'var(--nb-body-bg)' }}>
+        <div style={{ flex: 1, overflow: 'auto', background: token.colorBgLayout }}>
           <AgentDetail
             isCreateRoute={isCreateRoute}
             selectedAgentId={selectedAgentId}
@@ -359,7 +361,7 @@ export default function AgentsPage() {
           />
         </div>
       ) : (
-        <div style={{ flex: 1, overflow: 'auto', padding: '0 0 24px', background: 'var(--nb-body-bg)' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: `0 0 ${token.marginLG}px`, background: token.colorBgLayout }}>
           <AgentList
             agents={agents}
             loadingWorkspace={loadingWorkspace}
@@ -369,6 +371,6 @@ export default function AgentsPage() {
           />
         </div>
       )}
-    </div>
+    </Flex>
   )
 }

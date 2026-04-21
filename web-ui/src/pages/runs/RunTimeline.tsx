@@ -1,4 +1,4 @@
-import { Card, Empty, Space, Tag, Timeline, Typography } from 'antd'
+import { Card, Empty, Space, Tag, Timeline, Typography, theme } from 'antd'
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -16,6 +16,8 @@ interface RunTimelineProps {
 }
 
 export default function RunTimeline({ run, devMode }: RunTimelineProps) {
+  const { token } = theme.useToken()
+
   if (!run.events?.length) {
     return (
       <Card className="page-card" variant="borderless" title="执行过程">
@@ -32,11 +34,11 @@ export default function RunTimeline({ run, devMode }: RunTimelineProps) {
 
     return {
       dot: isFailed ? (
-        <CloseCircleOutlined style={{ color: 'var(--ant-color-error)', fontSize: 'var(--nb-text-lg)' }} />
+        <CloseCircleOutlined style={{ color: token.colorError, fontSize: token.fontSizeLG }} />
       ) : isCompleted ? (
-        <CheckCircleOutlined style={{ color: 'var(--ant-color-success)', fontSize: 'var(--nb-text-lg)' }} />
+        <CheckCircleOutlined style={{ color: token.colorSuccess, fontSize: token.fontSizeLG }} />
       ) : (
-        <ClockCircleOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 'var(--nb-text-sm)' }} />
+        <ClockCircleOutlined style={{ color: token.colorPrimary, fontSize: token.fontSizeSM }} />
       ),
       color: isFailed ? 'red' : isCompleted ? 'green' : isLast ? 'blue' : 'gray',
       children: (
@@ -44,7 +46,7 @@ export default function RunTimeline({ run, devMode }: RunTimelineProps) {
           <Space wrap>
             <Text strong>{eventLabel(event.eventType, devMode)}</Text>
             {devMode && <Tag bordered={false}>{event.eventType}</Tag>}
-            <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+            <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
               {formatDateTimeZh(event.createdAt)}
             </Text>
           </Space>
@@ -52,11 +54,11 @@ export default function RunTimeline({ run, devMode }: RunTimelineProps) {
             <Text
               type="secondary"
               style={{
-                fontFamily: 'var(--nb-font-mono)',
-                fontSize: 'var(--nb-text-xs)',
+                fontFamily: token.fontFamilyCode,
+                fontSize: token.fontSizeSM,
                 display: 'block',
                 padding: '4px 8px',
-                background: 'var(--nb-surface-strong)',
+                background: token.colorFillAlter,
                 borderRadius: 4,
               }}
             >

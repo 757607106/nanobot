@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Flex, Popconfirm, Tag, Typography } from 'antd'
+import { Button, Card, Flex, Popconfirm, Tag, Typography, theme } from 'antd'
 import { PlusOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { api } from '../../api'
@@ -11,6 +11,7 @@ import TemplateEditorDrawer from './TemplateEditorDrawer'
 
 export default function TemplatesPage() {
   const message = useToast()
+  const { token } = theme.useToken()
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<AgentTemplate[]>([])
   
@@ -82,7 +83,7 @@ export default function TemplatesPage() {
       />
 
       <SectionCard title="所有蓝图">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--nb-spacing-md)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: token.paddingMD }}>
           {data.map((tpl, i) => (
             <motion.div
               key={tpl.name}
@@ -94,12 +95,12 @@ export default function TemplatesPage() {
                 hoverable 
                 onClick={() => openDrawer(tpl.name)}
                 style={{ height: '100%' }}
-                styles={{ body: { padding: 'var(--nb-spacing-md)' } }}
+                styles={{ body: { padding: token.paddingMD } }}
               >
                 <Flex vertical justify="space-between" style={{ height: '100%' }} gap={12}>
                   <div>
                     <Flex justify="space-between" align="flex-start" style={{ marginBottom: 8 }}>
-                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)' }}>{tpl.name}</Typography.Text>
+                      <Typography.Text strong style={{ fontSize: token.fontSize }}>{tpl.name}</Typography.Text>
                       <Tag color={tpl.enabled ? 'success' : 'default'} bordered={false} style={{ margin: 0 }}>
                         {tpl.enabled ? '已启用' : '禁用'}
                       </Tag>

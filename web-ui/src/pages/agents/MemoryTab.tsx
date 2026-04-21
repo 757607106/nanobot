@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Empty, Flex, Input, Space, Spin, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Flex, Input, Space, Spin, Tag, Typography, theme } from 'antd'
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import SectionCard from '../../components/console/SectionCard'
@@ -40,6 +40,7 @@ export default function MemoryTab({
   const [draft, setDraft] = useState(agentMemory?.content || '')
   const [candidateDraft, setCandidateDraft] = useState('')
 
+  const { token } = theme.useToken()
   const pendingCount = agentMemoryCandidates.filter((item) => item.status === 'proposed').length
 
   useEffect(() => {
@@ -47,53 +48,48 @@ export default function MemoryTab({
   }, [agentMemory?.content, currentAgent?.agentId])
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr',
-      gap: 24,
-      alignItems: 'start'
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <Flex vertical gap={token.marginLG} align="stretch">
+      <Flex vertical gap={token.marginLG}>
         <SectionCard
           title="长期核心记忆"
           action={(
             <Space wrap size={[8, 8]}>
-              {currentAgent ? <Tag color="blue" style={{ borderRadius: 12, border: 'none' }}>{memoryScopeLabel(formMemoryScope)}</Tag> : null}
-              <Tag color="purple" style={{ borderRadius: 12, border: 'none' }}>{`${pendingCount} 待处理`}</Tag>
+              {currentAgent ? <Tag color="blue" style={{ borderRadius: token.borderRadiusLG, border: 'none' }}>{memoryScopeLabel(formMemoryScope)}</Tag> : null}
+              <Tag color="purple" style={{ borderRadius: token.borderRadiusLG, border: 'none' }}>{`${pendingCount} 待处理`}</Tag>
             </Space>
           )}
         >
-          <Flex vertical gap={16}>
-            {memoryError ? <Alert type="error" message={memoryError} showIcon style={{ borderRadius: 12 }} /> : null}
+          <Flex vertical gap={token.marginMD}>
+            {memoryError ? <Alert type="error" message={memoryError} showIcon style={{ borderRadius: token.borderRadiusLG }} /> : null}
 
             {!currentAgent ? (
-              <Alert type="info" message="未保存员工，无法编辑记忆" showIcon style={{ borderRadius: 12 }} />
+              <Alert type="info" message="未保存员工，无法编辑记忆" showIcon style={{ borderRadius: token.borderRadiusLG }} />
             ) : (
               <>
-                <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
+                <div style={{ padding: '2px', borderRadius: token.borderRadiusLG, background: token.colorBgContainer }}>
                   <Input.TextArea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     rows={8}
                     placeholder="在此编辑员工长期的记忆、偏好与专属规范..."
                     aria-label="员工长期记忆"
-                    style={{ borderRadius: 12, border: 'none', background: 'transparent', lineHeight: 1.6 }}
+                    style={{ borderRadius: token.borderRadiusLG, border: 'none', background: 'transparent', lineHeight: 1.6 }}
                   />
                 </div>
-                <div style={{ padding: 16, borderRadius: 12, background: 'var(--nb-surface-strong)' }}>
-                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                <div style={{ padding: token.margin, borderRadius: token.borderRadiusLG, background: token.colorBgContainer }}>
+                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: token.marginXS }}>
                     Markdown 预览
                   </Typography.Text>
                   <MarkdownBubble content={draft || '*(暂无内容)*'} isStreaming={false} />
                 </div>
                 <Space wrap size={[8, 8]}>
-                  <Button icon={<ReloadOutlined />} onClick={() => currentAgent && onRefresh(currentAgent.agentId)} loading={loadingMemory} style={{ borderRadius: 12 }}>
+                  <Button icon={<ReloadOutlined />} onClick={() => currentAgent && onRefresh(currentAgent.agentId)} loading={loadingMemory} style={{ borderRadius: token.borderRadiusLG }}>
                     刷新提取
                   </Button>
-                  <Button type="primary" icon={<SaveOutlined />} onClick={() => currentAgent && onSaveMemory(currentAgent.agentId, draft)} style={{ borderRadius: 12 }}>
+                  <Button type="primary" icon={<SaveOutlined />} onClick={() => currentAgent && onSaveMemory(currentAgent.agentId, draft)} style={{ borderRadius: token.borderRadiusLG }}>
                     覆写记忆
                   </Button>
-                  <Button onClick={() => currentAgent && navigate(`/studio/memory/agents/${currentAgent.agentId}`)} style={{ borderRadius: 12 }}>
+                  <Button onClick={() => currentAgent && navigate(`/studio/memory/agents/${currentAgent.agentId}`)} style={{ borderRadius: token.borderRadiusLG }}>
                     全局记忆审计
                   </Button>
                 </Space>
@@ -103,19 +99,19 @@ export default function MemoryTab({
         </SectionCard>
 
         <SectionCard title="候选记忆队列">
-          <Flex vertical gap={24}>
-            <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
+          <Flex vertical gap={token.marginLG}>
+            <div style={{ padding: '2px', borderRadius: token.borderRadiusLG, background: token.colorBgContainer }}>
               <Input.TextArea
                 value={candidateDraft}
                 onChange={(event) => setCandidateDraft(event.target.value)}
                 rows={3}
                 placeholder="在此粘贴测试文本来生成并提交流水线候选记忆..."
                 aria-label="提交候选"
-                style={{ borderRadius: 12, border: 'none', background: 'transparent', lineHeight: 1.6 }}
+                style={{ borderRadius: token.borderRadiusLG, border: 'none', background: 'transparent', lineHeight: 1.6 }}
               />
             </div>
             <div>
-              <Button onClick={() => currentAgent && onCreateCandidate(currentAgent.agentId, candidateDraft)} disabled={!currentAgent} style={{ borderRadius: 12 }}>
+              <Button onClick={() => currentAgent && onCreateCandidate(currentAgent.agentId, candidateDraft)} disabled={!currentAgent} style={{ borderRadius: token.borderRadiusLG }}>
                 人工提交候选
               </Button>
             </div>
@@ -144,7 +140,7 @@ export default function MemoryTab({
             )}
           </Flex>
         </SectionCard>
-      </div>
-    </div>
+      </Flex>
+    </Flex>
   )
 }

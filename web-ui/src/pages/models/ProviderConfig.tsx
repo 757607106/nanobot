@@ -14,9 +14,10 @@ interface FieldGroupProps {
 }
 
 function FieldGroup({ label, children }: FieldGroupProps) {
+  const { token } = theme.useToken()
   return (
     <Flex vertical gap={6}>
-      <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
+      <Typography.Text strong style={{ fontSize: token.fontSizeSM }}>
         {label}
       </Typography.Text>
       {children}
@@ -138,11 +139,11 @@ export default function ProviderConfig({
                 aria-label="API Key"
                 value={providerConfig?.apiKey || ''}
                 onChange={(e) => onUpdateCredential('apiKey', e.target.value)}
-                style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)' }}
+                style={{ borderRadius: 12, background: token.colorFillAlter }}
               />
               {providerMeta.envKey ? (
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
-                  可通过环境变量 <Typography.Text code style={{ fontSize: 'var(--nb-text-xs)' }}>{providerMeta.envKey}</Typography.Text> 配置
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                  可通过环境变量 <Typography.Text code style={{ fontSize: token.fontSizeSM }}>{providerMeta.envKey}</Typography.Text> 配置
                 </Typography.Text>
               ) : null}
             </FieldGroup>
@@ -157,7 +158,7 @@ export default function ProviderConfig({
                 value={providerConfig?.apiBase || ''}
                 onChange={(e) => onUpdateCredential('apiBase', e.target.value)}
                 placeholder={providerMeta.defaultApiBase || undefined}
-                style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)' }}
+                style={{ borderRadius: 12, background: token.colorFillAlter }}
               />
             </FieldGroup>
           ) : null}

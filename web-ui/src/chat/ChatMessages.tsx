@@ -103,23 +103,23 @@ export function ChatMessages({
     const isTool = item.role === 'tool'
     const canReload = isAssistant && !isRequesting
 
-    let background = 'var(--nb-surface-panel-bg)'
-    let borderColor = 'var(--nb-surface-panel-border)'
+    let background = token.colorBgContainer
+    let borderColor = token.colorBorderSecondary
     let color = token.colorText
 
     if (isUser) {
-      background = 'var(--nb-surface-soft)'
-      borderColor = 'var(--nb-border)'
-      color = 'var(--nb-ink)'
+      background = token.colorFillAlter
+      borderColor = token.colorBorder
+      color = token.colorText
     } else if (isTool) {
       background = 'transparent'
       borderColor = 'transparent'
     }
 
     if (info.status === 'error') {
-      borderColor = 'var(--nb-error)'
+      borderColor = token.colorError
     } else if (info.status === 'abort') {
-      borderColor = 'var(--nb-warning)'
+      borderColor = token.colorWarning
     }
 
     return {
@@ -136,9 +136,9 @@ export function ChatMessages({
         <Avatar
           icon={isUser ? <UserOutlined /> : <RobotOutlined />}
           style={{
-            background: isUser ? 'var(--nb-accent)' : 'var(--nb-surface-panel-bg)',
-            color: isUser ? 'var(--nb-ink)' : token.colorText,
-            boxShadow: 'var(--nb-shadow-soft)',
+            background: isUser ? token.colorPrimary : token.colorBgContainer,
+            color: isUser ? '#fff' : token.colorText,
+            boxShadow: token.boxShadow,
           }}
         />
       ),
@@ -161,7 +161,7 @@ export function ChatMessages({
           background,
           border: isTool ? 'none' : `1px solid ${borderColor}`,
           color,
-          boxShadow: isUser ? '0 12px 24px rgba(36, 88, 198, 0.12)' : isTool ? 'none' : 'var(--nb-surface-soft-shadow)',
+          boxShadow: isUser ? '0 12px 24px rgba(36, 88, 198, 0.12)' : isTool ? 'none' : token.boxShadow,
           backdropFilter: isUser ? 'none' : isTool ? 'none' : 'blur(28px) saturate(140%)',
         },
         header: {
@@ -173,17 +173,17 @@ export function ChatMessages({
       },
       header: isTool ? null : (
         <Flex justify="space-between" gap={12} wrap="wrap">
-          <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+          <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
             {getChatMessageTitle(item, { assistantLabel })}
           </Text>
-          <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+          <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
             {item.createdAt ? formatDateTimeZh(item.createdAt) : '刚刚'}
           </Text>
         </Flex>
       ),
       footer: isAssistant ? (
         <Space size={12} wrap>
-          <Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+          <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
             {getMessageStatusLabel(info.status)}
           </Text>
           {canReload ? (

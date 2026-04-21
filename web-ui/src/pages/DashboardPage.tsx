@@ -238,17 +238,17 @@ export default function DashboardPage() {
       <PageHeader
         title="控制台总览"
         subtitle={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Flex align="center" gap={8}>
             <div style={{
-              width: 7,
-              height: 7,
+              width: 8,
+              height: 8,
               borderRadius: '50%',
               background: isSystemOnline ? token.colorSuccess : token.colorWarning,
             }} />
-            <span style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 'var(--nb-text-sm)', letterSpacing: '0.04em' }}>
+            <Typography.Text type="secondary" style={{ fontFamily: token.fontFamilyCode }}>
               {isSystemOnline ? '系统运行中' : '系统待机'} · {dateString}
-            </span>
-          </div>
+            </Typography.Text>
+          </Flex>
         }
         actions={
           <Flex gap={8} align="center">
@@ -257,7 +257,7 @@ export default function DashboardPage() {
               icon={<ReloadOutlined spin={loading || chartsLoading} />}
               onClick={handleRefresh}
               disabled={loading && chartsLoading}
-              style={{ color: 'var(--nb-text-secondary)' }}
+              style={{ color: token.colorTextSecondary }}
             >
               刷新
             </Button>
@@ -265,7 +265,7 @@ export default function DashboardPage() {
         }
       />
 
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 'var(--nb-spacing-lg)' }} /> : null}
+      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: token.marginLG }} /> : null}
 
       {/* ── 第一排：核心指标卡 (对齐参考图) ── */}
       <div className="dashboard-metrics-grid">
@@ -291,7 +291,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 第二排：主图表区域 (左大右小) ── */}
-      <div className="dashboard-main-grid" style={{ marginTop: 'var(--nb-spacing-lg)' }}>
+      <div className="dashboard-main-grid" style={{ marginTop: token.marginLG }}>
         {/* 调用统计 */}
         <SectionCard 
           title="调用统计" 
@@ -304,21 +304,21 @@ export default function DashboardPage() {
 
         {/* Token 消费分析 */}
         <SectionCard title="Token 消费分析">
-          <Flex justify="space-around" align="center" style={{ marginBottom: 24, textAlign: 'center' }}>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>总 Token</Typography.Text>
-              <div style={{ fontSize: 24, fontWeight: 600 }}>{(overview?.totalTokens ?? 0).toLocaleString()}</div>
-            </div>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Prompt</Typography.Text>
-              <div style={{ fontSize: 24, fontWeight: 600 }}>{(overview?.promptTokens ?? 0).toLocaleString()}</div>
-            </div>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Completion</Typography.Text>
-              <div style={{ fontSize: 24, fontWeight: 600 }}>{(overview?.completionTokens ?? 0).toLocaleString()}</div>
-            </div>
+          <Flex justify="space-around" align="center" style={{ marginBottom: token.marginLG, textAlign: 'center' }}>
+            <Flex vertical align="center">
+              <Typography.Text type="secondary">总 Token</Typography.Text>
+              <Typography.Title level={3} style={{ margin: 0 }}>{(overview?.totalTokens ?? 0).toLocaleString()}</Typography.Title>
+            </Flex>
+            <Flex vertical align="center">
+              <Typography.Text type="secondary">Prompt</Typography.Text>
+              <Typography.Title level={3} style={{ margin: 0 }}>{(overview?.promptTokens ?? 0).toLocaleString()}</Typography.Title>
+            </Flex>
+            <Flex vertical align="center">
+              <Typography.Text type="secondary">Completion</Typography.Text>
+              <Typography.Title level={3} style={{ margin: 0 }}>{(overview?.completionTokens ?? 0).toLocaleString()}</Typography.Title>
+            </Flex>
           </Flex>
-          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>消费趋势</Typography.Text>
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: token.marginMD }}>消费趋势</Typography.Text>
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <TokenConsumptionPieChart data={analytics?.timeSeries ?? []} />}
           </Suspense>
@@ -326,25 +326,25 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 第三排：详情监控区域 (3等分) ── */}
-      <div className="dashboard-status-grid" style={{ marginTop: 'var(--nb-spacing-lg)' }}>
+      <div className="dashboard-status-grid" style={{ marginTop: token.marginLG }}>
         
         {/* AI智能体分析 */}
         <SectionCard title="AI智能体分析">
-          <Flex justify="space-between" style={{ marginBottom: 24 }}>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>智能体总数</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorPrimary }}>{overview?.activeAgents ?? agents.length}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>个</span></div>
-            </div>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>总对话数</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorInfo }}>{overview?.totalRuns ?? 0}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>次</span></div>
-            </div>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>工具调用总数</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorWarning }}>{analytics?.toolRanking.reduce((sum, item) => sum + item.count, 0) || 0}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>次</span></div>
-            </div>
+          <Flex justify="space-between" style={{ marginBottom: token.marginLG }}>
+            <Flex vertical>
+              <Typography.Text type="secondary">智能体总数</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorPrimary }}>{overview?.activeAgents ?? agents.length} <Typography.Text type="secondary">个</Typography.Text></Typography.Title>
+            </Flex>
+            <Flex vertical>
+              <Typography.Text type="secondary">总对话数</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorInfo }}>{overview?.totalRuns ?? 0} <Typography.Text type="secondary">次</Typography.Text></Typography.Title>
+            </Flex>
+            <Flex vertical>
+              <Typography.Text type="secondary">工具调用总数</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorWarning }}>{analytics?.toolRanking.reduce((sum, item) => sum + item.count, 0) || 0} <Typography.Text type="secondary">次</Typography.Text></Typography.Title>
+            </Flex>
           </Flex>
-          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>对话/工具调用分布 (TOP 3)</Typography.Text>
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: token.marginMD }}>对话/工具调用分布 (TOP 3)</Typography.Text>
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <ToolUsageBarChart data={analytics?.toolRanking?.slice(0, 3) ?? []} />}
           </Suspense>
@@ -352,21 +352,21 @@ export default function DashboardPage() {
 
         {/* 工具调用监控 */}
         <SectionCard title="工具调用监控">
-           <Flex justify="space-between" style={{ marginBottom: 24 }}>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>总调用次数</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorPrimary }}>{analytics?.toolRanking.reduce((sum, item) => sum + item.count, 0) || 0}</div>
-            </div>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>失败任务</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorError }}>{runMetrics.failed}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>次</span></div>
-            </div>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>成功率</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorSuccess }}>{runMetrics.successRate}</div>
-            </div>
+           <Flex justify="space-between" style={{ marginBottom: token.marginLG }}>
+            <Flex vertical>
+              <Typography.Text type="secondary">总调用次数</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorPrimary }}>{analytics?.toolRanking.reduce((sum, item) => sum + item.count, 0) || 0}</Typography.Title>
+            </Flex>
+            <Flex vertical>
+              <Typography.Text type="secondary">失败任务</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorError }}>{runMetrics.failed} <Typography.Text type="secondary">次</Typography.Text></Typography.Title>
+            </Flex>
+            <Flex vertical>
+              <Typography.Text type="secondary">成功率</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorSuccess }}>{runMetrics.successRate}</Typography.Title>
+            </Flex>
           </Flex>
-          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>最常用工具 TOP 10</Typography.Text>
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: token.marginMD }}>最常用工具 TOP 10</Typography.Text>
           <Suspense fallback={chartSkeleton()}>
             {chartsLoading ? chartSkeleton() : <ToolUsageBarChart data={analytics?.toolRanking ?? []} />}
           </Suspense>
@@ -374,33 +374,31 @@ export default function DashboardPage() {
 
         {/* 知识库使用情况 */}
         <SectionCard title="知识库使用情况">
-          <Flex justify="space-between" style={{ marginBottom: 24 }}>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>知识库总数</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorPrimary }}>{knowledgeBases.length}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>个</span></div>
-            </div>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>文件总数</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorSuccess }}>{kbSummary.totalFiles}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>个</span></div>
-            </div>
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>引擎类型</Typography.Text>
-              <div style={{ fontSize: 20, fontWeight: 600, color: token.colorWarning }}>{Object.keys(kbSummary.typeCounts).length}<span style={{ fontSize: 12, color: token.colorTextSecondary }}>种</span></div>
-            </div>
+          <Flex justify="space-between" style={{ marginBottom: token.marginLG }}>
+            <Flex vertical>
+              <Typography.Text type="secondary">知识库总数</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorPrimary }}>{knowledgeBases.length} <Typography.Text type="secondary">个</Typography.Text></Typography.Title>
+            </Flex>
+            <Flex vertical>
+              <Typography.Text type="secondary">文件总数</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorSuccess }}>{kbSummary.totalFiles} <Typography.Text type="secondary">个</Typography.Text></Typography.Title>
+            </Flex>
+            <Flex vertical>
+              <Typography.Text type="secondary">引擎类型</Typography.Text>
+              <Typography.Title level={4} style={{ margin: 0, color: token.colorWarning }}>{Object.keys(kbSummary.typeCounts).length} <Typography.Text type="secondary">种</Typography.Text></Typography.Title>
+            </Flex>
           </Flex>
 
           {knowledgeBases.length > 0 && (
-            <>
-              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>引擎分布</Typography.Text>
-              <div>
-                {Object.entries(kbSummary.typeCounts).map(([type, count]) => (
-                  <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <div style={{ height: 16, background: token.colorPrimary, borderRadius: 4, flex: 1 }} />
-                    <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{type} ({count})</Typography.Text>
-                  </div>
-                ))}
-              </div>
-            </>
+            <Flex vertical gap={token.marginXS}>
+              <Typography.Text type="secondary">引擎分布</Typography.Text>
+              {Object.entries(kbSummary.typeCounts).map(([type, count]) => (
+                <Flex key={type} align="center" gap={token.marginXS}>
+                  <div style={{ height: 6, background: token.colorPrimary, borderRadius: token.borderRadius, flex: 1 }} />
+                  <Typography.Text type="secondary">{type} ({count})</Typography.Text>
+                </Flex>
+              ))}
+            </Flex>
           )}
         </SectionCard>
       </div>

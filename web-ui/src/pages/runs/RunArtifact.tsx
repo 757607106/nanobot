@@ -1,4 +1,4 @@
-import { Button, Card, Empty, Space, Tag, Typography } from 'antd'
+import { Button, Card, Empty, Space, Tag, Typography, theme } from 'antd'
 import {
   DownloadOutlined,
   SyncOutlined,
@@ -31,6 +31,7 @@ export default function RunArtifactPanel({
   onLifecycle,
   onRetentionPolicy,
 }: RunArtifactProps) {
+  const { token } = theme.useToken()
   const artifactAudit = artifact?.audit || boundaryAudit?.artifact || null
   const lifecycleStatus = artifactAudit?.lifecycleStatus
   const retentionPolicy = artifactAudit?.retentionPolicy || null
@@ -54,11 +55,11 @@ export default function RunArtifactPanel({
           padding: '24px 0',
         }}
       >
-        <FileTextOutlined style={{ fontSize: 48, color: 'var(--ant-color-primary)', marginBottom: 16 }} />
+        <FileTextOutlined style={{ fontSize: 48, color: token.colorPrimary, marginBottom: 16 }} />
         <Title level={4} style={{ margin: 0, marginBottom: 8 }}>
           {artifact?.fileName || artifactAudit?.fileName || '运行归档'}
         </Title>
-        <Text type="secondary" style={{ marginBottom: 16, fontFamily: 'var(--nb-font-mono)', fontSize: 'var(--nb-text-xs)' }}>
+        <Text type="secondary" style={{ marginBottom: 16, fontFamily: token.fontFamilyCode, fontSize: token.fontSizeSM }}>
           {artifact?.artifactPath || run.artifactPath}
         </Text>
 

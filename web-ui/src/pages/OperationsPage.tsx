@@ -120,7 +120,7 @@ export default function OperationsPage() {
               {logs.items.slice(0, 3).map((item) => (
                 <div
                   key={item.path}
-                  style={{ overflow: 'hidden', borderRadius: 'var(--nb-radius-sm)', border: `1px solid ${token.colorBorderSecondary}` }}
+                  style={{ overflow: 'hidden', borderRadius: token.borderRadius, border: `1px solid ${token.colorBorderSecondary}` }}
                 >
                   <Flex vertical gap={12} style={{ padding: 18 }}>
                     <Flex justify="space-between" align="flex-start" gap={12} wrap="wrap">
@@ -136,13 +136,13 @@ export default function OperationsPage() {
                     <pre
                       style={{
                         margin: 0,
-                        padding: 'var(--nb-spacing-md)',
+                        padding: token.paddingMD,
                         overflow: 'auto',
-                        borderRadius: 'var(--nb-radius-sm)',
+                        borderRadius: token.borderRadius,
                         background: token.colorBgLayout,
                         color: token.colorText,
-                        fontFamily: 'var(--nb-font-mono)',
-                        fontSize: 'var(--nb-text-xs)',
+                        fontFamily: token.fontFamilyCode,
+                        fontSize: token.fontSizeSM,
                         lineHeight: 1.6,
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
@@ -166,8 +166,8 @@ export default function OperationsPage() {
                 <div
                   key={item.name}
                   style={{
-                    padding: 'var(--nb-spacing-md)',
-                    borderRadius: 'var(--nb-radius-sm)',
+                    padding: token.paddingMD,
+                    borderRadius: token.borderRadius,
                     border: `1px solid ${token.colorBorderSecondary}`,
                     background: token.colorBgLayout,
                   }}

@@ -1,4 +1,4 @@
-import { Button, Empty, Flex, Segmented, Space, Tag, Tooltip, Typography } from 'antd'
+import { Button, Empty, Flex, Segmented, Space, Tag, Tooltip, Typography, theme } from 'antd'
 import { DeleteOutlined, PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import SectionCard from '../../components/console/SectionCard'
@@ -25,6 +25,7 @@ export default function ModelBindings({
   onAddModel,
   onCapabilityChange,
 }: ModelBindingsProps) {
+  const { token } = theme.useToken()
   return (
     <SectionCard
       title="模型绑定"
@@ -58,10 +59,10 @@ export default function ModelBindings({
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  padding: '20px',
-                  borderRadius: 20,
-                  background: isDefault ? 'var(--nb-card-selected-bg)' : 'var(--nb-card-subtle-bg)',
-                  border: isDefault ? '1px solid var(--nb-accent)' : '1px solid var(--nb-card-subtle-border)',
+                  padding: `${token.paddingLG}px`,
+                  borderRadius: token.borderRadiusLG,
+                  background: isDefault ? token.colorPrimaryBg : token.colorBgContainer,
+                  border: isDefault ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorBorderSecondary}`,
                   boxShadow: isDefault ? '0 8px 24px rgba(99, 102, 241, 0.06)' : 'none',
                   minHeight: 160,
                   transition: 'all 0.3s ease',
@@ -74,28 +75,28 @@ export default function ModelBindings({
                     <Flex align="center" gap={6}>
                       {!hasModel && (
                         <Tooltip title="模型 ID 未配置，无法使用">
-                          <WarningOutlined style={{ color: 'var(--ant-color-warning)', fontSize: 'var(--nb-text-sm)' }} />
+                          <WarningOutlined style={{ color: token.colorWarning, fontSize: token.fontSizeSM }} />
                         </Tooltip>
                       )}
                       <Typography.Text
                         strong
                         ellipsis={{ tooltip: binding.model || '未配置模型 ID' }}
                         style={{
-                          fontSize: 'var(--nb-text-lg)',
+                          fontSize: token.fontSizeLG,
                           letterSpacing: '-0.01em',
-                          fontFamily: hasModel ? 'var(--nb-font-mono)' : undefined,
-                          color: hasModel ? undefined : 'var(--ant-color-text-quaternary)',
+                          fontFamily: hasModel ? token.fontFamilyCode : undefined,
+                          color: hasModel ? undefined : token.colorTextQuaternary,
                         }}
                       >
                         {binding.model || '未配置模型 ID'}
                       </Typography.Text>
                     </Flex>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)', opacity: 0.8 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, opacity: 0.8 }}>
                       {binding.label || binding.bindingName}
                     </Typography.Text>
                   </Flex>
                   {isDefault && (
-                    <Tag color="success" bordered={false} style={{ margin: 0, borderRadius: 8, fontSize: 'var(--nb-text-2xs)', fontWeight: 'var(--nb-font-weight-strong)' }}>
+                    <Tag color="success" bordered={false} style={{ margin: 0, borderRadius: token.borderRadiusSM, fontSize: token.fontSizeSM, fontWeight: token.fontWeightStrong }}>
                       DEFAULT
                     </Tag>
                   )}
@@ -115,7 +116,7 @@ export default function ModelBindings({
                     <Tag
                       color={capabilityColor(binding.capabilityType as CapabilityType)}
                       bordered={false}
-                      style={{ borderRadius: 6, fontSize: 'var(--nb-text-2xs)', padding: '0 8px' }}
+                      style={{ borderRadius: token.borderRadiusSM, fontSize: token.fontSizeSM, padding: `0 ${token.paddingXS}px` }}
                     >
                       {capabilityLabel(binding.capabilityType as CapabilityType).toUpperCase()}
                     </Tag>
@@ -123,7 +124,7 @@ export default function ModelBindings({
                 </div>
 
                 {/* 底部操作 */}
-                <Flex justify="space-between" align="center" style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
+                <Flex justify="space-between" align="center" style={{ marginTop: 'auto', paddingTop: token.padding, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
                   <Space size={4}>
                     <Button type="text" size="small" onClick={() => onTest(binding.model || '')} style={{ opacity: 0.7 }}>
                       测试连接
@@ -134,7 +135,7 @@ export default function ModelBindings({
                     {!isDefault && binding.capabilityType !== 'embedding' ? (
                       <Button 
                         size="small" 
-                        style={{ borderRadius: 8, fontSize: 'var(--nb-text-xs)' }} 
+                        style={{ borderRadius: token.borderRadiusLG, fontSize: token.fontSizeSM }} 
                         onClick={() => onSetDefault(binding.bindingName)}
                       >
                         设为默认

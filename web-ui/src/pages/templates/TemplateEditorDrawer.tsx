@@ -9,7 +9,8 @@ import {
   Row,
   Col,
   Flex,
-  Spin
+  Spin,
+  theme
 } from 'antd'
 import SectionCard from '../../components/console/SectionCard'
 import { SaveOutlined } from '@ant-design/icons'
@@ -27,6 +28,7 @@ interface Props {
 export default function TemplateEditorDrawer({ open, onClose, templateName, onSaved }: Props) {
   const message = useToast()
   const [form] = Form.useForm()
+  const { token } = theme.useToken()
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -100,7 +102,7 @@ export default function TemplateEditorDrawer({ open, onClose, templateName, onSa
       open={open}
       onClose={onClose}
       destroyOnClose
-      styles={{ body: { background: 'var(--nb-body-bg)', padding: 'var(--nb-spacing-lg)' } }}
+      styles={{ body: { background: token.colorBgLayout, padding: token.paddingLG } }}
       extra={
         <Flex gap={8}>
           <Button onClick={onClose} style={{ borderRadius: 12 }}>取消</Button>
@@ -145,13 +147,13 @@ export default function TemplateEditorDrawer({ open, onClose, templateName, onSa
           <Col xs={24} lg={14} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <SectionCard title="核心指令">
               <Form.Item name="systemPrompt" style={{ marginBottom: 0 }}>
-                <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
+                <div style={{ padding: '2px', borderRadius: 14, background: token.colorBgContainer }}>
                   <Input.TextArea 
                     placeholder="描述该员工的角色、目标、边界与沟通风格…"
                     autoSize={{ minRows: 20, maxRows: 30 }}
                     style={{
                       borderRadius: 12, border: 'none', background: 'transparent',
-                      fontFamily: 'var(--nb-font-mono)',
+                      fontFamily: token.fontFamilyCode,
                       lineHeight: 1.6
                     }}
                   />

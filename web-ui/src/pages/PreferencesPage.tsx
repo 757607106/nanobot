@@ -3,7 +3,7 @@ import {
   MoonOutlined,
   SunOutlined,
 } from '@ant-design/icons'
-import { Flex, Segmented, Typography } from 'antd'
+import { Flex, Segmented, Typography, theme } from 'antd'
 import PageHeader from '../components/console/PageHeader'
 import SectionCard from '../components/console/SectionCard'
 import { useThemeMode, type ThemePreference } from '../themeMode'
@@ -16,6 +16,7 @@ const themeOptions: { value: ThemePreference; label: string; icon: JSX.Element }
 
 export default function PreferencesPage() {
   const { preference, setPreference } = useThemeMode()
+  const { token } = theme.useToken()
 
   return (
     <div className="page-stack">
@@ -23,12 +24,11 @@ export default function PreferencesPage() {
         title="偏好设置"
         subtitle="显示 · 主题"
       />
-
-      <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)' }}>
+      <div className="page-content-wrapper" style={{ paddingInline: token.paddingLG }}>
         <div 
           style={{
             display: 'grid',
-            gap: 20,
+            gap: 24,
             gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
           }}
         >
@@ -43,8 +43,8 @@ export default function PreferencesPage() {
                 onChange={(value) => setPreference(value as ThemePreference)}
                 options={themeOptions.map(({ value, label, icon }) => ({
                   value,
-                  icon: <span style={{ fontSize: 'var(--nb-text-lg)' }}>{icon}</span>,
-                  label: <span style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)' }}>{label}</span>,
+                  icon: <span style={{ fontSize: token.fontSizeLG }}>{icon}</span>,
+                  label: <span style={{ fontSize: token.fontSizeSM, fontWeight: 500 }}>{label}</span>,
                 }))}
                 style={{ borderRadius: 12, padding: 4 }}
               />

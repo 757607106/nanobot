@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState } from 'react'
-import { Alert, Button, Card, Space, Table, Tag, Typography, Select, Skeleton } from 'antd'
+import { Alert, Button, Card, Space, Table, Tag, Typography, Select, Skeleton, theme } from 'antd'
 import type { TableProps } from 'antd'
 import { ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -36,21 +36,22 @@ function formatDuration(createdAt: string, finishedAt?: string | null): string {
 }
 
 /** 状态图标 */
-function statusIcon(status: string) {
+function statusIcon(status: string, token: any) {
   switch (status) {
     case 'succeeded':
-      return <CheckCircleOutlined style={{ color: 'var(--ant-color-success)', marginRight: 4 }} />
+      return <CheckCircleOutlined style={{ color: token.colorSuccess, marginRight: 4 }} />
     case 'failed':
-      return <CloseCircleOutlined style={{ color: 'var(--ant-color-error)', marginRight: 4 }} />
+      return <CloseCircleOutlined style={{ color: token.colorError, marginRight: 4 }} />
     case 'running':
     case 'queued':
-      return <LoadingOutlined style={{ color: 'var(--ant-color-warning)', marginRight: 4 }} />
+      return <LoadingOutlined style={{ color: token.colorWarning, marginRight: 4 }} />
     default:
-      return <ClockCircleOutlined style={{ color: 'var(--ant-color-text-quaternary)', marginRight: 4 }} />
+      return <ClockCircleOutlined style={{ color: token.colorTextQuaternary, marginRight: 4 }} />
   }
 }
 
 export default function RunsList({ runs, loading, error, onRefresh }: RunsListProps) {
+  const { token } = theme.useToken()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const threadFilter = (searchParams.get('threadId') || '').trim()
@@ -98,7 +99,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       dataIndex: 'label',
       key: 'label',
       render: (text) => (
-        <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{text}</Text>
+        <Text strong style={{ fontSize: token.fontSizeSM }}>{text}</Text>
       ),
     },
     {
@@ -107,7 +108,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       width: 130,
       render: (_, record) => (
         <Tag color={statusBadgeStatus(record.status)} bordered={false}>
-          {statusIcon(record.status)}
+          {statusIcon(record.status, token)}
           {statusLabel(record.status)}
         </Tag>
       ),
@@ -130,7 +131,7 @@ export default function RunsList({ runs, loading, error, onRefresh }: RunsListPr
       key: 'duration',
       width: 100,
       render: (_, record) => (
-        <Text type="secondary" style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 'var(--nb-text-sm)' }}>
+        <Text type="secondary" style={{ fontFamily: token.fontFamilyCode, fontSize: token.fontSizeSM }}>
           {formatDuration(record.createdAt ?? '', record.finishedAt)}
         </Text>
       ),

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Empty, Space, Spin, Typography } from 'antd'
+import { Button, Empty, Space, Spin, Typography, theme } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import type { KnowledgeMindmapNode } from '../../types'
 
@@ -21,6 +21,7 @@ function mindmapToMarkdown(node: KnowledgeMindmapNode | null | undefined, level 
 }
 
 export function KnowledgeMindmapTab({ mindmapLoading, mindmap, onRegenerate }: KnowledgeMindmapTabProps) {
+  const { token } = theme.useToken()
   const svgRef = useRef<SVGSVGElement | null>(null)
   const markmapRef = useRef<any>(null)
   const [rendering, setRendering] = useState(false)
@@ -97,7 +98,7 @@ export function KnowledgeMindmapTab({ mindmapLoading, mindmap, onRegenerate }: K
 
       <div style={{ position: 'relative', width: '100%' }}>
         {mindmapLoading || rendering ? (
-          <div className="knowledge-loading-panel" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, background: 'rgba(var(--ant-color-bg-base), 0.7)' }}>
+          <div className="knowledge-loading-panel" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, background: token.colorBgContainer }}>
             <Spin />
           </div>
         ) : null}

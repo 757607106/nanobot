@@ -1,4 +1,4 @@
-import { Button, Empty, Select, Space, Table } from 'antd'
+import { Button, Empty, Select, Space, Table, theme } from 'antd'
 import { ReloadOutlined, AppstoreOutlined, ProfileOutlined, HistoryOutlined, FieldTimeOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import SectionCard from '../../components/console/SectionCard'
@@ -28,6 +28,7 @@ export function KnowledgeEvaluationTab({
   onRun,
   onRefresh,
 }: KnowledgeEvaluationTabProps) {
+  const { token } = theme.useToken()
   const selectedBenchmark = benchmarks.find((item) => item.benchmarkId === selectedBenchmarkId) || null
   const questionCount = selectedBenchmark?.questionCount || selectedBenchmark?.question_count || 0
 
@@ -41,7 +42,7 @@ export function KnowledgeEvaluationTab({
           </Button>
         )}
       >
-        <div className="knowledge-eval-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--nb-border)' }}>
+        <div className="knowledge-eval-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: `1px solid ${token.colorBorder}` }}>
           <MetricCard
             label="当前题库"
             value={selectedBenchmark?.name || '未选择'}

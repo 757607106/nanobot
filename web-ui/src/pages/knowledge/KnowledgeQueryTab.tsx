@@ -14,6 +14,7 @@ import {
   Switch,
   Tag,
   Typography,
+  theme,
 } from 'antd'
 import { SaveOutlined, SearchOutlined } from '@ant-design/icons'
 import SectionCard from '../../components/console/SectionCard'
@@ -108,6 +109,7 @@ export function KnowledgeQueryTab({
       .map(([source, chunks]) => ({ source, chunks }))
       .sort((left, right) => left.source.localeCompare(right.source))
   }, [queryResult])
+  const { token } = theme.useToken()
   const answerMessage = deriveAnswerMessage(queryResult)
   const resultStats = useMemo(() => ({
     chunkCount: queryResult?.data?.chunks?.length || 0,
@@ -228,22 +230,22 @@ export function KnowledgeQueryTab({
         {queryResult ? (
           <>
             {/* Console-style inline summary bar - Replacing heavy metric cards */}
-            <Flex className="knowledge-summary-bar" align="center" gap={32} wrap="wrap" style={{ marginBottom: 32, paddingBottom: 16, borderBottom: '1px solid var(--nb-border)' }}>
+            <Flex className="knowledge-summary-bar" align="center" gap={32} wrap="wrap" style={{ marginBottom: token.marginLG, paddingBottom: token.margin, borderBottom: `1px solid ${token.colorBorder}` }}>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>回答</Typography.Text>
-                <Typography.Text style={{ fontSize: 'var(--nb-title-xs)', fontWeight: 'var(--nb-font-weight-title)', fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em', color: answerMessage ? 'var(--ant-color-success)' : 'inherit' }}>{answerMessage ? '已生成' : '—'}</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, textTransform: 'uppercase', letterSpacing: '0.05em' }}>回答</Typography.Text>
+                <Typography.Text style={{ fontSize: token.fontSizeHeading5, fontWeight: token.fontWeightStrong, letterSpacing: '-0.02em', color: answerMessage ? token.colorSuccess : 'inherit' }}>{answerMessage ? '已生成' : '—'}</Typography.Text>
               </Flex>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>参考片段</Typography.Text>
-                <Typography.Text style={{ fontSize: 'var(--nb-title-xs)', fontWeight: 'var(--nb-font-weight-title)', fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em' }}>{resultStats.chunkCount}</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, textTransform: 'uppercase', letterSpacing: '0.05em' }}>参考片段</Typography.Text>
+                <Typography.Text style={{ fontSize: token.fontSizeHeading5, fontWeight: token.fontWeightStrong, letterSpacing: '-0.02em' }}>{resultStats.chunkCount}</Typography.Text>
               </Flex>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>结构信息</Typography.Text>
-                <Typography.Text style={{ fontSize: 'var(--nb-title-xs)', fontWeight: 'var(--nb-font-weight-title)', fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em' }}>{resultStats.entityCount + resultStats.relationshipCount}</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, textTransform: 'uppercase', letterSpacing: '0.05em' }}>结构信息</Typography.Text>
+                <Typography.Text style={{ fontSize: token.fontSizeHeading5, fontWeight: token.fontWeightStrong, letterSpacing: '-0.02em' }}>{resultStats.entityCount + resultStats.relationshipCount}</Typography.Text>
               </Flex>
               <Flex vertical gap={4} style={{ minWidth: 100 }}>
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>来源文件</Typography.Text>
-                <Typography.Text style={{ fontSize: 'var(--nb-title-xs)', fontWeight: 'var(--nb-font-weight-title)', fontFamily: 'var(--nb-font-display)', letterSpacing: '-0.02em' }}>{resultStats.referenceCount}</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, textTransform: 'uppercase', letterSpacing: '0.05em' }}>来源文件</Typography.Text>
+                <Typography.Text style={{ fontSize: token.fontSizeHeading5, fontWeight: token.fontWeightStrong, letterSpacing: '-0.02em' }}>{resultStats.referenceCount}</Typography.Text>
               </Flex>
             </Flex>
 
@@ -258,7 +260,7 @@ export function KnowledgeQueryTab({
                   {answerMessage ? (
                     <section>
                       <Typography.Text className="nb-section-label">参考回答</Typography.Text>
-                      <Paragraph style={{ whiteSpace: 'pre-wrap', fontSize: 'var(--nb-text-md)', lineHeight: 1.6, margin: 0 }}>
+                      <Paragraph style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, margin: 0 }}>
                         {answerMessage}
                       </Paragraph>
                     </section>
@@ -270,10 +272,10 @@ export function KnowledgeQueryTab({
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
                         {groupedChunks.map((group) => (
                           <div key={group.source} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', color: 'var(--ant-color-primary)' }}>{group.source}</Typography.Text>
+                            <Typography.Text strong style={{ fontSize: token.fontSizeSM, color: token.colorPrimary }}>{group.source}</Typography.Text>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                               {group.chunks.map((item, index) => (
-                                <div key={index} className="knowledge-chunk-inline" style={{ padding: '12px 16px', background: 'var(--nb-surface-soft)', borderRadius: 'var(--nb-radius-md)' }}>
+                                <div key={index} className="knowledge-chunk-inline" style={{ padding: '12px 16px', background: token.colorBgContainer, borderRadius: token.borderRadiusLG }}>
                                   <Space wrap size={8} style={{ marginBottom: 8 }}>
                                     <TagLabel label={`#${index + 1}`} />
                                     {typeof item.score === 'number' ? (
@@ -284,7 +286,7 @@ export function KnowledgeQueryTab({
                                     ) : null}
                                     <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setSelectedChunk(item)}>详情</Button>
                                   </Space>
-                                  <Paragraph ellipsis={{ rows: 3 }} style={{ marginBottom: 0, color: 'var(--ant-color-text-secondary)', fontSize: 'var(--nb-text-sm)' }}>
+                                  <Paragraph ellipsis={{ rows: 3 }} style={{ marginBottom: 0, color: token.colorTextSecondary, fontSize: token.fontSizeSM }}>
                                     {getChunkPreview(String(item.content || ''), 160)}
                                   </Paragraph>
                                 </div>
@@ -312,19 +314,19 @@ export function KnowledgeQueryTab({
                               <Typography.Text className="nb-section-label">检索信息</Typography.Text>
                               <div className="knowledge-metadata-list">
                                 {Object.entries(queryResult.metadata || {}).map(([key, value]) => (
-                                  <div key={key} className="knowledge-metadata-item" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                                  <div key={key} className="knowledge-metadata-item" style={{ fontSize: token.fontSizeSM }}>
                                     <Text type="secondary">{key}</Text>
                                     <span style={{ textAlign: 'right' }}>{Array.isArray(value) ? value.join(', ') : String(value)}</span>
                                   </div>
                                 ))}
                                 {queryResult.message ? (
-                                  <div className="knowledge-metadata-item" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                                  <div className="knowledge-metadata-item" style={{ fontSize: token.fontSizeSM }}>
                                     <Text type="secondary">提示</Text>
                                     <span style={{ textAlign: 'right' }}>{queryResult.message}</span>
                                   </div>
                                 ) : null}
                                 {(!queryResult.metadata || Object.keys(queryResult.metadata).length === 0) && !queryResult.message && (
-                                  <Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>无</Text>
+                                  <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>无</Text>
                                 )}
                               </div>
                             </section>
@@ -335,11 +337,11 @@ export function KnowledgeQueryTab({
                                 size="small"
                                 split={false}
                                 dataSource={queryResult.data?.entities || []}
-                                locale={{ emptyText: <Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>暂无</Text> }}
+                                locale={{ emptyText: <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>暂无</Text> }}
                                 renderItem={(item) => (
                                   <List.Item style={{ padding: '4px 0' }}>
                                     <div style={{ width: '100%' }}>
-                                      <Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{String(item.entity_name || item.entity_type || 'Entity')}</Text>
+                                      <Text strong style={{ fontSize: token.fontSizeSM }}>{String(item.entity_name || item.entity_type || 'Entity')}</Text>
                                       <Paragraph type="secondary" ellipsis={{ rows: 1 }} style={{ marginBottom: 0, fontSize: '13px' }}>
                                         {String(item.description || '') || '无描述'}
                                       </Paragraph>
@@ -355,9 +357,9 @@ export function KnowledgeQueryTab({
                                 size="small"
                                 split={false}
                                 dataSource={queryResult.data?.references || []}
-                                locale={{ emptyText: <Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>暂无</Text> }}
+                                locale={{ emptyText: <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>暂无</Text> }}
                                 renderItem={(item) => (
-                                  <List.Item style={{ padding: '4px 0', fontSize: 'var(--nb-text-sm)' }}>
+                                  <List.Item style={{ padding: '4px 0', fontSize: token.fontSizeSM }}>
                                     {String(item.file_path || item.reference_id || '')}
                                   </List.Item>
                                 )}

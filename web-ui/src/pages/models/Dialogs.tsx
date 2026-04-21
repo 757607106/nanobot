@@ -18,9 +18,10 @@ interface FieldGroupProps {
 }
 
 function FieldGroup({ label, children }: FieldGroupProps) {
+  const { token } = theme.useToken()
   return (
     <Flex vertical gap={6}>
-      <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
+      <Typography.Text strong style={{ fontSize: token.fontSizeSM }}>
         {label}
       </Typography.Text>
       {children}
@@ -359,8 +360,8 @@ export function TestConnectionDialog({
                     borderRadius: token.borderRadius,
                     overflowX: 'auto',
                     background: token.colorBgContainer,
-                    fontFamily: 'var(--nb-font-mono)',
-                    fontSize: 'var(--nb-text-xs)',
+                    fontFamily: token.fontFamilyCode,
+                    fontSize: token.fontSizeSM,
                   }}
                 >
                   {result.responsePreview}

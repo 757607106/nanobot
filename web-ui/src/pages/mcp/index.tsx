@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { App, Button, Card, Empty, Flex, Input, Skeleton, Space, Switch, Tag, Typography, Tabs, Popconfirm } from 'antd'
+import { App, Button, Card, Empty, Flex, Input, Skeleton, Space, Switch, Tag, Typography, Tabs, Popconfirm, theme } from 'antd'
 import { CodeOutlined, DeleteOutlined, GlobalOutlined, PlusOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { api } from '../../api'
@@ -33,6 +33,7 @@ function McpCard({
   onDelete: (entry: McpServerEntry) => void
   onClick: () => void
 }) {
+  const { token } = theme.useToken()
   const icon = entry.transport === 'stdio' ? <CodeOutlined /> : <GlobalOutlined />
   const preview =
     entry.transport === 'stdio'
@@ -46,7 +47,7 @@ function McpCard({
   return (
     <motion.div
       className="skill-card"
-      whileHover={{ y: -2, boxShadow: 'var(--nb-surface-soft-shadow)' }}
+      whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
       style={{ cursor: 'pointer' }}
       onClick={onClick}
     >
@@ -69,27 +70,27 @@ function McpCard({
             {icon}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)', display: 'block', letterSpacing: '-0.01em' }}>
+            <Typography.Text strong style={{ fontSize: 16, display: 'block', letterSpacing: '-0.01em' }}>
               {entry.displayName || entry.name}
             </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', display: 'block', marginBottom: 4, fontFamily: 'var(--nb-font-mono)' }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4, fontFamily: 'monospace' }}>
               {entry.name}
             </Typography.Text>
             <Flex gap={6} wrap="wrap">
-              <Tag bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}>
+              <Tag bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 12 }}>
                 {entry.transport === 'stdio' ? 'LOCAL' : 'REMOTE'}
               </Tag>
               <Tag
                 color={entry.enabled ? 'green' : 'default'}
                 bordered={false}
-                style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}
+                style={{ margin: 0, borderRadius: 6, fontSize: 12 }}
               >
                 {entry.enabled ? '已启用' : '已停用'}
               </Tag>
               <Tag
                 color={statusInfo.color}
                 bordered={false}
-                style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}
+                style={{ margin: 0, borderRadius: 6, fontSize: 12 }}
               >
                 {statusInfo.label}
               </Tag>
@@ -114,17 +115,17 @@ function McpCard({
       <Typography.Paragraph
         type="secondary"
         ellipsis={{ rows: 2 }}
-        style={{ fontSize: 'var(--nb-text-sm)', lineHeight: 1.6, marginBottom: 20, fontFamily: 'var(--nb-font-mono)' }}
+        style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 20, fontFamily: 'monospace' }}
       >
         {preview}
       </Typography.Paragraph>
 
-      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
+      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
         <Flex justify="space-between" align="center">
-          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', opacity: 0.6 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12, opacity: 0.6 }}>
             {entry.toolCountKnown ? `${entry.toolCount || 0} Tools` : '未同步工具'}
           </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', opacity: 0.6 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12, opacity: 0.6 }}>
             {entry.lastCheckedAt ? formatDateTimeZh(entry.lastCheckedAt) : '尚未测试'}
           </Typography.Text>
         </Flex>
@@ -136,6 +137,7 @@ function McpCard({
 export default function McpPage() {
   const { serverName } = useParams()
   const navigate = useNavigate()
+  const { token } = theme.useToken()
   const { modal } = App.useApp()
   const message = useToast()
   const [data, setData] = useState<McpServerListResponse | null>(null)
@@ -293,10 +295,10 @@ export default function McpPage() {
 
   if (loading && !data) {
     return (
-      <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)' }}>
-        <div style={{ paddingTop: 'var(--nb-spacing-lg)' }}>
+      <div className="page-stack" style={{ paddingInline: token.paddingLG }}>
+        <div style={{ paddingTop: token.paddingLG }}>
           <PageHeader title="服务集成" />
-          <div style={{ borderBottom: '1px solid var(--nb-card-subtle-border)', marginBottom: 24 }}>
+          <div style={{ borderBottom: `1px solid ${token.colorBorderSecondary}`, marginBottom: 24 }}>
             <Tabs items={[{ key: 'loading', label: '加载中...' }]} />
           </div>
         </div>
@@ -318,10 +320,10 @@ export default function McpPage() {
   }
 
   return (
-    <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)' }}>
-      <div style={{ paddingTop: 'var(--nb-spacing-lg)' }}>
+    <div className="page-stack" style={{ paddingInline: token.paddingLG }}>
+      <div style={{ paddingTop: token.paddingLG }}>
         <PageHeader title="服务集成" />
-        <div style={{ borderBottom: '1px solid var(--nb-card-subtle-border)' }}>
+        <div style={{ borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
           <Tabs
             activeKey={viewMode}
             onChange={(key) => setViewMode(key as any)}
@@ -366,7 +368,7 @@ export default function McpPage() {
                 ))}
               </div>
             ) : (
-              <Empty description="暂无匹配的服务连接" style={{ paddingBlock: 'var(--nb-spacing-3xl)' }}>
+              <Empty description="暂无匹配的服务连接" style={{ paddingBlock: 48 }}>
                 {!search && (
                   <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDialog}>
                     添加第一个连接
@@ -388,7 +390,7 @@ export default function McpPage() {
                 value={repoSource}
                 onChange={(e) => setRepoSource(e.target.value)}
                 placeholder="例如：https://github.com/abc/xyz"
-                prefix={<GlobalOutlined style={{ color: 'var(--nb-text-tertiary)', marginRight: 8 }} />}
+                prefix={<GlobalOutlined style={{ color: token.colorTextTertiary, marginRight: 8 }} />}
               />
               <Button size="large" onClick={() => setRepoSource('')} disabled={!repoSource}>清除</Button>
               <Button size="large" type="primary" loading={repoInspecting} onClick={() => void handleInspectRepository()} style={{ paddingInline: 24 }}>
@@ -428,8 +430,8 @@ export default function McpPage() {
                       <Typography.Text type="secondary" style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
                         预演命令
                       </Typography.Text>
-                      <div style={{ background: 'var(--nb-card-subtle-bg)', padding: '8px 12px', borderRadius: 6 }}>
-                        <Typography.Text style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 13 }}>
+                      <div style={{ background: token.colorFillAlter, padding: '8px 12px', borderRadius: 6 }}>
+                        <Typography.Text style={{ fontFamily: token.fontFamilyCode, fontSize: 13 }}>
                           {repoAnalysis.commandPreview}
                         </Typography.Text>
                       </div>

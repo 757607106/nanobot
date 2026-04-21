@@ -46,17 +46,17 @@ export default function AgentList({
   }, [agents, searchQuery])
 
   return (
-    <Flex vertical gap="var(--nb-spacing-xl)">
-      <Flex align="center" justify="space-between" wrap="wrap" gap="var(--nb-spacing-md)">
+    <Flex vertical gap={token.marginXL}>
+      <Flex align="center" justify="space-between" wrap gap={token.marginMD}>
         <div style={{ minWidth: 0 }}>
-          <Typography.Title level={3} style={{ margin: 0, fontWeight: 'var(--nb-font-weight-title)' }}>
+          <Typography.Title level={3} style={{ margin: 0, fontWeight: token.fontWeightStrong }}>
             数字员工大厅
           </Typography.Title>
-          <Typography.Text type="secondary" style={{ display: 'block', marginTop: 2 }}>
+          <Typography.Text type="secondary" style={{ display: 'block' }}>
             创建、编排数字员工的角色与能力
           </Typography.Text>
         </div>
-        <Flex gap="var(--nb-spacing-sm)" align="center" wrap="wrap">
+        <Flex gap={token.marginSM} align="center" wrap>
           <Input
             placeholder="搜索员工..."
             value={searchQuery}
@@ -71,7 +71,7 @@ export default function AgentList({
             icon={<PlusOutlined />}
             onClick={() => navigate('/studio/agents/new')}
             size="large"
-            style={{ borderRadius: 12, fontWeight: 'var(--nb-font-weight-medium)' }}
+            style={{ borderRadius: token.borderRadiusLG, fontWeight: token.fontWeightStrong }}
           >
             新员工入职
           </Button>

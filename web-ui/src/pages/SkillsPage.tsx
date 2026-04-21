@@ -68,6 +68,7 @@ function SkillCard({
   actionLoading?: boolean
   onAction?: () => void
 }) {
+  const { token } = theme.useToken()
   const isWorkspace = 'source' in skill && skill.source === 'workspace'
   const isDeletable = 'isDeletable' in skill ? skill.isDeletable : false
   const compatibility = 'compatibility' in skill ? skill.compatibility : undefined
@@ -75,13 +76,13 @@ function SkillCard({
 
   const avatarColor = `hsl(${(skill.name.charCodeAt(0) || 65) * 137 % 360}, 65%, 55%)`
 
-  const bg = type === 'marketplace' && installed ? 'var(--nb-card-selected-bg)' : 'var(--nb-card-subtle-bg)'
-  const border = type === 'marketplace' && installed ? '1px solid var(--nb-accent)' : '1px solid var(--nb-card-subtle-border)'
+  const bg = type === 'marketplace' && installed ? token.colorPrimaryBg : token.colorFillAlter
+  const border = type === 'marketplace' && installed ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorBorderSecondary}`
 
   return (
     <motion.div
       className={`skill-card ${type === 'marketplace' && installed ? 'is-installed-market' : ''}`}
-      whileHover={{ y: -2, boxShadow: 'var(--nb-surface-soft-shadow)' }}
+      whileHover={{ y: -2, boxShadow: token.boxShadowSecondary }}
     >
       <Flex justify="space-between" align="flex-start" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
@@ -95,26 +96,26 @@ function SkillCard({
               alignItems: 'center',
               justifyContent: 'center',
               color: '#fff',
-              fontSize: 'var(--nb-title-xs)',
-              fontWeight: 'var(--nb-font-weight-strong)',
+              fontSize: token.fontSizeHeading4,
+              fontWeight: 600,
               flexShrink: 0,
             }}
           >
             {skill.name.charAt(0).toUpperCase()}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)', display: 'block', letterSpacing: '-0.01em' }}>
+            <Typography.Text strong style={{ fontSize: token.fontSizeLG, display: 'block', letterSpacing: '-0.01em' }}>
               {skill.name}
             </Typography.Text>
             <Flex gap={6} style={{ marginTop: 4 }} wrap="wrap">
-              <Tag bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}>
+              <Tag bordered={false} style={{ margin: 0, borderRadius: 6, fontSize: token.fontSizeSM }}>
                 V{skill.version || '1.0.0'}
               </Tag>
               {type === 'installed' && (
                 <Tag
                   color={isWorkspace ? 'green' : 'blue'}
                   bordered={false}
-                  style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}
+                  style={{ margin: 0, borderRadius: 6, fontSize: token.fontSizeSM }}
                 >
                   {isWorkspace ? 'LOCAL' : 'CORE'}
                 </Tag>
@@ -123,7 +124,7 @@ function SkillCard({
                 <Tag
                   color={MARKET_COMPATIBILITY_META[compatibility]?.color || 'default'}
                   bordered={false}
-                  style={{ margin: 0, borderRadius: 6, fontSize: 'var(--nb-text-2xs)' }}
+                  style={{ margin: 0, borderRadius: 6, fontSize: token.fontSizeSM }}
                 >
                   {compatibilityLabel?.toUpperCase()}
                 </Tag>
@@ -139,7 +140,7 @@ function SkillCard({
               <Button size="small" type="text" danger icon={<DeleteOutlined />} loading={actionLoading} />
             </Popconfirm>
           ) : (
-            <Tag bordered={false} style={{ fontSize: 'var(--nb-text-2xs)', background: 'var(--nb-card-subtle-border)' }}>BUILTIN</Tag>
+            <Tag bordered={false} style={{ fontSize: token.fontSizeSM, background: token.colorFillAlter }}>BUILTIN</Tag>
           )
         ) : (
           <Button
@@ -158,33 +159,33 @@ function SkillCard({
       <Typography.Paragraph
         type="secondary"
         ellipsis={{ rows: 2 }}
-        style={{ fontSize: 'var(--nb-text-sm)', lineHeight: 1.6, marginBottom: 20 }}
+        style={{ fontSize: token.fontSizeSM, lineHeight: 1.6, marginBottom: 20 }}
       >
         {skill.description || '—'}
       </Typography.Paragraph>
 
-      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--nb-card-subtle-border)' }}>
+      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
         {type === 'installed' ? (
           <>
             {'author' in skill && skill.author && (
-              <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', display: 'block', marginBottom: 8, opacity: 0.6 }}>
+              <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, display: 'block', marginBottom: 8, opacity: 0.6 }}>
                 DEVELOPED BY {getSkillAuthorLabel(skill.author as string)?.toUpperCase()}
               </Typography.Text>
             )}
           </>
         ) : (
           <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', opacity: 0.6 }}>
+            <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, opacity: 0.6 }}>
               {('downloads' in skill ? skill.downloads : 0)} 次下载
             </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', opacity: 0.6 }}>
+            <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, opacity: 0.6 }}>
               {'updatedAt' in skill && skill.updatedAt ? formatDateTimeZh(skill.updatedAt).split(' ')[0] : '-'}
             </Typography.Text>
           </Flex>
         )}
         <Flex gap={6} wrap="wrap">
           {(skill.tags || []).slice(0, 3).map((tag) => (
-            <Tag key={tag} bordered={false} style={{ margin: 0, fontSize: 'var(--nb-text-2xs)', borderRadius: 4, background: 'var(--nb-card-subtle-border)' }}>
+            <Tag key={tag} bordered={false} style={{ margin: 0, fontSize: token.fontSizeSM, borderRadius: 4, background: token.colorFillAlter }}>
               {tag}
             </Tag>
           ))}
@@ -374,7 +375,7 @@ export default function SkillsPage() {
   }
 
   const renderInstalledView = () => (
-    <div style={{ padding: 'var(--nb-spacing-xs) 0' }}>
+    <div style={{ padding: '4px 0' }}>
       <SectionCard
         title="已安装能力目录"
         action={(
@@ -392,19 +393,19 @@ export default function SkillsPage() {
             placeholder="搜索已安装技能..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            style={{ maxWidth: 420, borderRadius: 12, border: 'none', background: 'var(--nb-card-subtle-bg)' }}
+            style={{ maxWidth: 420, borderRadius: 12, border: 'none', background: token.colorFillAlter }}
             size="large"
           />
 
           {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--nb-spacing-2xl)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
               <Spin size="large" />
             </div>
           ) : filteredSkills.length === 0 ? (
             <Empty
               image={false}
               description={skills.length === 0 ? '暂无数据' : '无匹配项'}
-              style={{ padding: 'var(--nb-spacing-2xl)' }}
+              style={{ padding: 48 }}
             />
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
@@ -426,7 +427,7 @@ export default function SkillsPage() {
   )
 
   const renderMarketView = () => (
-    <div style={{ padding: 'var(--nb-spacing-sm) 0' }}>
+    <div style={{ padding: '8px 0' }}>
       <SectionCard
         title="市场能力目录"
         action={(
@@ -454,11 +455,11 @@ export default function SkillsPage() {
           />
 
           {marketLoading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--nb-spacing-2xl)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
               <Spin size="large" />
             </div>
           ) : marketplaceSkills.length === 0 ? (
-            <Empty description="无匹配项" style={{ padding: 'var(--nb-spacing-2xl)' }} />
+            <Empty description="无匹配项" style={{ padding: 48 }} />
           ) : (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
@@ -580,7 +581,7 @@ export default function SkillsPage() {
             {
               key: 'installed',
               label: (
-                <span style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 500 }}>
+                <span style={{ fontSize: token.fontSizeSM, fontWeight: 500 }}>
                   已安装技能
                 </span>
               ),
@@ -589,7 +590,7 @@ export default function SkillsPage() {
             {
               key: 'market',
               label: (
-                <span style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 500 }}>
+                <span style={{ fontSize: token.fontSizeSM, fontWeight: 500 }}>
                   官方技能市场
                 </span>
               ),

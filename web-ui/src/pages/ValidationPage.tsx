@@ -68,8 +68,8 @@ function ValidationQueue({
               <div
                 key={item.key}
                 style={{
-                  padding: 'var(--nb-spacing-md)',
-                  borderRadius: 'var(--nb-radius-md)',
+                  padding: token.paddingMD,
+                  borderRadius: token.borderRadiusLG,
                   border: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorBgLayout,
                 }}
@@ -108,7 +108,7 @@ function ValidationQueue({
             minHeight: 120,
             display: 'grid',
             placeItems: 'center',
-            borderRadius: 'var(--nb-radius-md)',
+            borderRadius: token.borderRadiusLG,
             border: `1px dashed ${token.colorBorderSecondary}`,
             background: token.colorBgLayout,
           }}

@@ -30,7 +30,7 @@ export default function ProviderList({
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
         size="large"
-        style={{ borderRadius: 12, border: 'none', background: 'var(--nb-card-subtle-bg)' }}
+        style={{ borderRadius: 12, border: 'none', background: token.colorFillAlter }}
       />
 
       {providers.length === 0 ? (
@@ -71,14 +71,14 @@ export default function ProviderList({
                       </div>
                       <Space size={6} wrap>
                         {item.defaultProvider ? (
-                          <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: 8, fontSize: 'var(--nb-text-2xs)' }}>
+                          <Tag color="processing" bordered={false} style={{ margin: 0, borderRadius: token.borderRadiusSM, fontSize: token.fontSizeSM }}>
                             默认
                           </Tag>
                         ) : null}
                         <Tag
                           color={item.configured ? 'success' : 'warning'}
                           bordered={false}
-                          style={{ margin: 0, borderRadius: 8, fontSize: 'var(--nb-text-2xs)' }}
+                          style={{ margin: 0, borderRadius: token.borderRadiusSM, fontSize: token.fontSizeSM }}
                         >
                           {item.configured ? '已配置' : '待补齐'}
                         </Tag>
@@ -93,7 +93,7 @@ export default function ProviderList({
                     </Typography.Paragraph>
 
                     <Flex align="center" justify="space-between" gap={8} style={{ marginTop: 12 }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                         {item.bindingsCount} 个模型
                       </Typography.Text>
                       <div
@@ -101,7 +101,7 @@ export default function ProviderList({
                           width: 8,
                           height: 8,
                           borderRadius: '50%',
-                          background: item.configured ? 'var(--nb-success)' : 'var(--nb-text-quaternary)',
+                          background: item.configured ? token.colorSuccess : token.colorTextQuaternary,
                           flexShrink: 0,
                         }}
                       />

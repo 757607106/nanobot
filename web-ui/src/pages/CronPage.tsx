@@ -15,6 +15,7 @@ import {
   Table,
   Tag,
   Typography,
+  theme,
 } from 'antd'
 import {
   CheckCircleOutlined,
@@ -152,6 +153,7 @@ function buildCronExpr(values: Pick<CronFormValues, 'cronMinute' | 'cronHour' | 
 
 export default function CronPage() {
   const message = useToast()
+  const { token } = theme.useToken()
   const [form] = Form.useForm<CronFormValues>()
   const [jobs, setJobs] = useState<CronJob[]>([])
   const [status, setStatus] = useState<CronStatus | null>(null)
@@ -329,14 +331,14 @@ export default function CronPage() {
 
   if (loading && !status) {
     return (
-      <Flex justify="center" align="center" style={{ padding: 'var(--nb-spacing-2xl)' }}>
+      <Flex justify="center" align="center" style={{ padding: 32 }}>
         <Spin />
       </Flex>
     )
   }
 
   return (
-    <Flex vertical gap={20} style={{ padding: 'var(--nb-spacing-xs) 0' }}>
+    <Flex vertical gap={20} style={{ padding: `${token.paddingXS}px 0` }}>
       {/* Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
         <MetricCard
@@ -432,7 +434,7 @@ export default function CronPage() {
                       <Typography.Text strong>{value}</Typography.Text>
                       {getStatusTag(job, runningJobId === job.id)}
                     </Flex>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>{job.payload.message}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSize }}>{job.payload.message}</Typography.Text>
                     <Flex gap={6} wrap="wrap">
                       {job.deleteAfterRun ? <Tag>运行后删除</Tag> : null}
                       {job.payload.deliver && job.payload.channel && job.payload.to ? (
@@ -448,8 +450,8 @@ export default function CronPage() {
                 key: 'schedule',
                 render: (_: unknown, job: CronJob) => (
                   <Flex vertical gap={4}>
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{getTriggerLabel(job)}</Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>{getSchedulePreview(job)}</Typography.Text>
+                    <Typography.Text strong style={{ fontSize: token.fontSize }}>{getTriggerLabel(job)}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>{getSchedulePreview(job)}</Typography.Text>
                   </Flex>
                 ),
               },
@@ -458,8 +460,8 @@ export default function CronPage() {
                 key: 'nextRunAtMs',
                 render: (_: unknown, job: CronJob) => (
                   <Flex vertical gap={4}>
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{formatDateTime(job.nextRunAtMs)}</Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>上次运行：{formatDateTime(job.lastRunAtMs)}</Typography.Text>
+                    <Typography.Text strong style={{ fontSize: token.fontSize }}>{formatDateTime(job.nextRunAtMs)}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>上次运行：{formatDateTime(job.lastRunAtMs)}</Typography.Text>
                   </Flex>
                 ),
               },
@@ -468,8 +470,8 @@ export default function CronPage() {
                 key: 'lastStatus',
                 render: (_: unknown, job: CronJob) => (
                   <Flex vertical gap={4}>
-                    <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>{job.lastStatus || '待运行'}</Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>{job.lastError || `更新时间：${formatDateTime(job.updatedAtMs)}`}</Typography.Text>
+                    <Typography.Text strong style={{ fontSize: token.fontSize }}>{job.lastStatus || '待运行'}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>{job.lastError || `更新时间：${formatDateTime(job.updatedAtMs)}`}</Typography.Text>
                   </Flex>
                 ),
               },
@@ -641,15 +643,15 @@ export default function CronPage() {
                     style={{
                       padding: '12px 16px',
                       borderRadius: 12,
-                      background: 'var(--nb-card-subtle-bg)',
-                      border: '1px solid var(--nb-card-subtle-border)',
+                      background: token.colorFillAlter,
+                      border: `1px solid ${token.colorBorderSecondary}`,
                       display: 'flex',
                       alignItems: 'center',
                       gap: 12,
                     }}
                   >
                     <Text type="secondary">当前表达式</Text>
-                    <code style={{ fontWeight: 'var(--nb-font-weight-strong)' }}>
+                    <code style={{ fontWeight: token.fontWeightStrong }}>
                       {buildCronExpr({
                         cronMinute: getFieldValue('cronMinute') || defaultCronParts.cronMinute,
                         cronHour: getFieldValue('cronHour') || defaultCronParts.cronHour,

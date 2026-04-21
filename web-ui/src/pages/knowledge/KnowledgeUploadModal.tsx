@@ -15,6 +15,7 @@ import {
   Tag,
   Typography,
   Upload,
+  theme,
 } from 'antd'
 import {
   DeleteOutlined,
@@ -93,6 +94,7 @@ export function KnowledgeUploadModal({
 }: KnowledgeUploadModalProps) {
   const message = useToast()
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const { token } = theme.useToken()
 
   const [mode, setMode] = useState<UploadMode>('file')
   const [targetParentId, setTargetParentId] = useState<string | null>(defaultParentId)
@@ -411,7 +413,7 @@ export function KnowledgeUploadModal({
             ]}
           />
 
-          <Card size="small" bordered={false} style={{ background: 'var(--nb-background)' }}>
+          <Card size="small" bordered={false} style={{ background: token.colorBgLayout }}>
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
               <div style={{ display: 'flex', gap: 16 }}>
                 <div style={{ flex: 1 }}>
@@ -447,7 +449,7 @@ export function KnowledgeUploadModal({
           </Card>
 
           {autoIndex ? (
-            <Card size="small" title={<Text strong>入库参数</Text>} style={{ background: 'var(--nb-card-bg)' }}>
+            <Card size="small" title={<Text strong>入库参数</Text>} style={{ background: token.colorBgContainer }}>
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', gap: 16 }}>
                   <div style={{ flex: 1 }}>
@@ -494,7 +496,7 @@ export function KnowledgeUploadModal({
           ) : null}
 
           {mode === 'file' ? (
-            <Card size="small" style={{ background: 'var(--nb-card-bg)' }}>
+            <Card size="small" style={{ background: token.colorBgContainer }}>
               <Upload.Dragger
                 multiple
                 beforeUpload={(file, fileList) => {
@@ -503,15 +505,15 @@ export function KnowledgeUploadModal({
                 }}
                 showUploadList={false}
                 fileList={[]}
-                style={{ padding: '24px 0', background: 'var(--nb-card-subtle-bg)', border: '1px dashed var(--nb-card-subtle-border)', borderRadius: 8 }}
+                style={{ padding: '24px 0', background: token.colorFillAlter, border: `1px dashed ${token.colorBorder}`, borderRadius: token.borderRadiusLG }}
               >
                 <p className="ant-upload-drag-icon">
-                  <UploadOutlined style={{ fontSize: 28, color: 'var(--nb-accent)' }} />
+                  <UploadOutlined style={{ fontSize: 28, color: token.colorPrimary }} />
                 </p>
-                <p className="ant-upload-text" style={{ fontSize: 'var(--nb-text-md)', fontWeight: 'var(--nb-font-weight-medium)', margin: '4px 0' }}>
+                <p className="ant-upload-text" style={{ fontSize: token.fontSize, fontWeight: 500, margin: '4px 0' }}>
                   点击或拖拽文件到此区域
                 </p>
-                <p className="ant-upload-hint" style={{ fontSize: 'var(--nb-text-xs)', color: 'var(--nb-text-secondary)', padding: '0 24px', margin: 0 }}>
+                <p className="ant-upload-hint" style={{ fontSize: token.fontSizeSM, color: token.colorTextSecondary, padding: '0 24px', margin: 0 }}>
                   支持单次多选
                 </p>
               </Upload.Dragger>

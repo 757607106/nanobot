@@ -1286,8 +1286,8 @@ export default function KnowledgePage() {
                 optionFilterProp="label"
                 style={{ width: '100%' }}
                 notFoundContent={
-                  <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                  <Flex vertical align="center" gap={token.marginXS} style={{ padding: `${token.margin}px ${token.marginSM}px` }}>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                       暂无可用的 Embedding 模型
                     </Typography.Text>
                     <Button
@@ -1409,7 +1409,7 @@ export default function KnowledgePage() {
                 key: 'advanced',
                 label: '高级参数',
                 children: (
-                  <div className="knowledge-settings-grid" style={{ marginTop: 12 }}>
+                  <div className="knowledge-settings-grid" style={{ marginTop: token.marginSM }}>
                     <div className="studio-form-field">
                       <Typography.Text type="secondary">片段长度</Typography.Text>
                       <InputNumber

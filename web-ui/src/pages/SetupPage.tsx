@@ -92,7 +92,7 @@ function SectionHeader({
           borderRadius: 14,
           background: `${token.colorPrimary}12`,
           color: token.colorPrimary,
-          fontSize: 'var(--nb-title-xs)',
+          fontSize: token.fontSizeHeading4,
         }}
       >
         {icon}
@@ -339,7 +339,7 @@ export default function SetupPage() {
         subtitle="初始化配置"
       />
 
-      <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)', paddingBottom: 48 }}>
+      <div className="page-content-wrapper" style={{ paddingInline: token.paddingLG, paddingBottom: 48 }}>
         <Flex vertical gap={24}>
           {error ? <Alert type="error" showIcon message={error} style={{ borderRadius: 16 }} /> : null}
 
@@ -442,7 +442,7 @@ export default function SetupPage() {
                       value={String(config.agents.defaults.workspace || '')}
                       onChange={(event) => updateDefaults('workspace', event.target.value)}
                       data-testid={testIds.setup.workspaceInput}
-                      style={{ borderRadius: 12, background: 'var(--nb-card-subtle-bg)', border: 'none' }}
+                      style={{ borderRadius: 12, background: token.colorFillAlter, border: 'none' }}
                     />
                   </Form.Item>
 
@@ -455,7 +455,7 @@ export default function SetupPage() {
                       }}
                     >
                        <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>最大回复长度</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>最大回复长度</Typography.Text>
                         <InputNumber
                           min={1}
                           value={Number(config.agents.defaults.maxTokens || 0)}
@@ -464,7 +464,7 @@ export default function SetupPage() {
                         />
                       </Flex>
                       <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>记忆上下文窗口</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>记忆上下文窗口</Typography.Text>
                         <InputNumber
                           min={1}
                           value={Number(config.agents.defaults.contextWindowTokens || 0)}
@@ -473,7 +473,7 @@ export default function SetupPage() {
                         />
                       </Flex>
                       <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>创意强度</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>创意强度</Typography.Text>
                         <InputNumber
                           min={0}
                           max={2}
@@ -484,7 +484,7 @@ export default function SetupPage() {
                         />
                       </Flex>
                       <Flex vertical gap={6}>
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>推理偏好</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>推理偏好</Typography.Text>
                         <Select
                           value={String(config.agents.defaults.reasoningEffort || 'medium')}
                           options={[
@@ -510,9 +510,9 @@ export default function SetupPage() {
                         borderRadius: 14, 
                         height: 52, 
                         padding: '0 32px',
-                        background: 'var(--nb-accent)',
+                        background: token.colorPrimary,
                         border: 'none',
-                        boxShadow: '0 12px 24px -6px color-mix(in srgb, var(--nb-accent) 30%, transparent)'
+                        boxShadow: `0 12px 24px -6px color-mix(in srgb, ${token.colorPrimary} 30%, transparent)`
                       }}
                     >
                       完成配置并进入桌面

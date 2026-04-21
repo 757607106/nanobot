@@ -449,19 +449,19 @@ export default function ModelsPage() {
         <MetricCard
           label="已注册模型"
           value={totalBindingCount}
-          icon={<LinkOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
+          icon={<LinkOutlined style={{ fontSize: token.fontSizeLG }} />}
           tone="primary"
         />
         <MetricCard
           label="可用供应商"
           value={`${configuredProviderCount}/${providers.length}`}
-          icon={<CheckCircleOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
+          icon={<CheckCircleOutlined style={{ fontSize: token.fontSizeLG }} />}
           tone="success"
         />
         <MetricCard
           label="默认模型"
           value={bindings[defaultBindingName]?.model || bindings[defaultBindingName]?.label || '未设置'}
-          icon={<DatabaseOutlined style={{ fontSize: 'var(--nb-text-lg)' }} />}
+          icon={<DatabaseOutlined style={{ fontSize: token.fontSizeLG }} />}
           tone="neutral"
         />
       </div>
@@ -492,7 +492,7 @@ export default function ModelsPage() {
           description="所有已注册的模型，按能力类型分类。"
           action={
             totalBindingCount > 0 ? undefined : (
-              <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+              <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                 请先在供应商管理中添加模型
               </Typography.Text>
             )
@@ -627,8 +627,8 @@ export default function ModelsPage() {
               <div
                 style={{
                   padding: '20px 24px 16px',
-                  borderBottom: `1px solid var(--nb-border)`,
-                  background: 'var(--nb-surface-strong)',
+                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                  background: token.colorFillAlter,
                   flexShrink: 0,
                 }}
               >
@@ -636,7 +636,7 @@ export default function ModelsPage() {
                   <Flex align="center" gap={12}>
                     <ProviderAvatar providerName={activeProviderName!} label={activeProviderMeta.label} size={40} />
                     <div>
-                      <Typography.Text strong style={{ fontSize: 'var(--nb-title-xs)', display: 'block' }}>
+                      <Typography.Text strong style={{ fontSize: token.fontSizeLG, display: 'block' }}>
                         {activeProviderMeta.label}
                       </Typography.Text>
                       <Space size={6} style={{ marginTop: 2 }}>
@@ -705,8 +705,8 @@ export default function ModelsPage() {
               <div
                 style={{
                   padding: '16px 24px',
-                  borderTop: `1px solid var(--nb-border)`,
-                  background: 'var(--nb-surface-strong)',
+                  borderTop: `1px solid ${token.colorBorderSecondary}`,
+                  background: token.colorFillAlter,
                   flexShrink: 0,
                 }}
               >

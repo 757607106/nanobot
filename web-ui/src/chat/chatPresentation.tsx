@@ -27,44 +27,45 @@ interface ToolUIMap {
   successIcon: ReactNode
 }
 
-const TOOL_UI_MAPPING: Record<string, ToolUIMap> = {
+const TOOL_UI_MAPPING: Record<string, Omit<ToolUIMap, 'successIcon'> & { successIconType: React.ComponentType<any> }> = {
   web_search: {
     activeTitle: '正在进行全网检索',
     successTitle: '完成网络信息收集',
     activeIcon: <GlobalOutlined spin />,
-    successIcon: <GlobalOutlined style={{ color: 'var(--nb-text-tertiary)' }} />
+    successIconType: GlobalOutlined,
   },
   web_fetch: {
     activeTitle: '正在深度阅读网页',
     successTitle: '网页阅读完毕',
     activeIcon: <FileTextOutlined spin />,
-    successIcon: <FileTextOutlined style={{ color: 'var(--nb-text-tertiary)' }} />
+    successIconType: FileTextOutlined,
   },
   create_file: {
     activeTitle: '正在创建本地文件',
     successTitle: '文件创建完毕',
     activeIcon: <CodeOutlined spin />,
-    successIcon: <CodeOutlined style={{ color: 'var(--nb-text-tertiary)' }} />
+    successIconType: CodeOutlined,
   },
   run_command: {
     activeTitle: '正在运行系统命令',
     successTitle: '命令执行完毕',
     activeIcon: <FunctionOutlined spin />,
-    successIcon: <FunctionOutlined style={{ color: 'var(--nb-text-tertiary)' }} />
+    successIconType: FunctionOutlined,
   }
 }
 
-function getToolUIMeta(toolName: string, isSuccess: boolean) {
+function getToolUIMeta(toolName: string, isSuccess: boolean, tertiaryColor: string) {
   const meta = TOOL_UI_MAPPING[toolName]
   if (meta) {
+    const IconComp = meta.successIconType
     return {
       title: isSuccess ? meta.successTitle : meta.activeTitle,
-      icon: isSuccess ? meta.successIcon : meta.activeIcon
+      icon: isSuccess ? <IconComp style={{ color: tertiaryColor }} /> : meta.activeIcon
     }
   }
   return {
     title: isSuccess ? `${toolName} 执行完毕` : `调用专属工具: ${toolName}`,
-    icon: isSuccess ? <ToolOutlined style={{ color: 'var(--nb-text-tertiary)' }} /> : <LoadingOutlined />
+    icon: isSuccess ? <ToolOutlined style={{ color: tertiaryColor }} /> : <LoadingOutlined />
   }
 }
 
@@ -289,11 +290,11 @@ export function ChatMessageBody({
         })
       } else if (step.kind === 'tool') {
         const toolBaseName = step.label?.split(':')[0]?.trim() || 'tool'
-        const meta = getToolUIMeta(toolBaseName, !!step.completed)
+        const meta = getToolUIMeta(toolBaseName, !!step.completed, token.colorTextTertiary)
         pendingToolItems.push({
           key: step.key,
           title: meta.title,
-          icon: step.completed ? meta.icon : <LoadingOutlined style={{ color: 'var(--nb-primary)' }} />,
+          icon: step.completed ? meta.icon : <LoadingOutlined style={{ color: token.colorPrimary }} />,
           status: step.completed ? 'success' : 'loading',
           ...(step.completed && step.resultContent ? {
             collapsible: true,
@@ -306,7 +307,7 @@ export function ChatMessageBody({
         pendingToolItems.push({
           key: step.key,
           title: step.label || '处理中',
-          icon: <SyncOutlined spin style={{ color: 'var(--nb-primary)' }} />,
+          icon: <SyncOutlined spin style={{ color: token.colorPrimary }} />,
           status: 'loading',
         })
       }
@@ -351,7 +352,7 @@ export function ChatMessageBody({
       if (subMsg.toolCalls?.length) {
         for (const toolCall of subMsg.toolCalls) {
           const toolName = getToolCallName(toolCall)
-          const meta = getToolUIMeta(toolName, true)
+          const meta = getToolUIMeta(toolName, true, token.colorTextTertiary)
           const toolCallId = String(toolCall.id || '').trim()
           const resultContent = toolCallId ? toolResultMap.get(toolCallId) : undefined
 

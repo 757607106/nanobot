@@ -1,4 +1,4 @@
-import { Badge, Card, Empty, Space, Tag, Typography } from 'antd'
+import { Badge, Card, Empty, Space, Tag, Typography, theme } from 'antd'
 import { RobotOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import type { AgentRunTreeNode } from '../../types'
@@ -18,6 +18,7 @@ interface TreeNodeProps {
 }
 
 function TreeNode({ node, selectedRunId, navigate }: TreeNodeProps) {
+  const { token } = theme.useToken()
   const children = node.children || []
   const active = node.runId === selectedRunId
 
@@ -25,7 +26,7 @@ function TreeNode({ node, selectedRunId, navigate }: TreeNodeProps) {
     <div
       style={{
         marginLeft: children.length > 0 ? 16 : 0,
-        borderLeft: children.length > 0 ? '2px solid var(--nb-border)' : 'none',
+        borderLeft: children.length > 0 ? `2px solid ${token.colorBorderSecondary}` : 'none',
       }}
     >
       <div
@@ -36,8 +37,8 @@ function TreeNode({ node, selectedRunId, navigate }: TreeNodeProps) {
           marginBottom: 8,
           borderRadius: 8,
           cursor: 'pointer',
-          background: active ? 'var(--ant-color-primary-bg)' : 'var(--nb-surface)',
-          border: `1px solid ${active ? 'var(--ant-color-primary)' : 'var(--nb-border)'}`,
+          background: active ? token.colorPrimaryBg : token.colorBgContainer,
+          border: `1px solid ${active ? token.colorPrimary : token.colorBorderSecondary}`,
           transition: 'all 0.2s',
         }}
       >
@@ -59,7 +60,7 @@ function TreeNode({ node, selectedRunId, navigate }: TreeNodeProps) {
           <Badge status={statusBadgeStatus(node.status)} text={statusLabel(node.status)} />
         </div>
         {node.resultSummary?.content && (
-          <Text type="secondary" ellipsis style={{ fontSize: 'var(--nb-text-xs)' }}>
+          <Text type="secondary" ellipsis style={{ fontSize: token.fontSizeSM }}>
             {node.resultSummary.content}
           </Text>
         )}

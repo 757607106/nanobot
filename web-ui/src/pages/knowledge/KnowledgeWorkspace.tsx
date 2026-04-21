@@ -18,6 +18,7 @@ import {
   Tabs,
   Tag,
   Typography,
+  theme,
   type TableColumnsType,
 } from 'antd'
 import {
@@ -69,6 +70,7 @@ export default function KnowledgeWorkspace() {
   const ctx = useKnowledge()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('files')
+  const { token } = theme.useToken()
 
   const {
     currentKb,
@@ -164,7 +166,7 @@ export default function KnowledgeWorkspace() {
       render: (_value, item) => (
         <Flex gap={12} align="center">
           <Badge
-            color={item.isFolder ? 'var(--ant-color-warning)' : 'var(--nb-ink-light)'}
+            color={item.isFolder ? token.colorWarning : token.colorTextSecondary}
             text={null}
             style={{ marginTop: 2 }}
           />
@@ -377,17 +379,17 @@ export default function KnowledgeWorkspace() {
               left: '50%',
               transform: 'translateX(-50%)',
               zIndex: 1000,
-              background: 'var(--nb-surface)',
-              boxShadow: 'var(--nb-shadow-lg)',
-              border: '1px solid var(--nb-border-strong)',
-              padding: '12px 24px',
-              borderRadius: '20px',
+              background: token.colorBgElevated,
+              boxShadow: token.boxShadowSecondary,
+              border: `1px solid ${token.colorBorderSecondary}`,
+              padding: `${token.marginSM}px ${token.marginLG}px`,
+              borderRadius: token.borderRadiusLG,
               display: 'flex',
               alignItems: 'center',
-              gap: 20
+              gap: token.marginMD
             }}
           >
-            <div style={{ color: 'var(--nb-ink)', fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-strong)', marginRight: 8 }}>
+            <div style={{ color: token.colorText, fontSize: token.fontSizeSM, fontWeight: token.fontWeightStrong, marginRight: token.marginXS }}>
               已选择 {selectedFileIds.length} 项
             </div>
             
@@ -446,10 +448,10 @@ export default function KnowledgeWorkspace() {
               key={item.jobId}
               className={`knowledge-job-item ${['pending', 'processing', 'parsing', 'indexing'].includes(item.status) ? 'is-processing' : ''}`}
               style={{
-                background: 'var(--nb-layout-bg)',
-                border: '1px solid var(--nb-border)',
-                borderRadius: 'var(--nb-radius-lg)',
-                padding: '16px 20px',
+                background: token.colorBgContainer,
+                border: `1px solid ${token.colorBorder}`,
+                borderRadius: token.borderRadiusLG,
+                padding: `${token.margin}px ${token.marginLG}px`,
               }}
             >
               <Flex justify="space-between" align="center" gap={12} wrap="wrap" style={{ position: 'relative', zIndex: 1 }}>
@@ -656,7 +658,7 @@ export default function KnowledgeWorkspace() {
                   onChange={(e) => onFormStateChange({ ...formState, tagsText: e.target.value })}
                   placeholder="用逗号分隔，例如：AI，文档，FAQ"
                 />
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', marginTop: 2, display: 'block' }}>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, marginTop: 2, display: 'block' }}>
                   支持中文或英文逗号分隔
                 </Typography.Text>
               </div>
@@ -678,7 +680,7 @@ export default function KnowledgeWorkspace() {
                   style={{ width: '100%' }}
                   notFoundContent={
                     <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                         暂无可用的向量模型
                       </Typography.Text>
                       <Button
@@ -692,12 +694,12 @@ export default function KnowledgeWorkspace() {
                   }
                 />
                 {embeddingBindingOptions.length === 0 && (
-                  <Typography.Text type="warning" style={{ fontSize: 'var(--nb-text-xs)', marginTop: 4, display: 'block' }}>
+                  <Typography.Text type="warning" style={{ fontSize: token.fontSizeSM, marginTop: 4, display: 'block' }}>
                     ⚠ 未配置向量模型，文档入库将无法使用。
                     <Button
                       type="link"
                       size="small"
-                      style={{ fontSize: 'var(--nb-text-xs)', padding: '0 4px' }}
+                      style={{ fontSize: token.fontSizeSM, padding: '0 4px' }}
                       onClick={() => navigate('/models')}
                     >
                       前往配置
@@ -717,7 +719,7 @@ export default function KnowledgeWorkspace() {
                   style={{ width: '100%' }}
                   notFoundContent={
                     <Flex vertical align="center" gap={8} style={{ padding: '16px 12px' }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                         暂无可用的问答模型
                       </Typography.Text>
                       <Button
@@ -759,7 +761,7 @@ export default function KnowledgeWorkspace() {
                 <Flex vertical gap={20}>
                 {/* — 多模态处理 — */}
                 <div>
-                  <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                  <Typography.Text strong style={{ fontSize: token.fontSizeSM, display: 'block', marginBottom: 12, color: token.colorTextSecondary }}>
                     图文解析
                   </Typography.Text>
                   <div className="knowledge-settings-grid">
@@ -783,7 +785,7 @@ export default function KnowledgeWorkspace() {
                           onChange={(checked) => onFormStateChange({ ...formState, enableMultimodal: checked })}
                           disabled={!formState.visionBindingName}
                         />
-                        <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                           {formState.visionBindingName ? 'PDF、Office 与图片将以图文方式解析并建立索引' : '请先选择图文解析模型'}
                         </Typography.Text>
                       </div>
@@ -793,7 +795,7 @@ export default function KnowledgeWorkspace() {
 
                 {/* — 检索增强 — */}
                 <div>
-                  <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                  <Typography.Text strong style={{ fontSize: token.fontSizeSM, display: 'block', marginBottom: 12, color: token.colorTextSecondary }}>
                     排序优化
                   </Typography.Text>
                   <div className="knowledge-settings-grid">
@@ -814,7 +816,7 @@ export default function KnowledgeWorkspace() {
 
                 {/* — 其他 — */}
                 <div>
-                  <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)', display: 'block', marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+                  <Typography.Text strong style={{ fontSize: token.fontSizeSM, display: 'block', marginBottom: 12, color: token.colorTextSecondary }}>
                     其他
                   </Typography.Text>
                   <div className="knowledge-settings-grid">

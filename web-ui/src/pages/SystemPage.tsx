@@ -17,18 +17,19 @@ import { useToast } from '../toast'
 import type { SystemStatus } from '../types'
 
 function DetailRow({ label, value }: { label: string; value: string }) {
+  const { token } = theme.useToken()
   return (
     <div
       style={{
         padding: '12px 0',
-        borderBottom: '1px solid var(--nb-card-subtle-border)',
+        borderBottom: `1px solid ${token.colorBorderSecondary}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
       }}
     >
-      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)', letterSpacing: '0.01em' }}>{label}</Typography.Text>
-      <Typography.Text className="break-all" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 500, fontFamily: 'var(--nb-font-mono)' }}>{value}</Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, letterSpacing: '0.01em' }}>{label}</Typography.Text>
+      <Typography.Text className="break-all" style={{ fontSize: token.fontSizeSM, fontWeight: 500, fontFamily: token.fontFamilyCode }}>{value}</Typography.Text>
     </div>
   )
 }
@@ -154,7 +155,7 @@ export default function SystemPage() {
       <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'minmax(0, 1.12fr) minmax(320px, 0.88fr)' }}>
         <SectionCard
           title="运行清单"
-          action={<Tag bordered={false} style={{ background: 'var(--nb-surface-soft-bg)', color: 'var(--nb-text-tertiary)' }}>v{status.web.version}</Tag>}
+          action={<Tag bordered={false} style={{ background: token.colorFillAlter, color: token.colorTextTertiary }}>v{status.web.version}</Tag>}
         >
           <Flex vertical gap={0}>
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
@@ -174,7 +175,7 @@ export default function SystemPage() {
               </Typography.Text>
               <Flex gap={8} wrap="wrap" style={{ marginTop: 12 }}>
                 {(status.stats.enabledChannels.length > 0 ? status.stats.enabledChannels : ['—']).map((item) => (
-                  <Tag key={item} bordered={false} style={{ background: 'var(--nb-surface-soft-bg)', color: 'var(--nb-ink)' }}>
+                  <Tag key={item} bordered={false} style={{ background: token.colorFillAlter, color: token.colorText }}>
                     {item}
                   </Tag>
                 ))}
@@ -189,18 +190,18 @@ export default function SystemPage() {
               style={{
                 padding: '20px',
                 borderRadius: 16,
-                background: 'var(--nb-card-subtle-bg)',
-                border: '1px solid var(--nb-card-subtle-border)',
+                background: token.colorFillAlter,
+                border: `1px solid ${token.colorBorderSecondary}`,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 8,
               }}
             >
               <Typography.Text type="secondary">当前 Web 会话</Typography.Text>
-              <Typography.Title level={2} style={{ margin: 0, fontSize: 'var(--nb-title-lg)', lineHeight: 'var(--nb-line-tight)' }}>
+              <Typography.Title level={2} style={{ margin: 0, fontSize: token.fontSizeHeading2, lineHeight: token.lineHeightHeading2 }}>
                 {status.stats.webSessions}
               </Typography.Title>
-              <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0', fontSize: 'var(--nb-text-sm)', lineHeight: 1.6 }}>
+              <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0', fontSize: token.fontSizeSM, lineHeight: 1.6 }}>
                 {status.stats.totalSessions} 会话 · {status.stats.messages} 消息
               </Typography.Paragraph>
             </div>
@@ -209,24 +210,24 @@ export default function SystemPage() {
           <SectionCard title="调度状态">
             <Flex vertical gap={12}>
               <Flex gap={8} wrap="wrap">
-                <Tag bordered={false} style={{ background: 'var(--nb-surface-soft-bg)', color: status.cron.enabled ? 'var(--nb-success)' : 'var(--nb-warning)' }}>
-                  <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 3, background: status.cron.enabled ? 'var(--nb-success)' : 'var(--nb-warning)', marginRight: 6 }}></span>
+                <Tag bordered={false} style={{ background: token.colorFillAlter, color: status.cron.enabled ? token.colorSuccessText : token.colorWarningText }}>
+                  <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 3, background: status.cron.enabled ? token.colorSuccess : token.colorWarning, marginRight: 6 }}></span>
                   {status.cron.enabled ? '运行中' : '未启用'}
                 </Tag>
-                <Tag bordered={false} style={{ background: 'var(--nb-surface-soft-bg)', color: 'var(--nb-text-secondary)' }}>任务 {status.stats.scheduledJobs}</Tag>
+                <Tag bordered={false} style={{ background: token.colorFillAlter, color: token.colorTextSecondary }}>任务 {status.stats.scheduledJobs}</Tag>
               </Flex>
 
               <div
                 style={{
                   padding: '20px 0',
-                  borderTop: '1px solid var(--nb-card-subtle-border)',
+                  borderTop: `1px solid ${token.colorBorderSecondary}`,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 4,
                   marginTop: 12,
                 }}
               >
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>下一次唤醒时间</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>下一次唤醒时间</Typography.Text>
                 <Typography.Title level={4} style={{ margin: 0 }}>
                   {formatWakeTime(status.cron.nextWakeAtMs)}
                 </Typography.Title>

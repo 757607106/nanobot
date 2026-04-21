@@ -298,11 +298,11 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
               />
             )}
             <Flex vertical gap={2} style={{ minWidth: 0 }}>
-              <Title level={5} style={{ margin: 0, fontSize: 'var(--nb-text-md)' }} ellipsis>
+              <Title level={5} style={{ margin: 0 }} ellipsis>
                 {selectedSessionTitle}
               </Title>
               {selectedSessionSubtitle ? (
-                <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>{selectedSessionSubtitle}</Text>
+                <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>{selectedSessionSubtitle}</Text>
               ) : null}
             </Flex>
           </Flex>
@@ -322,11 +322,11 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
               size="middle"
               data-testid={testIds.chat.switchAgent}
               optionRender={(option) => (
-                <Flex align="center" gap={8}>
-                  <RobotOutlined style={{ color: token.colorTextSecondary, fontSize: 'var(--nb-text-sm)' }} />
+                <Flex align="center" gap={token.marginXS}>
+                  <RobotOutlined style={{ color: token.colorTextSecondary }} />
                   <span>{option.label}</span>
                   {option.value === currentAgentValue ? (
-                    <Tag color="blue" style={{ marginLeft: 'auto', fontSize: 'var(--nb-text-2xs)' }}>当前</Tag>
+                    <Tag color="blue" style={{ marginLeft: 'auto', fontSize: token.fontSizeSM }}>当前</Tag>
                   ) : null}
                 </Flex>
               )}
@@ -407,21 +407,20 @@ export default function ChatPage({ agentId }: { agentId?: string } = {}) {
             {sessionRail}
           </Sider>
           {!sidebarCollapsed && isDesktopLayout && (
-            <div
+            <Flex
+              align="center"
+              justify="center"
               onMouseDown={handleMouseDown}
               style={{
                 width: 8,
                 cursor: 'col-resize',
                 backgroundColor: 'transparent',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
                 zIndex: 10,
               }}
               title="拖拽调整侧边栏宽度"
             >
-              <div style={{ width: 3, height: 24, borderRadius: 2, backgroundColor: 'color-mix(in srgb, var(--nb-border) 40%, transparent)' }} />
-            </div>
+              <div style={{ width: 3, height: 24, borderRadius: 2, backgroundColor: token.colorBorderSecondary }} />
+            </Flex>
           )}
           <Content style={{ minWidth: 0, background: 'transparent' }}>
             {workspacePanel}

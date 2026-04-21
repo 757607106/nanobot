@@ -89,10 +89,10 @@ export function ChatSidebar({
       flexDirection: 'column',
       height: '100%',
       padding: '16px 8px 16px 12px',
-      borderRadius: 'var(--nb-radius-2xl)',
-      background: 'var(--nb-card-bg)',
-      border: '1px solid var(--nb-surface-panel-border)',
-      boxShadow: 'var(--nb-surface-panel-shadow)',
+      borderRadius: 22,
+      background: token.colorBgContainer,
+      border: `1px solid ${token.colorBorderSecondary}`,
+      boxShadow: token.boxShadowSecondary,
     }}>
       <Button
         type="primary"
@@ -105,7 +105,7 @@ export function ChatSidebar({
           borderRadius: 8,
           justifyContent: 'center',
           marginBottom: 20,
-          fontWeight: 'var(--nb-font-weight-medium)',
+          fontWeight: 500,
         }}
       >
         全新对话
@@ -113,8 +113,8 @@ export function ChatSidebar({
 
       <Text
         style={{
-          fontSize: 'var(--nb-text-2xs)',
-          fontWeight: 'var(--nb-font-weight-title)',
+          fontSize: token.fontSizeSM,
+          fontWeight: 700,
           letterSpacing: '0.12em',
           textTransform: 'uppercase',
           paddingLeft: 8,

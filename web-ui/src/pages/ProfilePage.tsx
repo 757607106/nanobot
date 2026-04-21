@@ -80,7 +80,7 @@ function FieldGroup({
 }) {
   return (
     <Flex vertical gap={8}>
-      <Typography.Text strong style={{ fontSize: 'var(--nb-text-xs)' }}>
+      <Typography.Text strong style={{ fontSize: 12 }}>
         {label}
       </Typography.Text>
       {children}
@@ -295,7 +295,7 @@ export default function ProfilePage() {
     return (
       <div className="page-stack">
         <PageHeader title="账户" subtitle="加载中..." />
-        <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)' }}>
+        <div className="page-content-wrapper" style={{ paddingInline: token.paddingLG }}>
           <Flex vertical gap={24}>
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
               <SectionCard loading />
@@ -346,7 +346,7 @@ export default function ProfilePage() {
         )}
       />
 
-      <div className="page-content-wrapper" style={{ paddingInline: 'var(--nb-layout-gutter)', paddingBottom: 40 }}>
+      <div className="page-content-wrapper" style={{ paddingInline: token.paddingLG, paddingBottom: 40 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {profileError && dialogMode !== 'profile' ? <Alert type="error" showIcon message={profileError} /> : null}
 
@@ -359,10 +359,10 @@ export default function ProfilePage() {
                     alt={profileLabel(profile)}
                     size={120}
                     style={{
-                      background: 'var(--nb-card-selected-bg)',
-                      color: 'var(--nb-accent)',
+                      background: token.colorPrimaryBg,
+                      color: token.colorPrimary,
                       fontSize: 48,
-                      border: '4px solid var(--nb-card-subtle-border)',
+                      border: `4px solid ${token.colorBorderSecondary}`,
                       boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
                     }}
                   >
@@ -385,17 +385,17 @@ export default function ProfilePage() {
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Flex vertical gap={12}>
                     <Flex gap={8} wrap="wrap" align="center">
-                      <Typography.Title level={2} style={{ margin: 0, fontSize: 'var(--nb-title-lg)', letterSpacing: '-0.02em' }}>
+                      <Typography.Title level={2} style={{ margin: 0, fontSize: token.fontSizeHeading1, letterSpacing: '-0.02em' }}>
                         {profile.username}
                       </Typography.Title>
-                      <Tag color="gold" bordered={false} style={{ margin: 0, borderRadius: 6, fontWeight: 'var(--nb-font-weight-strong)' }}>ADMIN</Tag>
+                      <Tag color="gold" bordered={false} style={{ margin: 0, borderRadius: 6, fontWeight: token.fontWeightStrong }}>ADMIN</Tag>
                     </Flex>
 
                     <Flex vertical gap={4}>
-                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)' }}>
+                      <Typography.Text strong style={{ fontSize: token.fontSizeHeading4 }}>
                         {profile.displayName || '未设置展示名称'}
                       </Typography.Text>
-                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSize }}>
                         {profile.email || '未设置邮箱地址'}
                       </Typography.Text>
                     </Flex>
@@ -410,15 +410,15 @@ export default function ProfilePage() {
                   style={{
                     padding: '16px',
                     borderRadius: 16,
-                    background: 'var(--nb-card-subtle-bg)',
-                    border: '1px solid var(--nb-card-subtle-border)',
+                    background: token.colorFillAlter,
+                    border: `1px solid ${token.colorBorderSecondary}`,
                   }}
                 >
                   <Flex align="center" gap={10} style={{ marginBottom: 12 }}>
-                    <SafetyCertificateOutlined style={{ color: 'var(--nb-success)' }} />
+                    <SafetyCertificateOutlined style={{ color: token.colorSuccess }} />
                     <Typography.Text strong>实例鉴权</Typography.Text>
                   </Flex>
-                  <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 'var(--nb-text-sm)', lineHeight: 1.6 }}>
+                  <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: token.fontSize, lineHeight: 1.6 }}>
                     当前实例由 Nanobot 管理，一个实例只能拥有一个主管理员。
                   </Typography.Paragraph>
                 </div>
@@ -429,8 +429,8 @@ export default function ProfilePage() {
                   size="small"
                   items={securityItems}
                   styles={{
-                    label: { color: 'var(--nb-text-quaternary)', width: 120 },
-                    content: { fontWeight: 'var(--nb-font-weight-medium)' },
+                    label: { color: token.colorTextQuaternary, width: 120 },
+                    content: { fontWeight: 500 },
                   }}
                 />
               </Flex>
@@ -445,14 +445,14 @@ export default function ProfilePage() {
                 size="small"
                 items={profileItems}
                 styles={{
-                  label: { color: 'var(--nb-text-quaternary)', width: 100 },
+                  label: { color: token.colorTextQuaternary, width: 100 },
                 }}
               />
             </SectionCard>
 
             <SectionCard title="安全与密码轮换">
               <Flex vertical gap={20}>
-                <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 'var(--nb-text-sm)', lineHeight: 1.6 }}>
+                <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: token.fontSize, lineHeight: 1.6 }}>
                   为保护您的账户安全，建议开启高强度密码（12位+混合字符）并定期轮换。
                 </Typography.Paragraph>
                 <Button 
@@ -477,7 +477,7 @@ export default function ProfilePage() {
                     { key: 'avatarTime', label: '最近更新', children: profile?.avatarUpdatedAt ? formatDateTimeZh(profile.avatarUpdatedAt).split(' ')[0] : '无' },
                   ]}
                   styles={{
-                    label: { color: 'var(--nb-text-quaternary)', width: 80 },
+                    label: { color: token.colorTextQuaternary, width: 80 },
                   }}
                 />
                 <Button 

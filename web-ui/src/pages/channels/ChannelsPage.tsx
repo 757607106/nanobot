@@ -56,7 +56,7 @@ import {
   getFieldValue,
   updateNestedValue,
 } from './shared'
-import { designTokens } from '../../ui/design/tokens'
+
 import { useToast } from '../../toast'
 import ChannelMetricsGrid from './components/ChannelMetricsGrid'
 import ChannelCardGrid from './components/ChannelCardGrid'
@@ -457,10 +457,10 @@ export default function ChannelsPage() {
     <Card
       size="small"
       style={{ width: 280, padding: 0 }}
-      styles={{ body: { padding: 'var(--nb-spacing-md)' } }}
+      styles={{ body: { padding: token.paddingMD } }}
     >
-      <Flex vertical gap="var(--nb-spacing-md)">
-        <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
+      <Flex vertical gap={token.paddingMD}>
+        <Typography.Text strong style={{ fontSize: token.fontSizeSM }}>
           消息投递设置
         </Typography.Text>
         <Flex justify="space-between" align="center">
@@ -555,15 +555,15 @@ export default function ChannelsPage() {
               <div
                 style={{
                   padding: '20px 24px 16px',
-                  borderBottom: `1px solid var(--nb-border)`,
-                  background: 'var(--nb-surface-strong)',
+                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                  background: token.colorFillAlter,
                 }}
               >
                 <Flex align="center" justify="space-between">
                   <Flex align="center" gap={12}>
                     <ChannelAvatar channelName={activeChannel.name} label={activeChannel.label} size={40} />
                     <div>
-                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-lg)', display: 'block' }}>
+                      <Typography.Text strong style={{ fontSize: token.fontSizeLG, display: 'block' }}>
                         {activeChannel.label}
                       </Typography.Text>
                       <ChannelStatusTag status={activeChannel.status} />
@@ -571,7 +571,7 @@ export default function ChannelsPage() {
                   </Flex>
                   <Flex align="center" gap={12}>
                     <Flex align="center" gap={6}>
-                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>启用</Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>启用</Typography.Text>
                       <Switch
                         size="small"
                         checked={Boolean(activeDraft.enabled ?? activeChannel.enabled)}
@@ -607,12 +607,12 @@ export default function ChannelsPage() {
                       padding: '10px 14px',
                       background: `${token.colorWarning}10`,
                       borderRadius: 10,
-                      marginBottom: designTokens.space.md,
+                      marginBottom: 12,
                       border: `1px solid ${token.colorWarning}30`,
                     }}
                   >
                     <WarningOutlined style={{ color: token.colorWarning }} />
-                    <Typography.Text style={{ fontSize: 'var(--nb-text-sm)' }}>
+                    <Typography.Text style={{ fontSize: token.fontSizeSM }}>
                       还需填写 {activeChannel.missingFields.length} 个必填项
                     </Typography.Text>
                   </Flex>
@@ -630,15 +630,15 @@ export default function ChannelsPage() {
                           <Tag color={getProbeStatusColor(activeProbe.status)} style={{ margin: 0 }}>
                             {activeProbe.statusLabel}
                           </Tag>
-                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+                          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                             {activeProbe.summary}
                           </Typography.Text>
                         </Flex>
                       ),
                       children: activeProbe.checks.length > 0 ? (
-                        <Flex vertical gap={designTokens.space.xs}>
+                        <Flex vertical gap={4}>
                           {activeProbe.checks.map((check) => (
-                            <Flex key={check.key} justify="space-between" align="center" gap={designTokens.space.xs}>
+                            <Flex key={check.key} justify="space-between" align="center" gap={4}>
                               <Typography.Text type="secondary">{check.label}</Typography.Text>
                               <Tag color={getProbeCheckColor(check.status)}>
                                 {check.status === 'pass' ? '通过' : check.status === 'warn' ? '警告' : '失败'}
@@ -648,7 +648,7 @@ export default function ChannelsPage() {
                         </Flex>
                       ) : null,
                     }]}
-                    style={{ marginBottom: designTokens.space.md }}
+                    style={{ marginBottom: 12 }}
                   />
                 )}
 
@@ -657,7 +657,7 @@ export default function ChannelsPage() {
                   <div
                     style={{
                       display: 'grid',
-                      gap: designTokens.space.sm,
+                      gap: 8,
                       gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                     }}
                   >
@@ -672,14 +672,14 @@ export default function ChannelsPage() {
                   <Card
                     size="small"
                     style={{
-                      marginTop: designTokens.space.md,
+                      marginTop: 12,
                       borderRadius: 12,
-                      border: '1px solid var(--nb-card-subtle-border)',
+                      border: `1px solid ${token.colorBorderSecondary}`,
                     }}
                     styles={{ body: { padding: 16 } }}
                   >
                     <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-sm)' }}>
+                      <Typography.Text strong style={{ fontSize: token.fontSizeSM }}>
                         扫码绑定
                       </Typography.Text>
                       <Space size={8}>
@@ -727,12 +727,12 @@ export default function ChannelsPage() {
                         {weixinBinding.qrCode ? (
                           <Flex vertical align="center" gap={8} style={{ padding: '12px 0' }}>
                             <QRCode value={weixinBinding.qrCode} size={180} />
-                            <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+                            <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                               请用微信扫描上方二维码登录
                             </Typography.Text>
                           </Flex>
                         ) : (
-                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                             {weixinBinding.authenticated ? '已成功登录' : '点击“获取二维码”启动绑定流程'}
                           </Typography.Text>
                         )}
@@ -741,7 +741,7 @@ export default function ChannelsPage() {
                         )}
                       </Flex>
                     ) : (
-                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                         点击“获取二维码”启动微信扫码绑定
                       </Typography.Text>
                     )}
@@ -753,8 +753,8 @@ export default function ChannelsPage() {
               <div
                 style={{
                   padding: '14px 24px',
-                  borderTop: `1px solid var(--nb-border)`,
-                  background: 'var(--nb-surface-strong)',
+                  borderTop: `1px solid ${token.colorBorderSecondary}`,
+                  background: token.colorFillAlter,
                 }}
               >
                 <Flex gap={8} justify="flex-end">

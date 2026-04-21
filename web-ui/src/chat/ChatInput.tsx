@@ -105,7 +105,7 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
       headerOpen ? (
         <div style={{ padding: '0 8px 16px' }}>
           <Flex justify="space-between" align="center" style={{ marginBottom: 10 }}>
-            <Text style={{ fontSize: 'var(--nb-text-2xs)', fontWeight: 'var(--nb-font-weight-title)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            <Text style={{ fontSize: token.fontSizeSM, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
               本轮上下文
             </Text>
             <Button
@@ -120,7 +120,7 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
           <Flex vertical gap={8}>
             {draftAttachmentRefs.length > 0 && (
               <Flex vertical gap={4}>
-                <Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)' }}>关联知识与记忆</Text>
+                <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>关联知识与记忆</Text>
                 <AttachmentTags
                   attachments={draftAttachmentRefs}
                   removable
@@ -175,20 +175,20 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
             <Flex align="center" gap={6} style={{
               padding: '4px 4px 4px 12px',
               borderRadius: 24,
-              background: thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 6%, transparent)' : 'transparent',
-              border: `1px solid ${thinkingEnabled ? 'color-mix(in srgb, var(--nb-accent) 20%, transparent)' : 'transparent'}`,
+              background: thinkingEnabled ? `color-mix(in srgb, ${token.colorPrimary} 6%, transparent)` : 'transparent',
+              border: `1px solid ${thinkingEnabled ? `color-mix(in srgb, ${token.colorPrimary} 20%, transparent)` : 'transparent'}`,
               transition: 'all 0.25s ease'
             }}>
               <ThunderboltOutlined style={{
                 fontSize: 14,
-                color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextQuaternary,
+                color: thinkingEnabled ? token.colorPrimary : token.colorTextQuaternary,
                 transition: 'color 0.25s',
               }} />
               <Text
                 id="chat-thinking-label"
                 style={{
-                  fontSize: 'var(--nb-text-xs)',
-                  color: thinkingEnabled ? 'var(--nb-accent)' : token.colorTextSecondary,
+                  fontSize: token.fontSizeSM,
+                  color: thinkingEnabled ? token.colorPrimary : token.colorTextSecondary,
                   cursor: 'pointer',
                   userSelect: 'none',
                   transition: 'color 0.25s',
@@ -220,7 +220,7 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
                   options={EFFORT_OPTIONS}
                   onChange={(val) => onReasoningEffortChange(val as ReasoningEffortLevel)}
                   aria-label="思考强度"
-                  style={{ background: 'var(--nb-card-bg)', boxShadow: 'var(--nb-shadow-soft)' }}
+                  style={{ background: token.colorBgContainer, boxShadow: token.boxShadow }}
                 />
               )}
             </Flex>
@@ -236,7 +236,7 @@ export const ChatInput = forwardRef<ComponentRef<typeof Sender>, ChatInputProps>
               type="primary"
               onClick={() => onSubmit(value)}
               disabled={!value.trim()}
-              style={{ borderRadius: 12, fontWeight: 'var(--nb-font-weight-medium)' }}
+              style={{ borderRadius: 12, fontWeight: 500 }}
             >
               发送
             </Button>

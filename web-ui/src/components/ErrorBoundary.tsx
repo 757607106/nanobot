@@ -43,7 +43,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           >
             <div className="desc">
               <Paragraph>
-                <Text strong style={{ fontSize: 'var(--nb-text-lg)' }}>错误详情</Text>
+                <Text strong style={{ fontSize: 16 }}>错误详情</Text>
               </Paragraph>
               <Paragraph>
                 <Text type="danger">{this.state.error?.message || 'Unknown Error'}</Text>

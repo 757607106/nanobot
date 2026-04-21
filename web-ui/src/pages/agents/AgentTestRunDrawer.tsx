@@ -5,12 +5,12 @@ import {
   Flex,
   Input,
   Typography,
+  theme,
 } from 'antd'
 import { PlayCircleOutlined } from '@ant-design/icons'
 import { api } from '../../api'
 import type { AgentTestRunResult } from '../../types'
 import { useToast } from '../../toast'
-import { designTokens } from '../../ui/design/tokens'
 import { MarkdownBubble } from '../../chat/chatPresentation'
 
 interface Props {
@@ -22,6 +22,7 @@ interface Props {
 
 export default function AgentTestRunDrawer({ open, onClose, agentId, agentName }: Props) {
   const message = useToast()
+  const { token } = theme.useToken()
   
   const [content, setContent] = useState('')
   const [testing, setTesting] = useState(false)
@@ -86,7 +87,7 @@ export default function AgentTestRunDrawer({ open, onClose, agentId, agentName }
 
         {!testing && result && (
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            <div style={{ padding: designTokens.space.md, background: 'var(--nb-surface)', borderRadius: 8, border: '1px solid var(--nb-border)' }}>
+            <div style={{ padding: token.padding, background: token.colorBgContainer, borderRadius: 8, border: `1px solid ${token.colorBorder}` }}>
               <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
                 回答内容:
               </Typography.Text>
@@ -94,23 +95,23 @@ export default function AgentTestRunDrawer({ open, onClose, agentId, agentName }
             </div>
             
             {result.run && (
-              <div style={{ marginTop: designTokens.space.md }}>
-                <Typography.Text strong style={{ display: 'block', marginBottom: 8, fontSize: 'var(--nb-text-xs)', color: 'var(--nb-text-primary)' }}>
+              <div style={{ marginTop: token.padding }}>
+                <Typography.Text strong style={{ display: 'block', marginBottom: 8, fontSize: token.fontSizeSM, color: token.colorText }}>
                   执行消耗概览
                 </Typography.Text>
                 
                 <Flex gap={12} wrap style={{ marginBottom: 16 }}>
                   {(result.run.provider || result.run.model) && (
-                    <div style={{ padding: '8px 12px', background: 'var(--nb-surface)', borderRadius: 6, border: '1px solid var(--nb-border)' }}>
-                      <Typography.Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: 2, letterSpacing: 0.2 }}>模型</Typography.Text>
-                      <Typography.Text strong style={{ fontSize: '13px' }}>{result.run.provider || 'default'} {result.run.model ? `· ${result.run.model}` : ''}</Typography.Text>
+                    <div style={{ padding: '8px 12px', background: token.colorBgContainer, borderRadius: 6, border: `1px solid ${token.colorBorder}` }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2, letterSpacing: 0.2 }}>模型</Typography.Text>
+                      <Typography.Text strong style={{ fontSize: 13 }}>{result.run.provider || 'default'} {result.run.model ? `· ${result.run.model}` : ''}</Typography.Text>
                     </div>
                   )}
                   {result.run.totalTokens !== undefined && result.run.totalTokens > 0 && (
-                    <div style={{ padding: '8px 12px', background: 'var(--nb-surface)', borderRadius: 6, border: '1px solid var(--nb-border)' }}>
-                      <Typography.Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: 2, letterSpacing: 0.2 }}>Token 消耗</Typography.Text>
-                      <Typography.Text strong style={{ fontSize: '13px', color: '#1677ff' }}>{result.run.totalTokens}</Typography.Text>
-                      <Typography.Text style={{ fontSize: '11px', color: 'var(--nb-text-secondary)', marginLeft: 6 }}>
+                    <div style={{ padding: '8px 12px', background: token.colorBgContainer, borderRadius: 6, border: `1px solid ${token.colorBorder}` }}>
+                      <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2, letterSpacing: 0.2 }}>Token 消耗</Typography.Text>
+                      <Typography.Text strong style={{ fontSize: 13, color: token.colorPrimary }}>{result.run.totalTokens}</Typography.Text>
+                      <Typography.Text style={{ fontSize: 11, color: token.colorTextSecondary, marginLeft: 6 }}>
                         （输入 {result.run.promptTokens || 0} · 输出 {result.run.completionTokens || 0}）
                       </Typography.Text>
                     </div>
@@ -121,30 +122,30 @@ export default function AgentTestRunDrawer({ open, onClose, agentId, agentName }
                   <Flex vertical gap={8} style={{ marginBottom: 16 }}>
                     {Object.keys(result.run.resultSummary.tools_call_counts || {}).length > 0 && (
                        <Flex gap={8} align="center" wrap>
-                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', width: 65 }}>工具：</Typography.Text>
+                          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, width: 65 }}>工具：</Typography.Text>
                           {Object.entries(result.run.resultSummary.tools_call_counts!).map(([k, v]) => (
-                            <div key={k} style={{ fontSize: '12px', border: '1px solid var(--nb-border)', padding: '2px 8px', borderRadius: 4, background: 'var(--nb-surface)', color: 'var(--nb-text-primary)' }}>
-                              {k} <span style={{ color: '#1677ff', fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
+                            <div key={k} style={{ fontSize: 12, border: `1px solid ${token.colorBorder}`, padding: '2px 8px', borderRadius: 4, background: token.colorBgContainer, color: token.colorText }}>
+                              {k} <span style={{ color: token.colorPrimary, fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
                             </div>
                           ))}
                        </Flex>
                     )}
                     {Object.keys(result.run.resultSummary.mcps_call_counts || {}).length > 0 && (
                        <Flex gap={8} align="center" wrap>
-                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', width: 65 }}>MCP：</Typography.Text>
+                          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, width: 65 }}>MCP：</Typography.Text>
                           {Object.entries(result.run.resultSummary.mcps_call_counts!).map(([k, v]) => (
-                            <div key={k} style={{ fontSize: '12px', border: '1px solid var(--nb-border)', padding: '2px 8px', borderRadius: 4, background: 'var(--nb-surface)', color: 'var(--nb-text-primary)' }}>
-                              {k} <span style={{ color: '#1677ff', fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
+                            <div key={k} style={{ fontSize: 12, border: `1px solid ${token.colorBorder}`, padding: '2px 8px', borderRadius: 4, background: token.colorBgContainer, color: token.colorText }}>
+                              {k} <span style={{ color: token.colorPrimary, fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
                             </div>
                           ))}
                        </Flex>
                     )}
                     {Object.keys(result.run.resultSummary.knowledge_call_counts || {}).length > 0 && (
                        <Flex gap={8} align="center" wrap>
-                          <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', width: 65 }}>知识库：</Typography.Text>
+                          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, width: 65 }}>知识库：</Typography.Text>
                           {Object.entries(result.run.resultSummary.knowledge_call_counts!).map(([k, v]) => (
-                            <div key={k} style={{ fontSize: '12px', border: '1px solid var(--nb-border)', padding: '2px 8px', borderRadius: 4, background: 'var(--nb-surface)', color: 'var(--nb-text-primary)' }}>
-                              {k} <span style={{ color: '#1677ff', fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
+                            <div key={k} style={{ fontSize: 12, border: `1px solid ${token.colorBorder}`, padding: '2px 8px', borderRadius: 4, background: token.colorBgContainer, color: token.colorText }}>
+                              {k} <span style={{ color: token.colorPrimary, fontWeight: 600, marginLeft: 4 }}>×{v as any}</span>
                             </div>
                           ))}
                        </Flex>
@@ -152,7 +153,7 @@ export default function AgentTestRunDrawer({ open, onClose, agentId, agentName }
                   </Flex>
                 )}
                 
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)' }}>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                   状态：{result.run.status} · 耗时：{(result.run as any).durationMs || '-'} ms
                 </Typography.Text>
               </div>

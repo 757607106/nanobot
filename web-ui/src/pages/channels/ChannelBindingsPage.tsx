@@ -14,6 +14,7 @@ import {
   Switch,
   Tag,
   Typography,
+  theme,
 } from 'antd'
 import {
   DeleteOutlined,
@@ -97,6 +98,7 @@ export default function ChannelBindingsPage() {
   const navigate = useNavigate()
   const params = useParams<{ bindingId: string }>()
   const [form] = Form.useForm()
+  const { token } = theme.useToken()
   const isNewMode = !params.bindingId
 
   const [bindings, setBindings] = useState<ChannelBinding[]>([])
@@ -383,7 +385,7 @@ export default function ChannelBindingsPage() {
                               </div>
                             </Flex>
                           </Flex>
-                          <LinkOutlined style={{ color: 'var(--nb-text-quaternary)' }} />
+                          <LinkOutlined style={{ color: token.colorTextQuaternary }} />
                         </Flex>
                       </div>
                     )

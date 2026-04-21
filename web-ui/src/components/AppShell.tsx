@@ -246,7 +246,7 @@ export default function AppShell() {
                 {authStatus?.username?.slice(0, 1).toUpperCase()}
               </Avatar>
               <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-2xs)', letterSpacing: '0.04em', lineHeight: 1.1 }}>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, letterSpacing: '0.04em', lineHeight: 1.1 }}>
                   当前账号
                 </Typography.Text>
                 <Typography.Text strong className="app-sidebar-user-name" ellipsis style={{ lineHeight: 1.15 }}>
@@ -262,7 +262,7 @@ export default function AppShell() {
               onClick={() => void handleLogout()}
               data-testid={testIds.app.logout}
               title="退出登录"
-              style={{ color: 'var(--nb-muted)' }}
+              style={{ color: token.colorTextSecondary }}
             />
           </Flex>
         </div>
@@ -308,7 +308,7 @@ export default function AppShell() {
                 <Typography.Text type="secondary" className="app-sidebar-section-title" style={{ paddingInline: 0 }}>
                   {activeSection.label}
                 </Typography.Text>
-                <Typography.Text strong style={{ display: 'block', marginTop: 2, fontSize: 'var(--nb-text-sm)', lineHeight: 1.2 }}>
+                <Typography.Text strong style={{ display: 'block', marginTop: 2, fontSize: token.fontSize, lineHeight: 1.2 }}>
                   {activeRoute.label}
                 </Typography.Text>
               </div>

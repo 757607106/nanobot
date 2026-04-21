@@ -42,7 +42,7 @@ export default function ProviderAvatar({ providerName, label, size = 44 }: Provi
       style={{
         background: `${token.colorPrimary}16`,
         color: token.colorPrimary,
-        fontWeight: 'var(--nb-font-weight-title)',
+        fontWeight: token.fontWeightStrong,
         flexShrink: 0,
       }}
     >

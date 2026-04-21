@@ -12,12 +12,13 @@ import {
   Table,
   Tabs,
   Typography,
+  theme,
 } from 'antd'
 import { PlusOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons'
 import { api } from '../../api'
 import type { Tenant, ArtifactRetentionPolicy, TenantApiKey } from '../../types'
 import { useToast } from '../../toast'
-import { designTokens } from '../../ui/design/tokens'
+
 
 interface Props {
   open: boolean
@@ -28,6 +29,7 @@ interface Props {
 
 export default function TenantDetailDrawer({ open, onClose, tenantId, onSaved }: Props) {
   const message = useToast()
+  const { token } = theme.useToken()
   const [form] = Form.useForm()
   const [retentionForm] = Form.useForm()
   const [apiKeyForm] = Form.useForm()
@@ -161,7 +163,7 @@ export default function TenantDetailDrawer({ open, onClose, tenantId, onSaved }:
             key: 'basic',
             label: '基础配置',
             children: (
-              <Form form={form} layout="vertical" style={{ marginTop: designTokens.space.md }}>
+              <Form form={form} layout="vertical" style={{ marginTop: 12 }}>
                 <Form.Item name="name" label="租户名称" rules={[{ required: true, message: '必填' }]}>
                   <Input placeholder="输入租户名称" />
                 </Form.Item>
@@ -180,7 +182,7 @@ export default function TenantDetailDrawer({ open, onClose, tenantId, onSaved }:
                   key: 'retention',
                   label: '制品留存策略',
                   children: (
-                    <Form form={retentionForm} layout="vertical" style={{ marginTop: designTokens.space.md }}>
+                    <Form form={retentionForm} layout="vertical" style={{ marginTop: 12 }}>
                       <Typography.Paragraph type="secondary">
                         系统将定期清理或归档过期的历史运行制品数据（如沙盒产物、执行日志等）。留空表示不自动清理。
                       </Typography.Paragraph>
@@ -200,11 +202,11 @@ export default function TenantDetailDrawer({ open, onClose, tenantId, onSaved }:
                   key: 'apikeys',
                   label: 'API Keys',
                   children: (
-                    <Flex vertical gap={24} style={{ marginTop: designTokens.space.md }}>
+                    <Flex vertical gap={24} style={{ marginTop: 12 }}>
                       {newApiKeyToken && (
-                        <div style={{ padding: 12, background: 'var(--nb-color-success-bg)', border: '1px solid var(--nb-color-success-border)', borderRadius: 8 }}>
-                          <Typography.Text strong style={{ color: 'var(--nb-color-success)' }}>API Key 已成功创建</Typography.Text>
-                          <Typography.Paragraph copyable style={{ margin: '8px 0 0', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                        <div style={{ padding: 12, background: token.colorSuccessBg, border: `1px solid ${token.colorSuccessBorder}`, borderRadius: 8 }}>
+                          <Typography.Text strong style={{ color: token.colorSuccess }}>API Key 已成功创建</Typography.Text>
+                          <Typography.Paragraph copyable style={{ margin: '8px 0 0', fontFamily: token.fontFamilyCode, wordBreak: 'break-all' }}>
                             {newApiKeyToken}
                           </Typography.Paragraph>
                           <Typography.Text type="secondary" style={{ fontSize: 12 }}>

@@ -1,4 +1,4 @@
-import { Card, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd'
+import { Card, Col, Descriptions, Empty, Row, Space, Tag, Typography, theme } from 'antd'
 import type { RunBoundaryAudit } from '../../types'
 import { formatDateTimeZh } from '../../locale'
 import { artifactLifecycleColor, artifactLifecycleLabel, artifactRetentionSummary } from './utils'
@@ -26,6 +26,8 @@ function renderBoundaryList(values: string[] | undefined) {
 }
 
 export default function RunBoundaryAuditPanel({ audit, devMode }: RunBoundaryAuditProps) {
+  const { token } = theme.useToken()
+
   if (!audit) {
     return (
       <Card className="page-card" variant="borderless">
@@ -193,9 +195,9 @@ export default function RunBoundaryAuditPanel({ audit, devMode }: RunBoundaryAud
             style={{
               margin: 0,
               padding: 16,
-              background: 'var(--nb-surface-strong)',
+              background: token.colorFillAlter,
               borderRadius: 8,
-              fontSize: 'var(--nb-text-xs)',
+              fontSize: token.fontSizeSM,
               overflow: 'auto',
             }}
           >

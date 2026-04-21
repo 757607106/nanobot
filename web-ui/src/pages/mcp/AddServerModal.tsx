@@ -49,8 +49,8 @@ export default function AddServerModal({
 
   const labelStyle = {
     display: 'block',
-    fontSize: 'var(--nb-text-sm)',
-    fontWeight: 'var(--nb-font-weight-medium)',
+    fontSize: token.fontSize,
+    fontWeight: 500,
     color: token.colorText,
     marginBottom: 6,
   }
@@ -69,8 +69,8 @@ export default function AddServerModal({
       destroyOnClose
       width={520}
       styles={{
-        body: { padding: 'var(--nb-spacing-lg)' },
-        footer: { padding: 'var(--nb-spacing-md) var(--nb-spacing-lg)' },
+        body: { padding: token.paddingLG },
+        footer: { padding: `${token.padding}px ${token.paddingLG}px` },
       }}
       footer={
         <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
@@ -81,7 +81,7 @@ export default function AddServerModal({
         </Space>
       }
     >
-      <div className="flex flex-col" style={{ gap: 'var(--nb-spacing-md)' }}>
+      <div className="flex flex-col" style={{ gap: token.padding }}>
         {/* 名称 */}
         <div style={formGroupStyle}>
           <label style={labelStyle}>
@@ -100,12 +100,12 @@ export default function AddServerModal({
             status={!editingEntry && existingNames.has(draft.name.trim()) ? 'error' : undefined}
           />
           {editingEntry && (
-            <span style={{ fontSize: 'var(--nb-text-xs)', color: token.colorTextTertiary }}>
+            <span style={{ fontSize: token.fontSizeSM, color: token.colorTextTertiary }}>
               连接 ID：{editingEntry.name}
             </span>
           )}
           {!editingEntry && existingNames.has(draft.name.trim()) && (
-            <span style={{ fontSize: 'var(--nb-text-xs)', color: token.colorError }}>
+            <span style={{ fontSize: token.fontSizeSM, color: token.colorError }}>
               该名称已存在
             </span>
           )}
@@ -142,7 +142,7 @@ export default function AddServerModal({
                 value={draft.headersText}
                 onChange={(e) => onDraftChange({ ...draft, headersText: e.target.value })}
                 placeholder="Authorization: Bearer <token>"
-                style={{ fontFamily: 'var(--nb-font-mono)' }}
+                style={{ fontFamily: token.fontFamilyCode }}
               />
             </div>
           </>
@@ -171,14 +171,14 @@ export default function AddServerModal({
                 value={draft.envText}
                 onChange={(e) => onDraftChange({ ...draft, envText: e.target.value })}
                 placeholder="KEY=value&#10;API_KEY=xxx"
-                style={{ fontFamily: 'var(--nb-font-mono)' }}
+                style={{ fontFamily: token.fontFamilyCode }}
               />
             </div>
           </>
         )}
 
         {/* 超时 */}
-        <div className="flex items-center" style={{ gap: 'var(--nb-spacing-md)' }}>
+        <div className="flex items-center" style={{ gap: token.padding }}>
           <label style={{ ...labelStyle, marginBottom: 0, flexShrink: 0 }}>
             超时时间
           </label>
@@ -200,7 +200,7 @@ export default function AddServerModal({
                 borderBottomRightRadius: 8,
                 background: token.colorFillTertiary,
                 color: token.colorTextSecondary,
-                fontSize: 'var(--nb-text-xs)',
+                fontSize: token.fontSizeSM,
                 lineHeight: 1,
               }}
             >

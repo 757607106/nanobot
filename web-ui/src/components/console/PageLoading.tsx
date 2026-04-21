@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Alert, Empty, Flex, Spin } from 'antd'
+import { Alert, Empty, Flex, Spin, theme } from 'antd'
 
 interface PageLoadingProps {
   /** Show loading spinner */
@@ -31,9 +31,11 @@ export default function PageLoading({
   minHeight = 220,
   children,
 }: PageLoadingProps) {
+  const { token } = theme.useToken()
+
   if (loading) {
     return (
-      <Flex justify="center" align="center" style={{ minHeight, padding: 'var(--nb-spacing-2xl)' }}>
+      <Flex justify="center" align="center" style={{ minHeight, padding: 32 }}>
         <Spin size="large" />
       </Flex>
     )
@@ -46,14 +48,14 @@ export default function PageLoading({
         message="加载失败"
         description={error}
         showIcon
-        style={{ margin: 'var(--nb-spacing-md) 0' }}
+        style={{ margin: `${token.padding}px 0` }}
       />
     )
   }
 
   if (!hasData) {
     return (
-      <Flex justify="center" align="center" style={{ minHeight, padding: 'var(--nb-spacing-2xl)' }}>
+      <Flex justify="center" align="center" style={{ minHeight, padding: 32 }}>
         <Empty description={emptyText} />
       </Flex>
     )

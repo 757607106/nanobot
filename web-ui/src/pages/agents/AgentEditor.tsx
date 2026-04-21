@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Collapse, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography, App, Row, Col } from 'antd'
+import { Button, Collapse, Descriptions, Flex, Input, Select, Space, Switch, Tag, Typography, App, Row, Col, theme } from 'antd'
 import { SettingOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { api } from '../../api'
 import SectionCard from '../../components/console/SectionCard'
@@ -34,6 +34,7 @@ export default function AgentEditor({
   onUpdateForm,
 }: AgentEditorProps) {
   const { message } = App.useApp()
+  const { token } = theme.useToken()
 
   const agentProviderOptions = useMemo(
     () => getProviderOptions(globalConfigMeta),
@@ -139,7 +140,7 @@ export default function AgentEditor({
   }
 
   return (
-    <div style={{ overflowX: 'hidden', padding: '4px' }}>
+    <div style={{ overflowX: 'hidden', padding: token.marginXXS }}>
       <Row gutter={[24, 24]} style={{ alignItems: 'stretch' }}>
         <Col xs={24} lg={10} xl={9} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           <SectionCard title="核心设定">
@@ -156,7 +157,7 @@ export default function AgentEditor({
                   onChange={(event) => onUpdateForm('name', event.target.value)}
                   placeholder="例如：全栈工程师"
                   aria-label="名称"
-                  style={{ borderRadius: 12, padding: '8px 12px' }}
+                  style={{ borderRadius: token.borderRadiusLG }}
                 />
               </FormField>
 
@@ -170,7 +171,7 @@ export default function AgentEditor({
                   }}
                   placeholder="例如：人事助理、销售精英"
                   aria-label="岗位头衔"
-                  style={{ borderRadius: 12, padding: '8px 12px' }}
+                  style={{ borderRadius: token.borderRadiusLG }}
                 />
               </FormField>
 
@@ -183,7 +184,7 @@ export default function AgentEditor({
                   }}
                   placeholder="Python, React, API设计 (逗号分隔)"
                   aria-label="技能标签"
-                  style={{ borderRadius: 12, padding: '8px 12px' }}
+                  style={{ borderRadius: token.borderRadiusLG }}
                 />
               </FormField>
 
@@ -204,7 +205,7 @@ export default function AgentEditor({
                   rows={3}
                   placeholder="用一两句话描述该员工的擅长领域"
                   aria-label="职责说明"
-                  style={{ borderRadius: 12 }}
+                  style={{ borderRadius: token.borderRadiusLG }}
                 />
               </FormField>
             </div>
@@ -217,8 +218,8 @@ export default function AgentEditor({
               key: 'advanced',
               label: (
                 <Flex align="center" gap={8}>
-                  <SettingOutlined style={{ fontSize: 'var(--nb-text-sm)', color: 'var(--nb-muted)' }} />
-                  <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-sm)' }}>
+                  <SettingOutlined style={{ fontSize: token.fontSizeSM, color: token.colorTextSecondary }} />
+                  <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                     高级参数
                   </Typography.Text>
                 </Flex>
@@ -249,7 +250,7 @@ export default function AgentEditor({
                           value={form.model}
                           onChange={(event) => onUpdateForm('model', event.target.value)}
                           aria-label="模型"
-                          style={{ borderRadius: 12 }}
+                          style={{ borderRadius: token.borderRadiusLG }}
                         />
                       </FormField>
                     </>
@@ -271,7 +272,7 @@ export default function AgentEditor({
                       onChange={(event) => onUpdateForm('artifactArchiveAfterDays', event.target.value)}
                       placeholder="永久保存"
                       aria-label="产物归档天数"
-                      style={{ borderRadius: 12 }}
+                      style={{ borderRadius: token.borderRadiusLG }}
                     />
                   </FormField>
                   
@@ -282,19 +283,19 @@ export default function AgentEditor({
                         onChange={(event) => onUpdateForm('backend', event.target.value)}
                         placeholder="默认路由"
                         aria-label="运行后端"
-                        style={{ borderRadius: 12 }}
+                        style={{ borderRadius: token.borderRadiusLG }}
                       />
                     </FormField>
                   </DevOnly>
 
                   {modelSuggestions.length > 0 && !form.binding ? (
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <Typography.Text type="secondary" style={{ fontSize: 'var(--nb-text-xs)', marginBottom: 8, display: 'block' }}>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM, marginBottom: 8, display: 'block' }}>
                         快速选择模型
                       </Typography.Text>
                       <Space wrap size={[8, 8]}>
                         {modelSuggestions.slice(0, 6).map((modelName) => (
-                          <Button key={modelName} size="small" onClick={() => onUpdateForm('model', modelName)} style={{ borderRadius: 12 }}>
+                          <Button key={modelName} size="small" onClick={() => onUpdateForm('model', modelName)} style={{ borderRadius: token.borderRadiusLG }}>
                             {modelName}
                           </Button>
                         ))}
@@ -305,9 +306,9 @@ export default function AgentEditor({
               ),
             }]}
             style={{
-              background: 'var(--nb-surface-strong)',
-              borderRadius: 16,
-              border: '1px solid var(--nb-card-border)',
+              background: token.colorBgContainer,
+              borderRadius: token.borderRadiusLG,
+              border: `1px solid ${token.colorBorderSecondary}`,
             }}
           />
         </Col>
@@ -325,22 +326,22 @@ export default function AgentEditor({
                       icon={<ExperimentOutlined />} 
                       loading={isOptimizing}
                       onClick={handleOptimizePrompt}
-                      style={{ padding: 0, fontSize: 'var(--nb-text-xs)' }}
+                      style={{ padding: 0 }}
                     >
                       AI 补全与优化
                     </Button>
                   </Flex>
                 }
               >
-                <div style={{ padding: '2px', borderRadius: 14, background: 'var(--nb-surface)' }}>
+                <div style={{ padding: '2px', borderRadius: token.borderRadiusLG, background: token.colorBgContainer }}>
                   <Input.TextArea
                     value={form.systemPrompt}
                     onChange={(event) => onUpdateForm('systemPrompt', event.target.value)}
                     autoSize={{ minRows: 16 }}
                     aria-label="角色说明"
                     style={{ 
-                      borderRadius: 12, border: 'none', background: 'transparent',
-                      fontFamily: 'var(--nb-font-mono)',
+                      borderRadius: token.borderRadiusLG, border: 'none', background: 'transparent',
+                      fontFamily: token.fontFamilyCode,
                       lineHeight: 1.6
                     }}
                   />

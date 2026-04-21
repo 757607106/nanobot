@@ -1,4 +1,4 @@
-import { Button, Empty, Space, Table } from 'antd'
+import { Button, Empty, Space, Table, theme } from 'antd'
 import { ReloadOutlined, DatabaseOutlined, ProfileOutlined, CheckSquareOutlined, AimOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import SectionCard from '../../components/console/SectionCard'
@@ -22,6 +22,7 @@ export function KnowledgeBenchmarksTab({
   onOpenUpload,
   onRefresh,
 }: KnowledgeBenchmarksTabProps) {
+  const { token } = theme.useToken()
   const totalQuestions = benchmarks.reduce(
     (sum, item) => sum + (item.questionCount || item.question_count || 0),
     0,
@@ -43,7 +44,7 @@ export function KnowledgeBenchmarksTab({
           </Space>
         )}
       >
-        <div className="knowledge-benchmark-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--nb-border)' }}>
+        <div className="knowledge-benchmark-metrics" style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginBottom: 24, paddingBottom: 24, borderBottom: `1px solid ${token.colorBorder}` }}>
           <MetricCard
             label="题库数量"
             value={benchmarks.length}

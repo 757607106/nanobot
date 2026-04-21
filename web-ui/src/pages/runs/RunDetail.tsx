@@ -1,4 +1,4 @@
-import { Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd'
+import { Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Typography, theme } from 'antd'
 import {
   PauseCircleOutlined,
   ReloadOutlined,
@@ -45,8 +45,9 @@ export default function RunDetail({
   onRefresh,
   onCancel,
   children,
-}: RunDetailProps) {
+  }: RunDetailProps) {
   const { devMode } = useDevMode()
+  const { token } = theme.useToken()
 
   return (
     <div className="page-stack">
@@ -83,7 +84,7 @@ export default function RunDetail({
             <Card title="执行结果" className="page-card" variant="borderless">
               <div
                 style={{
-                  background: 'var(--nb-surface-strong)',
+                  background: token.colorFillAlter,
                   padding: 24,
                   borderRadius: 8,
                 }}
@@ -136,7 +137,7 @@ export default function RunDetail({
                     {formatDateTimeZh(run.createdAt)}
                   </Descriptions.Item>
                   <Descriptions.Item label="执行耗时">
-                    <Text style={{ fontFamily: 'var(--nb-font-mono)', fontSize: 'var(--nb-text-sm)' }}>
+                    <Text style={{ fontFamily: token.fontFamilyCode, fontSize: token.fontSizeSM }}>
                       {formatDuration(run.createdAt ?? '', run.finishedAt)}
                     </Text>
                   </Descriptions.Item>

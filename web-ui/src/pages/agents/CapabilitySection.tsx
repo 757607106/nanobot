@@ -1,4 +1,4 @@
-import { Checkbox, Empty, Flex, Space, Tag, Typography } from 'antd'
+import { Checkbox, Empty, Flex, Space, Tag, Typography, theme } from 'antd'
 import SectionCard from '../../components/console/SectionCard'
 import type { CapabilityItem } from './types'
 
@@ -19,6 +19,7 @@ export default function CapabilitySection({
   selectedKeys,
   onToggle,
 }: CapabilitySectionProps) {
+  const { token } = theme.useToken()
   return (
     <SectionCard title={title} description={description}>
       {items.length === 0 ? (
@@ -46,26 +47,26 @@ export default function CapabilitySection({
                 }}
                 style={{
                   cursor: 'pointer',
-                  padding: 20,
-                  borderRadius: 16,
-                  border: `1px solid ${selected ? 'var(--nb-token-color-primary)' : 'var(--nb-card-border)'}`,
-                  background: selected ? 'var(--nb-token-color-primary-bg)' : 'var(--nb-surface)',
-                  boxShadow: selected ? 'var(--nb-shadow-soft)' : 'none',
+                  padding: token.marginLG,
+                  borderRadius: token.borderRadiusLG,
+                  border: `1px solid ${selected ? token.colorPrimary : token.colorBorderSecondary}`,
+                  background: selected ? token.colorPrimaryBg : token.colorBgContainer,
+                  boxShadow: selected ? token.boxShadowSecondary : 'none',
                   transition: 'all 0.2s ease',
                   position: 'relative'
                 }}
               >
-                <Flex justify="space-between" align="flex-start" gap={12}>
+                <Flex justify="space-between" align="flex-start" gap={token.marginSM}>
                   <Flex vertical gap={6} style={{ minWidth: 0, flex: '1 1 auto' }}>
                     <Space wrap size={[8, 8]}>
-                      <Typography.Text strong style={{ fontSize: 'var(--nb-text-md)', color: selected ? 'var(--nb-token-color-primary-text)' : 'inherit' }}>
+                      <Typography.Text strong style={{ color: selected ? token.colorPrimaryText : 'inherit' }}>
                         {item.name}
                       </Typography.Text>
-                      {item.isOrphan ? <Tag color="warning" style={{ borderRadius: 12, border: 'none' }}>遗留引用</Tag> : null}
+                      {item.isOrphan ? <Tag color="warning" style={{ borderRadius: token.borderRadiusLG, border: 'none' }}>遗留引用</Tag> : null}
                     </Space>
                     <Typography.Paragraph
                       type="secondary"
-                      style={{ margin: 0, fontSize: 'var(--nb-text-sm)', lineHeight: 1.5, opacity: selected ? 0.8 : 1 }}
+                      style={{ margin: 0, fontSize: token.fontSizeSM, lineHeight: 1.5, opacity: selected ? 0.8 : 1 }}
                       ellipsis={{ rows: 2 }}
                       title={item.description}
                     >

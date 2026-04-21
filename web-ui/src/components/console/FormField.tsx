@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Typography } from 'antd'
+import { Typography, theme } from 'antd'
 
 interface FormFieldProps {
   /** Field label */
@@ -26,20 +26,22 @@ export default function FormField({
   children,
   fullWidth,
 }: FormFieldProps) {
+  const { token } = theme.useToken()
+
   return (
     <div style={{ minWidth: 0, ...(fullWidth ? { gridColumn: '1 / -1' } : {}) }}>
       <Typography.Text
         type="secondary"
-        style={{ display: 'block', fontSize: 'var(--nb-text-sm)', marginBottom: 8 }}
+        style={{ display: 'block', fontSize: token.fontSize, marginBottom: 8 }}
       >
         {label}
-        {required ? <span style={{ color: 'var(--nb-accent)', marginLeft: 4 }}>*</span> : null}
+        {required ? <span style={{ color: token.colorPrimary, marginLeft: 4 }}>*</span> : null}
       </Typography.Text>
       {children}
       {helper ? (
         <Typography.Text
           type="secondary"
-          style={{ display: 'block', fontSize: 'var(--nb-text-xs)', marginTop: 6, lineHeight: 1.5 }}
+          style={{ display: 'block', fontSize: token.fontSizeSM, marginTop: 6, lineHeight: 1.5 }}
         >
           {helper}
         </Typography.Text>

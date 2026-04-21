@@ -227,8 +227,8 @@ export default function McpServerDetailPage({
 
   if (loading) {
     return (
-      <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)' }}>
-        <div style={{ paddingTop: 'var(--nb-spacing-lg)' }}>
+      <div className="page-stack" style={{ paddingInline: token.paddingLG }}>
+        <div style={{ paddingTop: token.paddingLG }}>
           <PageHeader
             eyebrow="服务集成"
             title="正在加载 MCP 配置..."
@@ -248,8 +248,8 @@ export default function McpServerDetailPage({
 
   if (!serverName || !entry || !draft) {
     return (
-      <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)' }}>
-        <div style={{ paddingTop: 'var(--nb-spacing-lg)' }}>
+      <div className="page-stack" style={{ paddingInline: token.paddingLG }}>
+        <div style={{ paddingTop: token.paddingLG }}>
           <PageHeader
             eyebrow="服务集成"
             title="MCP 连接详情"
@@ -282,8 +282,8 @@ export default function McpServerDetailPage({
   const actionBusy = saving || probing || toggling
 
   return (
-    <div className="page-stack" style={{ paddingInline: 'var(--nb-spacing-lg)' }}>
-      <div style={{ paddingTop: 'var(--nb-spacing-lg)' }}>
+    <div className="page-stack" style={{ paddingInline: token.paddingLG }}>
+      <div style={{ paddingTop: token.paddingLG }}>
         <PageHeader
           eyebrow="服务集成"
           title={entry.displayName || entry.name}
@@ -338,7 +338,7 @@ export default function McpServerDetailPage({
                 {/* Row 1: name + enable */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'end' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label htmlFor="mcp-detail-display-name" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>展示名称</label>
+                    <label htmlFor="mcp-detail-display-name" style={{ fontSize: token.fontSize, fontWeight: 500, color: token.colorTextSecondary }}>展示名称</label>
                     <Input
                       id="mcp-detail-display-name"
                       value={draft.displayName}
@@ -353,11 +353,11 @@ export default function McpServerDetailPage({
                       gap: 8,
                       padding: '8px 12px',
                       borderRadius: 8,
-                      background: 'var(--nb-card-subtle-bg)',
+                      background: token.colorFillAlter,
                       height: 40,
                     }}
                   >
-                    <Text style={{ fontSize: 'var(--nb-text-sm)', whiteSpace: 'nowrap' }}>聊天中启用</Text>
+                    <Text style={{ fontSize: token.fontSize, whiteSpace: 'nowrap' }}>聊天中启用</Text>
                     <Switch
                       checked={draft.enabled}
                       onChange={(checked) => applyDraftPatch({ enabled: checked })}
@@ -370,7 +370,7 @@ export default function McpServerDetailPage({
                 {/* Row 2: transport + timeout */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label htmlFor="mcp-detail-transport" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>传输方式</label>
+                    <label htmlFor="mcp-detail-transport" style={{ fontSize: token.fontSize, fontWeight: 500, color: token.colorTextSecondary }}>传输方式</label>
                     <Select
                       id="mcp-detail-transport"
                       value={draft.type}
@@ -384,7 +384,7 @@ export default function McpServerDetailPage({
                     />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label htmlFor="mcp-detail-timeout" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>超时时间（秒）</label>
+                    <label htmlFor="mcp-detail-timeout" style={{ fontSize: token.fontSize, fontWeight: 500, color: token.colorTextSecondary }}>超时时间（秒）</label>
                     <InputNumber
                       id="mcp-detail-timeout"
                       min={1}
@@ -400,7 +400,7 @@ export default function McpServerDetailPage({
                 {draft.type === 'stdio' ? (
                   <>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label htmlFor="mcp-detail-command" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>命令</label>
+                      <label htmlFor="mcp-detail-command" style={{ fontSize: token.fontSize, fontWeight: 500, color: token.colorTextSecondary }}>命令</label>
                       <Input
                         id="mcp-detail-command"
                         value={draft.command}
@@ -411,7 +411,7 @@ export default function McpServerDetailPage({
                       />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label htmlFor="mcp-detail-args" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>参数（每行一个）</label>
+                      <label htmlFor="mcp-detail-args" style={{ fontSize: token.fontSize, fontWeight: 500, color: token.colorTextSecondary }}>参数（每行一个）</label>
                       <Input.TextArea
                         id="mcp-detail-args"
                         rows={3}
@@ -422,13 +422,13 @@ export default function McpServerDetailPage({
                       />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label htmlFor="mcp-detail-env" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>环境变量（JSON）</label>
+                      <label htmlFor="mcp-detail-env" style={{ fontSize: token.fontSize, fontWeight: 500, color: token.colorTextSecondary }}>环境变量（JSON）</label>
                       <Input.TextArea
                         id="mcp-detail-env"
                         rows={5}
                         value={showSensitive ? draft.envText : maskMappingText(draft.envText)}
                         onChange={(e) => applyDraftPatch({ envText: e.target.value })}
-                        style={{ fontFamily: 'monospace', fontSize: 'var(--nb-text-xs)' }}
+                        style={{ fontFamily: 'monospace', fontSize: token.fontSizeSM }}
                         data-testid={testIds.mcp.detailEnv}
                         readOnly={!showSensitive}
                         placeholder='{"KEY": "VALUE"}'
@@ -440,10 +440,10 @@ export default function McpServerDetailPage({
                         style={{
                           padding: 12,
                           borderRadius: 8,
-                          background: 'var(--nb-card-subtle-bg)',
-                          border: '1px solid var(--nb-card-subtle-border)',
-                          fontFamily: 'var(--nb-font-mono)',
-                          fontSize: 'var(--nb-text-2xs)',
+                          background: token.colorFillAlter,
+                          border: `1px solid ${token.colorBorderSecondary}`,
+                          fontFamily: token.fontFamilyCode,
+                          fontSize: token.fontSizeSM,
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-word',
                           color: token.colorTextSecondary,
@@ -456,7 +456,7 @@ export default function McpServerDetailPage({
                 ) : (
                   <>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label htmlFor="mcp-detail-url" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>URL</label>
+                      <label htmlFor="mcp-detail-url" style={{ fontSize: token.fontSize, fontWeight: 500, color: token.colorTextSecondary }}>URL</label>
                       <Input
                         id="mcp-detail-url"
                         value={draft.url}
@@ -466,13 +466,13 @@ export default function McpServerDetailPage({
                       />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label htmlFor="mcp-detail-headers" style={{ fontSize: 'var(--nb-text-sm)', fontWeight: 'var(--nb-font-weight-medium)', color: token.colorTextSecondary }}>请求头（JSON）</label>
+                      <label htmlFor="mcp-detail-headers" style={{ fontSize: token.fontSize, fontWeight: 500, color: token.colorTextSecondary }}>请求头（JSON）</label>
                       <Input.TextArea
                         id="mcp-detail-headers"
                         rows={5}
                         value={showSensitive ? draft.headersText : maskMappingText(draft.headersText)}
                         onChange={(e) => applyDraftPatch({ headersText: e.target.value })}
-                        style={{ fontFamily: 'monospace', fontSize: 'var(--nb-text-xs)' }}
+                        style={{ fontFamily: 'monospace', fontSize: token.fontSizeSM }}
                         readOnly={!showSensitive}
                         placeholder='{"Authorization": "Bearer ..."}'
                         aria-label="请求头（JSON）"
@@ -483,10 +483,10 @@ export default function McpServerDetailPage({
                         style={{
                           padding: 12,
                           borderRadius: 8,
-                          background: 'var(--nb-card-subtle-bg)',
-                          border: '1px solid var(--nb-card-subtle-border)',
-                          fontFamily: 'var(--nb-font-mono)',
-                          fontSize: 'var(--nb-text-2xs)',
+                          background: token.colorFillAlter,
+                          border: `1px solid ${token.colorBorderSecondary}`,
+                          fontFamily: token.fontFamilyCode,
+                          fontSize: token.fontSizeSM,
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-word',
                           color: token.colorTextSecondary,
