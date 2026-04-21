@@ -3,11 +3,83 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any
 
 from nanobot.agent.tools.base import Tool
 
 COMMON_KB_TOOL_NAMES = ("list_kbs", "get_mindmap", "query_kb")
+_PREFETCH_PREVIEW_CHARS = 480
+_SMALLTALK_NORMALIZE_RE = re.compile(r"[\s\W_]+", re.UNICODE)
+_SMALLTALK_EXACT = frozenset(
+    {
+        "你好",
+        "您好",
+        "嗨",
+        "哈喽",
+        "哈囉",
+        "hello",
+        "hi",
+        "hey",
+        "早上好",
+        "中午好",
+        "下午好",
+        "晚上好",
+        "在吗",
+        "在嘛",
+        "有人吗",
+        "收到",
+        "好的",
+        "ok",
+        "okk",
+        "okay",
+        "谢谢",
+        "感谢",
+        "thankyou",
+        "thanks",
+        "bye",
+        "再见",
+        "拜拜",
+    }
+)
+_SMALLTALK_PATTERNS = (
+    re.compile(r"^(你|您)?好+$"),
+    re.compile(r"^(哈)+[喽囉啰]?$"),
+    re.compile(r"^(hi|hello|hey)+$"),
+    re.compile(r"^(谢+谢+|多谢|感谢|thanks?|thankyou)$", re.IGNORECASE),
+    re.compile(r"^(再见|拜拜|bye+)$", re.IGNORECASE),
+)
+_EAGER_PREFETCH_HINTS = (
+    re.compile(r"[?？]"),
+    re.compile(r"(怎么|如何|为何|为什么|是否|能否|可否|多少|几天|几时|哪里|哪儿|哪个|什么)"),
+    re.compile(r"\b(how|what|why|when|where|which|can|could|should|is|are|do|does)\b", re.IGNORECASE),
+)
+
+
+def _normalize_smalltalk_query(query: str) -> str:
+    return _SMALLTALK_NORMALIZE_RE.sub("", str(query or "").strip().lower())
+
+
+def should_skip_bound_knowledge_prefetch(query: str) -> bool:
+    """Return True when the request is low-information phatic chatter."""
+    normalized = _normalize_smalltalk_query(query)
+    if not normalized:
+        return False
+    if len(normalized) > 24:
+        return False
+    if normalized in _SMALLTALK_EXACT:
+        return True
+    return any(pattern.fullmatch(normalized) for pattern in _SMALLTALK_PATTERNS)
+
+
+def should_eager_prefetch_bound_knowledge(query: str) -> bool:
+    """Return True when a query looks explicit enough to justify eager KB prefetch."""
+    text = str(query or "").strip()
+    if not text or should_skip_bound_knowledge_prefetch(text):
+        return False
+    if len(text) < 4:
+        return False
+    return any(pattern.search(text) for pattern in _EAGER_PREFETCH_HINTS)
 
 
 @dataclass(slots=True)
@@ -285,11 +357,14 @@ def build_knowledge_prompt_block(hits: list[dict[str, Any]]) -> str:
         label = citation.get("title") or hit.get("title") or f"Chunk {index}"
         source_uri = citation.get("sourceUri")
         source_type = citation.get("sourceType") or "knowledge"
+        snippet = str(hit.get("preview") or hit.get("content") or "").strip()
+        if len(snippet) > _PREFETCH_PREVIEW_CHARS:
+            snippet = snippet[:_PREFETCH_PREVIEW_CHARS].rstrip() + "…"
         header = f"## Evidence {index}: {label}"
         meta = f"Source Type: {source_type}"
         if source_uri:
             meta += f"\nSource URI: {source_uri}"
-        sections.append(f"{header}\n{meta}\n\n{hit.get('content', '').strip()}")
+        sections.append(f"{header}\n{meta}\n\n{snippet}")
     return "\n\n".join(sections)
 
 
@@ -298,6 +373,7 @@ def build_knowledge_policy_block() -> str:
         [
             "# Knowledge Policy",
             "You have bound knowledge bases.",
+            "For factual or product-specific questions, call query_kb before answering unless retrieved knowledge is already provided below.",
             "When knowledge evidence exists, answer from that evidence.",
             "When retrieval or query_kb returns no evidence, explicitly say no matching information was found in the bound knowledge base.",
             "Do not fill gaps with general knowledge.",
@@ -346,15 +422,34 @@ class KnowledgeBindingMiddleware:
 
         knowledge_result: dict[str, Any] = {"hits": [], "requestedMode": "auto", "effectiveMode": "mixed"}
         prompt_sections: list[str] = []
-        if binding_context is not None and binding_context.has_bindings:
+        should_prefetch = should_eager_prefetch_bound_knowledge(task)
+        skip_for_smalltalk = should_skip_bound_knowledge_prefetch(task)
+        if binding_context is not None and binding_context.has_bindings and not skip_for_smalltalk:
             prompt_sections.append(build_knowledge_policy_block())
-        if self.knowledge_service and binding_context is not None and binding_context.has_bindings:
+        if (
+            self.knowledge_service
+            and binding_context is not None
+            and binding_context.has_bindings
+            and should_prefetch
+        ):
             knowledge_result = self.knowledge_service.retrieve(
                 kb_ids=list(binding_context.bound_kb_ids),
                 query=str(task or ""),
-                limit=6,
+                limit=2,
                 requested_mode="naive",
             )
+        elif binding_context is not None and binding_context.has_bindings and skip_for_smalltalk:
+            knowledge_result = {
+                "hits": [],
+                "requestedMode": "skipped",
+                "effectiveMode": "skipped",
+            }
+        elif binding_context is not None and binding_context.has_bindings:
+            knowledge_result = {
+                "hits": [],
+                "requestedMode": "deferred",
+                "effectiveMode": "tool_only",
+            }
 
         knowledge_hits = list(knowledge_result.get("hits") or [])
         prompt_block = build_knowledge_prompt_block(knowledge_hits)

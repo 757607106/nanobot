@@ -17,6 +17,8 @@ from .knowledge import (
     build_knowledge_policy_block,
     build_knowledge_prompt_block,
     get_common_kb_tools,
+    should_eager_prefetch_bound_knowledge,
+    should_skip_bound_knowledge_prefetch,
 )
 from .middleware import (
     ExecutionAssemblyState,
@@ -90,6 +92,8 @@ __all__ = [
     "build_knowledge_binding_context",
     "build_knowledge_policy_block",
     "build_knowledge_prompt_block",
+    "should_eager_prefetch_bound_knowledge",
+    "should_skip_bound_knowledge_prefetch",
     "build_workspace_tool_registry",
     "format_tool_hint",
     "get_common_kb_tools",

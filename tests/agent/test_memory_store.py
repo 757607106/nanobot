@@ -18,17 +18,20 @@ class TestMemoryStoreFiles:
         assert store.read_soul() == ""
         assert store.read_profile() == ""
         assert store.read_memory() == ""
+        assert store.read_dreams() == ""
 
     def test_writes_and_reads_root_memory_files(self, store):
         store.write_agents("agents")
         store.write_soul("soul")
         store.write_profile("profile")
         store.write_memory("memory")
+        store.write_dreams("dreams")
 
         assert store.read_agents() == "agents"
         assert store.read_soul() == "soul"
         assert store.read_profile() == "profile"
         assert store.read_memory() == "memory"
+        assert store.read_dreams() == "dreams"
 
 
 class TestDailyNotes:
@@ -88,3 +91,14 @@ class TestDreamCursor:
         store.set_last_dream_cursor(3)
         store2 = MemoryStore(store.workspace)
         assert store2.get_last_dream_cursor() == 3
+
+
+class TestDreamLog:
+    def test_append_dream_entry_writes_timestamped_markdown_sections(self, store):
+        timestamp = datetime(2026, 4, 21, 10, 15)
+
+        store.append_dream_entry("Updated MEMORY.md from daily notes.", timestamp=timestamp)
+
+        content = store.read_dreams()
+        assert "## 2026-04-21 10:15" in content
+        assert "Updated MEMORY.md from daily notes." in content

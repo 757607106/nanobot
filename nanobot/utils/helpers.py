@@ -515,7 +515,15 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
         dest.write_text(src.read_text(encoding="utf-8") if src else "", encoding="utf-8")
         added.append(str(dest.relative_to(workspace)))
 
-    for name in ("AGENTS.md", "SOUL.md", "PROFILE.md", "MEMORY.md", "TOOLS.md", "HEARTBEAT.md"):
+    for name in (
+        "AGENTS.md",
+        "SOUL.md",
+        "PROFILE.md",
+        "MEMORY.md",
+        "DREAMS.md",
+        "TOOLS.md",
+        "HEARTBEAT.md",
+    ):
         item = tpl / name
         if item.is_file():
             _write(item, workspace / name)
@@ -531,7 +539,7 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     try:
         from nanobot.utils.gitstore import GitStore
         gs = GitStore(workspace, tracked_files=[
-            "AGENTS.md", "SOUL.md", "PROFILE.md", "MEMORY.md",
+            "AGENTS.md", "SOUL.md", "PROFILE.md", "MEMORY.md", "DREAMS.md",
         ])
         gs.init()
     except Exception:

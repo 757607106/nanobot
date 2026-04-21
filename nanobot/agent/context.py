@@ -30,6 +30,8 @@ class ContextBuilder:
         timezone: str | None = None,
         workspace_context: WorkspaceContext | None = None,
         disabled_skills: list[str] | None = None,
+        include_always_skills: bool = True,
+        include_skills_summary: bool = True,
     ):
         if workspace_context is not None:
             self.workspace = workspace_context.memory_root
@@ -46,6 +48,8 @@ class ContextBuilder:
                 else workspace
             )
         self.timezone = timezone
+        self.include_always_skills = include_always_skills
+        self.include_skills_summary = include_skills_summary
         self.memory = MemoryStore(self.memory_workspace)
         self.skills_workspace = (
             Path(skills_workspace)
@@ -91,7 +95,8 @@ class ContextBuilder:
             parts.append(f"# Additional Memory\n\n{memory_body}")
 
         active_skill_names: list[str] = []
-        for name in (skill_names or []) + self.skills.get_always_skills():
+        always_skills = self.skills.get_always_skills() if self.include_always_skills else []
+        for name in (skill_names or []) + always_skills:
             normalized = str(name or "").strip()
             if normalized and normalized not in active_skill_names:
                 active_skill_names.append(normalized)
@@ -100,7 +105,7 @@ class ContextBuilder:
             if active_content:
                 parts.append(f"# Active Skills\n\n{active_content}")
 
-        skills_summary = self.skills.build_skills_summary()
+        skills_summary = self.skills.build_skills_summary() if self.include_skills_summary else ""
         if skills_summary:
             parts.append(render_template("agent/skills_section.md", skills_summary=skills_summary))
 

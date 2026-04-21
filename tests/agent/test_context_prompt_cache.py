@@ -131,6 +131,25 @@ def test_channel_format_hint_absent_for_unknown(tmp_path) -> None:
     assert "Format Hint" not in prompt2
 
 
+def test_system_prompt_can_skip_always_skills_and_catalog_summary(tmp_path) -> None:
+    workspace = _make_workspace(tmp_path)
+    (workspace / "skills" / "always-on").mkdir(parents=True)
+    (workspace / "skills" / "always-on" / "SKILL.md").write_text(
+        "---\nname: always-on\ndescription: test\nalways: true\n---\n\n# Always On\n",
+        encoding="utf-8",
+    )
+    builder = ContextBuilder(
+        workspace,
+        include_always_skills=False,
+        include_skills_summary=False,
+    )
+
+    prompt = builder.build_system_prompt()
+
+    assert "# Active Skills" not in prompt
+    assert "<skills>" not in prompt
+
+
 def test_build_messages_passes_channel_to_system_prompt(tmp_path) -> None:
     workspace = _make_workspace(tmp_path)
     builder = ContextBuilder(workspace)

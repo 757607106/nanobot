@@ -99,7 +99,6 @@ class WebAgentRuntimeService:
 
     def __init__(self, state: WebAppState):
         self.state = state
-        self._dream_locks: dict[str, asyncio.Lock] = {}
 
     def _get_workspace_provider(self):
         return getattr(self.state, "workspace_provider", None) or SharedWorkspaceProvider()
@@ -112,59 +111,6 @@ class WebAgentRuntimeService:
         if service is None:
             return None
         return service.with_tenant(tenant_id) if hasattr(service, "with_tenant") else service
-
-    def _schedule_agent_dream(
-        self,
-        *,
-        agent_id: str,
-        memory_workspace_path: Path,
-        config: Config,
-        session_key: str,
-    ) -> None:
-        """Schedule a background Dream run for a custom agent after execution."""
-
-        async def _run() -> None:
-            lock = self._dream_locks.setdefault(agent_id, asyncio.Lock())
-            if lock.locked():
-                logger.debug("Dream: skipping {} — already running", agent_id)
-                return
-            async with lock:
-                try:
-                    from nanobot.agent.memory import Dream, MemoryStore as AgentMemoryStore
-
-                    store = AgentMemoryStore(memory_workspace_path)
-
-                    # Archive session messages so Dream has data even for short runs.
-                    if self.state.sessions:
-                        session = self.state.sessions.get_or_create(session_key)
-                        if session.messages:
-                            summary_lines = []
-                            for m in session.messages:
-                                role = str(m.get("role", "")).upper()
-                                content = str(m.get("content", ""))[:500]
-                                if role and content.strip():
-                                    summary_lines.append(f"{role}: {content}")
-                            if summary_lines:
-                                store.append_daily_note("\n".join(summary_lines))
-
-                    if not store.read_unprocessed_notes(since_cursor=store.get_last_dream_cursor()):
-                        return
-
-                    provider = self.state.config_runtime.make_provider(config)
-                    dream = Dream(
-                        store=store,
-                        provider=provider,
-                        model=config.agents.defaults.model,
-                        max_batch_size=config.agents.defaults.dream.max_batch_size,
-                        max_iterations=config.agents.defaults.dream.max_iterations,
-                    )
-                    did_work = await dream.run()
-                    if not did_work:
-                        return
-                except Exception:
-                    logger.exception("Dream: background run failed for agent {}", agent_id)
-
-        asyncio.create_task(_run())
 
     @staticmethod
     def _channel_route_event_payload(route_metadata: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -795,6 +741,8 @@ class WebAgentRuntimeService:
             workspace_provider=self._get_workspace_provider(),
             sandbox_binding=resolved_sandbox,
             sandbox_provider=self._get_sandbox_provider(),
+            include_always_skills=False,
+            include_skills_summary=False,
         )
         return isolated_agent, prepared
 
@@ -1103,13 +1051,6 @@ class WebAgentRuntimeService:
             raise
         finally:
             await isolated_agent.close_mcp()
-            if agent_id:
-                self._schedule_agent_dream(
-                    agent_id=agent_id,
-                    memory_workspace_path=memory_binding.path,
-                    config=config,
-                    session_key=execution_context.session_key,
-                )
 
         messages = self._format_messages(execution_context.session_key, execution_context.session_id)
         return {

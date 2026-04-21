@@ -16,7 +16,7 @@ from loguru import logger
 from nanobot.agent.autocompact import AutoCompact
 from nanobot.agent.context import ContextBuilder
 from nanobot.agent.hook import AgentHook, AgentHookContext, CompositeHook
-from nanobot.agent.memory import Consolidator, Dream
+from nanobot.agent.memory import Consolidator, Dream, PostConversationMemoryExtractor
 from nanobot.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
 from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 from nanobot.agent.subagent import SubagentManager
@@ -247,6 +247,8 @@ class AgentLoop:
         hooks: list[AgentHook] | None = None,
         unified_session: bool = False,
         disabled_skills: list[str] | None = None,
+        include_always_skills: bool = True,
+        include_skills_summary: bool = True,
     ):
         from nanobot.config.schema import ExecToolConfig, WebToolsConfig
 
@@ -322,6 +324,8 @@ class AgentLoop:
             timezone=timezone,
             workspace_context=self._ws_ctx,
             disabled_skills=disabled_skills,
+            include_always_skills=include_always_skills,
+            include_skills_summary=include_skills_summary,
         )
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
@@ -375,6 +379,11 @@ class AgentLoop:
             session_ttl_minutes=session_ttl_minutes,
         )
         self.dream = Dream(
+            store=self.context.memory,
+            provider=provider,
+            model=self.model,
+        )
+        self.memory_extractor = PostConversationMemoryExtractor(
             store=self.context.memory,
             provider=provider,
             model=self.model,
@@ -957,6 +966,8 @@ class AgentLoop:
         self._clear_pending_user_turn(session)
         self._clear_runtime_checkpoint(session)
         self.sessions.save(session)
+        turn_skip = max(0, save_skip - (1 if user_persisted_early else 0))
+        self._schedule_background(self.memory_extractor.run(all_msgs[turn_skip:]))
         self._schedule_background(self.consolidator.maybe_consolidate_by_tokens(session))
 
         # When follow-up messages were injected mid-turn, a later natural

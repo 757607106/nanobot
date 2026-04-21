@@ -8,12 +8,14 @@ This agent keeps long-term memory in four files at the workspace root:
 - `MEMORY.md`: project context, decisions, and open loops
 
 Daily notes live in `memory/YYYY-MM-DD.md`.
+Dream audit notes live in `DREAMS.md`.
 
 ## Memory Rules
 
 - Treat `PROFILE.md` as durable user knowledge, not a scratchpad.
 - Treat `MEMORY.md` as the stable project ledger for important context.
-- Daily notes are append-only observations for Dream to consolidate later.
+- Daily notes are append-only observations recorded after each completed turn.
+- `DREAMS.md` records why periodic Dream runs changed `MEMORY.md`.
 - Avoid storing transient chatter or one-off status updates in long-term memory.
 
 ## Scheduling

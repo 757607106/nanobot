@@ -1,4 +1,4 @@
-"""Agent memory store, token-pressure consolidation, and Dream processing."""
+"""Agent memory store, token-pressure consolidation, and long-term memory upkeep."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 
-from nanobot.agent.runner import AgentRunner, AgentRunSpec
-from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.utils.gitstore import GitStore
 from nanobot.utils.helpers import (
     ensure_dir,
@@ -25,6 +23,96 @@ from nanobot.utils.prompt_templates import render_template
 if TYPE_CHECKING:
     from nanobot.providers.base import LLMProvider
     from nanobot.session.manager import Session, SessionManager
+
+
+_RUNTIME_CONTEXT_RE = re.compile(
+    r"\[Runtime Context[^\n]*\]\n.*?\n\[/Runtime Context\]\s*",
+    re.DOTALL,
+)
+_SHARED_MEMORY_LOCKS: weakref.WeakValueDictionary[str, asyncio.Lock] = (
+    weakref.WeakValueDictionary()
+)
+
+
+def _memory_lock_for(workspace: Path) -> asyncio.Lock:
+    key = str(Path(workspace).resolve())
+    return _SHARED_MEMORY_LOCKS.setdefault(key, asyncio.Lock())
+
+
+def _normalize_markdown_document(content: str) -> str:
+    stripped = str(content or "").strip()
+    return f"{stripped}\n" if stripped else ""
+
+
+def _extract_tagged_section(text: str, name: str) -> str | None:
+    match = re.search(rf"\[{name}\]\s*(.*?)\s*\[/{name}\]", text, flags=re.DOTALL)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def _flatten_message_content(content: Any) -> str:
+    if isinstance(content, str):
+        text = content
+    elif isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        text = "\n".join(part for part in parts if part)
+    elif content is None:
+        text = ""
+    else:
+        text = str(content)
+    text = _RUNTIME_CONTEXT_RE.sub("", text)
+    return (strip_think(text) or text).strip()
+
+
+def _format_turn_transcript(
+    messages: list[dict[str, Any]],
+    *,
+    max_chars: int = 12_000,
+    max_message_chars: int = 2_000,
+) -> str:
+    lines: list[str] = []
+    for message in messages:
+        role = str(message.get("role", "")).lower()
+        if role not in {"user", "assistant", "tool"}:
+            continue
+        if role == "tool":
+            name = str(message.get("name") or "tool").strip() or "tool"
+            lines.append(f"TOOL {name}: used")
+            continue
+        content = _flatten_message_content(message.get("content"))
+        if len(content) > max_message_chars:
+            content = f"{content[:max_message_chars].rstrip()}..."
+        tool_calls = message.get("tool_calls") or []
+        tool_names = [
+            str(call.get("function", {}).get("name") or call.get("name") or "").strip()
+            for call in tool_calls
+            if isinstance(call, dict)
+        ]
+        tool_hint = ""
+        tool_names = [name for name in tool_names if name]
+        if tool_names:
+            tool_hint = f" [tool_calls: {', '.join(tool_names)}]"
+        label = role.upper()
+        if content:
+            lines.append(f"{label}{tool_hint}: {content}")
+        elif tool_hint:
+            lines.append(f"{label}{tool_hint}")
+    transcript = "\n".join(lines).strip()
+    if len(transcript) > max_chars:
+        transcript = f"...\n{transcript[-max_chars:]}"
+    return transcript
+
+
+def _fallback_daily_note(turn_messages: list[dict[str, Any]]) -> str:
+    transcript = _format_turn_transcript(turn_messages, max_chars=4_000, max_message_chars=1_000)
+    if not transcript:
+        return "Conversation completed."
+    return f"## Conversation Snapshot\n\n{transcript}"
 
 
 class MemoryStore:
@@ -42,6 +130,7 @@ class MemoryStore:
         self.soul_file = self.workspace / "SOUL.md"
         self.profile_file = self.workspace / "PROFILE.md"
         self.memory_file = self.workspace / "MEMORY.md"
+        self.dreams_file = self.workspace / "DREAMS.md"
         self._cursor_file = self.memory_dir / ".cursor"
         self._dream_cursor_file = self.memory_dir / ".dream_cursor"
         self._git = GitStore(
@@ -51,6 +140,7 @@ class MemoryStore:
                 "SOUL.md",
                 "PROFILE.md",
                 "MEMORY.md",
+                "DREAMS.md",
             ],
         )
 
@@ -89,6 +179,12 @@ class MemoryStore:
     def write_memory(self, content: str) -> None:
         self.memory_file.write_text(content, encoding="utf-8")
 
+    def read_dreams(self) -> str:
+        return self.read_file(self.dreams_file)
+
+    def write_dreams(self, content: str) -> None:
+        self.dreams_file.write_text(content, encoding="utf-8")
+
     def note_file_for_date(self, when: datetime | None = None) -> Path:
         stamp = when or datetime.now()
         return self.memory_dir / f"{stamp.strftime('%Y-%m-%d')}.md"
@@ -113,6 +209,16 @@ class MemoryStore:
             handle.write(block)
         self._cursor_file.write_text(str(cursor), encoding="utf-8")
         return cursor
+
+    def append_dream_entry(self, entry: str, *, timestamp: datetime | None = None) -> None:
+        when = timestamp or datetime.now()
+        content = strip_think(entry.rstrip()) or entry.rstrip()
+        heading = f"## {when.strftime('%Y-%m-%d %H:%M')}"
+        block = f"{heading}\n\n{content}\n"
+        if self.dreams_file.exists() and self.dreams_file.stat().st_size > 0:
+            block = f"\n{block}"
+        with open(self.dreams_file, "a", encoding="utf-8") as handle:
+            handle.write(block)
 
     def read_unprocessed_notes(self, since_cursor: int) -> list[dict[str, Any]]:
         entries: list[dict[str, Any]] = []
@@ -391,8 +497,93 @@ class Consolidator:
                     return
 
 
+class PostConversationMemoryExtractor:
+    """Extract durable facts from the latest turn into long-term memory files."""
+
+    def __init__(
+        self,
+        store: MemoryStore,
+        provider: LLMProvider,
+        model: str,
+    ):
+        self.store = store
+        self.provider = provider
+        self.model = model
+
+    async def run(self, turn_messages: list[dict[str, Any]]) -> bool:
+        transcript = _format_turn_transcript(turn_messages)
+        if not transcript:
+            return False
+
+        lock = _memory_lock_for(self.store.workspace)
+        async with lock:
+            current_profile_raw = self.store.read_profile()
+            current_memory_raw = self.store.read_memory()
+            current_profile = _normalize_markdown_document(current_profile_raw)
+            current_memory = _normalize_markdown_document(current_memory_raw)
+
+            prompt = "\n\n".join(
+                [
+                    f"## Current Date\n{datetime.now().strftime('%Y-%m-%d')}",
+                    f"## Current PROFILE.md\n{current_profile or '(empty)'}",
+                    f"## Current MEMORY.md\n{current_memory or '(empty)'}",
+                    f"## Latest Turn Transcript\n{transcript}",
+                ]
+            )
+
+            try:
+                response = await self.provider.chat_with_retry(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": render_template(
+                                "agent/post_conversation_extract.md",
+                                strip=True,
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    tools=None,
+                    tool_choice=None,
+                )
+            except Exception:
+                logger.exception("Post-conversation extraction failed")
+                self.store.append_daily_note(_fallback_daily_note(turn_messages))
+                return True
+
+            content = response.content or ""
+            profile_section = _extract_tagged_section(content, "PROFILE")
+            memory_section = _extract_tagged_section(content, "MEMORY")
+            daily_note = _extract_tagged_section(content, "DAILY_NOTE") or _fallback_daily_note(
+                turn_messages
+            )
+
+            updated_profile = (
+                _normalize_markdown_document(profile_section)
+                if profile_section is not None
+                else current_profile
+            )
+            updated_memory = (
+                _normalize_markdown_document(memory_section)
+                if memory_section is not None
+                else current_memory
+            )
+
+            changed = False
+            if updated_profile and updated_profile != current_profile:
+                self.store.write_profile(updated_profile)
+                changed = True
+            if updated_memory and updated_memory != current_memory:
+                self.store.write_memory(updated_memory)
+                changed = True
+
+            self.store.append_daily_note(daily_note)
+            return changed or bool(daily_note.strip())
+
+
 class Dream:
-    """Two-phase memory processor over daily notes plus stable memory files."""
+    """Periodic emergence that consolidates daily notes into MEMORY.md."""
 
     def __init__(
         self,
@@ -400,69 +591,13 @@ class Dream:
         provider: LLMProvider,
         model: str,
         max_batch_size: int = 20,
-        max_iterations: int = 10,
-        max_tool_result_chars: int = 16_000,
     ):
         self.store = store
         self.provider = provider
         self.model = model
         self.max_batch_size = max_batch_size
-        self.max_iterations = max_iterations
-        self.max_tool_result_chars = max_tool_result_chars
-        self._runner = AgentRunner(provider)
-        self._tools = self._build_tools()
-
-    def _build_tools(self) -> ToolRegistry:
-        from nanobot.agent.skills import BUILTIN_SKILLS_DIR
-        from nanobot.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
-
-        tools = ToolRegistry()
-        workspace = self.store.workspace
-        extra_read = [BUILTIN_SKILLS_DIR] if BUILTIN_SKILLS_DIR.exists() else None
-        tools.register(
-            ReadFileTool(
-                workspace=workspace,
-                allowed_dir=workspace,
-                extra_allowed_dirs=extra_read,
-            )
-        )
-        tools.register(EditFileTool(workspace=workspace, allowed_dir=workspace))
-        skills_dir = workspace / "skills"
-        skills_dir.mkdir(parents=True, exist_ok=True)
-        tools.register(WriteFileTool(workspace=workspace, allowed_dir=skills_dir))
-        return tools
-
-    def _list_existing_skills(self) -> list[str]:
-        import re as _re
-
-        from nanobot.agent.skills import BUILTIN_SKILLS_DIR
-
-        desc_re = _re.compile(
-            r"^description:\s*(.+)$",
-            _re.MULTILINE | _re.IGNORECASE,
-        )
-        entries: dict[str, str] = {}
-        for base in (self.store.workspace / "skills", BUILTIN_SKILLS_DIR):
-            if not base.exists():
-                continue
-            for directory in base.iterdir():
-                if not directory.is_dir():
-                    continue
-                skill_md = directory / "SKILL.md"
-                if not skill_md.exists():
-                    continue
-                if directory.name in entries and base == BUILTIN_SKILLS_DIR:
-                    continue
-                content = skill_md.read_text(encoding="utf-8")[:500]
-                match = desc_re.search(content)
-                entries[directory.name] = (
-                    match.group(1).strip() if match else "(no description)"
-                )
-        return [f"{name} — {desc}" for name, desc in sorted(entries.items())]
 
     async def run(self) -> bool:
-        from nanobot.agent.skills import BUILTIN_SKILLS_DIR
-
         last_cursor = self.store.get_last_dream_cursor()
         entries = self.store.read_unprocessed_notes(since_cursor=last_cursor)
         if not entries:
@@ -481,121 +616,74 @@ class Dream:
             f"[{entry['timestamp']}] {entry['content']}" for entry in batch
         )
 
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        current_agents = self.store.read_agents() or "(empty)"
-        current_soul = self.store.read_soul() or "(empty)"
-        current_profile = self.store.read_profile() or "(empty)"
-        current_memory = self.store.read_memory() or "(empty)"
-
-        file_context = "\n".join(
-            [
-                f"## Current Date\n{current_date}\n",
-                f"## Current AGENTS.md ({len(current_agents)} chars)\n{current_agents}\n",
-                f"## Current SOUL.md ({len(current_soul)} chars)\n{current_soul}\n",
-                f"## Current PROFILE.md ({len(current_profile)} chars)\n{current_profile}\n",
-                f"## Current MEMORY.md ({len(current_memory)} chars)\n{current_memory}",
-            ]
-        )
-
-        phase1_prompt = f"## Daily Notes\n{notes_text}\n\n{file_context}"
-
-        try:
-            phase1_response = await self.provider.chat_with_retry(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": render_template("agent/dream_phase1.md", strip=True),
-                    },
-                    {"role": "user", "content": phase1_prompt},
-                ],
-                tools=None,
-                tool_choice=None,
+        lock = _memory_lock_for(self.store.workspace)
+        async with lock:
+            current_profile = _normalize_markdown_document(self.store.read_profile())
+            current_memory = _normalize_markdown_document(self.store.read_memory())
+            prompt = "\n\n".join(
+                [
+                    f"## Current Date\n{datetime.now().strftime('%Y-%m-%d')}",
+                    f"## Current PROFILE.md (read-only context)\n{current_profile or '(empty)'}",
+                    f"## Current MEMORY.md\n{current_memory or '(empty)'}",
+                    f"## Recent Daily Notes\n{notes_text}",
+                ]
             )
-            analysis = phase1_response.content or ""
-            logger.debug(
-                "Dream Phase 1 analysis ({} chars): {}",
-                len(analysis),
-                analysis[:500],
-            )
-        except Exception:
-            logger.exception("Dream Phase 1 failed")
-            return False
 
-        existing_skills = self._list_existing_skills()
-        skills_section = ""
-        if existing_skills:
-            skills_section = "\n\n## Existing Skills\n" + "\n".join(
-                f"- {item}" for item in existing_skills
-            )
-        phase2_prompt = f"## Analysis Result\n{analysis}\n\n{file_context}{skills_section}"
-        skill_creator_path = BUILTIN_SKILLS_DIR / "skill-creator" / "SKILL.md"
-        messages: list[dict[str, Any]] = [
-            {
-                "role": "system",
-                "content": render_template(
-                    "agent/dream_phase2.md",
-                    strip=True,
-                    skill_creator_path=str(skill_creator_path),
-                ),
-            },
-            {"role": "user", "content": phase2_prompt},
-        ]
-
-        try:
-            result = await self._runner.run(
-                AgentRunSpec(
-                    initial_messages=messages,
-                    tools=self._tools,
+            try:
+                response = await self.provider.chat_with_retry(
                     model=self.model,
-                    max_iterations=self.max_iterations,
-                    max_tool_result_chars=self.max_tool_result_chars,
-                    fail_on_tool_error=False,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": render_template(
+                                "agent/dream_emergence.md",
+                                strip=True,
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    tools=None,
+                    tool_choice=None,
                 )
-            )
-            logger.debug(
-                "Dream Phase 2 complete: stop_reason={}, tool_events={}",
-                result.stop_reason,
-                len(result.tool_events),
-            )
-            for event in result.tool_events or []:
-                logger.info(
-                    "Dream tool_event: name={}, status={}, detail={}",
-                    event.get("name"),
-                    event.get("status"),
-                    event.get("detail", "")[:200],
+            except Exception:
+                logger.exception("Dream emergence failed")
+                return False
+
+            content = response.content or ""
+            memory_section = _extract_tagged_section(content, "MEMORY")
+            dream_summary = _extract_tagged_section(content, "DREAM")
+            if memory_section is None:
+                logger.warning("Dream skipped: missing MEMORY section")
+                return False
+
+            updated_memory = _normalize_markdown_document(memory_section)
+            changed = updated_memory != current_memory
+            if changed:
+                self.store.write_memory(updated_memory)
+                summary = (dream_summary or "Updated MEMORY.md from recent daily notes.").strip()
+                first_cursor = batch[0]["cursor"]
+                last_processed = batch[-1]["cursor"]
+                self.store.append_dream_entry(
+                    "\n".join(
+                        [
+                            f"- Processed note cursors: #{first_cursor} -> #{last_processed}",
+                            f"- Note count: {len(batch)}",
+                            f"- Summary: {summary}",
+                        ]
+                    )
                 )
-        except Exception:
-            logger.exception("Dream Phase 2 failed")
-            result = None
+            self.store.set_last_dream_cursor(batch[-1]["cursor"])
 
-        changelog = [
-            f"{event['name']}: {event['detail']}"
-            for event in (result.tool_events or [])
-            if event.get("status") == "ok"
-        ] if result else []
+            if changed and self.store.git.is_initialized():
+                sha = self.store.git.auto_commit(
+                    f"dream: {batch[-1]['timestamp']}, memory update"
+                )
+                if sha:
+                    logger.info("Dream commit: {}", sha)
 
-        new_cursor = batch[-1]["cursor"]
-        self.store.set_last_dream_cursor(new_cursor)
-
-        if result and result.stop_reason == "completed":
             logger.info(
-                "Dream done: {} change(s), cursor advanced to {}",
-                len(changelog),
-                new_cursor,
+                "Dream done: changed={}, cursor advanced to {}",
+                changed,
+                batch[-1]["cursor"],
             )
-        else:
-            logger.warning(
-                "Dream incomplete ({}): cursor advanced to {}",
-                result.stop_reason if result else "exception",
-                new_cursor,
-            )
-
-        if changelog and self.store.git.is_initialized():
-            sha = self.store.git.auto_commit(
-                f"dream: {batch[-1]['timestamp']}, {len(changelog)} change(s)"
-            )
-            if sha:
-                logger.info("Dream commit: {}", sha)
-
-        return True
+            return True

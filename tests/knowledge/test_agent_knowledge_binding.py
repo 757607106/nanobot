@@ -12,6 +12,8 @@ from nanobot.harness import (
     KnowledgeBindingMiddleware,
     QueryKnowledgeBaseTool,
     build_knowledge_binding_context,
+    should_eager_prefetch_bound_knowledge,
+    should_skip_bound_knowledge_prefetch,
 )
 from nanobot.web.runtime_services import channel_runtime as channel_runtime_module
 from nanobot.web.runtime_services.agents import WebAgentRuntimeService
@@ -36,7 +38,7 @@ class _FakeKnowledgeService:
     def retrieve(self, *, kb_ids: list[str], query: str, limit: int, requested_mode: str | None = None) -> dict[str, object]:
         assert kb_ids == ["kb-ops"]
         assert "restart" in query.lower()
-        assert limit == 6
+        assert limit == 2
         assert requested_mode == "naive"
         self.retrieve_calls.append(
             {
@@ -50,6 +52,7 @@ class _FakeKnowledgeService:
             "hits": [
                 {
                     "content": "Use supervisorctl restart nanobot after checking service health.",
+                    "preview": "Use supervisorctl restart nanobot after checking service health.",
                     "citation": {
                         "title": "runbook.md",
                         "sourceUri": "kb://runbook.md",
@@ -102,6 +105,61 @@ def test_knowledge_binding_middleware_builds_tools_prompt_and_allowlist() -> Non
     assert "# Retrieved Knowledge" in result.prompt_sections[1]
     assert "runbook.md" in result.prompt_sections[1]
     assert knowledge_service.retrieve_calls[0]["requested_mode"] == "naive"
+
+
+def test_knowledge_binding_skips_prefetch_for_smalltalk() -> None:
+    knowledge_service = _FakeKnowledgeService()
+    middleware = KnowledgeBindingMiddleware(knowledge_service)
+
+    result = middleware.apply(
+        {
+            "knowledgeBindingIds": ["kb-ops"],
+            "toolAllowlist": ["read_file"],
+        },
+        "哈喽",
+        base_tool_allowlist=["read_file"],
+    )
+
+    assert knowledge_service.retrieve_calls == []
+    assert result.prompt_sections == []
+    assert result.event_payload["requestedMode"] == "skipped"
+    assert result.event_payload["effectiveMode"] == "skipped"
+    assert result.event_payload["hitCount"] == 0
+
+
+def test_knowledge_binding_defers_prefetch_for_non_question_queries() -> None:
+    knowledge_service = _FakeKnowledgeService()
+    middleware = KnowledgeBindingMiddleware(knowledge_service)
+
+    result = middleware.apply(
+        {
+            "knowledgeBindingIds": ["kb-ops"],
+            "toolAllowlist": ["read_file"],
+        },
+        "支付通开通流程说明",
+        base_tool_allowlist=["read_file"],
+    )
+
+    assert knowledge_service.retrieve_calls == []
+    assert len(result.prompt_sections) == 1
+    assert "# Knowledge Policy" in result.prompt_sections[0]
+    assert result.event_payload["requestedMode"] == "deferred"
+    assert result.event_payload["effectiveMode"] == "tool_only"
+    assert result.event_payload["hitCount"] == 0
+
+
+def test_smalltalk_prefetch_gate_matches_low_information_phatic_inputs() -> None:
+    for text in ("你好", "哈喽", "hello", "thanks", "谢谢", "再见", "在吗"):
+        assert should_skip_bound_knowledge_prefetch(text) is True
+    for text in ("你好，怎么实名认证", "请问支付通怎么开通", "restart nanobot safely"):
+        assert should_skip_bound_knowledge_prefetch(text) is False
+
+
+def test_eager_prefetch_gate_matches_explicit_questions_only() -> None:
+    for text in ("请问支付通怎么开通", "How do we restart nanobot safely?", "为什么到账失败？"):
+        assert should_eager_prefetch_bound_knowledge(text) is True
+    for text in ("支付通开通流程说明", "restart nanobot safely", "hi"):
+        assert should_eager_prefetch_bound_knowledge(text) is False
 
 
 @pytest.mark.asyncio
