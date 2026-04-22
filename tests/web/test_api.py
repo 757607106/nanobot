@@ -13,6 +13,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from nanobot.agent.loop import AgentLoop
+from nanobot.bus.events import OutboundMessage
 from nanobot.config import loader as config_loader
 from nanobot.config.loader import save_config
 from nanobot.config.schema import Config, MCPServerConfig
@@ -1110,7 +1112,10 @@ def test_web_api_mcp_isolated_test_chat_is_independent_from_main_sessions(
         channel: str = "cli",
         chat_id: str = "direct",
         on_progress=None,
+        run_context=None,
+        **_kwargs,
     ) -> str:
+        _ = run_context
         session = self.sessions.get_or_create(session_key)
         if not session.metadata.get("title"):
             session.metadata["title"] = "MCP Test · filesystem-mcp"
@@ -1403,6 +1408,69 @@ def test_web_api_session_files_are_scoped_to_session(web_client: TestClient) -> 
     sessions = web_client.get("/api/v1/chat/sessions")
     assert sessions.status_code == 200
     assert sessions.json()["data"]["items"][0]["fileCount"] == 1
+
+
+def test_web_api_chat_message_prefers_turn_snapshot_over_session_tail(
+    web_client: TestClient,
+    monkeypatch,
+) -> None:
+    created = web_client.post("/api/v1/chat/sessions", json={"title": "Snapshot Session"})
+    assert created.status_code == 201
+    session_id = created.json()["data"]["id"]
+
+    async def fake_process_direct(
+        *,
+        content: str,
+        session_key: str,
+        channel: str,
+        chat_id: str,
+        run_context: dict[str, object] | None = None,
+        **_kwargs,
+    ) -> OutboundMessage:
+        assert content == "use current turn snapshot"
+        assert session_key == f"web:{session_id}"
+        assert channel == "web"
+        assert chat_id == session_id
+        assert isinstance(run_context, dict)
+        run_context[AgentLoop._TURN_RESULT_KEY] = {
+            "assistant_message": {
+                "sequence": 2,
+                "entry": {
+                    "role": "assistant",
+                    "content": "Snapshot reply",
+                    "timestamp": datetime.now().isoformat(),
+                },
+            }
+        }
+        return OutboundMessage(channel="web", chat_id=chat_id, content="Snapshot reply")
+
+    monkeypatch.setattr(web_client.app.state.web.agent, "process_direct", fake_process_direct)
+    monkeypatch.setattr(
+        web_client.app.state.web.chat_runtime,
+        "get_last_assistant_message",
+        lambda _session_id: {
+            "id": "msg_99",
+            "sessionId": _session_id,
+            "sequence": 99,
+            "role": "assistant",
+            "content": "stale tail reply",
+            "createdAt": datetime.now().isoformat(),
+        },
+    )
+
+    dispatched = web_client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={
+            "sessionId": session_id,
+            "content": "use current turn snapshot",
+        },
+    )
+
+    assert dispatched.status_code == 200
+    payload = dispatched.json()["data"]
+    assert payload["content"] == "Snapshot reply"
+    assert payload["message"]["content"] == "Snapshot reply"
+    assert payload["message"]["sequence"] == 2
 
 
 def test_web_api_session_file_import_accepts_absolute_workspace_path(web_client: TestClient) -> None:
@@ -2039,6 +2107,70 @@ def test_web_api_agent_test_run_accepts_legacy_runtime_tools(
     assert payload["run"]["status"] == "succeeded"
     assert payload["assistantMessage"]["content"] == "Legacy runtime tools ok"
     assert payload["appliedBindings"]["toolAllowlist"] == ["read_file", "message", "cron"]
+
+
+def test_web_api_agent_test_run_prefers_turn_snapshot_over_session_tail(
+    web_client: TestClient,
+    monkeypatch,
+) -> None:
+    created = web_client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Snapshot Test Agent",
+            "systemPrompt": "Use the current turn result.",
+            "toolAllowlist": ["read_file"],
+        },
+    )
+    assert created.status_code == 201
+    agent = created.json()["data"]
+
+    async def fake_execute_agent_turn(
+        isolated_agent,
+        *,
+        execution_context,
+        **_kwargs,
+    ) -> SimpleNamespace:
+        _ = isolated_agent
+        return SimpleNamespace(
+            content="Snapshot agent reply",
+            assistant_message={
+                "id": "msg_2",
+                "sessionId": execution_context.session_id,
+                "sequence": 2,
+                "role": "assistant",
+                "content": "Snapshot agent reply",
+                "createdAt": datetime.now().isoformat(),
+            },
+        )
+
+    monkeypatch.setattr(
+        web_client.app.state.web.agent_runtime,
+        "_execute_agent_turn",
+        fake_execute_agent_turn,
+    )
+    monkeypatch.setattr(
+        web_client.app.state.web.agent_runtime,
+        "_get_last_assistant_message",
+        lambda *_args, **_kwargs: {
+            "id": "msg_99",
+            "sessionId": "stale-session",
+            "sequence": 99,
+            "role": "assistant",
+            "content": "stale tail reply",
+            "createdAt": datetime.now().isoformat(),
+        },
+    )
+
+    tested = web_client.post(
+        f"/api/v1/agents/{agent['agentId']}/test-run",
+        json={"content": "Prefer the current turn snapshot."},
+    )
+
+    assert tested.status_code == 200
+    payload = tested.json()["data"]
+    assert payload["assistantMessage"]["content"] == "Snapshot agent reply"
+    assert payload["assistantMessage"]["sequence"] == 2
+    assert payload["assistantMessage"]["sessionId"] == payload["session"]["id"]
 
 
 
@@ -3535,8 +3667,7 @@ def test_web_api_agents_creation_persists_in_instance_scoped_store(web_client: T
     assert created.status_code == 201
     agent_id = created.json()["data"]["agentId"]
 
-    db_path = web_client.app.state.instance.agent_definitions_db_path()
-    store = AgentDefinitionStore(db_path)
+    store = AgentDefinitionStore(web_client.app.state.instance.data_dir)
     persisted = store.get(agent_id)
     assert persisted is not None
     assert persisted.instance_id == web_client.app.state.instance.id
@@ -3598,7 +3729,7 @@ def test_web_api_agents_get_repairs_legacy_binding_values(web_client: TestClient
     )
 
     now = now_iso()
-    store = AgentDefinitionStore(web_client.app.state.instance.agent_definitions_db_path())
+    store = AgentDefinitionStore(web_client.app.state.instance.data_dir)
     store.create(
         AgentDefinition(
             agent_id="legacy-support",

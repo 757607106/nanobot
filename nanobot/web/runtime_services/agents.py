@@ -12,7 +12,7 @@ from loguru import logger
 from nanobot.agent.factory import build_agent_loop_from_config
 from nanobot.agent.loop import AgentLoop
 from nanobot.agent.skills import SkillsLoader
-from nanobot.bus.events import InboundMessage, extract_outbound_content
+from nanobot.bus.events import extract_outbound_content
 from nanobot.harness import (
     AgentWorkspaceProvider,
     AgentThreadWorkspaceProvider,
@@ -96,6 +96,14 @@ class PreparedAgentExecution:
         return list(self.middleware_trace)
 
 
+@dataclass(slots=True)
+class ExecutedAgentTurn:
+    """Turn-scoped execution result returned from AgentLoop."""
+
+    content: str
+    assistant_message: dict[str, Any] | None = None
+
+
 class WebAgentRuntimeService:
     """Runtime helpers for agent definitions inside the collaboration domain."""
 
@@ -125,6 +133,16 @@ class WebAgentRuntimeService:
             include_spawn=True,
             include_cron=getattr(self.state, "cron", None) is not None,
         )
+
+    def _format_turn_assistant_message(
+        self,
+        session_id: str,
+        run_context: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        formatter = getattr(getattr(self.state, "chat_runtime", None), "format_turn_assistant_message", None)
+        if callable(formatter):
+            return formatter(session_id, run_context)
+        return None
 
     def build_default_agent_definition(
         self,
@@ -844,38 +862,33 @@ class WebAgentRuntimeService:
         on_run_event: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
         chat_message: dict[str, Any] | None = None,
         reasoning_effort: str | None = None,
-    ) -> str:
-        if hasattr(isolated_agent, "_process_message") and hasattr(isolated_agent, "_connect_mcp"):
-            await isolated_agent._connect_mcp()
-            run_context = execution_context.to_agent_loop_run_context()
-            if on_run_event is not None:
-                run_context["run_event_sink"] = on_run_event
-            if chat_message is not None:
-                run_context["chat_message"] = chat_message
-            if reasoning_effort:
-                run_context["reasoning_effort"] = reasoning_effort
-            response = await isolated_agent._process_message(
-                InboundMessage(
-                    channel=execution_context.origin_channel,
-                    sender_id="user",
-                    chat_id=execution_context.session_id or execution_context.origin_chat_id or "direct",
-                    content=task,
-                ),
-                session_key=execution_context.session_key,
-                on_progress=on_progress,
-                on_stream=on_stream,
-                run_context=run_context,
-            )
-            return extract_outbound_content(response)
-
+    ) -> ExecutedAgentTurn:
+        run_context = execution_context.to_agent_loop_run_context()
+        if on_run_event is not None:
+            run_context["run_event_sink"] = on_run_event
+        if chat_message is not None:
+            run_context["chat_message"] = chat_message
+        if reasoning_effort:
+            run_context["reasoning_effort"] = reasoning_effort
+        if on_stream is None:
+            run_context["response_validation"] = {"task": task}
         response = await isolated_agent.process_direct(
             content=task,
             session_key=execution_context.session_key,
             channel=execution_context.origin_channel,
             chat_id=execution_context.session_id or execution_context.origin_chat_id or "direct",
             on_progress=on_progress,
+            on_stream=on_stream,
+            run_context=run_context,
         )
-        return extract_outbound_content(response)
+        session_id = execution_context.session_id or execution_context.origin_chat_id or "direct"
+        return ExecutedAgentTurn(
+            content=extract_outbound_content(response),
+            assistant_message=self._format_turn_assistant_message(
+                session_id,
+                run_context,
+            ),
+        )
 
     def build_isolated_agent_loop(
         self,
@@ -1186,9 +1199,10 @@ class WebAgentRuntimeService:
 
         try:
             self.state.runs.start_run(record.run_id)
+            turn_result: ExecutedAgentTurn | None = None
             try:
                 timeout_seconds = int(agent.get("maxExecutionTimeoutSeconds") or 300)
-                response = await asyncio.wait_for(
+                turn_result = await asyncio.wait_for(
                     self._execute_agent_turn(
                         isolated_agent,
                         task=task,
@@ -1202,8 +1216,10 @@ class WebAgentRuntimeService:
                     timeout=timeout_seconds,
                 )
             except asyncio.TimeoutError:
-                response = f"Execution timed out after {timeout_seconds} seconds."
-                logger.warning(response)
+                timeout_message = f"Execution timed out after {timeout_seconds} seconds."
+                turn_result = ExecutedAgentTurn(content=timeout_message)
+                logger.warning(timeout_message)
+            response = turn_result.content
             artifact_path = self.state.runs.write_markdown_artifact(
                 record.run_id,
                 title=f"Run Artifact · {execution_context.label}",
@@ -1274,10 +1290,14 @@ class WebAgentRuntimeService:
             await isolated_agent.close_mcp()
 
         messages = self._format_messages(execution_context.session_key, execution_context.session_id)
+        assistant_message = turn_result.assistant_message if turn_result is not None else None
         return {
             "run": self.state.runs.get_run(record.run_id),
             "session": self._format_session_summary(execution_context.session_key, execution_context.session_id),
-            "assistantMessage": self._get_last_assistant_message(execution_context.session_key, execution_context.session_id),
+            "assistantMessage": assistant_message or self._get_last_assistant_message(
+                execution_context.session_key,
+                execution_context.session_id,
+            ),
             "messages": messages,
             "pendingKnowledgeBindings": execution_context.knowledge_policy.binding_ids_as_list(),
             "knowledgeHits": knowledge_hits,
@@ -1364,15 +1384,22 @@ class WebAgentRuntimeService:
             result["run"] = self.state.runs.get_run(run_id)
             result["session"] = self._format_session_summary(actual_session_key, actual_session_id)
             result["messages"] = self._format_messages(actual_session_key, actual_session_id)
-            result["assistantMessage"] = self._get_last_assistant_message(actual_session_key, actual_session_id)
+            assistant_message = result.get("assistantMessage")
+            if isinstance(assistant_message, dict):
+                result["assistantMessage"] = {
+                    **assistant_message,
+                    "sessionId": actual_session_id,
+                }
+            else:
+                result["assistantMessage"] = self._get_last_assistant_message(
+                    actual_session_key,
+                    actual_session_id,
+                )
         return result
 
     async def optimize_prompt(self, payload: dict[str, Any], tenant_id: str) -> dict[str, Any]:
         """Optimize user-provided agent system prompt using the prompt-optimizer skill."""
         import time
-
-        from nanobot.agent.loop import AgentLoop
-        from nanobot.bus.events import InboundMessage
 
         name = str(payload.get("name") or "未命名助手").strip()
         description = str(payload.get("description") or "无详细背景").strip()
@@ -1424,16 +1451,12 @@ class WebAgentRuntimeService:
             system_prompt_override=instructions,
             skill_names=["prompt-optimizer"],
         )
-
-        msg = InboundMessage(
+        result_msg = await agent.process_direct(
+            content="请严格按照你的 System 设定和技能规范，直接输出优化完成的最终 Prompt 文本。",
+            session_key=f"system:{optimize_session_id}",
             channel="system",
             chat_id=optimize_session_id,
-            sender_id="user",
-            content="请严格按照你的 System 设定和技能规范，直接输出优化完成的最终 Prompt 文本。",
-            session_key_override=f"system:{optimize_session_id}",
         )
-
-        result_msg = await agent._process_message(msg)
         return {
             "optimized_prompt": result_msg.content if result_msg else ""
         }

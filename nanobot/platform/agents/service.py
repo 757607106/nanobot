@@ -49,6 +49,21 @@ class AgentDefinitionService:
         self.instance_id = instance_id
         self._config_loader = config_loader
 
+    def replace_store(self, store: AgentDefinitionStore) -> None:
+        """Swap the underlying store and close the old one."""
+        previous = self.store
+        self.store = store
+        if previous is not store:
+            close = getattr(previous, "close", None)
+            if callable(close):
+                close()
+
+    def close(self) -> None:
+        """Release the underlying store resources."""
+        close = getattr(self.store, "close", None)
+        if callable(close):
+            close()
+
     @staticmethod
     def _get_value(payload: dict[str, Any], *keys: str) -> Any:
         for key in keys:

@@ -40,6 +40,21 @@ class ChannelBindingService:
         self.instance_id = instance_id
         self.agent_lookup = agent_lookup
 
+    def replace_store(self, store: ChannelBindingStore) -> None:
+        """Swap the underlying store and close the old one."""
+        previous = self.store
+        self.store = store
+        if previous is not store:
+            close = getattr(previous, "close", None)
+            if callable(close):
+                close()
+
+    def close(self) -> None:
+        """Release the underlying store resources."""
+        close = getattr(self.store, "close", None)
+        if callable(close):
+            close()
+
     @staticmethod
     def _normalize_text(value: Any, *, required: bool = False, field_name: str = "value") -> str:
         text = str(value or "").strip()

@@ -60,6 +60,39 @@ class ContextBuilder:
             self.skills_workspace,
             disabled_skills=set(disabled_skills) if disabled_skills else None,
         )
+        self._identity_cache: dict[str, str] = {}
+        self._bootstrap_cache: tuple[tuple[tuple[str, bool, int, int], ...], str] | None = None
+
+    @staticmethod
+    def _file_signature(path: Path) -> tuple[bool, int, int]:
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            return False, 0, 0
+        return True, stat.st_mtime_ns, stat.st_size
+
+    def _bootstrap_signature(self) -> tuple[tuple[str, bool, int, int], ...]:
+        return tuple(
+            (filename, *self._file_signature(self.workspace / filename))
+            for filename in self.BOOTSTRAP_FILES
+        )
+
+    def _should_include_bootstrap_memory(self, include_workspace_memory: bool) -> bool:
+        """Keep agent-scoped memory bootstrap even when shared workspace memory is disabled."""
+        return include_workspace_memory or self.memory_workspace != self.work_root
+
+    @staticmethod
+    def _normalize_memory_sections(
+        memory_sections: list[tuple[str, str]] | None,
+    ) -> tuple[tuple[str, str], ...]:
+        normalized: list[tuple[str, str]] = []
+        for heading, content in memory_sections or []:
+            title = str(heading or "").strip()
+            body = str(content or "").strip()
+            if not title or not body:
+                continue
+            normalized.append((title, body))
+        return tuple(normalized)
 
     def build_system_prompt(
         self,
@@ -70,29 +103,8 @@ class ContextBuilder:
         channel: str | None = None,
     ) -> str:
         """Build the system prompt from runtime info, agent memory files, and skills."""
-        parts: list[str] = []
-
-        if extra_system_prompt:
-            parts.append(f"# Agent Prompt\n\n{extra_system_prompt.strip()}")
-
-        identity = self._get_identity(channel=channel)
-        if identity:
-            parts.append(identity)
-
-        bootstrap = self._load_bootstrap_files()
-        if bootstrap:
-            parts.append(bootstrap)
-
-        memory_parts: list[str] = []
-        for heading, content in memory_sections or []:
-            title = str(heading or "").strip()
-            body = str(content or "").strip()
-            if not title or not body:
-                continue
-            memory_parts.append(f"## {title}\n\n{body}")
-        if memory_parts:
-            memory_body = "\n\n".join(memory_parts)
-            parts.append(f"# Additional Memory\n\n{memory_body}")
+        normalized_extra = (extra_system_prompt or "").strip()
+        normalized_memory_sections = self._normalize_memory_sections(memory_sections)
 
         active_skill_names: list[str] = []
         always_skills = self.skills.get_always_skills() if self.include_always_skills else []
@@ -100,6 +112,31 @@ class ContextBuilder:
             normalized = str(name or "").strip()
             if normalized and normalized not in active_skill_names:
                 active_skill_names.append(normalized)
+
+        parts: list[str] = []
+
+        if normalized_extra:
+            parts.append(f"# Agent Prompt\n\n{normalized_extra}")
+
+        identity = self._get_identity(channel=channel)
+        if identity:
+            parts.append(identity)
+
+        bootstrap = (
+            self._load_bootstrap_files()
+            if self._should_include_bootstrap_memory(include_workspace_memory)
+            else ""
+        )
+        if bootstrap:
+            parts.append(bootstrap)
+
+        memory_parts: list[str] = []
+        for title, body in normalized_memory_sections:
+            memory_parts.append(f"## {title}\n\n{body}")
+        if memory_parts:
+            memory_body = "\n\n".join(memory_parts)
+            parts.append(f"# Additional Memory\n\n{memory_body}")
+
         if active_skill_names:
             active_content = self.skills.load_skills_for_context(active_skill_names)
             if active_content:
@@ -121,16 +158,23 @@ class ContextBuilder:
 
     def _get_identity(self, channel: str | None = None) -> str:
         """Get the core identity section (includes persona + runtime info)."""
+        cache_key = channel or ""
+        cached = self._identity_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
 
-        return render_template(
+        identity = render_template(
             "agent/identity.md",
             workspace_path=self._resolve_workspace_path(),
             runtime=runtime,
             platform_policy=render_template("agent/platform_policy.md", system=system),
             channel=channel or "",
         )
+        self._identity_cache[cache_key] = identity
+        return identity
 
     @staticmethod
     def _build_runtime_context(
@@ -163,6 +207,10 @@ class ContextBuilder:
 
     def _load_bootstrap_files(self) -> str:
         """Load the canonical four-file memory skeleton from the agent root."""
+        signature = self._bootstrap_signature()
+        if self._bootstrap_cache is not None and self._bootstrap_cache[0] == signature:
+            return self._bootstrap_cache[1]
+
         parts = []
 
         for filename in self.BOOTSTRAP_FILES:
@@ -171,7 +219,9 @@ class ContextBuilder:
                 content = file_path.read_text(encoding="utf-8")
                 parts.append(f"## {filename}\n\n{content}")
 
-        return "\n\n".join(parts) if parts else ""
+        rendered = "\n\n".join(parts) if parts else ""
+        self._bootstrap_cache = (signature, rendered)
+        return rendered
 
     def build_messages(
         self,

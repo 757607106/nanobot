@@ -229,7 +229,7 @@ async def test_list_shows_last_run_state(tmp_path) -> None:
     # Simulate a completed run by updating state in the store
     job.state.last_run_at_ms = 1773673200000
     job.state.last_status = "ok"
-    tool._cron._save_store()
+    tool._cron.store.put_job(job)
 
     result = tool._list_jobs()
     assert "Last run:" in result
@@ -248,7 +248,7 @@ async def test_list_shows_error_message(tmp_path) -> None:
     job.state.last_run_at_ms = 1773673200000
     job.state.last_status = "error"
     job.state.last_error = "timeout"
-    tool._cron._save_store()
+    tool._cron.store.put_job(job)
 
     result = tool._list_jobs()
     assert "error" in result

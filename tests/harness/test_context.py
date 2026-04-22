@@ -5,6 +5,9 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
+from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.harness import (
@@ -245,6 +248,55 @@ def test_execution_context_artifact_metadata_tracks_agent_scope() -> None:
         "knowledge_names": ["Support KB"],
         "knowledge_hits": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_turn_enables_response_validation_only_without_streaming() -> None:
+    runtime = WebAgentRuntimeService(_make_runtime_state())
+    context = ExecutionContext(
+        tenant_id="tenant-demo",
+        instance_id="instance-demo",
+        principal_kind="agent",
+        principal_id="ops-agent",
+        label="Ops Agent",
+        agent_id="ops-agent",
+        run_id="run-1",
+        root_run_id="run-1",
+        session_key="agent:ops-agent:web:1",
+        session_id="agent-session-1",
+        origin_channel="web",
+        origin_chat_id="chat-1",
+        tool_policy=ToolPolicy(allowlist=("read_file",)),
+        memory_policy=MemoryPolicy(scope="agent_workspace", include_workspace_memory=False),
+        knowledge_policy=KnowledgePolicy(scope="workspace"),
+    )
+
+    captured: list[dict[str, Any]] = []
+
+    class _FakeLoop:
+        async def process_direct(self, *_args, **kwargs):
+            captured.append(dict(kwargs.get("run_context") or {}))
+            return OutboundMessage(channel="web", chat_id="chat-1", content="ok")
+
+    result = await runtime._execute_agent_turn(  # noqa: SLF001 - exercise runtime wiring
+        _FakeLoop(),
+        task="Read the file and answer.",
+        execution_context=context,
+    )
+    assert result.content == "ok"
+    assert captured[-1]["response_validation"] == {"task": "Read the file and answer."}
+
+    async def _stream(_delta: str) -> None:
+        return None
+
+    result = await runtime._execute_agent_turn(  # noqa: SLF001 - exercise runtime wiring
+        _FakeLoop(),
+        task="Read the file and answer.",
+        execution_context=context,
+        on_stream=_stream,
+    )
+    assert result.content == "ok"
+    assert "response_validation" not in captured[-1]
 
 
 def test_workspace_providers_resolve_scoped_paths(tmp_path: Path) -> None:

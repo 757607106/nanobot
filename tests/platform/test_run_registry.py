@@ -173,12 +173,10 @@ def test_run_service_can_mark_timeout(tmp_path: Path) -> None:
 
 
 def test_run_service_writes_artifacts_under_tenant_scoped_storage(tmp_path: Path) -> None:
-    artifact_dir = tmp_path / "artifacts"
     service = RunService(
         RunStore(tmp_path / "artifact.db"),
         instance_id="instance-test",
         tenant_id="tenant-a",
-        artifact_dir=artifact_dir,
     )
 
     run = service.create_run(
@@ -201,45 +199,12 @@ def test_run_service_writes_artifacts_under_tenant_scoped_storage(tmp_path: Path
     )
 
     assert artifact_path == f"{run.run_id}.md"
-    scoped_artifact = artifact_dir / "tenants" / "tenant-a" / "instance-test" / artifact_path
-    assert scoped_artifact.exists()
-    assert not (artifact_dir / artifact_path).exists()
-
     artifact = service.get_artifact(run.run_id)
     assert artifact["artifactPath"] == artifact_path
     assert artifact["fileName"] == artifact_path
+    assert artifact["audit"]["storageScope"] == "tenant_instance_scoped"
+    assert artifact["audit"]["storageKey"] == f"tenants/tenant-a/instance-test/{artifact_path}"
     assert "Scoped artifact content." in artifact["content"]
-
-
-def test_run_service_reads_legacy_root_artifacts_for_compatibility(tmp_path: Path) -> None:
-    artifact_dir = tmp_path / "artifacts"
-    service = RunService(
-        RunStore(tmp_path / "artifact-legacy.db"),
-        instance_id="instance-test",
-        tenant_id="tenant-a",
-        artifact_dir=artifact_dir,
-    )
-
-    run = service.create_run(
-        kind=RunKind.AGENT,
-        label="Legacy artifact run",
-        task_preview="Read a legacy artifact",
-        session_key="web:artifact-legacy",
-    )
-    service.start_run(run.run_id)
-    legacy_file = artifact_dir / f"{run.run_id}.md"
-    legacy_file.parent.mkdir(parents=True, exist_ok=True)
-    legacy_file.write_text("# Legacy\n\nCompatibility artifact.\n", encoding="utf-8")
-    service.complete_run(
-        run.run_id,
-        RunResultSummary(content="Compatibility artifact."),
-        artifact_path=legacy_file.name,
-    )
-
-    artifact = service.get_artifact(run.run_id)
-    assert artifact["audit"]["storageScope"] == "legacy_root"
-    assert artifact["audit"]["isLegacyFallback"] is True
-    assert "Compatibility artifact." in artifact["content"]
 
 
 def test_run_service_boundary_audit_exposes_single_agent_lineage(tmp_path: Path) -> None:
@@ -499,13 +464,16 @@ def test_run_service_metrics_time_range_filtering(tmp_path: Path) -> None:
         total_tokens=150,
     )
     # Manually backdate this run's created_at
-    conn = store._connect()
-    conn.execute(
-        "UPDATE run_records SET created_at = ? WHERE run_id = ?",
-        ("2025-01-01T00:00:00Z", old_run.run_id),
-    )
-    conn.commit()
-    conn.close()
+    with store._connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE run_records
+                SET created_at = %s
+                WHERE workspace_key = %s AND run_id = %s
+                """,
+                ("2025-01-01T00:00:00Z", store.workspace_key, old_run.run_id),
+            )
 
     # Create a recent run
     new_run = service.create_run(
@@ -576,4 +544,3 @@ def test_run_service_cached_tokens_zero_default(tmp_path: Path) -> None:
 
     detail = service.get_run(run.run_id)
     assert detail["cachedTokens"] == 0
-

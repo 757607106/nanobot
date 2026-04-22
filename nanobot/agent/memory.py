@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import re
-import weakref
+import threading
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -19,6 +20,7 @@ from nanobot.utils.helpers import (
     strip_think,
 )
 from nanobot.utils.prompt_templates import render_template
+from nanobot.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
 if TYPE_CHECKING:
     from nanobot.providers.base import LLMProvider
@@ -29,14 +31,43 @@ _RUNTIME_CONTEXT_RE = re.compile(
     r"\[Runtime Context[^\n]*\]\n.*?\n\[/Runtime Context\]\s*",
     re.DOTALL,
 )
-_SHARED_MEMORY_LOCKS: weakref.WeakValueDictionary[str, asyncio.Lock] = (
-    weakref.WeakValueDictionary()
+_GENERIC_TURN_RE = re.compile(
+    r"^(?:"
+    r"ok(?:ay)?|thanks?|thank you|thx|got it|sure|cool|great|hello|hi|hey|bye|yes|no|"
+    r"yep|nope|好的|好|谢谢|收到|明白|嗯|不客气|测试|test"
+    r")[\s.!?~。！？…]*$",
+    re.IGNORECASE,
 )
+_ASSISTANT_PLACEHOLDER_TEXTS = frozenset(
+    {
+        EMPTY_FINAL_RESPONSE_MESSAGE,
+        "[Assistant reply unavailable due to model error.]",
+        "Error: Task interrupted before a response was generated.",
+    }
+)
+_SHARED_MEMORY_LOCKS: dict[str, threading.Lock] = {}
+_SHARED_MEMORY_LOCKS_GUARD = threading.Lock()
 
 
-def _memory_lock_for(workspace: Path) -> asyncio.Lock:
+def _memory_lock_for(workspace: Path) -> threading.Lock:
     key = str(Path(workspace).resolve())
-    return _SHARED_MEMORY_LOCKS.setdefault(key, asyncio.Lock())
+    with _SHARED_MEMORY_LOCKS_GUARD:
+        lock = _SHARED_MEMORY_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _SHARED_MEMORY_LOCKS[key] = lock
+        return lock
+
+
+@asynccontextmanager
+async def _memory_lock_scope(workspace: Path):
+    lock = _memory_lock_for(workspace)
+    while not lock.acquire(blocking=False):
+        await asyncio.sleep(0.01)
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 def _normalize_markdown_document(content: str) -> str:
@@ -106,6 +137,33 @@ def _format_turn_transcript(
     if len(transcript) > max_chars:
         transcript = f"...\n{transcript[-max_chars:]}"
     return transcript
+
+
+def _is_generic_turn_text(text: str) -> bool:
+    return bool(_GENERIC_TURN_RE.fullmatch(str(text or "").strip()))
+
+
+def _should_extract_turn_memory(turn_messages: list[dict[str, Any]]) -> bool:
+    non_tool_texts: list[str] = []
+    assistant_texts: list[str] = []
+    for message in turn_messages:
+        role = str(message.get("role") or "").lower()
+        if role not in {"user", "assistant"}:
+            continue
+        content = _flatten_message_content(message.get("content"))
+        if not content:
+            continue
+        non_tool_texts.append(content)
+        if role == "assistant":
+            assistant_texts.append(content)
+
+    if not non_tool_texts:
+        return False
+    if all(_is_generic_turn_text(text) for text in non_tool_texts):
+        return False
+    if assistant_texts and all(text in _ASSISTANT_PLACEHOLDER_TEXTS for text in assistant_texts):
+        return False
+    return True
 
 
 def _fallback_daily_note(turn_messages: list[dict[str, Any]]) -> str:
@@ -197,6 +255,7 @@ class MemoryStore:
         )
 
     def append_daily_note(self, entry: str, *, timestamp: datetime | None = None) -> int:
+        ensure_dir(self.memory_dir)
         cursor = self._next_cursor()
         when = timestamp or datetime.now()
         target = self.note_file_for_date(when)
@@ -301,6 +360,7 @@ class Consolidator:
     _MAX_CONSOLIDATION_ROUNDS = 5
     _MAX_CHUNK_MESSAGES = 60
     _SAFETY_BUFFER = 1024
+    _ARCHIVE_MAX_TOKENS = 768
 
     def __init__(
         self,
@@ -321,12 +381,6 @@ class Consolidator:
         self.max_completion_tokens = max_completion_tokens
         self._build_messages = build_messages
         self._get_tool_definitions = get_tool_definitions
-        self._locks: weakref.WeakValueDictionary[str, asyncio.Lock] = (
-            weakref.WeakValueDictionary()
-        )
-
-    def get_lock(self, session_key: str) -> asyncio.Lock:
-        return self._locks.setdefault(session_key, asyncio.Lock())
 
     def pick_consolidation_boundary(
         self,
@@ -401,6 +455,8 @@ class Consolidator:
                 ],
                 tools=None,
                 tool_choice=None,
+                max_tokens=self._ARCHIVE_MAX_TOKENS,
+                temperature=0.0,
             )
             summary = response.content or "[no summary]"
             self.store.append_daily_note(summary)
@@ -418,8 +474,7 @@ class Consolidator:
         if context_window_tokens <= 0:
             return
 
-        lock = self.get_lock(session.key)
-        async with lock:
+        async with self.sessions.execution(session.key):
             budget = (
                 context_window_tokens
                 - self.max_completion_tokens
@@ -500,6 +555,8 @@ class Consolidator:
 class PostConversationMemoryExtractor:
     """Extract durable facts from the latest turn into long-term memory files."""
 
+    _EXTRACTION_MAX_TOKENS = 1024
+
     def __init__(
         self,
         store: MemoryStore,
@@ -511,12 +568,13 @@ class PostConversationMemoryExtractor:
         self.model = model
 
     async def run(self, turn_messages: list[dict[str, Any]]) -> bool:
+        if not _should_extract_turn_memory(turn_messages):
+            return False
         transcript = _format_turn_transcript(turn_messages)
         if not transcript:
             return False
 
-        lock = _memory_lock_for(self.store.workspace)
-        async with lock:
+        async with _memory_lock_scope(self.store.workspace):
             current_profile_raw = self.store.read_profile()
             current_memory_raw = self.store.read_memory()
             current_profile = _normalize_markdown_document(current_profile_raw)
@@ -546,6 +604,8 @@ class PostConversationMemoryExtractor:
                     ],
                     tools=None,
                     tool_choice=None,
+                    max_tokens=self._EXTRACTION_MAX_TOKENS,
+                    temperature=0.0,
                 )
             except Exception:
                 logger.exception("Post-conversation extraction failed")
@@ -611,14 +671,17 @@ class TurnMaintenanceCoordinator:
         schedule_background: Callable[[Any], None],
         session: Session,
         turn_messages: list[dict[str, Any]],
+        capture_memory: bool = True,
     ) -> None:
-        if turn_messages:
+        if capture_memory and turn_messages:
             schedule_background(self.memory_extractor.run(turn_messages))
         schedule_background(self.consolidator.maybe_consolidate_by_tokens(session))
 
 
 class Dream:
     """Periodic emergence that consolidates daily notes into MEMORY.md."""
+
+    _DREAM_MAX_TOKENS = 1024
 
     def __init__(
         self,
@@ -651,8 +714,7 @@ class Dream:
             f"[{entry['timestamp']}] {entry['content']}" for entry in batch
         )
 
-        lock = _memory_lock_for(self.store.workspace)
-        async with lock:
+        async with _memory_lock_scope(self.store.workspace):
             current_profile = _normalize_markdown_document(self.store.read_profile())
             current_memory = _normalize_markdown_document(self.store.read_memory())
             prompt = "\n\n".join(
@@ -679,6 +741,8 @@ class Dream:
                     ],
                     tools=None,
                     tool_choice=None,
+                    max_tokens=self._DREAM_MAX_TOKENS,
+                    temperature=0.0,
                 )
             except Exception:
                 logger.exception("Dream emergence failed")

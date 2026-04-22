@@ -235,6 +235,44 @@ async def test_process_message_persists_user_message_before_turn_completes(tmp_p
 
 
 @pytest.mark.asyncio
+async def test_process_direct_records_uncontended_session_execution_metrics(tmp_path: Path) -> None:
+    loop = _make_full_loop(tmp_path)
+    loop.turn_maintenance.schedule_after_user_turn = MagicMock()
+
+    async def fake_run(initial_messages, **_kwargs):
+        return (
+            "reply",
+            None,
+            [*initial_messages, {"role": "assistant", "content": "reply"}],
+            "stop",
+            False,
+        )
+
+    loop._run_agent_loop = fake_run  # type: ignore[method-assign]
+
+    seen_events: list[tuple[str, dict[str, object]]] = []
+
+    async def event_sink(event_type: str, payload: dict[str, object]) -> None:
+        seen_events.append((event_type, payload))
+
+    run_context: dict[str, object] = {"run_event_sink": event_sink}
+    response = await loop.process_direct(
+        "hello",
+        session_key="cli:metrics",
+        run_context=run_context,
+    )
+
+    assert response is not None
+    assert response.content == "reply"
+    metrics = run_context["session_execution"]
+    assert isinstance(metrics, dict)
+    assert metrics["sessionKey"] == "cli:metrics"
+    assert metrics["queued"] is False
+    assert float(metrics["waitMs"]) >= 0.0
+    assert seen_events == []
+
+
+@pytest.mark.asyncio
 async def test_process_message_does_not_duplicate_early_persisted_user_message(tmp_path: Path) -> None:
     loop = _make_full_loop(tmp_path)
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
@@ -415,5 +453,151 @@ async def test_stop_preserves_runtime_checkpoint_for_next_turn(tmp_path: Path) -
         {"role": "user", "content": "continue here"},
         {"role": "assistant", "content": "next answer"},
     ]
-    assert AgentLoop._PENDING_USER_TURN_KEY not in session.metadata
-    assert AgentLoop._RUNTIME_CHECKPOINT_KEY not in session.metadata
+
+
+@pytest.mark.asyncio
+async def test_process_direct_serializes_same_session_across_loops(tmp_path: Path) -> None:
+    first_loop = _make_full_loop(tmp_path)
+    second_loop = _make_full_loop(tmp_path)
+    first_loop.turn_maintenance.prepare_session = AsyncMock(return_value=None)
+    first_loop.turn_maintenance.schedule_after_user_turn = MagicMock()
+    first_loop.turn_maintenance.schedule_after_system_turn = MagicMock()
+    second_loop.turn_maintenance.prepare_session = AsyncMock(return_value=None)
+    second_loop.turn_maintenance.schedule_after_user_turn = MagicMock()
+    second_loop.turn_maintenance.schedule_after_system_turn = MagicMock()
+    session_key = "web:shared"
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    second_seen_history: list[list[dict[str, str]]] = []
+
+    async def first_run(initial_messages, **_kwargs):
+        first_started.set()
+        await release_first.wait()
+        return (
+            "reply first",
+            None,
+            [*initial_messages, {"role": "assistant", "content": "reply first"}],
+            "stop",
+            False,
+        )
+
+    async def second_run(initial_messages, **_kwargs):
+        second_seen_history.append(
+            [
+                {"role": str(message.get("role")), "content": str(message.get("content"))}
+                for message in initial_messages
+                if message.get("role") in {"user", "assistant"}
+            ]
+        )
+        return (
+            "reply second",
+            None,
+            [*initial_messages, {"role": "assistant", "content": "reply second"}],
+            "stop",
+            False,
+        )
+
+    first_loop._run_agent_loop = first_run  # type: ignore[method-assign]
+    second_loop._run_agent_loop = second_run  # type: ignore[method-assign]
+
+    first_task = asyncio.create_task(first_loop.process_direct("first", session_key=session_key))
+    await asyncio.wait_for(first_started.wait(), timeout=1.0)
+
+    second_task = asyncio.create_task(second_loop.process_direct("second", session_key=session_key))
+    await asyncio.sleep(0.05)
+    assert not second_task.done()
+
+    release_first.set()
+    await asyncio.gather(first_task, second_task)
+
+    reloaded = second_loop.sessions.get_or_create(session_key)
+    assert [
+        {k: v for k, v in message.items() if k in {"role", "content"}}
+        for message in reloaded.messages
+    ] == [
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "reply first"},
+        {"role": "user", "content": "second"},
+        {"role": "assistant", "content": "reply second"},
+    ]
+    assert second_seen_history[0][:2] == [
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "reply first"},
+    ]
+    assert second_seen_history[0][-1]["role"] == "user"
+    assert second_seen_history[0][-1]["content"].endswith("second")
+    assert AgentLoop._PENDING_USER_TURN_KEY not in reloaded.metadata
+    assert AgentLoop._RUNTIME_CHECKPOINT_KEY not in reloaded.metadata
+
+
+@pytest.mark.asyncio
+async def test_same_session_wait_emits_queue_observation_event(tmp_path: Path) -> None:
+    shared_sessions = _make_full_loop(tmp_path).sessions
+    first_loop = _make_full_loop(tmp_path)
+    second_loop = _make_full_loop(tmp_path)
+    first_loop.sessions = shared_sessions
+    second_loop.sessions = shared_sessions
+    first_loop.turn_maintenance.prepare_session = AsyncMock(return_value=None)
+    first_loop.turn_maintenance.schedule_after_user_turn = MagicMock()
+    second_loop.turn_maintenance.prepare_session = AsyncMock(return_value=None)
+    second_loop.turn_maintenance.schedule_after_user_turn = MagicMock()
+
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+
+    async def first_run(initial_messages, **_kwargs):
+        first_started.set()
+        await release_first.wait()
+        return (
+            "reply first",
+            None,
+            [*initial_messages, {"role": "assistant", "content": "reply first"}],
+            "stop",
+            False,
+        )
+
+    async def second_run(initial_messages, **_kwargs):
+        return (
+            "reply second",
+            None,
+            [*initial_messages, {"role": "assistant", "content": "reply second"}],
+            "stop",
+            False,
+        )
+
+    first_loop._run_agent_loop = first_run  # type: ignore[method-assign]
+    second_loop._run_agent_loop = second_run  # type: ignore[method-assign]
+
+    seen_events: list[tuple[str, dict[str, object]]] = []
+
+    async def event_sink(event_type: str, payload: dict[str, object]) -> None:
+        seen_events.append((event_type, payload))
+
+    session_key = "web:queued-metrics"
+    first_task = asyncio.create_task(first_loop.process_direct("first", session_key=session_key))
+    await asyncio.wait_for(first_started.wait(), timeout=1.0)
+
+    run_context: dict[str, object] = {"run_event_sink": event_sink}
+    second_task = asyncio.create_task(
+        second_loop.process_direct(
+            "second",
+            session_key=session_key,
+            run_context=run_context,
+        )
+    )
+    await asyncio.sleep(0.05)
+    assert not second_task.done()
+
+    release_first.set()
+    await asyncio.gather(first_task, second_task)
+
+    metrics = run_context["session_execution"]
+    assert isinstance(metrics, dict)
+    assert metrics["sessionKey"] == session_key
+    assert metrics["queued"] is True
+    assert float(metrics["waitMs"]) >= 40.0
+    assert seen_events
+    event_type, payload = seen_events[0]
+    assert event_type == "session_execution_queued"
+    assert payload["sessionKey"] == session_key
+    assert payload["queued"] is True

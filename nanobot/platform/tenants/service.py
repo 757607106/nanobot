@@ -47,6 +47,21 @@ class TenantService:
     def __init__(self, store: TenantStore):
         self.store = store
 
+    def replace_store(self, store: TenantStore) -> None:
+        """Swap the underlying store and close the old one."""
+        previous = self.store
+        self.store = store
+        if previous is not store:
+            close = getattr(previous, "close", None)
+            if callable(close):
+                close()
+
+    def close(self) -> None:
+        """Release the underlying store resources."""
+        close = getattr(self.store, "close", None)
+        if callable(close):
+            close()
+
     def _next_tenant_id(self, name: str) -> str:
         base = _slugify(name)
         candidate = base

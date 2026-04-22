@@ -8,7 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nanobot.bus.events import InboundMessage, extract_outbound_content
+from nanobot.agent.loop import AgentLoop
+from nanobot.bus.events import extract_outbound_content
 from nanobot.chat_payload import normalize_chat_attachments
 from nanobot.session.manager import Session
 from nanobot.utils.reasoning import normalize_reasoning_effort
@@ -84,6 +85,24 @@ class WebChatRuntimeService:
             payload["attachments"] = attachments
         return payload
 
+    @classmethod
+    def format_turn_assistant_message(
+        cls,
+        session_id: str,
+        run_context: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        turn_result = AgentLoop.get_turn_result(run_context)
+        if not turn_result:
+            return None
+        assistant_snapshot = turn_result.get("assistant_message")
+        if not isinstance(assistant_snapshot, dict):
+            return None
+        sequence = assistant_snapshot.get("sequence")
+        entry = assistant_snapshot.get("entry")
+        if not isinstance(sequence, int) or sequence < 1 or not isinstance(entry, dict):
+            return None
+        return cls.format_message(sequence, session_id, entry)
+
     @staticmethod
     def format_upload_item(path: Path, workspace_path: Path) -> dict[str, Any]:
         stat = path.stat()
@@ -135,17 +154,6 @@ class WebChatRuntimeService:
         run_context: dict[str, Any] | None = None,
     ) -> str:
         agent = self.state.agent
-        if hasattr(agent, "_process_message") and hasattr(agent, "_connect_mcp"):
-            await agent._connect_mcp()
-            response = await agent._process_message(
-                InboundMessage(channel="web", sender_id="user", chat_id=session_id, content=content),
-                session_key=session_key,
-                on_progress=on_progress,
-                on_stream=on_stream,
-                run_context=run_context,
-            )
-            return extract_outbound_content(response)
-
         response = await agent.process_direct(
             content=content,
             session_key=session_key,
@@ -153,6 +161,7 @@ class WebChatRuntimeService:
             chat_id=session_id,
             on_progress=on_progress,
             on_stream=on_stream,
+            run_context=run_context,
         )
         return extract_outbound_content(response)
 
@@ -543,18 +552,23 @@ class WebChatRuntimeService:
             mcp_server_ids=[server_name],
         )
         try:
+            run_context: dict[str, Any] = {}
             response = await isolated_agent.process_direct(
                 content=content,
                 session_key=session_key,
                 channel="web",
                 chat_id=session_id,
                 on_progress=on_progress,
+                run_context=run_context,
             )
         finally:
             await isolated_agent.close_mcp()
 
         payload = self.get_mcp_test_chat(server_name)
-        assistant_message = next(
+        assistant_message = self.format_turn_assistant_message(
+            session_id,
+            run_context,
+        ) or next(
             (message for message in reversed(payload["messages"]) if message["role"] == "assistant"),
             None,
         )
@@ -613,7 +627,11 @@ class WebChatRuntimeService:
             on_stream=on_stream,
             run_context=run_context,
         )
+        assistant_message = self.format_turn_assistant_message(
+            session_id,
+            run_context,
+        ) or self.get_last_assistant_message(session_id)
         return {
             "content": response,
-            "message": self.get_last_assistant_message(session_id),
+            "message": assistant_message,
         }

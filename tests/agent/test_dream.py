@@ -1,9 +1,12 @@
 """Tests for post-turn extraction and Dream emergence over agent memory files."""
 
+import asyncio
+import threading
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from nanobot.agent import memory as memory_module
 from nanobot.agent.memory import Dream, MemoryStore, PostConversationMemoryExtractor
 
 
@@ -25,6 +28,23 @@ def mock_provider():
 
 
 class TestPostConversationMemoryExtractor:
+    async def test_workspace_memory_lock_is_shared_across_event_loops(self, store):
+        main_loop_lock = memory_module._memory_lock_for(store.workspace)
+        thread_result: dict[str, object] = {}
+
+        def runner() -> None:
+            async def capture() -> None:
+                thread_result["lock"] = memory_module._memory_lock_for(store.workspace)
+
+            asyncio.run(capture())
+
+        thread = threading.Thread(target=runner)
+        thread.start()
+        thread.join(timeout=5)
+
+        assert thread.is_alive() is False
+        assert thread_result["lock"] is main_loop_lock
+
     async def test_updates_profile_memory_and_daily_note(self, store, mock_provider):
         extractor = PostConversationMemoryExtractor(
             store=store,
@@ -73,6 +93,46 @@ class TestPostConversationMemoryExtractor:
         entries = store.read_unprocessed_notes(since_cursor=0)
         assert len(entries) == 1
         assert "staged rollout plan" in entries[0]["content"]
+        assert mock_provider.chat_with_retry.await_args.kwargs["max_tokens"] == extractor._EXTRACTION_MAX_TOKENS
+        assert mock_provider.chat_with_retry.await_args.kwargs["temperature"] == 0.0
+
+    async def test_skips_generic_acknowledgement_turns(self, store, mock_provider):
+        extractor = PostConversationMemoryExtractor(
+            store=store,
+            provider=mock_provider,
+            model="test-model",
+        )
+
+        did_work = await extractor.run(
+            [
+                {"role": "user", "content": "谢谢"},
+                {"role": "assistant", "content": "不客气"},
+            ]
+        )
+
+        assert did_work is False
+        mock_provider.chat_with_retry.assert_not_awaited()
+        assert store.read_unprocessed_notes(since_cursor=0) == []
+
+    async def test_skips_placeholder_only_turns(self, store, mock_provider):
+        from nanobot.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
+
+        extractor = PostConversationMemoryExtractor(
+            store=store,
+            provider=mock_provider,
+            model="test-model",
+        )
+
+        did_work = await extractor.run(
+            [
+                {"role": "user", "content": "Summarize this."},
+                {"role": "assistant", "content": EMPTY_FINAL_RESPONSE_MESSAGE},
+            ]
+        )
+
+        assert did_work is False
+        mock_provider.chat_with_retry.assert_not_awaited()
+        assert store.read_unprocessed_notes(since_cursor=0) == []
 
     async def test_falls_back_to_snapshot_note_on_model_failure(self, store, mock_provider):
         extractor = PostConversationMemoryExtractor(
@@ -139,6 +199,8 @@ class TestDreamRun:
         assert "Launch checklist is the current focus" in store.read_memory()
         assert "Processed note cursors: #1 -> #1" in store.read_dreams()
         assert "Added the launch checklist" in store.read_dreams()
+        assert mock_provider.chat_with_retry.await_args.kwargs["max_tokens"] == dream._DREAM_MAX_TOKENS
+        assert mock_provider.chat_with_retry.await_args.kwargs["temperature"] == 0.0
 
     async def test_advances_dream_cursor_after_successful_processing(self, store, mock_provider):
         dream = Dream(store=store, provider=mock_provider, model="test-model", max_batch_size=5)

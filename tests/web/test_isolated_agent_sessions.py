@@ -155,3 +155,45 @@ def test_session_delete_removes_only_target_session(tmp_path) -> None:
     # Verify deleted session returns empty on re-create
     deleted = manager2.get_or_create("web:delete-me")
     assert len(deleted.messages) == 0
+
+
+def test_session_save_append_from_appends_only_new_suffix(tmp_path) -> None:
+    manager = SessionManager(tmp_path)
+    session = manager.get_or_create("web:append-only")
+    session.add_message("user", "first")
+    session.add_message("assistant", "second")
+    manager.save(session)
+
+    session.add_message("user", "third")
+    session.metadata["title"] = "Append Only"
+    manager.save(session, append_from=2)
+
+    reloaded = SessionManager(tmp_path).get_or_create("web:append-only")
+    assert [message["content"] for message in reloaded.messages] == ["first", "second", "third"]
+    assert reloaded.metadata["title"] == "Append Only"
+
+
+def test_session_save_append_from_can_update_metadata_without_rewriting_messages(tmp_path) -> None:
+    manager = SessionManager(tmp_path)
+    session = manager.get_or_create("web:metadata-only")
+    session.add_message("user", "hello")
+    session.add_message("assistant", "world")
+    manager.save(session)
+
+    session.metadata["title"] = "Metadata Only"
+    manager.save(session, append_from=len(session.messages))
+
+    reloaded = SessionManager(tmp_path).get_or_create("web:metadata-only")
+    assert [message["content"] for message in reloaded.messages] == ["hello", "world"]
+    assert reloaded.metadata["title"] == "Metadata Only"
+
+
+def test_session_save_append_from_falls_back_to_full_save_for_new_session(tmp_path) -> None:
+    manager = SessionManager(tmp_path)
+    session = manager.get_or_create("web:new-append")
+    session.add_message("user", "first")
+
+    manager.save(session, append_from=1)
+
+    reloaded = SessionManager(tmp_path).get_or_create("web:new-append")
+    assert [message["content"] for message in reloaded.messages] == ["first"]

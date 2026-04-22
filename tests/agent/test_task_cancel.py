@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -164,6 +165,14 @@ class TestDispatch:
 
         loop, bus = _make_loop()
         order = []
+        session_lock = asyncio.Lock()
+
+        @asynccontextmanager
+        async def _execution(_session_key: str):
+            async with session_lock:
+                yield
+
+        loop.sessions.execution = _execution  # type: ignore[method-assign]
 
         async def mock_process(m, **kwargs):
             order.append(f"start-{m.content}")
@@ -171,7 +180,7 @@ class TestDispatch:
             order.append(f"end-{m.content}")
             return OutboundMessage(channel="test", chat_id="c1", content=m.content)
 
-        loop._process_message = mock_process
+        loop._process_message_locked = mock_process  # type: ignore[method-assign]
         msg1 = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="a")
         msg2 = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="b")
 

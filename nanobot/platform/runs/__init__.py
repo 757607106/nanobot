@@ -18,7 +18,7 @@ from nanobot.platform.runs.service import (
     RunService,
     RunStateError,
 )
-from nanobot.platform.runs.store import RunStore
+from nanobot.platform.runs.store import RunStore, create_run_store
 
 __all__ = [
     "RunControlScope",
@@ -36,4 +36,5 @@ __all__ = [
     "RunStateError",
     "RunStatus",
     "RunStore",
+    "create_run_store",
 ]

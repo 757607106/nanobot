@@ -33,6 +33,21 @@ class ChannelAuditService:
         self.instance_id = instance_id
         self.tenant_id = normalize_tenant_id(tenant_id)
 
+    def replace_store(self, store: ChannelAuditStore) -> None:
+        """Swap the underlying store and close the old one."""
+        previous = self.store
+        self.store = store
+        if previous is not store:
+            close = getattr(previous, "close", None)
+            if callable(close):
+                close()
+
+    def close(self) -> None:
+        """Release the underlying store resources."""
+        close = getattr(self.store, "close", None)
+        if callable(close):
+            close()
+
     def with_tenant(self, tenant_id: str | None) -> "ChannelAuditService":
         resolved_tenant = normalize_tenant_id(tenant_id, default=self.tenant_id)
         return clone_service_with_overrides(self, tenant_id=resolved_tenant)

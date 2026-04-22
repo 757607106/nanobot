@@ -43,9 +43,6 @@ class PlatformInstance:
     def logs_dir(self) -> Path:
         return self.runtime_dir("logs")
 
-    def cron_dir(self) -> Path:
-        return self.runtime_dir("cron")
-
     def media_dir(self, channel: str | None = None) -> Path:
         base = self.runtime_dir("media")
         return ensure_dir(base / channel) if channel else base
@@ -63,15 +60,6 @@ class PlatformInstance:
 
     def setup_state_path(self) -> Path:
         return self.data_dir / "web-setup.json"
-
-    def agent_runs_db_path(self) -> Path:
-        return self.data_dir / "web-agent-runs.db"
-
-    def agent_definitions_db_path(self) -> Path:
-        return self.data_dir / "web-agents.db"
-
-    def agent_artifacts_dir(self) -> Path:
-        return ensure_dir(self.data_dir / "agent-artifacts")
 
     def agent_run_exports_dir(self) -> Path:
         return ensure_dir(self.data_dir / "agent-run-exports")
@@ -93,15 +81,6 @@ class PlatformInstance:
 
     def mcp_registry_path(self) -> Path:
         return self.data_dir / "web-mcp-registry.json"
-
-    def tenants_db_path(self) -> Path:
-        return self.data_dir / "web-tenants.db"
-
-    def channel_bindings_db_path(self) -> Path:
-        return self.data_dir / "web-channel-bindings.db"
-
-    def channel_audit_db_path(self) -> Path:
-        return self.data_dir / "web-channel-audit.db"
 
     def mcp_installs_dir(self) -> Path:
         return ensure_dir(self.data_dir / "mcp-installs")

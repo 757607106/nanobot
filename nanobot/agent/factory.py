@@ -5,11 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from nanobot.session.manager import SessionManager
+
 if TYPE_CHECKING:
     from nanobot.bus.queue import MessageBus
     from nanobot.config.schema import Config
     from nanobot.providers.base import LLMProvider
-    from nanobot.session.manager import SessionManager
     from nanobot.agent.loop import AgentLoop
 
 
@@ -48,6 +49,11 @@ def build_agent_loop_from_config(
     if agent_loop_cls is None:
         from nanobot.agent.loop import AgentLoop as agent_loop_cls
     defaults = config.agents.defaults
+    resolved_session_manager = (
+        session_manager
+        if session_manager is not None
+        else SessionManager(workspace, postgres=config.rag.postgres)
+    )
     return agent_loop_cls(
         bus=bus,
         provider=provider,
@@ -68,7 +74,7 @@ def build_agent_loop_from_config(
             if restrict_to_workspace is None
             else restrict_to_workspace
         ),
-        session_manager=session_manager,
+        session_manager=resolved_session_manager,
         mcp_servers=mcp_servers if mcp_servers is not None else config.tools.mcp_servers,
         channels_config=config.channels,
         run_registry=run_registry,

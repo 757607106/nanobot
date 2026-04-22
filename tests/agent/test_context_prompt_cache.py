@@ -59,6 +59,19 @@ def test_system_prompt_reflects_current_memory_contract(tmp_path) -> None:
     assert "USER.md" not in prompt
 
 
+def test_system_prompt_omits_workspace_memory_when_disabled(tmp_path) -> None:
+    workspace = _make_workspace(tmp_path)
+    marker = "workspace-memory-marker"
+    (workspace / "AGENTS.md").write_text(marker, encoding="utf-8")
+    builder = ContextBuilder(workspace)
+
+    prompt_with_memory = builder.build_system_prompt(include_workspace_memory=True)
+    prompt_without_memory = builder.build_system_prompt(include_workspace_memory=False)
+
+    assert marker in prompt_with_memory
+    assert marker not in prompt_without_memory
+
+
 def test_daily_notes_are_not_injected_into_system_prompt(tmp_path) -> None:
     workspace = _make_workspace(tmp_path)
     builder = ContextBuilder(workspace)
@@ -163,6 +176,42 @@ def test_build_messages_passes_channel_to_system_prompt(tmp_path) -> None:
     system = messages[0]["content"]
     assert "Format Hint" in system
     assert "messaging app" in system
+
+
+def test_system_prompt_cache_refreshes_when_bootstrap_changes(tmp_path) -> None:
+    workspace = _make_workspace(tmp_path)
+    memory_file = workspace / "MEMORY.md"
+    memory_file.write_text("Version A", encoding="utf-8")
+    builder = ContextBuilder(workspace)
+
+    prompt1 = builder.build_system_prompt()
+    memory_file.write_text("Version B updated", encoding="utf-8")
+    prompt2 = builder.build_system_prompt()
+
+    assert "Version A" in prompt1
+    assert "Version B updated" in prompt2
+    assert prompt1 != prompt2
+
+
+def test_system_prompt_cache_refreshes_when_skill_changes(tmp_path) -> None:
+    workspace = _make_workspace(tmp_path)
+    skill_dir = workspace / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text("---\ndescription: Alpha\n---\n\n# Alpha v1\n", encoding="utf-8")
+    builder = ContextBuilder(
+        workspace,
+        include_always_skills=False,
+        include_skills_summary=False,
+    )
+
+    prompt1 = builder.build_system_prompt(skill_names=["alpha"])
+    skill_file.write_text("---\ndescription: Alpha\n---\n\n# Alpha v2 updated\n", encoding="utf-8")
+    prompt2 = builder.build_system_prompt(skill_names=["alpha"])
+
+    assert "# Alpha v1" in prompt1
+    assert "# Alpha v2 updated" in prompt2
+    assert prompt1 != prompt2
 
 
 def test_subagent_result_does_not_create_consecutive_assistant_messages(tmp_path) -> None:

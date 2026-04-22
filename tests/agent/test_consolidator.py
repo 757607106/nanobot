@@ -48,6 +48,8 @@ class TestConsolidatorSummarize:
         assert result == "User fixed a bug in the auth module."
         entries = store.read_unprocessed_notes(since_cursor=0)
         assert len(entries) == 1
+        assert mock_provider.chat_with_retry.await_args.kwargs["max_tokens"] == consolidator._ARCHIVE_MAX_TOKENS
+        assert mock_provider.chat_with_retry.await_args.kwargs["temperature"] == 0.0
 
     async def test_summarize_raw_dumps_on_llm_failure(self, consolidator, mock_provider, store):
         mock_provider.chat_with_retry.side_effect = Exception("API error")

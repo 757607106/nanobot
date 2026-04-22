@@ -297,6 +297,44 @@ def test_disabled_skills_excluded_from_build_skills_summary(tmp_path: Path) -> N
     assert "beta" in summary
 
 
+def test_load_skill_refreshes_when_file_changes(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    ws_skills = workspace / "skills"
+    ws_skills.mkdir(parents=True)
+    skill_path = _write_skill(ws_skills, "alpha", body="# Alpha v1")
+    builtin = tmp_path / "builtin"
+    builtin.mkdir()
+
+    loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
+    assert loader.load_skill("alpha") == skill_path.read_text(encoding="utf-8")
+
+    updated = "---\n---\n\n# Alpha v2 updated\n"
+    skill_path.write_text(updated, encoding="utf-8")
+
+    assert loader.load_skill("alpha") == updated
+
+
+def test_build_skills_summary_refreshes_when_metadata_changes(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    ws_skills = workspace / "skills"
+    ws_skills.mkdir(parents=True)
+    skill_path = _write_skill(ws_skills, "alpha", body="# Alpha")
+    builtin = tmp_path / "builtin"
+    builtin.mkdir()
+
+    loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
+    summary_v1 = loader.build_skills_summary()
+
+    skill_path.write_text(
+        "\n".join(["---", "description: Alpha v2 updated", "---", "", "# Alpha"]),
+        encoding="utf-8",
+    )
+    summary_v2 = loader.build_skills_summary()
+
+    assert "Alpha v2 updated" not in summary_v1
+    assert "Alpha v2 updated" in summary_v2
+
+
 def test_disabled_skills_excluded_from_get_always_skills(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     ws_skills = workspace / "skills"

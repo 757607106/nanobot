@@ -1483,7 +1483,7 @@ async def test_backfill_repairs_model_context_without_shifting_save_turn_boundar
     assert result is not None
     assert result.content == "new answer"
 
-    request_messages = provider.chat_with_retry.await_args.kwargs["messages"]
+    request_messages = provider.chat_with_retry.await_args_list[0].kwargs["messages"]
     synthetic = [
         message
         for message in request_messages

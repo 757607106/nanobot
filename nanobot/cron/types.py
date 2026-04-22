@@ -73,10 +73,3 @@ class CronJob:
         kwargs["payload"] = CronPayload(**kwargs.get("payload", {}))
         kwargs["state"] = CronJobState(**state_kwargs)
         return cls(**kwargs)
-
-
-@dataclass
-class CronStore:
-    """Persistent store for cron jobs."""
-    version: int = 1
-    jobs: list[CronJob] = field(default_factory=list)

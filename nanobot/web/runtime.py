@@ -99,7 +99,11 @@ class WebAppState:
         self.workspace_runtime = WebWorkspaceRuntimeService(self, DOCUMENT_DEFINITIONS)
         self.config_runtime = WebConfigRuntimeService(self)
         self.channel_runtime = WebChannelRuntimeService(self)
-        self.cron = CronService(self.instance.cron_dir() / "jobs.json", on_job=self.schedule_runtime.handle_cron_job)
+        self.cron = CronService(
+            self.config.workspace_path,
+            postgres=self.config.rag.postgres,
+            on_job=self.schedule_runtime.handle_cron_job,
+        )
         self.calendar_reminders = CalendarReminderService(self.cron)
         self._cron_loop: asyncio.AbstractEventLoop | None = None
         self._cron_thread: threading.Thread | None = None
@@ -509,6 +513,18 @@ class WebAppState:
         self.schedule_runtime.stop_runtime()
         if self.agent is not None:
             await self.agent.close_mcp()
+        if self.app_agents is not None:
+            self.app_agents.close()
+        if self.tenants_service is not None:
+            self.tenants_service.close()
+        if self.channel_bindings_service is not None:
+            self.channel_bindings_service.close()
+        if self.channel_audit_service is not None:
+            self.channel_audit_service.close()
+        if self.sessions is not None:
+            self.sessions.close()
+        if self.runs is not None:
+            self.runs.close()
 
 
 __all__ = [

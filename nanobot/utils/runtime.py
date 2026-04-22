@@ -26,6 +26,16 @@ LENGTH_RECOVERY_PROMPT = (
     "— no recap, no apology. Break remaining work into smaller steps if needed."
 )
 
+VALIDATION_RETRY_PROMPT = (
+    "Your last draft answer did not pass validation for this tool-based task.\n\n"
+    "Draft answer:\n"
+    "{candidate}\n\n"
+    "Validation issue:\n"
+    "{issue}\n\n"
+    "Use the exact tool results already in the conversation. "
+    "If they are insufficient, call more tools. Then provide a corrected final answer."
+)
+
 
 @dataclass(slots=True, frozen=True)
 class ExternalLookupBlock:
@@ -68,6 +78,17 @@ def build_finalization_retry_message() -> dict[str, str]:
 def build_length_recovery_message() -> dict[str, str]:
     """Prompt the model to continue after hitting output token limit."""
     return {"role": "user", "content": LENGTH_RECOVERY_PROMPT}
+
+
+def build_validation_retry_message(candidate: str, issue: str) -> dict[str, str]:
+    """Prompt the model to correct a draft answer that failed validation."""
+    return {
+        "role": "user",
+        "content": VALIDATION_RETRY_PROMPT.format(
+            candidate=(candidate or "").strip() or "(empty)",
+            issue=(issue or "").strip() or "The answer does not match the tool results.",
+        ),
+    }
 
 
 def external_lookup_signature(tool_name: str, arguments: dict[str, Any]) -> str | None:

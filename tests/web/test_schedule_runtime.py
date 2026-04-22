@@ -11,7 +11,6 @@ def test_schedule_runtime_sweeps_artifact_retention_across_tenants(tmp_path) -> 
     runs = RunService(
         RunStore(tmp_path / "runs.db"),
         instance_id="instance-test",
-        artifact_dir=tmp_path / "artifacts",
     )
     tenants = TenantService(TenantStore(tmp_path / "tenants.db"))
     tenants.create_tenant({"tenantId": "tenant-a", "name": "Tenant A"})

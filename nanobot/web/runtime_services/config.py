@@ -11,8 +11,13 @@ import httpx
 
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import Config, ModelBindingConfig, normalize_api_base_url
+from nanobot.platform.agents import AgentDefinitionStore
+from nanobot.platform.channel_audit import ChannelAuditStore
+from nanobot.platform.channel_bindings import ChannelBindingStore
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.knowledge.store import create_knowledge_store
+from nanobot.platform.runs import create_run_store
+from nanobot.platform.tenants import TenantStore
 from nanobot.providers.factory import make_provider_from_config
 from nanobot.providers.registry import PROVIDERS, find_by_name
 from nanobot.session.manager import SessionManager
@@ -92,8 +97,9 @@ class WebConfigRuntimeService:
     def rebuild_runtime(self, config: Config) -> None:
         sync_workspace_templates(config.workspace_path)
         self.state.calendar_repo = get_calendar_repository(config.workspace_path)
+        old_sessions = self.state.sessions
         bus = MessageBus()
-        sessions = SessionManager(config.workspace_path)
+        sessions = SessionManager(config.workspace_path, postgres=config.rag.postgres)
         agent = self.state.agent_runtime.build_default_agent_loop(
             config=config,
             bus=bus,
@@ -108,6 +114,8 @@ class WebConfigRuntimeService:
             config.workspace_path,
             tool_catalog_provider=self.state.workspace_runtime.get_template_tool_catalog,
         )
+        if old_sessions is not None and old_sessions is not sessions:
+            old_sessions.close()
 
     def get_config(self) -> dict[str, Any]:
         return self.state.config.model_dump(mode="json", by_alias=True)
@@ -151,22 +159,54 @@ class WebConfigRuntimeService:
 
     def update_config(self, payload: dict[str, Any]) -> dict[str, Any]:
         config = Config.model_validate(payload)
+        agent_store = None
+        tenant_store = None
+        channel_binding_store = None
+        channel_audit_store = None
         knowledge_store = None
         rag_engine = None
-        if self.state.app_knowledge is not None:
-            knowledge_store = create_knowledge_store(config, self.state.instance)
-            try:
+        run_store = None
+        try:
+            if self.state.app_agents is not None:
+                agent_store = AgentDefinitionStore(self.state.instance.data_dir, config.rag.postgres)
+            if self.state.tenants_service is not None:
+                tenant_store = TenantStore(self.state.instance.data_dir, config.rag.postgres)
+            if self.state.channel_bindings_service is not None:
+                channel_binding_store = ChannelBindingStore(self.state.instance.data_dir, config.rag.postgres)
+            if self.state.channel_audit_service is not None:
+                channel_audit_store = ChannelAuditStore(self.state.instance.data_dir, config.rag.postgres)
+            if self.state.app_knowledge is not None:
+                knowledge_store = create_knowledge_store(config, self.state.instance)
                 rag_engine = create_rag_engine_from_config(config, self.state.instance.data_dir)
-            except Exception:
-                close_store = getattr(knowledge_store, "close", None)
+            if self.state.runs is not None:
+                run_store = create_run_store(config, self.state.instance)
+        except Exception:
+            for store in (agent_store, tenant_store, channel_binding_store, channel_audit_store):
+                close_store = getattr(store, "close", None)
                 if callable(close_store):
                     close_store()
-                raise
+            close_store = getattr(knowledge_store, "close", None)
+            if callable(close_store):
+                close_store()
+            close_run_store = getattr(run_store, "close", None)
+            if callable(close_run_store):
+                close_run_store()
+            raise
 
         self.state.instance.save_config(config)
         old_agent = self.state.agent
         if old_agent is not None:
             asyncio.run(old_agent.close_mcp())
+        if agent_store is not None and self.state.app_agents is not None:
+            self.state.app_agents.replace_store(agent_store)
+        if tenant_store is not None and self.state.tenants_service is not None:
+            self.state.tenants_service.replace_store(tenant_store)
+        if channel_binding_store is not None and self.state.channel_bindings_service is not None:
+            self.state.channel_bindings_service.replace_store(channel_binding_store)
+        if channel_audit_store is not None and self.state.channel_audit_service is not None:
+            self.state.channel_audit_service.replace_store(channel_audit_store)
+        if run_store is not None and self.state.runs is not None:
+            self.state.runs.replace_store(run_store)
         self.rebuild_runtime(config)
         if self.state.app_knowledge is not None:
             if knowledge_store is None:

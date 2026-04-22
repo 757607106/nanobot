@@ -63,6 +63,22 @@ class TestContextBuilderWithWorkspaceContext:
         bootstrap = builder._load_bootstrap_files()
         assert "I am the agent soul." in bootstrap
 
+    def test_separate_agent_memory_stays_in_prompt_when_workspace_memory_disabled(self, tmp_path: Path) -> None:
+        from nanobot.agent.context import ContextBuilder
+
+        memory_root = tmp_path / "agent-root"
+        work_root = tmp_path / "thread-root"
+        memory_root.mkdir()
+        work_root.mkdir()
+        marker = "agent-memory-marker"
+        (memory_root / "PROFILE.md").write_text(marker, encoding="utf-8")
+
+        ctx = WorkspaceContext(memory_root=memory_root, work_root=work_root)
+        builder = ContextBuilder(memory_root, workspace_context=ctx)
+
+        prompt = builder.build_system_prompt(include_workspace_memory=False)
+        assert marker in prompt
+
     def test_memory_store_uses_memory_root(self, tmp_path: Path) -> None:
         from nanobot.agent.context import ContextBuilder
 

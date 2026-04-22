@@ -26,6 +26,7 @@ from nanobot.utils.runtime import (
     EMPTY_FINAL_RESPONSE_MESSAGE,
     build_finalization_retry_message,
     build_length_recovery_message,
+    build_validation_retry_message,
     ensure_nonempty_tool_result,
     is_blank_text,
     repeated_external_lookup_error,
@@ -35,6 +36,7 @@ _DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
 _PERSISTED_MODEL_ERROR_PLACEHOLDER = "[Assistant reply unavailable due to model error.]"
 _MAX_EMPTY_RETRIES = 2
 _MAX_LENGTH_RECOVERIES = 3
+_MAX_VALIDATION_RETRIES = 1
 _MAX_INJECTIONS_PER_TURN = 3
 _MAX_INJECTION_CYCLES = 5
 _SNIP_SAFETY_BUFFER = 1024
@@ -74,6 +76,7 @@ class AgentRunSpec:
     checkpoint_callback: Any | None = None
     tool_complete_callback: Any | None = None
     injection_callback: Any | None = None
+    final_response_validator: Any | None = None
 
 
 @dataclass(slots=True)
@@ -233,9 +236,11 @@ class AgentRunner:
         error: str | None = None
         stop_reason = "completed"
         tool_events: list[dict[str, str]] = []
+        tool_messages: list[dict[str, Any]] = []
         external_lookup_counts: dict[str, int] = {}
         empty_content_retries = 0
         length_recovery_count = 0
+        validation_retry_count = 0
         had_injections = False
         injection_cycles = 0
 
@@ -285,6 +290,7 @@ class AgentRunner:
                     thinking_blocks=response.thinking_blocks,
                 )
                 messages.append(assistant_message)
+                tool_messages.append(dict(assistant_message))
                 tools_used.extend(tc.name for tc in response.tool_calls)
                 await self._emit_checkpoint(
                     spec,
@@ -322,6 +328,7 @@ class AgentRunner:
                         ),
                     }
                     messages.append(tool_message)
+                    tool_messages.append(dict(tool_message))
                     completed_tool_results.append(tool_message)
                 if fatal_error is not None:
                     error = f"Error: {type(fatal_error).__name__}: {fatal_error}"
@@ -418,6 +425,28 @@ class AgentRunner:
 
             assistant_message: dict[str, Any] | None = None
             if response.finish_reason != "error" and not is_blank_text(clean):
+                validation_issue = await self._validate_final_response(
+                    spec,
+                    candidate=clean,
+                    tool_messages=tool_messages,
+                    tools_used=tools_used,
+                )
+                if validation_issue is not None and validation_retry_count < _MAX_VALIDATION_RETRIES:
+                    validation_retry_count += 1
+                    logger.info(
+                        "Final response validation rejected turn {} for {} (retry {}/{})",
+                        iteration,
+                        spec.session_key or "default",
+                        validation_retry_count,
+                        _MAX_VALIDATION_RETRIES,
+                    )
+                    retry_message = build_validation_retry_message(clean, validation_issue)
+                    retry_message["_internal"] = True
+                    messages.append(retry_message)
+                    if hook.wants_streaming():
+                        await hook.on_stream_end(context, resuming=True)
+                    await hook.after_iteration(context)
+                    continue
                 assistant_message = build_assistant_message(
                     clean,
                     reasoning_content=response.reasoning_content,
@@ -732,6 +761,36 @@ class AgentRunner:
         if callback is not None:
             await callback(payload)
 
+    async def _validate_final_response(
+        self,
+        spec: AgentRunSpec,
+        *,
+        candidate: str,
+        tool_messages: list[dict[str, Any]],
+        tools_used: list[str],
+    ) -> str | None:
+        validator = spec.final_response_validator
+        if validator is None or not tool_messages:
+            return None
+        try:
+            result = await validator(
+                candidate=candidate,
+                tool_messages=tool_messages,
+                tools_used=tools_used,
+            )
+        except Exception:
+            logger.exception("final_response_validator failed; accepting candidate")
+            return None
+        if result is None or getattr(result, "accepted", True):
+            return None
+        retry_message = getattr(result, "retry_message", None)
+        if isinstance(retry_message, str) and retry_message.strip():
+            return retry_message.strip()
+        reason = getattr(result, "reason", None)
+        if isinstance(reason, str) and reason.strip():
+            return reason.strip()
+        return "The answer does not match the available tool results."
+
     @staticmethod
     def _append_final_message(messages: list[dict[str, Any]], content: str | None) -> None:
         if not content:
@@ -978,4 +1037,3 @@ class AgentRunner:
         if current:
             batches.append(current)
         return batches
-

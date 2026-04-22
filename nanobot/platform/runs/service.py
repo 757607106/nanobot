@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import re
-import shutil
 import uuid
 from collections import deque
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any, Callable
 
 from nanobot.platform.artifact_retention import normalize_artifact_retention_policy
@@ -67,7 +65,6 @@ class RunService:
         instance_id: str,
         tenant_id: str = "default",
         limits: RunLimits | None = None,
-        artifact_dir: Path | None = None,
         tenant_settings_loader: Callable[[str], dict[str, Any] | None] | None = None,
         agent_definition_loader: Callable[[str, str | None], dict[str, Any] | None] | None = None,
     ):
@@ -75,12 +72,9 @@ class RunService:
         self.instance_id = instance_id
         self.tenant_id = tenant_id
         self.limits = limits or RunLimits()
-        self.artifact_dir = artifact_dir
         self.tenant_settings_loader = tenant_settings_loader
         self.agent_definition_loader = agent_definition_loader
         self._scope_enforced = False
-        if self.artifact_dir is not None:
-            self.artifact_dir.mkdir(parents=True, exist_ok=True)
 
     def bind_tenant_settings_loader(
         self,
@@ -94,6 +88,21 @@ class RunService:
         agent_loader: Callable[[str, str | None], dict[str, Any] | None] | None = None,
     ) -> None:
         self.agent_definition_loader = agent_loader
+
+    def replace_store(self, store: RunStore) -> None:
+        """Swap the underlying store and close the old one."""
+        previous = self.store
+        self.store = store
+        if previous is not store:
+            close = getattr(previous, "close", None)
+            if callable(close):
+                close()
+
+    def close(self) -> None:
+        """Release the underlying store resources."""
+        close = getattr(self.store, "close", None)
+        if callable(close):
+            close()
 
     def with_tenant(self, tenant_id: str | None) -> RunService:
         """Return a tenant-scoped facade over the shared run registry."""
@@ -115,19 +124,23 @@ class RunService:
         normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "").strip()).strip("-.")
         return normalized[:96] or "default"
 
-    def _artifact_scope_root(
+    def _artifact_storage_scope(self) -> str:
+        return "tenant_instance_scoped"
+
+    def _artifact_storage_key(
         self,
         *,
-        tenant_id: str | None = None,
-        instance_id: str | None = None,
-    ) -> Path:
-        if self.artifact_dir is None:
-            raise RunArtifactNotFoundError("Artifact storage is not configured.")
-        return (
-            self.artifact_dir
-            / "tenants"
-            / self._sanitize_artifact_segment(tenant_id or self.tenant_id)
-            / self._sanitize_artifact_segment(instance_id or self.instance_id)
+        tenant_id: str | None,
+        instance_id: str | None,
+        artifact_path: str,
+    ) -> str:
+        return "/".join(
+            (
+                "tenants",
+                self._sanitize_artifact_segment(tenant_id or self.tenant_id),
+                self._sanitize_artifact_segment(instance_id or self.instance_id),
+                str(artifact_path or "").strip(),
+            )
         )
 
     def create_run(
@@ -172,9 +185,13 @@ class RunService:
             memory_scope=memory_scope,
             knowledge_scope=knowledge_scope,
         )
-        self.store.insert_run(record)
-        self.append_event(run_id, "queued", {"label": label, "taskPreview": task_preview})
-        return self.require_run(run_id)
+        record = self.store.insert_run(
+            record,
+            event=RunEvent(run_id=run_id, event_type="queued", payload={"label": label, "taskPreview": task_preview}),
+        )
+        if not self._is_visible_in_scope(record):
+            raise RunNotFoundError(run_id)
+        return record
 
     def _is_visible_in_scope(self, record: RunRecord) -> bool:
         if not self._scope_enforced:
@@ -190,17 +207,51 @@ class RunService:
             raise RunNotFoundError(run_id)
         return record
 
+    def _append_event_known_existing(
+        self,
+        run_id: str,
+        event_type: str,
+        payload: dict[str, Any] | None = None,
+    ) -> RunEvent:
+        return self.store.insert_event(RunEvent(run_id=run_id, event_type=event_type, payload=payload))
+
     def _ensure_transition(self, record: RunRecord, *, allowed_from: set[RunStatus]) -> None:
         if record.status not in allowed_from:
             raise RunStateError(f"Run {record.run_id} cannot transition from {record.status.value}.")
 
-    def start_run(self, run_id: str) -> RunRecord:
+    def _transition_run(
+        self,
+        run_id: str,
+        *,
+        allowed_from: set[RunStatus],
+        event: RunEvent | None = None,
+        **updates: object,
+    ) -> RunRecord:
+        allowed_values = tuple(status.value for status in allowed_from)
+        if not self._scope_enforced:
+            updated = self.store.update_run(
+                run_id,
+                event=event,
+                expected_statuses=allowed_values,
+                **updates,
+            )
+            if updated is not None:
+                return updated
+
         record = self.require_run(run_id)
-        self._ensure_transition(record, allowed_from={RunStatus.QUEUED})
-        updated = self.store.update_run(run_id, status=RunStatus.RUNNING, started_at=now_iso())
+        self._ensure_transition(record, allowed_from=allowed_from)
+        updated = self.store.update_run(run_id, current=record, event=event, **updates)
         assert updated is not None
-        self.append_event(run_id, "started")
         return updated
+
+    def start_run(self, run_id: str) -> RunRecord:
+        return self._transition_run(
+            run_id,
+            allowed_from={RunStatus.QUEUED},
+            event=RunEvent(run_id=run_id, event_type="started"),
+            status=RunStatus.RUNNING,
+            started_at=now_iso(),
+        )
 
     def complete_run(
         self,
@@ -215,10 +266,10 @@ class RunService:
         cached_tokens: int = 0,
         total_tokens: int = 0,
     ) -> RunRecord:
-        record = self.require_run(run_id)
-        self._ensure_transition(record, allowed_from={RunStatus.RUNNING})
-        updated = self.store.update_run(
+        return self._transition_run(
             run_id,
+            allowed_from={RunStatus.RUNNING},
+            event=RunEvent(run_id=run_id, event_type="completed", payload={"artifactPath": artifact_path}),
             status=RunStatus.SUCCEEDED,
             result_summary=summary,
             artifact_path=artifact_path,
@@ -230,46 +281,45 @@ class RunService:
             total_tokens=total_tokens,
             finished_at=now_iso(),
         )
-        assert updated is not None
-        self.append_event(run_id, "completed", {"artifactPath": artifact_path})
-        return updated
 
     def fail_run(self, run_id: str, error_code: str, error_message: str) -> RunRecord:
-        record = self.require_run(run_id)
-        self._ensure_transition(record, allowed_from={RunStatus.RUNNING, RunStatus.QUEUED})
-        updated = self.store.update_run(
+        return self._transition_run(
             run_id,
+            allowed_from={RunStatus.RUNNING, RunStatus.QUEUED},
+            event=RunEvent(
+                run_id=run_id,
+                event_type="failed",
+                payload={"code": error_code, "message": error_message},
+            ),
             status=RunStatus.FAILED,
             last_error_code=error_code,
             last_error_message=error_message,
             finished_at=now_iso(),
         )
-        assert updated is not None
-        self.append_event(run_id, "failed", {"code": error_code, "message": error_message})
-        return updated
 
     def timeout_run(self, run_id: str, message: str | None = None) -> RunRecord:
-        record = self.require_run(run_id)
-        self._ensure_transition(record, allowed_from={RunStatus.RUNNING, RunStatus.QUEUED, RunStatus.CANCEL_REQUESTED})
         text = str(message or "").strip() or "Run timed out."
-        updated = self.store.update_run(
+        return self._transition_run(
             run_id,
+            allowed_from={RunStatus.RUNNING, RunStatus.QUEUED, RunStatus.CANCEL_REQUESTED},
+            event=RunEvent(run_id=run_id, event_type="timed_out", payload={"message": text}),
             status=RunStatus.TIMED_OUT,
             last_error_code="TIMEOUT",
             last_error_message=text,
             finished_at=now_iso(),
         )
-        assert updated is not None
-        self.append_event(run_id, "timed_out", {"message": text})
-        return updated
 
     def request_cancel(self, run_id: str) -> RunRecord:
         record = self.require_run(run_id)
         if record.status in self._TERMINAL_STATUSES:
             return record
-        updated = self.store.update_run(run_id, status=RunStatus.CANCEL_REQUESTED)
+        updated = self.store.update_run(
+            run_id,
+            current=record,
+            event=RunEvent(run_id=run_id, event_type="cancel_requested"),
+            status=RunStatus.CANCEL_REQUESTED,
+        )
         assert updated is not None
-        self.append_event(run_id, "cancel_requested")
         return updated
 
     def cancel_run(self, run_id: str) -> RunRecord:
@@ -280,11 +330,12 @@ class RunService:
             raise RunStateError(f"Run {run_id} already finished with {record.status.value}.")
         updated = self.store.update_run(
             run_id,
+            current=record,
+            event=RunEvent(run_id=run_id, event_type="cancelled"),
             status=RunStatus.CANCELLED,
             finished_at=now_iso(),
         )
         assert updated is not None
-        self.append_event(run_id, "cancelled")
         return updated
 
     def append_event(self, run_id: str, event_type: str, payload: dict[str, Any] | None = None) -> RunEvent:
@@ -299,8 +350,6 @@ class RunService:
         metadata: dict[str, Any] | None = None,
         sections: list[tuple[str, str]] | None = None,
     ) -> str | None:
-        if self.artifact_dir is None:
-            return None
         record = self.require_run(run_id)
         lines = [f"# {title}", ""]
         if metadata:
@@ -320,85 +369,44 @@ class RunService:
             lines.append("")
             lines.append(text)
             lines.append("")
-        artifact_file = self._artifact_scope_root(
+        artifact_path = f"{run_id}.md"
+        file_name = artifact_path.rsplit("/", 1)[-1]
+        content = "\n".join(lines).rstrip() + "\n"
+        storage_scope = self._artifact_storage_scope()
+        storage_key = self._artifact_storage_key(
             tenant_id=record.tenant_id,
             instance_id=record.instance_id,
-        ) / f"{run_id}.md"
-        artifact_file.parent.mkdir(parents=True, exist_ok=True)
-        artifact_file.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
-        self.append_event(
+            artifact_path=artifact_path,
+        )
+        artifact = self.store.put_artifact(
+            run_id,
+            tenant_id=record.tenant_id,
+            instance_id=record.instance_id,
+            artifact_path=artifact_path,
+            file_name=file_name,
+            content_type="text/markdown",
+            content_text=content,
+            storage_scope=storage_scope,
+            storage_key=storage_key,
+            timestamp=now_iso(),
+        )
+        self._append_event_known_existing(
             run_id,
             "artifact_written",
             self._artifact_audit_payload(
                 record,
-                resolved_path=artifact_file,
-                storage_scope="tenant_instance_scoped",
+                artifact=artifact,
+                artifact_path=artifact_path,
                 exists=True,
             ),
         )
-        return artifact_file.name
+        return artifact_path
 
-    def _resolve_artifact_path(self, artifact_path: str) -> Path:
-        if self.artifact_dir is None:
-            raise RunArtifactNotFoundError("Artifact storage is not configured.")
-        base = self.artifact_dir.resolve()
-        resolved = (self.artifact_dir / artifact_path).resolve()
-        if resolved != base and base not in resolved.parents:
-            raise RunArtifactNotFoundError("Artifact path is outside the configured storage.")
-        return resolved
-
-    def _artifact_candidates(self, record: RunRecord) -> list[Path]:
-        artifact_path = str(record.artifact_path or "").strip()
-        if not artifact_path:
-            return []
-        if "/" in artifact_path or "\\" in artifact_path:
-            return [self._resolve_artifact_path(artifact_path)]
-        scoped = self._artifact_scope_root(
-            tenant_id=record.tenant_id,
-            instance_id=record.instance_id,
-        ) / artifact_path
-        legacy = self._resolve_artifact_path(artifact_path)
-        return [scoped, legacy]
-
-    def _resolve_record_artifact_path(self, record: RunRecord) -> Path:
-        candidates = self._artifact_candidates(record)
-        if not candidates:
-            raise RunArtifactNotFoundError(f"Run {record.run_id} has no artifact.")
-        for candidate in candidates:
-            if candidate.exists():
-                return candidate
-        return candidates[0]
-
-    def _artifact_storage_scope(self, record: RunRecord, resolved_path: Path) -> str:
-        scoped = self._artifact_scope_root(
-            tenant_id=record.tenant_id,
-            instance_id=record.instance_id,
-        )
-        try:
-            resolved = resolved_path.resolve()
-            scoped_root = scoped.resolve()
-        except Exception:
-            resolved = resolved_path
-            scoped_root = scoped
-        if resolved == scoped_root or scoped_root in resolved.parents:
-            return "tenant_instance_scoped"
-        return "legacy_root"
-
-    def _artifact_storage_key(self, resolved_path: Path) -> str | None:
-        if self.artifact_dir is None:
-            return None
-        try:
-            return resolved_path.resolve().relative_to(self.artifact_dir.resolve()).as_posix()
-        except Exception:
-            return resolved_path.name
-
-    def _artifact_path_from_storage_key(self, storage_key: str | None) -> Path:
-        if self.artifact_dir is None:
-            raise RunArtifactNotFoundError("Artifact storage is not configured.")
-        key = str(storage_key or "").strip()
-        if not key:
-            raise RunArtifactNotFoundError("Artifact storage key is missing.")
-        return (self.artifact_dir / key).resolve()
+    def _artifact_entry(self, record: RunRecord) -> dict[str, Any]:
+        artifact = self.store.get_artifact_record(record.run_id)
+        if artifact is None:
+            raise RunArtifactNotFoundError(f"Artifact for run {record.run_id} was not found.")
+        return artifact
 
     def _artifact_governance_storage_key(self, state: str, storage_key: str | None) -> str:
         key = str(storage_key or "").strip()
@@ -543,22 +551,23 @@ class RunService:
         self,
         record: RunRecord,
         *,
-        resolved_path: Path | None = None,
-        storage_scope: str | None = None,
+        artifact: dict[str, Any] | None = None,
+        artifact_path: str | None = None,
         exists: bool | None = None,
     ) -> dict[str, Any]:
-        path = resolved_path or self._resolve_record_artifact_path(record)
-        scope = storage_scope or self._artifact_storage_scope(record, path)
-        exists_flag = path.exists() if exists is None else bool(exists)
+        payload = artifact or self._artifact_entry(record)
+        scope = str(payload.get("storage_scope") or self._artifact_storage_scope()).strip() or self._artifact_storage_scope()
+        artifact_key = str(payload.get("storage_key") or "").strip()
+        exists_flag = bool(payload) if exists is None else bool(exists)
         return {
             "runId": record.run_id,
             "tenantId": record.tenant_id,
             "instanceId": record.instance_id,
-            "artifactPath": record.artifact_path,
-            "fileName": path.name,
+            "artifactPath": artifact_path or payload.get("artifact_path") or record.artifact_path,
+            "fileName": payload.get("file_name"),
             "storageScope": scope,
-            "storageKey": self._artifact_storage_key(path),
-            "isLegacyFallback": scope == "legacy_root",
+            "storageKey": artifact_key,
+            "isLegacyFallback": False,
             "exists": exists_flag,
         }
 
@@ -570,7 +579,8 @@ class RunService:
     ) -> dict[str, Any]:
         snapshot: dict[str, Any]
         try:
-            base_audit = self._artifact_audit_payload(record)
+            artifact = self._artifact_entry(record)
+            base_audit = self._artifact_audit_payload(record, artifact=artifact)
             snapshot = {
                 **base_audit,
                 "lifecycleStatus": "active",
@@ -631,17 +641,12 @@ class RunService:
                 lifecycle_status = payload.get("lifecycleStatus")
                 current_key = payload.get("currentStorageKey") or snapshot.get("currentStorageKey")
                 current_scope = payload.get("currentStorageScope") or snapshot.get("currentStorageScope")
-                current_exists = snapshot.get("exists")
-                if current_key:
-                    try:
-                        current_exists = self._artifact_path_from_storage_key(str(current_key)).exists()
-                    except Exception:
-                        current_exists = False
+                current_exists = str(lifecycle_status or snapshot.get("lifecycleStatus") or "") != "deleted"
                 snapshot.update(
                     {
                         "storageScope": current_scope,
                         "storageKey": current_key,
-                        "isLegacyFallback": str(current_scope or "") == "legacy_root",
+                        "isLegacyFallback": False,
                         "lifecycleStatus": lifecycle_status or snapshot.get("lifecycleStatus"),
                         "currentStorageScope": current_scope,
                         "currentStorageKey": current_key,
@@ -761,24 +766,6 @@ class RunService:
         policy["canApplyNow"] = next_action in {"archive", "delete"}
         return policy
 
-    def _resolve_artifact_read_path(
-        self,
-        record: RunRecord,
-        *,
-        snapshot: dict[str, Any] | None = None,
-    ) -> Path:
-        current = snapshot or self._artifact_governance_snapshot(record)
-        lifecycle_status = str(current.get("lifecycleStatus") or "missing")
-        storage_key = str(current.get("currentStorageKey") or "").strip()
-        if lifecycle_status == "deleted":
-            raise RunArtifactNotFoundError(f"Artifact for run {record.run_id} has been deleted.")
-        if not storage_key:
-            raise RunArtifactNotFoundError(f"Run {record.run_id} has no artifact.")
-        path = self._artifact_path_from_storage_key(storage_key)
-        if not path.exists():
-            raise RunArtifactNotFoundError(f"Artifact for run {record.run_id} was not found.")
-        return path
-
     def get_artifact_audit(self, run_id: str) -> dict[str, Any]:
         record = self.require_run(run_id)
         if not record.artifact_path:
@@ -847,17 +834,11 @@ class RunService:
         source_key = current_storage_key or original_storage_key
         if not source_key:
             raise RunArtifactNotFoundError(f"Artifact for run {run_id} was not found.")
-        source_path = self._artifact_path_from_storage_key(source_key)
-        if not source_path.exists():
-            raise RunArtifactNotFoundError(f"Artifact for run {run_id} was not found.")
-        target_path = self._artifact_path_from_storage_key(target_storage_key)
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(source_path), str(target_path))
 
         payload = {
             "runId": run_id,
             "artifactPath": record.artifact_path,
-            "fileName": target_path.name,
+            "fileName": str(record.artifact_path or "").rsplit("/", 1)[-1] or None,
             "lifecycleStatus": target_status,
             "reason": str(reason or "").strip() or None,
             "actionBy": str(action_by or "").strip() or "control_plane",
@@ -870,7 +851,7 @@ class RunService:
             "originalStorageScope": original_storage_scope,
             "originalStorageKey": original_storage_key,
         }
-        self.append_event(run_id, event_type, payload)
+        self._append_event_known_existing(run_id, event_type, payload)
         return self.get_artifact_audit(run_id)
 
     def archive_artifact(
@@ -968,7 +949,7 @@ class RunService:
             "actionBy": str(action_by or "").strip() or "control_plane",
             "basisTimestamp": self._artifact_retention_basis_timestamp(record),
         }
-        self.append_event(run_id, "artifact_retention_policy_set", payload)
+        self._append_event_known_existing(run_id, "artifact_retention_policy_set", payload)
         return self.get_artifact_retention_policy(run_id)
 
     def apply_artifact_retention_policy(
@@ -1070,22 +1051,24 @@ class RunService:
         if not record.artifact_path:
             raise RunArtifactNotFoundError(f"Run {run_id} has no artifact.")
         audit = self._artifact_governance_snapshot(record)
-        artifact_file = self._resolve_artifact_read_path(record, snapshot=audit)
+        if str(audit.get("lifecycleStatus") or "missing") == "deleted":
+            raise RunArtifactNotFoundError(f"Artifact for run {run_id} has been deleted.")
+        artifact = self._artifact_entry(record)
         return {
             "runId": run_id,
             "tenantId": record.tenant_id,
             "instanceId": record.instance_id,
             "artifactPath": record.artifact_path,
-            "fileName": artifact_file.name,
-            "contentType": "text/markdown",
-            "content": artifact_file.read_text(encoding="utf-8"),
+            "fileName": artifact.get("file_name"),
+            "contentType": artifact.get("content_type") or "text/markdown",
+            "content": artifact.get("content_text") or "",
             "audit": {
                 **audit,
                 "retentionPolicy": self._artifact_retention_policy_snapshot(
                     record,
                     artifact_snapshot=audit,
                 ),
-                "fileName": artifact_file.name,
+                "fileName": artifact.get("file_name"),
                 "exists": True,
             },
         }

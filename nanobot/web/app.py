@@ -23,7 +23,7 @@ from nanobot.platform.knowledge import KnowledgeBaseService
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.knowledge.store import create_knowledge_store
 from nanobot.platform.memory import MemoryService
-from nanobot.platform.runs import RunService, RunStore
+from nanobot.platform.runs import RunService, create_run_store
 from nanobot.platform.tenants import TenantService, TenantStore
 from nanobot.web.channels import WebChannelService
 from nanobot.web.frontend import (
@@ -115,6 +115,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
             app.state.web.app_agents = agents
             app.state.web.app_knowledge = knowledge
             app.state.web.app_memory = memory
+            app.state.web.tenants_service = tenants_service
             app.state.web.channel_bindings_service = channel_bindings_service
             app.state.web.channel_audit_service = channel_audit_service
             app.state.web.channel_runtime.start()
@@ -127,7 +128,7 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
 
     app = FastAPI(title="nanobot Web UI", version=__version__, lifespan=lifespan)
     agents = AgentDefinitionService(
-        AgentDefinitionStore(instance.agent_definitions_db_path()),
+        AgentDefinitionStore(instance.data_dir, config.rag.postgres),
         instance_id=instance.id,
         config_loader=lambda: getattr(getattr(app.state, "web", None), "config", config),
     )
@@ -145,22 +146,21 @@ def create_app(config: Config, static_dir: Path | None = None) -> FastAPI:
         agent_lookup=agents.require_agent,
     )
     runs = RunService(
-        RunStore(instance.agent_runs_db_path()),
+        create_run_store(config, instance),
         instance_id=instance.id,
-        artifact_dir=instance.agent_artifacts_dir(),
     )
-    tenants_service = TenantService(TenantStore(instance.tenants_db_path()))
+    tenants_service = TenantService(TenantStore(instance.data_dir, config.rag.postgres))
     runs.bind_tenant_settings_loader(lambda tenant_id: tenants_service.get_tenant(tenant_id))
     runs.bind_definition_policy_loaders(
         agent_loader=lambda agent_id, tenant_id=None: agents.get_agent(agent_id, tenant_id=tenant_id),
     )
     channel_bindings_service = ChannelBindingService(
-        ChannelBindingStore(instance.channel_bindings_db_path()),
+        ChannelBindingStore(instance.data_dir, config.rag.postgres),
         instance_id=instance.id,
         agent_lookup=agents.require_agent,
     )
     channel_audit_service = ChannelAuditService(
-        ChannelAuditStore(instance.channel_audit_db_path()),
+        ChannelAuditStore(instance.data_dir, config.rag.postgres),
         instance_id=instance.id,
     )
     app.state.instance = instance

@@ -20,7 +20,7 @@ from nanobot.platform.knowledge import KnowledgeBaseService
 from nanobot.platform.knowledge.rag_engine import create_rag_engine_from_config
 from nanobot.platform.knowledge.store import create_knowledge_store
 from nanobot.platform.memory import MemoryService
-from nanobot.platform.runs import RunService, RunStore
+from nanobot.platform.runs import RunService, create_run_store
 from nanobot.session.manager import SessionManager
 from nanobot.web.runtime_services.agents import WebAgentRuntimeService
 from nanobot.web.runtime_services.channel_routing import ChannelRoutingService
@@ -87,6 +87,9 @@ class CLIGatewayRoutingRuntime:
             await isolated.close_mcp()
 
     def shutdown(self) -> None:
+        self.agents_service.close()
+        self.channel_bindings.close()
+        self.runs.close()
         self.knowledge_service.shutdown()
 
 
@@ -108,12 +111,12 @@ def build_cli_gateway_routing_runtime(
     state.cron = cron
 
     agents_service = AgentDefinitionService(
-        AgentDefinitionStore(instance.agent_definitions_db_path()),
+        AgentDefinitionStore(instance.data_dir, config.rag.postgres),
         instance_id=instance.id,
         config_loader=lambda: state.config,
     )
     channel_bindings = ChannelBindingService(
-        ChannelBindingStore(instance.channel_bindings_db_path()),
+        ChannelBindingStore(instance.data_dir, config.rag.postgres),
         instance_id=instance.id,
         agent_lookup=agents_service.require_agent,
     )
@@ -126,9 +129,8 @@ def build_cli_gateway_routing_runtime(
         config=config,
     )
     runs = RunService(
-        RunStore(instance.agent_runs_db_path()),
+        create_run_store(config, instance),
         instance_id=instance.id,
-        artifact_dir=instance.agent_artifacts_dir(),
     )
     memory_service = MemoryService(
         instance=instance,

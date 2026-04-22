@@ -1,5 +1,4 @@
 import asyncio
-import json
 import time
 
 import pytest
@@ -92,7 +91,7 @@ async def test_run_history_trimmed_to_max(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_history_persisted_to_disk(tmp_path) -> None:
+async def test_run_history_persisted_across_instances(tmp_path) -> None:
     store_path = tmp_path / "cron" / "jobs.json"
     service = CronService(store_path, on_job=lambda _: asyncio.sleep(0))
     job = service.add_job(
@@ -101,13 +100,6 @@ async def test_run_history_persisted_to_disk(tmp_path) -> None:
         message="hello",
     )
     await service.run_job(job.id)
-
-    raw = json.loads(store_path.read_text())
-    history = raw["jobs"][0]["state"]["runHistory"]
-    assert len(history) == 1
-    assert history[0]["status"] == "ok"
-    assert "runAtMs" in history[0]
-    assert "durationMs" in history[0]
 
     fresh = CronService(store_path)
     loaded = fresh.get_job(job.id)
@@ -325,9 +317,6 @@ async def test_external_update_preserves_run_history_records(tmp_path):
     assert loaded.state.run_history
     assert loaded.state.run_history[0].status == "ok"
 
-    fresh._running = True
-    fresh._save_store()
-
 
 # ── timer race regression tests ──
 
@@ -346,7 +335,6 @@ async def test_timer_execution_is_not_rolled_back_by_list_jobs_reload(tmp_path):
 
     service = CronService(store_path, on_job=on_job)
     service._running = True
-    service._load_store()
     service._arm_timer = lambda: None
 
     job = service.add_job(
@@ -355,7 +343,7 @@ async def test_timer_execution_is_not_rolled_back_by_list_jobs_reload(tmp_path):
         message="hello",
     )
     job.state.next_run_at_ms = max(1, int(time.time() * 1000) - 1_000)
-    service._save_store()
+    service.store.put_job(job)
 
     await service._on_timer()
     await service._on_timer()
@@ -479,7 +467,7 @@ async def test_update_job_preserves_run_history(tmp_path) -> None:
     assert result.state.run_history[0].status == "ok"
 
 
-def test_update_job_offline_writes_action(tmp_path) -> None:
+def test_update_job_offline_persists_immediately(tmp_path) -> None:
     service = CronService(tmp_path / "cron" / "jobs.json")
     job = service.add_job(
         name="offline",
@@ -488,12 +476,10 @@ def test_update_job_offline_writes_action(tmp_path) -> None:
     )
     service.update_job(job.id, name="updated-offline")
 
-    action_path = tmp_path / "cron" / "action.jsonl"
-    assert action_path.exists()
-    lines = [l for l in action_path.read_text().strip().split("\n") if l]
-    last = json.loads(lines[-1])
-    assert last["action"] == "update"
-    assert last["params"]["name"] == "updated-offline"
+    fresh = CronService(tmp_path / "cron" / "jobs.json")
+    loaded = fresh.get_job(job.id)
+    assert loaded is not None
+    assert loaded.name == "updated-offline"
 
 
 def test_update_job_sentinel_channel_and_to(tmp_path) -> None:
@@ -546,21 +532,17 @@ async def test_list_jobs_during_on_job_does_not_cause_stale_reload(tmp_path) -> 
             message="test",
         )
     # Force next_run to the past so _on_timer picks them up
-    for job in service._store.jobs:
+    for job in service.list_jobs(include_disabled=True):
         job.state.next_run_at_ms = now_ms - 1000
-    service._save_store()
-    service._arm_timer()
+        service.store.put_job(job)
 
-    # Let the timer fire once
-    await asyncio.sleep(0.3)
-    service.stop()
+    await service._on_timer()
 
     # Each job should have run exactly once, not looped
     assert execution_count == 2
 
     # Verify next_run_at_ms was persisted correctly (in the future)
-    raw = json.loads(store_path.read_text())
-    for j in raw["jobs"]:
-        next_run = j["state"]["nextRunAtMs"]
+    for job in service.list_jobs(include_disabled=True):
+        next_run = job.state.next_run_at_ms
         assert next_run is not None
-        assert next_run > now_ms, f"Job '{j['name']}' next_run should be in the future"
+        assert next_run > now_ms, f"Job '{job.name}' next_run should be in the future"
