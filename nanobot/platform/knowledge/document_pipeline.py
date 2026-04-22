@@ -494,6 +494,9 @@ class DocumentPipeline:
     # context coherence for entity extraction and fault isolation granularity.
     _SEGMENT_SIZE = 30_000
     _SEGMENT_OVERLAP = 500
+    _FAST_CHUNK_ONLY_MIN_CHUNKS = 4
+    _GRAPH_SEGMENT_STATUS_MAX_WAIT = 30.0
+    _GRAPH_SEGMENT_MAX_CONCURRENCY = 4
 
     def index_single_file(self, file: KnowledgeFile) -> KnowledgeFile:
         current = self._require_file(file.kb_id, file.file_id)
@@ -521,6 +524,14 @@ class DocumentPipeline:
             replace(current, status=KnowledgeDocumentStatus.INDEXING, error_message=None, updated_at=now_iso())
         )
         text = parsed_path.read_text(encoding="utf-8")
+        from nanobot.platform.knowledge.chunking.dispatcher import build_chunks
+
+        chunk_texts = build_chunks(
+            text,
+            kb_params=kb.additional_params,
+            file_params=current.processing_params,
+            faq_items=(current.processing_params or {}).get("faqItems"),
+        )
 
         # Ensure RAG engine is available
         self._ensure_lightrag(kb, feature="Document indexing")
@@ -549,23 +560,19 @@ class DocumentPipeline:
                 ingest_mode = "text_insert_fallback"
 
         if index_result is None or not index_result.success:
-            index_result = self._index_text_with_segments(current, kb, text)
-            if index_result.parser_name == "text_segments":
-                ingest_mode = "text_segments"
+            index_result = self._index_text_content(current, kb, text, chunk_texts)
+            ingest_mode = {
+                "text_segments": "text_segments",
+                "text_chunks_fast": "text_chunks_fast",
+                "text_insert_fallback": "text_insert_fallback",
+            }.get(index_result.parser_name, ingest_mode)
 
         if not index_result.success:
             raise KnowledgeBaseValidationError(
                 index_result.error or f"Failed to index knowledge file {current.file_id}"
             )
 
-        # Build chunk manifest for local tracking
-        from nanobot.platform.knowledge.chunking.dispatcher import build_chunks
-        chunk_texts = build_chunks(
-            text,
-            kb_params=kb.additional_params,
-            file_params=current.processing_params,
-            faq_items=(current.processing_params or {}).get("faqItems"),
-        )
+        # Build chunk manifest for local tracking from the same chunks used for indexing.
         self.artifacts.replace_chunk_entries_for_file(
             current.kb_id,
             current.file_id,
@@ -583,13 +590,31 @@ class DocumentPipeline:
         processing_params["indexedAt"] = now_iso()
         processing_params["indexBackend"] = "lightrag"
         processing_params["indexMode"] = ingest_mode
-        processing_params["graphExtraction"] = True
+        processing_params["graphExtraction"] = (
+            str(index_result.parser_name or "").strip() not in {"text_chunks_fast", "text_insert_fallback"}
+            and str((index_result.metadata or {}).get("fallback_mode") or "").strip() != "chunk_only"
+        )
         if index_result.track_id:
             processing_params["trackId"] = index_result.track_id
-        if index_result.metadata:
-            for key in ("total_segments", "succeeded_segments", "failed_segments", "failed_details"):
-                if key in index_result.metadata:
-                    processing_params[key] = index_result.metadata[key]
+        for key in ("total_segments", "succeeded_segments", "failed_segments", "failed_details"):
+            if key in (index_result.metadata or {}):
+                processing_params[key] = index_result.metadata[key]
+            else:
+                processing_params.pop(key, None)
+        segment_doc_ids = []
+        if isinstance(index_result.metadata, dict):
+            raw_segment_doc_ids = index_result.metadata.get("segment_doc_ids")
+            if isinstance(raw_segment_doc_ids, list):
+                segment_doc_ids = [
+                    str(item).strip()
+                    for item in raw_segment_doc_ids
+                    if str(item).strip()
+                ]
+        if segment_doc_ids:
+            processing_params["segmentDocIds"] = segment_doc_ids
+        else:
+            processing_params.pop("segmentDocIds", None)
+            processing_params.pop("indexProgress", None)
         return self._update_file(
             replace(
                 current,
@@ -601,6 +626,104 @@ class DocumentPipeline:
         )
 
     # -- Internal: segment-aware text indexing --------------------------------
+
+    def _index_text_content(
+        self,
+        file: KnowledgeFile,
+        kb: KnowledgeBaseDefinition,
+        text: str,
+        chunk_texts: list[str],
+    ) -> "ParseResult":
+        if len(chunk_texts) <= 1:
+            return self._index_text_with_segments(file, kb, text)
+        if len(chunk_texts) >= self._FAST_CHUNK_ONLY_MIN_CHUNKS:
+            return self._index_chunk_texts_fast(file, chunk_texts)
+        return self._index_chunk_texts_as_segments(file, chunk_texts)
+
+    def _segment_progress_callback(self, file: KnowledgeFile) -> Any:
+        def _on_segment_done(
+            index: int,
+            total: int,
+            seg_doc_id: str,
+            success: bool,
+            error: str | None,
+        ) -> None:
+            """Update file processing_params with real-time progress."""
+            try:
+                progress = {
+                    "completedSegments": index + 1,
+                    "totalSegments": total,
+                    "lastSegmentId": seg_doc_id,
+                    "lastSegmentSuccess": success,
+                    "lastSegmentAt": now_iso(),
+                }
+                if error:
+                    progress["lastSegmentError"] = str(error)[:200]
+                processing_params = dict(file.processing_params)
+                processing_params["indexProgress"] = progress
+                self._update_file(
+                    replace(file, processing_params=processing_params, updated_at=now_iso())
+                )
+            except Exception:
+                pass  # Progress tracking is best-effort; never block indexing.
+
+        return _on_segment_done
+
+    def _index_chunk_texts_fast(
+        self,
+        file: KnowledgeFile,
+        chunk_texts: list[str],
+    ) -> "ParseResult":
+        self._run_async(
+            self.rag_engine.prepare_document_ingest(
+                file.kb_id,
+                file.file_id,
+            )
+        )
+        return self._as_parse_result(
+            self._run_async(
+                self.rag_engine.insert_text_chunks(
+                    file.kb_id,
+                    chunk_texts,
+                    doc_id=file.file_id,
+                    file_path=file.raw_path or file.filename,
+                )
+            )
+        )
+
+    def _index_chunk_texts_as_segments(
+        self,
+        file: KnowledgeFile,
+        chunk_texts: list[str],
+    ) -> "ParseResult":
+        segment_doc_ids = [
+            f"{file.file_id}_seg_{index:04d}"
+            for index in range(len(chunk_texts))
+        ]
+        existing_segment_doc_ids = [
+            str(item).strip()
+            for item in (file.processing_params or {}).get("segmentDocIds") or []
+            if str(item).strip()
+        ]
+        self._run_async(
+            self.rag_engine.prepare_document_ingest(
+                file.kb_id,
+                file.file_id,
+                extra_doc_ids=[*existing_segment_doc_ids, *segment_doc_ids],
+            )
+        )
+        return self._as_parse_result(
+            self._run_async(
+                self.rag_engine.insert_text_segments(
+                    file.kb_id,
+                    list(zip(chunk_texts, segment_doc_ids)),
+                    file_path=file.raw_path or file.filename,
+                    max_concurrency=self._GRAPH_SEGMENT_MAX_CONCURRENCY,
+                    on_segment_done=self._segment_progress_callback(file),
+                    status_max_wait=self._GRAPH_SEGMENT_STATUS_MAX_WAIT,
+                )
+            )
+        )
 
     @staticmethod
     def _as_parse_result(result: Any) -> "ParseResult":
@@ -676,38 +799,12 @@ class DocumentPipeline:
             len(segments),
         )
 
-        def _on_segment_done(
-            index: int,
-            total: int,
-            seg_doc_id: str,
-            success: bool,
-            error: str | None,
-        ) -> None:
-            """Update file processing_params with real-time progress."""
-            try:
-                progress = {
-                    "completedSegments": index + 1,
-                    "totalSegments": total,
-                    "lastSegmentId": seg_doc_id,
-                    "lastSegmentSuccess": success,
-                    "lastSegmentAt": now_iso(),
-                }
-                if error:
-                    progress["lastSegmentError"] = str(error)[:200]
-                processing_params = dict(file.processing_params)
-                processing_params["indexProgress"] = progress
-                self._update_file(
-                    replace(file, processing_params=processing_params, updated_at=now_iso())
-                )
-            except Exception:
-                pass  # Progress tracking is best-effort; never block indexing.
-
         return self._run_async(
             self.rag_engine.insert_text_segments(
                 file.kb_id,
                 segments,
                 file_path=file.raw_path or file.filename,
-                on_segment_done=_on_segment_done,
+                on_segment_done=self._segment_progress_callback(file),
             )
         )
 

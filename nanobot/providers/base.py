@@ -68,6 +68,13 @@ class LLMResponse:
         """Check if response contains tool calls."""
         return len(self.tool_calls) > 0
 
+    @property
+    def should_execute_tools(self) -> bool:
+        """Allow tool execution only for normal tool-call stopping reasons."""
+        if not self.has_tool_calls:
+            return False
+        return self.finish_reason in ("tool_calls", "stop")
+
 
 @dataclass(frozen=True)
 class GenerationSettings:

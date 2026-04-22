@@ -44,7 +44,13 @@ class KnowledgeLLMHelper:
 
     # ── Public API ──
 
-    def generate(self, *, system_prompt: str, user_prompt: str) -> str | None:
+    def generate(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        timeout: float | None = None,
+    ) -> str | None:
         """Run a single LLM chat turn and return the text content, or ``None``."""
         try:
             provider = self._provider_from_config()
@@ -57,7 +63,8 @@ class KnowledgeLLMHelper:
                         {"role": "user", "content": user_prompt},
                     ],
                     model=self.config.agents.defaults.model if self.config is not None else None,
-                )
+                ),
+                timeout=timeout,
             )
             content = str(response.content or "").strip()
             return content or None

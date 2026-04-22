@@ -355,6 +355,15 @@ class KnowledgeFileManager:
         source_type = str(file.processing_params.get("sourceType") or "").strip()
         return not file.is_folder and self._is_source_type_supported(source_type)
 
+    @staticmethod
+    def _indexed_doc_ids(file: KnowledgeFile) -> list[str]:
+        segment_doc_ids = [
+            str(item).strip()
+            for item in (file.processing_params or {}).get("segmentDocIds") or []
+            if str(item).strip()
+        ]
+        return [file.file_id, *segment_doc_ids]
+
     def _source_title(self, file: KnowledgeFile) -> str:
         return (
             normalize_text(file.processing_params.get("sourceTitle"), field_name="sourceTitle")
@@ -552,7 +561,8 @@ class KnowledgeFileManager:
                 # Delete from LightRAG Server
                 if self.rag_engine is not None:
                     try:
-                        self._run_async(self.rag_engine.delete_document(kb_id, file.file_id))
+                        for doc_id in self._indexed_doc_ids(file):
+                            self._run_async(self.rag_engine.delete_document(kb_id, doc_id))
                     except Exception:
                         logger.exception("Failed to delete indexed knowledge file {}", file.file_id)
             if not file.is_folder:

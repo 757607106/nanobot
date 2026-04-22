@@ -267,6 +267,9 @@ class ChannelManager:
                     if not msg.metadata.get("_tool_hint") and not self.config.channels.send_progress:
                         continue
 
+                if msg.metadata.get("_retry_wait"):
+                    continue
+
                 if msg.metadata.get("_stream_delta") and not msg.metadata.get("_stream_end"):
                     msg, extra_pending = self._coalesce_stream_deltas(msg)
                     pending.extend(extra_pending)

@@ -83,7 +83,11 @@ class SubagentManager:
         """Spawn a subagent to execute a task in the background."""
         task_id = str(uuid.uuid4())[:8]
         display_label = label or task[:30] + ("..." if len(task) > 30 else "")
-        origin = {"channel": origin_channel, "chat_id": origin_chat_id}
+        origin = {
+            "channel": origin_channel,
+            "chat_id": origin_chat_id,
+            "session_key": session_key,
+        }
 
         bg_task = asyncio.create_task(
             self._run_subagent(task_id, task, display_label, origin)
@@ -109,7 +113,7 @@ class SubagentManager:
         task_id: str,
         task: str,
         label: str,
-        origin: dict[str, str],
+        origin: dict[str, str | None],
     ) -> None:
         """Execute the subagent task and announce the result."""
         logger.info("Subagent [{}] starting task: {}", task_id, label)
@@ -188,7 +192,7 @@ class SubagentManager:
         label: str,
         task: str,
         result: str,
-        origin: dict[str, str],
+        origin: dict[str, str | None],
         status: str,
     ) -> None:
         """Announce the subagent result to the main agent via the message bus."""
@@ -202,12 +206,19 @@ class SubagentManager:
             result=result,
         )
 
-        # Inject as system message to trigger main agent
+        # Inject as a system message and preserve the effective session key
+        # so the parent agent can route the follow-up into the active turn.
+        session_key = origin.get("session_key") or f"{origin['channel']}:{origin['chat_id']}"
         msg = InboundMessage(
             channel="system",
             sender_id="subagent",
             chat_id=f"{origin['channel']}:{origin['chat_id']}",
             content=announce_content,
+            session_key_override=session_key,
+            metadata={
+                "injected_event": "subagent_result",
+                "subagent_task_id": task_id,
+            },
         )
 
         await self.bus.publish_inbound(msg)

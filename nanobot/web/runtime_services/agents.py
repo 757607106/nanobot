@@ -1047,11 +1047,6 @@ class WebAgentRuntimeService:
             sandbox_binding = sandbox_binding or environment.sandbox
         assert workspace_binding is not None
         assert sandbox_binding is not None
-        memory_binding = self.resolve_agent_memory_binding(
-            agent,
-            root_run_id=root_run_id,
-            session_key=session_key,
-        )
 
         if prepared is None:
             effective_workspace_memory_resolver = workspace_memory_resolver

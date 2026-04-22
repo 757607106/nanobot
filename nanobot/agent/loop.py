@@ -21,7 +21,6 @@ from nanobot.agent.response_validation import FinalResponseValidationResult, Fin
 from nanobot.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
 from nanobot.agent.subagent import SubagentManager
 from nanobot.agent.tools.base import Tool
-from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.bus.events import InboundMessage, OutboundMessage
@@ -62,6 +61,7 @@ class _LoopHook(AgentHook):
         channel: str = "cli",
         chat_id: str = "direct",
         message_id: str | None = None,
+        session_key: str | None = None,
     ) -> None:
         super().__init__(reraise=True)
         self._loop = agent_loop
@@ -71,6 +71,7 @@ class _LoopHook(AgentHook):
         self._channel = channel
         self._chat_id = chat_id
         self._message_id = message_id
+        self._session_key = session_key
         self._stream_buf = ""
 
     async def on_tool_complete(self, tool_call, result, event, error) -> None:
@@ -139,7 +140,12 @@ class _LoopHook(AgentHook):
         for tc in context.tool_calls:
             args_str = json.dumps(tc.arguments, ensure_ascii=False)
             logger.info("Tool call: {}({})", tc.name, args_str[:200])
-        self._loop._set_tool_context(self._channel, self._chat_id, self._message_id)
+        self._loop._set_tool_context(
+            self._channel,
+            self._chat_id,
+            self._message_id,
+            self._session_key,
+        )
 
     async def after_iteration(self, context: AgentHookContext) -> None:
         u = context.usage or {}
@@ -434,12 +440,24 @@ class AgentLoop:
         finally:
             self._mcp_connecting = False
 
-    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
+    def _set_tool_context(
+        self,
+        channel: str,
+        chat_id: str,
+        message_id: str | None = None,
+        session_key: str | None = None,
+    ) -> None:
         """Update context for all tools that need routing info."""
+        effective_key = session_key or (
+            UNIFIED_SESSION_KEY if self._unified_session else f"{channel}:{chat_id}"
+        )
         for name in ("message", "spawn", "cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
+                    if name == "spawn":
+                        tool.set_context(channel, chat_id, effective_key=effective_key)
+                    else:
+                        tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -564,6 +582,7 @@ class AgentLoop:
         on_progress: Callable[..., Awaitable[None]] | None = None,
         on_stream: Callable[[str, str | None], Awaitable[None]] | None = None,
         on_stream_end: Callable[..., Awaitable[None]] | None = None,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
         *,
         session: Session | None = None,
         channel: str = "cli",
@@ -590,6 +609,7 @@ class AgentLoop:
             channel=channel,
             chat_id=chat_id,
             message_id=message_id,
+            session_key=session.key if session else None,
         )
         hook: AgentHook = (
             CompositeHook([loop_hook] + self._extra_hooks) if self._extra_hooks else loop_hook
@@ -644,6 +664,7 @@ class AgentLoop:
             context_block_limit=self.context_block_limit,
             provider_retry_mode=self.provider_retry_mode,
             progress_callback=on_progress,
+            retry_wait_callback=on_retry_wait,
             checkpoint_callback=_checkpoint,
             tool_complete_callback=loop_hook.on_tool_complete,
             injection_callback=_drain_pending,
@@ -948,7 +969,7 @@ class AgentLoop:
             session, pending = self.auto_compact.prepare_session(session, session_key)
 
             await self.turn_maintenance.prepare_session(session)
-            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
+            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"), session_key)
             history = session.get_history(max_messages=0)
             current_role = "assistant" if msg.sender_id == "subagent" else "user"
 
@@ -1016,7 +1037,7 @@ class AgentLoop:
 
         await self.turn_maintenance.prepare_session(session)
 
-        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
+        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"), session_key)
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
@@ -1040,6 +1061,18 @@ class AgentLoop:
             meta = dict(msg.metadata or {})
             meta["_progress"] = True
             meta["_tool_hint"] = tool_hint
+            await self.bus.publish_outbound(
+                OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    content=content,
+                    metadata=meta,
+                )
+            )
+
+        async def _on_retry_wait(content: str) -> None:
+            meta = dict(msg.metadata or {})
+            meta["_retry_wait"] = True
             await self.bus.publish_outbound(
                 OutboundMessage(
                     channel=msg.channel,
@@ -1073,6 +1106,7 @@ class AgentLoop:
             on_progress=on_progress or _bus_progress,
             on_stream=on_stream,
             on_stream_end=on_stream_end,
+            on_retry_wait=_on_retry_wait,
             session=session,
             channel=msg.channel,
             chat_id=msg.chat_id,

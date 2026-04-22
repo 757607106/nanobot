@@ -955,8 +955,18 @@ class KnowledgeBaseService:
     def _extract_json_text(raw: str) -> str | None:
         return KnowledgeLLMHelper.extract_json(raw)
 
-    def _generate_with_llm(self, *, system_prompt: str, user_prompt: str) -> str | None:
-        return self.llm_helper.generate(system_prompt=system_prompt, user_prompt=user_prompt)
+    def _generate_with_llm(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        timeout: float | None = None,
+    ) -> str | None:
+        return self.llm_helper.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            timeout=timeout,
+        )
 
     @staticmethod
     def _split_large_block(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:

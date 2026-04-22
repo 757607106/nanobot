@@ -45,6 +45,8 @@ if TYPE_CHECKING:
 class KnowledgeEvaluationService:
     """Handles mindmap, sample questions, benchmarks, evaluation, and graph queries."""
 
+    _MINDMAP_LLM_TIMEOUT_SECONDS = 30.0
+
     def __init__(
         self,
         *,
@@ -257,6 +259,7 @@ class KnowledgeEvaluationService:
                 },
                 ensure_ascii=False,
             ),
+            timeout=self._MINDMAP_LLM_TIMEOUT_SECONDS,
         )
         generated = fallback
         if llm_raw:

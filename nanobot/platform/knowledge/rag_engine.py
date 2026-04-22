@@ -108,6 +108,8 @@ class RAGEngine:
         ``delete_kb`` as the public API consumed by ``KnowledgeBaseService``.
     """
 
+    _DOC_STATUS_CONTENT_SUMMARY_MAX_LENGTH = 255
+
     def __init__(
         self,
         *,
@@ -232,6 +234,10 @@ class RAGEngine:
             parts.append(f"error={error_msg}")
         return ", ".join(parts)
 
+    @classmethod
+    def _doc_status_content_summary(cls, text: str) -> str:
+        return str(text or "")[: cls._DOC_STATUS_CONTENT_SUMMARY_MAX_LENGTH]
+
     def _resolve_file_reference(self, rag: Any, file_path: str | None) -> str | None:
         candidate = str(file_path or "").strip()
         if not candidate:
@@ -273,6 +279,8 @@ class RAGEngine:
                 "timeout",
                 "worker execution timeout",
                 "worker timeout",
+                "did not reach a fully processed state",
+                "status not ready",
             )
         )
 
@@ -397,7 +405,7 @@ class RAGEngine:
                     "status": DocStatus.PROCESSED,
                     "chunks_count": len(chunk_payloads),
                     "chunks_list": list(chunk_payloads.keys()),
-                    "content_summary": full_text,
+                    "content_summary": self._doc_status_content_summary(full_text),
                     "content_length": len(full_text),
                     "created_at": now_iso,
                     "updated_at": now_iso,
@@ -1199,6 +1207,7 @@ class RAGEngine:
         *,
         doc_id: str | None = None,
         file_path: str | None = None,
+        status_max_wait: float | None = None,
     ) -> ParseResult:
         """Insert plain text via RAG-Anything direct content insertion.
 
@@ -1226,6 +1235,7 @@ class RAGEngine:
                 operation="insert_text",
                 doc_id=doc_id,
                 file_path=file_path,
+                max_wait=status_max_wait,
             )
 
             return ParseResult(
@@ -1275,6 +1285,37 @@ class RAGEngine:
                 error=str(exc),
             )
 
+    async def insert_text_chunks(
+        self,
+        kb_id: str,
+        chunks: list[str],
+        *,
+        doc_id: str | None = None,
+        file_path: str | None = None,
+    ) -> ParseResult:
+        """Insert pre-built text chunks directly without graph extraction."""
+        rag = await self._ensure_ready(kb_id)
+        try:
+            metadata = await self._insert_chunks_without_graph_extraction(
+                rag,
+                chunks,
+                doc_id=doc_id,
+                file_path=file_path or f"{kb_id}.txt",
+            )
+            return ParseResult(
+                success=True,
+                parser_name="text_chunks_fast",
+                chunks_count=int(metadata.get("chunks_count") or 0),
+                metadata=metadata,
+            )
+        except Exception as exc:
+            logger.error("RAGEngine: insert_text_chunks failed for kb_id={}: {}", kb_id, exc)
+            return ParseResult(
+                success=False,
+                parser_name="text_chunks_fast",
+                error=str(exc),
+            )
+
     async def insert_text_segments(
         self,
         kb_id: str,
@@ -1283,6 +1324,7 @@ class RAGEngine:
         file_path: str | None = None,
         max_concurrency: int = 0,
         on_segment_done: Any = None,
+        status_max_wait: float | None = None,
     ) -> ParseResult:
         """Insert multiple text segments with fault-isolated concurrency.
 
@@ -1305,7 +1347,7 @@ class RAGEngine:
         if not segments:
             raise ValueError("segments are required.")
 
-        rag = await self._ensure_ready(kb_id)
+        await self._ensure_ready(kb_id)
         lightrag_kwargs = self._build_lightrag_kwargs(kb_id)
         concurrency = max_concurrency or int(lightrag_kwargs.get("max_parallel_insert", 2))
         concurrency = max(1, concurrency)
@@ -1317,7 +1359,11 @@ class RAGEngine:
         async def _process(index: int, text: str, seg_doc_id: str) -> None:
             async with sem:
                 result = await self.insert_text(
-                    kb_id, text, doc_id=seg_doc_id, file_path=file_path,
+                    kb_id,
+                    text,
+                    doc_id=seg_doc_id,
+                    file_path=file_path,
+                    status_max_wait=status_max_wait,
                 )
                 chunks_count = int(result.chunks_count or 0)
                 results.append((seg_doc_id, result.success, chunks_count, result.error))
@@ -1356,6 +1402,7 @@ class RAGEngine:
                 "succeeded_segments": len(succeeded),
                 "failed_segments": len(failed),
                 "chunks_count": total_chunks,
+                "segment_doc_ids": [doc_id for _, doc_id in segments],
                 "failed_details": [
                     {"doc_id": d, "error": e} for d, e in failed
                 ] if failed else [],
@@ -2008,7 +2055,13 @@ class RAGEngine:
             logger.warning("RAGEngine: delete_document failed: {}", exc)
             return False
 
-    async def prepare_document_ingest(self, kb_id: str, doc_id: str) -> dict[str, list[str]]:
+    async def prepare_document_ingest(
+        self,
+        kb_id: str,
+        doc_id: str,
+        *,
+        extra_doc_ids: list[str] | None = None,
+    ) -> dict[str, list[str]]:
         """Clean the target doc and any retryable leftovers before a scoped ingest.
 
         LightRAG re-queues all FAILED/PENDING/PROCESSING docs when enqueueing a new
@@ -2046,10 +2099,14 @@ class RAGEngine:
         cleanup_doc_ids: list[str] = []
         if normalized_doc_id:
             cleanup_doc_ids.append(normalized_doc_id)
+        for candidate in extra_doc_ids or []:
+            normalized_candidate = str(candidate or "").strip()
+            if normalized_candidate and normalized_candidate not in cleanup_doc_ids:
+                cleanup_doc_ids.append(normalized_candidate)
         pruned_doc_ids = sorted(
             item
             for item in retryable_doc_ids
-            if item and item != normalized_doc_id
+            if item and item != normalized_doc_id and item not in cleanup_doc_ids
         )
         cleanup_doc_ids.extend(pruned_doc_ids)
 
